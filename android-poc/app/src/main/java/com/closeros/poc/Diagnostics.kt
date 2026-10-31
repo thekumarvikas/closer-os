@@ -22,7 +22,10 @@ data class CallEntry(
     val startMillis: Long,
     val durationSec: Long,
     val phoneAccountId: String?,
-)
+) {
+    // MIUI stores ring time as "duration" on missed calls, so only count real answered calls.
+    val isAnswered get() = durationSec > 0 && (type == "Incoming" || type == "Outgoing")
+}
 
 data class RecordingFile(
     val uri: Uri,
@@ -155,7 +158,7 @@ object Diagnostics {
      */
     fun match(calls: List<CallEntry>, recordings: List<RecordingFile>): List<Match> {
         val used = mutableSetOf<Uri>()
-        return calls.filter { it.durationSec > 0 }.map { call ->
+        return calls.filter { it.isAnswered }.map { call ->
             val last10 = digits(call.number).takeLast(10)
             val callEnd = call.startMillis + call.durationSec * 1000
             var best: Pair<RecordingFile, String>? = null
@@ -193,7 +196,7 @@ object Diagnostics {
         appendLine("CLOSER OS RECORDING TEST REPORT")
         device.forEach { (k, v) -> appendLine("$k: $v") }
         appendLine("SIMs: " + sims.joinToString { "slot ${it.slot} ${it.carrier} (sub ${it.subscriptionId})" }.ifBlank { "none visible" })
-        appendLine("Calls read: ${calls.size}, answered: ${calls.count { it.durationSec > 0 }}")
+        appendLine("Calls read: ${calls.size}, answered: ${calls.count { it.isAnswered }}")
         appendLine("Recording files found: ${recordings.size}")
         recordings.map { "${it.source}: ${it.folder}" }.distinct().take(5).forEach { appendLine("  folder $it") }
         recordings.take(5).forEach { appendLine("  e.g. ${it.name.replace(Regex("\\d{6,}")) { m -> "#".repeat(m.value.length) }}") }

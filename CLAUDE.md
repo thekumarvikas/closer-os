@@ -44,8 +44,12 @@ DD/MM/YYYY), but nothing India-specific hardcoded.
   and both SIMs read fine, but 0 recordings because the default dialer was a third-party app
   (com.hb.dialer.free) with no recorder. => Onboarding must check the default phone app and guide
   the rep to the phone maker's dialer with auto-record on; dashboard shows per-device recording setup.
-  Plan B for phones whose built-in recorder is locked (e.g. Google Phone app): manual upload now,
-  cloud telephony (virtual number, server-side recording) later.
+  The 11T Pro's built-in dialer is Google's Phone app (screenshot confirmed): it records, but keeps
+  files private, so Closer OS cannot pick them up automatically. Recording strategy (proposed):
+  A) auto-pickup where the maker's dialer saves accessible files (Samsung, Vivo, older MIUI…);
+  B) free fallback: rep shares the recording from Google Phone to Closer OS, matched by time;
+  C) paid cloud-calling add-on (virtual number, recorded on the server) for guaranteed recording
+  on any phone. App detects which case applies per device and tells rep + manager.
 - Distribution: public Play Store first; later a company-specific APK downloadable from the
   dashboard. Test device: Redmi/Xiaomi.
 - Web app domain: none yet; owner has thekumarvikas.com (subdomain possible).

@@ -13,8 +13,10 @@ import { Button, Card, Empty, ErrorBox, Field, Modal, Spinner } from '../compone
 import { BatchForm } from './Batches'
 import LeadImport from './LeadImport'
 import LeadDrawer from './LeadDrawer'
+import ShowUpImpact from './ShowUp'
 
 type Purpose = 'sales' | 'reminder'
+type View = Purpose | 'showup'
 interface RepRow {
   g: number; rep: string | null; assigned: number; attended: number; hot: number; called: number; picked: number
   picked_short: number; not_picked: number; not_picked_hot: number; over5: number; over5_hot: number
@@ -56,7 +58,7 @@ export default function BatchDetail() {
   const { org, isManager } = useOrg()
   const dir = useDirectory(org.id)
   const [batch, setBatch] = useState<Batch | null>(null)
-  const [purpose, setPurpose] = useState<Purpose>('sales')
+  const [purpose, setPurpose] = useState<View>('sales')
   const [version, setVersion] = useState(0)
   const [modal, setModal] = useState<'import' | 'zoom' | 'remind' | 'edit' | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -82,7 +84,7 @@ export default function BatchDetail() {
           <h1 className="flex items-center gap-2 text-xl font-semibold text-slate-900">{batch.name}
             {isManager && <button onClick={() => setModal('edit')} className="text-slate-400 hover:text-slate-700" aria-label="Edit webinar"><Pencil className="h-4 w-4" /></button>}
           </h1>
-          <p className="mt-0.5 text-sm text-slate-500">{fmtDateTime(batch.webinar_at, org)} · hot lead = {batch.hot_minutes}+ min · guided target {batch.guided_target_pct}%
+          <p className="mt-0.5 text-sm text-slate-500">{fmtDateTime(batch.webinar_at, org)} · hot lead = {batch.hot_minutes}+ min · guided target {batch.guided_target_pct}%{batch.holdout_pct > 0 ? ` · test group ${batch.holdout_pct}%` : ''}
             {batch.zoom_uploaded_at ? <> · Zoom report uploaded {fmtDateTime(batch.zoom_uploaded_at, org)}</> : null}</p>
         </div>
         {isManager && (
@@ -95,12 +97,14 @@ export default function BatchDetail() {
       </div>
 
       <div className="mb-4 flex rounded-lg bg-slate-100 p-1 text-sm sm:inline-flex">
-        {([['reminder', 'Reminder calls · before'], ['sales', 'Sales calls · after']] as const).map(([k, l]) => (
+        {([['reminder', 'Reminder calls · before'], ['showup', 'Show-up impact'], ['sales', 'Sales calls · after']] as const).map(([k, l]) => (
           <button key={k} onClick={() => setPurpose(k)} className={`flex-1 whitespace-nowrap rounded-md px-4 py-1.5 font-medium ${purpose === k ? 'bg-white shadow-sm' : 'text-slate-600'}`}>{l}</button>
         ))}
       </div>
 
-      <BatchReport key={purpose + version} batch={batch} purpose={purpose} dir={dir} />
+      {purpose === 'showup'
+        ? <ShowUpImpact key={'s' + version} batch={batch} dir={dir} />
+        : <BatchReport key={purpose + version} batch={batch} purpose={purpose} dir={dir} />}
 
       {modal === 'import' && <LeadImport orgId={org.id} dir={dir} batchId={batch.id} onClose={() => setModal(null)} onDone={refresh} />}
       {modal === 'zoom' && <ZoomUpload batch={batch} dir={dir} onClose={() => setModal(null)} onDone={refresh} />}

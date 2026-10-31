@@ -34,6 +34,6 @@ export interface Rule {
 }
 export interface Batch {
   id: string; org_id: string; name: string; webinar_at: string; hot_minutes: number; guided_target_pct: number
-  zoom_uploaded_at: string | null; is_archived: boolean; created_at: string
+  zoom_uploaded_at: string | null; is_archived: boolean; created_at: string; holdout_pct: number
 }
 export interface ProfessionCategory { id: string; name: string; keywords: string[]; position: number }

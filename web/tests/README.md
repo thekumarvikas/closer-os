@@ -18,3 +18,7 @@ screenshots of Dashboard and every Reports tab, then deletes everything. Same en
 registrations import (with repeats), reminder assignment, a Zoom attendee report (email + phone
 matching, multiple joins summed, new attendees added), reminder and sales calls, then checks the
 batch report numbers per rep against an independent count. Cleans up after itself.
+
+`showup-test.cjs` seeds a webinar with known reminder-call patterns and checks the Show-up impact
+report (called vs not called, per caller, per outcome, timing), rep visibility and the optional
+test group (10% held out, skipped by reminder assignment, cleared when switched off).

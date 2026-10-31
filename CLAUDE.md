@@ -96,6 +96,14 @@ intelligence → Play Store launch.
   "like my sheet" (each row's own base, as in owner's Google Sheet) or "% of assigned".
 - Reminder caller may differ from sales rep (separate reminder team) — lead_visible() includes
   reminder_by. "Previous batch enrolled"/"New enrolled" come from the buyers list (+ won outcome).
+- Show-up impact tab (show_up_report, show_up_trend): "joined" = ANY minutes > 0 (owner's rule:
+  the caller's job is to get them in; staying is the webinar's job); "stayed" = hot_minutes+.
+  Only reminder calls before webinar_at count. Compares called vs not-called (or test group),
+  per caller, per last reminder outcome, and pattern factors (call timing, attempts, talk time,
+  hour, registration lead time, repeat, profession, source). Groups < 20 leads are greyed out.
+- Optional test group: batches.holdout_pct (0 = OFF, the default; owner wants it off). Held-out
+  leads have batch_leads.is_holdout and are skipped by assign_reminders; the Android reminder
+  queue must skip them too.
 - Android app must send purpose + batch_id with every call, and offer profession + category.
 
 ## Open question for owner

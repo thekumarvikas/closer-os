@@ -85,6 +85,7 @@ export function BatchForm({ batch, onClose, onSaved }: { batch?: Batch; onClose:
   const [when, setWhen] = useState(local(batch?.webinar_at))
   const [hot, setHot] = useState(batch?.hot_minutes ?? 60)
   const [target, setTarget] = useState(batch?.guided_target_pct ?? 70)
+  const [holdout, setHoldout] = useState(batch?.holdout_pct ?? 0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -95,7 +96,7 @@ export function BatchForm({ batch, onClose, onSaved }: { batch?: Batch; onClose:
     const zoned = new Date(asUtc.toLocaleString('en-US', { timeZone: org.timezone }))
     const utc = new Date(asUtc.toLocaleString('en-US', { timeZone: 'UTC' }))
     const webinar_at = new Date(asUtc.getTime() - (zoned.getTime() - utc.getTime())).toISOString()
-    const row = { name: name.trim(), webinar_at, hot_minutes: hot, guided_target_pct: target }
+    const row = { name: name.trim(), webinar_at, hot_minutes: hot, guided_target_pct: target, holdout_pct: holdout }
     const { error } = batch
       ? await supabase.from('batches').update(row).eq('id', batch.id)
       : await supabase.from('batches').insert({ ...row, org_id: org.id, created_by: session?.user.id })
@@ -114,6 +115,14 @@ export function BatchForm({ batch, onClose, onSaved }: { batch?: Batch; onClose:
         <div className="sm:col-span-2"><Field label={`Date & time (${org.timezone})`}><input className="input" type="datetime-local" required value={when} onChange={e => setWhen(e.target.value)} /></Field></div>
         <Field label="Hot lead = watched at least (minutes)"><input className="input" type="number" min={0} value={hot} onChange={e => setHot(Number(e.target.value))} /></Field>
         <Field label="Guided target (%)"><input className="input" type="number" min={0} max={100} value={target} onChange={e => setTarget(Number(e.target.value))} /></Field>
+        <div className="sm:col-span-2">
+          <Field label="Test group (optional)" hint="Leaves a random share of leads out of reminder calls, to measure how much reminder calls really add. Most teams keep this off.">
+            <select className="input" value={holdout} onChange={e => setHoldout(Number(e.target.value))}>
+              <option value={0}>Off — call every lead</option>
+              {[5, 10, 15, 20].map(n => <option key={n} value={n}>Leave {n}% of leads uncalled</option>)}
+            </select>
+          </Field>
+        </div>
         <div className="sm:col-span-2"><ErrorBox error={error} /></div>
       </form>
     </Modal>

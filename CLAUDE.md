@@ -40,7 +40,12 @@ DD/MM/YYYY), but nothing India-specific hardcoded.
 - Target devices: ALL Android brands (Xiaomi, Realme, Oppo, Vivo, Samsung, OnePlus, Motorola…),
   not only Xiaomi. Recording test v1 passed on Redmi K20 Pro (both voices audible).
   Xiaomi 11T Pro said "package invalid" on v2; v3 adds a fixed test signing key (android-poc/keystore,
-  test-only, NOT the Play Store key).
+  test-only, NOT the Play Store key). v3 installed on Xiaomi 11T Pro (Android 14, HyperOS 1): call log
+  and both SIMs read fine, but 0 recordings because the default dialer was a third-party app
+  (com.hb.dialer.free) with no recorder. => Onboarding must check the default phone app and guide
+  the rep to the phone maker's dialer with auto-record on; dashboard shows per-device recording setup.
+  Plan B for phones whose built-in recorder is locked (e.g. Google Phone app): manual upload now,
+  cloud telephony (virtual number, server-side recording) later.
 - Distribution: public Play Store first; later a company-specific APK downloadable from the
   dashboard. Test device: Redmi/Xiaomi.
 - Web app domain: none yet; owner has thekumarvikas.com (subdomain possible).

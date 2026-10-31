@@ -50,6 +50,9 @@ DD/MM/YYYY), but nothing India-specific hardcoded.
   B) free fallback: rep shares the recording from Google Phone to Closer OS, matched by time;
   C) paid cloud-calling add-on (virtual number, recorded on the server) for guaranteed recording
   on any phone. App detects which case applies per device and tells rep + manager.
+  DECIDED: owner rejected B (too much hassle per call). Go with A, plus Closer OS recording itself
+  if possible. v4 test app has a mic-recording experiment (MIC / VOICE_RECOGNITION /
+  VOICE_COMMUNICATION during a cellular call) to measure this; C remains the reliable fallback.
 - Distribution: public Play Store first; later a company-specific APK downloadable from the
   dashboard. Test device: Redmi/Xiaomi.
 - Web app domain: none yet; owner has thekumarvikas.com (subdomain possible).

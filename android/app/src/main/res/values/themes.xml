@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.CloserOS" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#0E5E57</item>
+        <item name="android:windowBackground">#F8FAFC</item>
+    </style>
+    <color name="ic_bg">#0E5E57</color>
+</resources>

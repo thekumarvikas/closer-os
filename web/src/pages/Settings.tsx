@@ -15,6 +15,7 @@ export default function Settings() {
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [company, setCompany] = useState({ name: org.name, phone_prefix: org.phone_prefix, currency: org.currency, timezone: org.timezone, date_format: org.date_format })
+  const [tracking, setTracking] = useState<'all' | 'leads'>(org.settings?.call_tracking ?? 'all')
   const reload = () => setVersion(v => v + 1)
 
   useEffect(() => {
@@ -28,7 +29,7 @@ export default function Settings() {
 
   async function saveCompany(e: FormEvent) {
     e.preventDefault()
-    const { error } = await supabase.from('organizations').update(company).eq('id', org.id)
+    const { error } = await supabase.from('organizations').update({ ...company, settings: { ...(org.settings ?? {}), call_tracking: tracking } }).eq('id', org.id)
     if (error) return setError(errorText(error))
     setSaved(true); setTimeout(() => setSaved(false), 2000); refresh()
   }
@@ -53,6 +54,14 @@ export default function Settings() {
                 {['DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD'].map(f => <option key={f}>{f}</option>)}
               </select>
             </Field>
+            <div className="sm:col-span-2">
+              <Field label="Calls to upload from reps' phones" hint={tracking === 'all' ? 'Every call on the work phone is uploaded (best for company SIMs). Tell your reps.' : 'Only calls to numbers that are leads. Personal calls stay on the phone.'}>
+                <select className="input" value={tracking} onChange={e => setTracking(e.target.value as 'all' | 'leads')}>
+                  <option value="all">All calls (like Callyzer)</option>
+                  <option value="leads">Lead calls only</option>
+                </select>
+              </Field>
+            </div>
             <div className="sm:col-span-2"><Button type="submit">{saved ? 'Saved ✓' : 'Save'}</Button></div>
           </form>
         </Card>

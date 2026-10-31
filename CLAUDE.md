@@ -108,10 +108,25 @@ intelligence → Play Store launch.
   queue must skip them too.
 - Android app must send purpose + batch_id with every call, and offer profession + category.
 
-## Open question for owner
-- Owner's Callyzer reference tracks ALL calls (Total vs Lead). Earlier decision was "only lead
-  numbers are uploaded". Reports support both (calls.lead_id null = unknown number). Need a
-  company setting: "Track all calls on work SIMs" vs "Lead calls only" (default TBD).
+## Call tracking (decided Nov 2026)
+- Owner chose B: upload ALL calls (like Callyzer). Company setting organizations.settings
+  .call_tracking = 'all' (default) | 'leads' (Settings → Company). sync_calls() enforces it.
+  Private/blank numbers are skipped. TODO: per-company "Exclude numbers" list (like Callyzer).
+
+## Android app (`android/`) — v0.1.0
+- Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
+  test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
+- Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
+  via call_report for the rep), My Leads (search, paging; reps see assigned only), Lead detail
+  (Call with SIM choice via TelecomManager.placeCall + PhoneAccountHandle, WhatsApp), mandatory
+  Outcome screen after every call started from the app (outcome + next-call quick picks /
+  date-time picker or "No follow-up needed"), Follow-ups, Profile (SIMs, sync now, sign out).
+- Calls: the phone's own dialer makes the call. On return, the call-log entry is found and its
+  stable id (UUID from device id + call-log _ID + date) is used for log_call, so sync_calls of
+  the same entry never duplicates. Outcomes saved offline go to an outbox flushed by SyncWorker
+  (every 15 min + on app open). First sync uploads the last 2 days of call log.
+- NOT yet: calling queue + countdown, webinar reminder/sales queues (purpose + batch_id),
+  recording upload, Room offline lead cache, notifications for follow-ups, device/SIM licences.
 
 ## Build notes
 - Android SDK at /opt/android-sdk (set `sdk.dir` in local.properties).

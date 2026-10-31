@@ -9,3 +9,4 @@ node_modules/
 downloads/
 dist/
 *.tsbuildinfo
+android/local.properties

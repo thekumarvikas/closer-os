@@ -11,11 +11,24 @@ android {
         applicationId = "com.closeros.poc"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1-recording-test"
+        versionCode = 3
+        versionName = "0.3-recording-test"
+    }
+    // Test-only signing key, so every test build can update the previous one.
+    // The Play Store release key will be separate and never committed.
+    signingConfigs {
+        create("devTest") {
+            storeFile = rootProject.file("keystore/dev-test.jks")
+            storePassword = "closeros-dev"
+            keyAlias = "closeros-dev"
+            keyPassword = "closeros-dev"
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
+        }
     }
     buildTypes {
-        release { isMinifyEnabled = false; signingConfig = signingConfigs.getByName("debug") }
+        release { isMinifyEnabled = false; signingConfig = signingConfigs.getByName("devTest") }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

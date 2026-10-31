@@ -37,6 +37,10 @@ DD/MM/YYYY), but nothing India-specific hardcoded.
   dashboard and via Flexifunnels landing page + Razorpay (webhook creates/renews the account).
   Never sell inside the Android app. Trial length configurable by Super Admin (7/14 days).
 - English only at launch. Owner designs nothing; Claude proposes branding.
+- Target devices: ALL Android brands (Xiaomi, Realme, Oppo, Vivo, Samsung, OnePlus, Motorola…),
+  not only Xiaomi. Recording test v1 passed on Redmi K20 Pro (both voices audible).
+  Xiaomi 11T Pro said "package invalid" on v2; v3 adds a fixed test signing key (android-poc/keystore,
+  test-only, NOT the Play Store key).
 - Distribution: public Play Store first; later a company-specific APK downloadable from the
   dashboard. Test device: Redmi/Xiaomi.
 - Web app domain: none yet; owner has thekumarvikas.com (subdomain possible).
@@ -46,6 +50,11 @@ Phase 1: recording test (done on Redmi K20 Pro, MIUI dialer: works) → Supabase
 → web dashboard → Android app → lead integrations.
 Then: recording upload/management → billing & licences → AI → Docs/WhatsApp → management
 intelligence → Play Store launch.
+
+## Supabase
+- Project `closer-os`, ref `tdbqgoxxxfkfttdznzhb`, region ap-south-1 (Mumbai).
+- `SUPABASE_ACCESS_TOKEN` env var holds the owner's personal access token (Management API).
+- Migrations live in `supabase/migrations/` and are applied with `scripts/db-apply.sh`.
 
 ## Build notes
 - Android SDK at /opt/android-sdk (set `sdk.dir` in local.properties).

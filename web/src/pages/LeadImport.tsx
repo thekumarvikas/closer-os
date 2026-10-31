@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Papa from 'papaparse'
 import readXlsxFile from 'read-excel-file'
 import { Upload, CheckCircle2 } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import type { Directory } from '../lib/directory'
+import type { Batch } from '../lib/types'
 import { Button, ErrorBox, Field, Modal } from '../components/ui'
 
 // Closer OS fields a column can be mapped to. Anything else is kept as a custom field.
@@ -14,8 +15,9 @@ const targets: { key: string; label: string; guesses: string[] }[] = [
   { key: 'city', label: 'City', guesses: ['city', 'town', 'location'] },
   { key: 'state', label: 'State', guesses: ['state', 'region', 'province'] },
   { key: 'country', label: 'Country', guesses: ['country'] },
+  { key: 'profession', label: 'Profession', guesses: ['profession', 'occupation', 'what do you do', 'work', 'industry', 'business type'] },
+  { key: 'watch_minutes', label: 'Webinar minutes watched', guesses: ['watch minutes', 'webinar minutes', 'duration', 'duration (minutes)', 'time in session (minutes)', 'total duration (minutes)', 'minutes'] },
   { key: 'company', label: 'Company', guesses: ['company', 'organisation', 'organization', 'business', 'firm'] },
-  { key: 'profession', label: 'Profession', guesses: ['profession', 'occupation', 'job', 'designation', 'job title', 'title'] },
   { key: 'source', label: 'Lead source', guesses: ['source', 'lead source', 'utm_source', 'platform'] },
   { key: 'campaign', label: 'Campaign', guesses: ['campaign', 'campaign name', 'utm_campaign', 'ad name'] },
   { key: 'deal_value', label: 'Deal value', guesses: ['deal value', 'amount', 'value', 'budget'] },
@@ -27,8 +29,8 @@ const SKIP = '__skip'
 
 type Row = Record<string, string>
 
-export default function LeadImport({ orgId, dir, onClose, onDone }:
-  { orgId: string; dir: Directory; onClose: () => void; onDone: () => void }) {
+export default function LeadImport({ orgId, dir, onClose, onDone, batchId }:
+  { orgId: string; dir: Directory; onClose: () => void; onDone: () => void; batchId?: string }) {
   const [rows, setRows] = useState<Row[]>([])
   const [headers, setHeaders] = useState<string[]>([])
   const [fileName, setFileName] = useState('')
@@ -40,7 +42,13 @@ export default function LeadImport({ orgId, dir, onClose, onDone }:
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<{ inserted: number; duplicates: number; invalid: number } | null>(null)
+  const [result, setResult] = useState<{ inserted: number; joined: number; duplicates: number; invalid: number } | null>(null)
+  const [batch, setBatch] = useState(batchId ?? '')
+  const [batches, setBatches] = useState<Batch[]>([])
+  useEffect(() => {
+    supabase.from('batches').select('*').eq('org_id', orgId).eq('is_archived', false).order('webinar_at', { ascending: false }).limit(50)
+      .then(({ data }) => setBatches((data ?? []) as Batch[]))
+  }, [orgId])
 
   async function readFile(f: File) {
     setError(null); setFileName(f.name)
@@ -89,7 +97,7 @@ export default function LeadImport({ orgId, dir, onClose, onDone }:
 
   async function run() {
     setBusy(true); setError(null)
-    const total = { inserted: 0, duplicates: 0, invalid: 0 }
+    const total = { inserted: 0, joined: 0, duplicates: 0, invalid: 0 }
     try {
       const chunk = 1000
       for (let i = 0; i < rows.length; i += chunk) {
@@ -97,11 +105,11 @@ export default function LeadImport({ orgId, dir, onClose, onDone }:
         const { data, error } = await supabase.rpc('import_leads', {
           p_org: orgId, p_rows: rows.slice(i, i + chunk).map(toPayload),
           p_source: source || null, p_campaign: campaign || null,
-          p_assign_mode: assignMode, p_assign_to: assignMode === 'user' ? assignTo : null,
+          p_assign_mode: assignMode, p_assign_to: assignMode === 'user' ? assignTo : null, p_batch: batch || null,
         })
         if (error) throw error
         const d = data as typeof total
-        total.inserted += d.inserted; total.duplicates += d.duplicates; total.invalid += d.invalid
+        total.inserted += d.inserted; total.joined += d.joined ?? 0; total.duplicates += d.duplicates; total.invalid += d.invalid
       }
       setResult(total)
       onDone()
@@ -128,6 +136,7 @@ export default function LeadImport({ orgId, dir, onClose, onDone }:
           <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-600" />
           <p className="mt-3 text-lg font-semibold">{result.inserted.toLocaleString('en-IN')} leads imported</p>
           <p className="mt-1 text-sm text-slate-500">
+            {result.joined > 0 && <>{result.joined} existing leads joined this webinar (marked Repeated) · </>}
             {result.duplicates} skipped as duplicates · {result.invalid} skipped because the phone number was missing or wrong
           </p>
         </div>
@@ -162,6 +171,12 @@ export default function LeadImport({ orgId, dir, onClose, onDone }:
             <Field label="Lead source (if not in the file)"><input className="input" value={source} onChange={e => setSource(e.target.value)} placeholder="e.g. Facebook Ads" /></Field>
             <Field label="Campaign (if not in the file)"><input className="input" value={campaign} onChange={e => setCampaign(e.target.value)} placeholder="e.g. Diwali Webinar" /></Field>
           </div>
+          <Field label="Webinar batch" hint="With a batch, numbers already in Closer OS join the batch (marked Repeated) instead of being skipped.">
+            <select className="input" value={batch} onChange={e => setBatch(e.target.value)} disabled={!!batchId}>
+              <option value="">No batch</option>
+              {batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          </Field>
           <Field label="Who gets these leads?">
             <select className="input" value={assignMode} onChange={e => setAssignMode(e.target.value as typeof assignMode)}>
               <option value="rules">Use my distribution rules (round-robin / rule-based)</option>

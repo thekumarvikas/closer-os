@@ -7,6 +7,8 @@ import Onboarding from './pages/Onboarding'
 import Overview from './pages/Overview'
 import Leads from './pages/Leads'
 import Reports from './pages/Reports'
+import Batches from './pages/Batches'
+import BatchDetail from './pages/BatchDetail'
 import Calls from './pages/Calls'
 import FollowUps from './pages/FollowUps'
 import Team from './pages/Team'
@@ -22,6 +24,8 @@ export default function App() {
       <Route element={<Layout />}>
         <Route index element={<Overview />} />
         <Route path="reports" element={<Reports />} />
+        <Route path="webinars" element={<Batches />} />
+        <Route path="webinars/:id" element={<BatchDetail />} />
         <Route path="leads" element={<Leads />} />
         <Route path="calls" element={<Calls />} />
         <Route path="follow-ups" element={<FollowUps />} />

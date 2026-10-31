@@ -5,6 +5,7 @@ import { useOrg } from '../lib/session'
 import { useDirectory } from '../lib/directory'
 import type { Rule } from '../lib/types'
 import { Badge, Button, Card, ErrorBox, Field, PageHeader, Spinner } from '../components/ui'
+import { Buyers, ProfessionCategories } from './SettingsExtra'
 
 export default function Settings() {
   const { org, refresh } = useOrg()
@@ -81,8 +82,8 @@ export default function Settings() {
             onSave={row => run(supabase.from('distribution_rules').insert({ ...row, org_id: org.id }))} />
         </Card>
 
-        <ListEditor title="Call outcomes" subtitle="What reps choose after every call."
-          items={dir.outcomes.map(o => ({ id: o.id, label: o.label, active: o.is_active, position: o.position, extra: o.category.replace('_', ' ') }))}
+        <ListEditor title="Call outcomes" subtitle="What reps choose after every call. Sales outcomes show after sales calls, Reminder outcomes after pre-webinar reminder calls."
+          items={dir.outcomes.map(o => ({ id: o.id, label: o.label, active: o.is_active, position: o.position, extra: `${o.purpose === 'reminder' ? 'Reminder' : o.purpose === 'both' ? 'Both' : 'Sales'} · ${o.category.replace('_', ' ')}` }))}
           onRename={(id, label) => run(supabase.from('call_outcomes').update({ label }).eq('id', id))}
           onToggle={(id, active) => run(supabase.from('call_outcomes').update({ is_active: active }).eq('id', id))}
           onMove={(a, b) => run(Promise.all([
@@ -90,11 +91,13 @@ export default function Settings() {
             supabase.from('call_outcomes').update({ position: a.position }).eq('id', b.id),
           ]).then(r => r.find(x => x.error) ?? { error: null }))}
           addLabel="New outcome"
-          extraOptions={['connected', 'not_connected', 'positive', 'won', 'lost', 'invalid']}
-          onAdd={(label, category) => run(supabase.from('call_outcomes').insert({
-            org_id: org.id, label, category, code: label.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 40) + '_' + Date.now().toString(36),
+          extraOptions={['sales:connected', 'sales:positive', 'sales:won', 'sales:lost', 'sales:not_connected', 'sales:invalid', 'reminder:positive', 'reminder:connected', 'reminder:not_connected', 'reminder:lost', 'reminder:invalid']}
+          onAdd={(label, kind) => run(supabase.from('call_outcomes').insert({
+            org_id: org.id, label, purpose: kind.split(':')[0], category: kind.split(':')[1], code: label.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 40) + '_' + Date.now().toString(36),
             position: (dir.outcomes.at(-1)?.position ?? 0) + 1,
           }))} />
+
+        <Buyers />
 
         <ListEditor title="Sales stages" subtitle="The steps a lead moves through."
           items={dir.stages.map(s => ({ id: s.id, label: s.name, active: s.is_active, position: s.position, extra: s.is_won ? 'won' : s.is_lost ? 'lost' : '' }))}
@@ -106,6 +109,8 @@ export default function Settings() {
           ]).then(r => r.find(x => x.error) ?? { error: null }))}
           addLabel="New stage"
           onAdd={label => run(supabase.from('pipeline_stages').insert({ org_id: org.id, name: label, position: (dir.stages.at(-1)?.position ?? 0) + 1 }))} />
+
+        <ProfessionCategories />
       </div>
     </>
   )
@@ -138,7 +143,7 @@ function ListEditor({ title, subtitle, items, onRename, onToggle, onMove, onAdd,
       </ul>
       <form className="mt-3 flex gap-2" onSubmit={e => { e.preventDefault(); if (label.trim()) { onAdd(label.trim(), extra); setLabel('') } }}>
         <input className="input" placeholder={addLabel} value={label} onChange={e => setLabel(e.target.value)} />
-        {extraOptions && <select className="input !w-36" value={extra} onChange={e => setExtra(e.target.value)}>{extraOptions.map(o => <option key={o} value={o}>{o.replace('_', ' ')}</option>)}</select>}
+        {extraOptions && <select className="input !w-48" value={extra} onChange={e => setExtra(e.target.value)}>{extraOptions.map(o => <option key={o} value={o}>{o.replace(':', ' · ').replace('_', ' ')}</option>)}</select>}
         <Button variant="secondary" type="submit"><Plus className="h-4 w-4" /></Button>
       </form>
     </Card>

@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { X, Phone, Mail, MapPin, Building2 } from 'lucide-react'
+import { X, Phone, Mail, MapPin, Building2, GraduationCap, Video } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
 import type { Directory } from '../lib/directory'
 import { fmtDateTime, fmtDuration, fmtPhone, fmtMoney } from '../lib/format'
-import type { Call, FollowUp, Lead } from '../lib/types'
+import type { Call, FollowUp, Lead, ProfessionCategory } from '../lib/types'
 import { Badge, Button, ErrorBox, Spinner } from '../components/ui'
 
 interface Activity { id: string; kind: string; data: Record<string, unknown>; created_at: string; user_id: string | null }
@@ -17,15 +17,24 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
   const [followUps, setFollowUps] = useState<FollowUp[]>([])
   const [acts, setActs] = useState<Activity[]>([])
   const [note, setNote] = useState('')
+  const [enrolled, setEnrolled] = useState<{ product: string; purchased_at: string | null }[]>([])
+  const [batches, setBatches] = useState<{ watch_minutes: number | null; attended: boolean; is_repeat: boolean; batch: { name: string; webinar_at: string } | null }[]>([])
+  const [cats, setCats] = useState<ProfessionCategory[]>([])
   const [error, setError] = useState<string | null>(null)
 
   async function load() {
-    const [l, c, f, a] = await Promise.all([
+    const [l, c, f, a, en, bl, pc] = await Promise.all([
       supabase.from('leads').select('*').eq('id', leadId).single(),
       supabase.from('calls').select('*').eq('lead_id', leadId).order('started_at', { ascending: false }).limit(50),
       supabase.from('follow_ups').select('*').eq('lead_id', leadId).order('due_at', { ascending: false }).limit(20),
       supabase.from('lead_activities').select('*').eq('lead_id', leadId).order('created_at', { ascending: false }).limit(50),
+      supabase.rpc('lead_enrollments', { p_lead: leadId }),
+      supabase.from('batch_leads').select('watch_minutes, attended, is_repeat, batch:batches(name, webinar_at)').eq('lead_id', leadId),
+      supabase.from('profession_categories').select('*').eq('org_id', org.id).order('position'),
     ])
+    setEnrolled((en.data ?? []) as typeof enrolled)
+    setBatches(((bl.data ?? []) as unknown as typeof batches).sort((x, y) => (y.batch?.webinar_at ?? '').localeCompare(x.batch?.webinar_at ?? '')))
+    setCats((pc.data ?? []) as ProfessionCategory[])
     if (l.error) return setError(errorText(l.error))
     setLead(l.data as Lead); setCalls((c.data ?? []) as Call[]); setFollowUps((f.data ?? []) as FollowUp[]); setActs((a.data ?? []) as Activity[])
   }
@@ -52,6 +61,7 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
       case 'stage_changed': return `Stage → ${dir.stageOf(a.data.to as string)?.name ?? '—'}`
       case 'call': return `Call: ${dir.outcomes.find(o => o.code === a.data.outcome)?.label ?? 'no outcome'}${a.data.no_follow_up ? ' · no follow-up' : a.data.follow_up_at ? ` · next call ${fmtDateTime(a.data.follow_up_at as string, org)}` : ''}`
       case 'note': return `Note: ${a.data.text}`
+      case 'batch_joined': return 'Registered again for a webinar (Repeated)'
       default: return a.kind
     }
   }
@@ -70,6 +80,12 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
             </div>
             <div className="space-y-6 p-5">
               <ErrorBox error={error} />
+              {enrolled.length > 0 && (
+                <div className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+                  <GraduationCap className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span><b>Already enrolled:</b> {enrolled.map(e => e.product + (e.purchased_at ? ` (${fmtDateTime(e.purchased_at, org).split(' ')[0]})` : '')).join(', ')}</span>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <label><span className="label">Stage</span>
                   <select className="input" value={lead.stage_id ?? ''} onChange={e => update({ stage_id: e.target.value || null })}>
@@ -87,6 +103,17 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
                   <input className="input" type="number" min={0} defaultValue={lead.deal_value ?? ''}
                     onBlur={e => { const v = e.target.value === '' ? null : Number(e.target.value); if (v !== lead.deal_value) update({ deal_value: v }) }} />
                 </label>
+                <label><span className="label">Profession</span>
+                  <input className="input" defaultValue={lead.profession ?? ''} placeholder="e.g. CA, insurance agent"
+                    onBlur={e => e.target.value !== (lead.profession ?? '') && update({ profession: e.target.value || null } as Partial<Lead>)} />
+                </label>
+                <label><span className="label">Profession group</span>
+                  <select className="input" value={lead.profession_category_id ?? ''}
+                    onChange={e => update({ profession_category_id: e.target.value || null } as Partial<Lead>)}>
+                    <option value="">Not categorised</option>
+                    {cats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </label>
                 <div><span className="label">Source / campaign</span><p className="py-2">{lead.source || '—'}{lead.campaign ? ` · ${lead.campaign}` : ''}</p></div>
               </div>
               <div className="space-y-1.5 text-sm text-slate-700">
@@ -101,6 +128,18 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
                   </dl>
                 )}
               </div>
+
+              {batches.length > 0 && (
+                <section>
+                  <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold"><Video className="h-4 w-4" /> Webinars</h3>
+                  <ul className="space-y-1 text-sm">{batches.map((b, i) => (
+                    <li key={i} className="flex justify-between rounded-lg border border-slate-200 px-3 py-2">
+                      <span>{b.batch?.name} {b.is_repeat && <Badge color="amber">Repeated</Badge>}</span>
+                      <span className="text-slate-600">{b.watch_minutes == null ? 'Not uploaded yet' : b.attended ? `Watched ${b.watch_minutes} min` : "Didn't attend"}</span>
+                    </li>))}
+                  </ul>
+                </section>
+              )}
 
               <section>
                 <h3 className="mb-2 text-sm font-semibold">Notes</h3>

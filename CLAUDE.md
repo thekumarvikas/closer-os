@@ -83,6 +83,21 @@ intelligence → Play Store launch.
 - Supabase auth still uses the built-in email sender (2 emails/hour) and Site URL localhost:3000;
   set Site URL/redirects once hosted, and add SMTP (e.g. Resend) before real users.
 
+## Webinars (batches) — Nov 2026
+- Owner's workflow: webinar businesses. Leads register for a webinar (batch); reminder calls happen
+  before it, sales calls after. Zoom attendee report gives watch minutes ("hot" = 60+ min, per batch).
+- Tables: batches, batch_leads (watch_minutes, attended, is_repeat, reminder_by), calls.purpose
+  ('sales'|'reminder') + calls.batch_id, call_outcomes.purpose, follow_ups.purpose,
+  profession_categories (keyword grouping, seeded 15 groups), customers (buyers list).
+- Import into a batch: existing numbers JOIN the batch as "Repeated" (not skipped).
+- Zoom upload (web): finds "Attendee Details" table, sums multiple joins, matches by email then
+  phone; unknown attendees can be added as new leads. apply_zoom_report() sets 0 for no-shows.
+- Reports: batch_report(batch, purpose) + batch_report_leads() for click-through. % style toggle:
+  "like my sheet" (each row's own base, as in owner's Google Sheet) or "% of assigned".
+- Reminder caller may differ from sales rep (separate reminder team) — lead_visible() includes
+  reminder_by. "Previous batch enrolled"/"New enrolled" come from the buyers list (+ won outcome).
+- Android app must send purpose + batch_id with every call, and offer profession + category.
+
 ## Open question for owner
 - Owner's Callyzer reference tracks ALL calls (Total vs Lead). Earlier decision was "only lead
   numbers are uploaded". Reports support both (calls.lead_id null = unknown number). Need a

@@ -108,6 +108,26 @@ intelligence → Play Store launch.
   queue must skip them too.
 - Android app must send purpose + batch_id with every call, and offer profession + category.
 
+## Owner feedback round 1 (Nov 2026) — decisions
+- Own wording, not Callyzer's: terms live in web/src/components/terms.tsx (All calls, Dialled,
+  Received, Missed (in), Declined, No answer, Never called back, Conversations, Conversation rate,
+  Talk time, Unique contacts, Active time, Gap time). Owner's own Google-Sheet terms may be copied.
+- Treat all calls as lead calls in the UI: no "Total vs Lead" split anywhere.
+- Reports must fit one screen (no sideways scroll): table-fixed, two-line cells, CSV has detail.
+  Report tabs: Overview, Outcomes, Team, Daily, By hour, Follow-ups, Call log.
+- Team member phone = profiles.phone (set_member_phone; admins or self). Shown next to names.
+- Calls page = complete history (all time by default) with filters; shows "Dialled from" =
+  calls.sim_number (rep confirms each SIM's number once in the app setup).
+- "Webinars" renamed "Events & Batches"; batches.kind webinar|event|batch; Compare view
+  (batch_compare()).
+- Follow-up discipline: follow_ups.dialled_at set by trigger on outgoing calls (from 10 min before
+  due). On time ≤ 15 min after due; Late > 15 min; Not called = 15 min passed, no call.
+  follow_up_report() per rep; Follow-ups page has Timing column, Late tab, CSV export.
+- App v0.2: follow-up notifications at −5, 0 (with Call button), +5, +10 min (AlarmManager exact
+  when allowed; skipped if the number was already called); Calls tab = phone call history with
+  "Add lead"; one-time setup of own number + SIM numbers; a lead created later links its
+  earlier calls (trigger link_calls_to_new_lead).
+
 ## Call tracking (decided Nov 2026)
 - Owner chose B: upload ALL calls (like Callyzer). Company setting organizations.settings
   .call_tracking = 'all' (default) | 'leads' (Settings → Company). sync_calls() enforces it.
@@ -130,7 +150,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: IndiaMART pull (CRM key), direct Facebook, push notification to rep on new lead.
 
-## Android app (`android/`) — v0.1.0
+## Android app (`android/`) — v0.2.0
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats

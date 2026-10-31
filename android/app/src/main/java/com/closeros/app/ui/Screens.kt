@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.closeros.app.BuildConfig
 import com.closeros.app.calls.PhoneCalls
+import com.closeros.app.calls.FollowUpAlarms
 import com.closeros.app.calls.Sim
 import com.closeros.app.data.CallRow
 import com.closeros.app.data.Lead
@@ -102,7 +103,7 @@ fun NoCompanyScreen(vm: AppViewModel) {
 // ───────────── Permissions ─────────────
 
 val requiredPermissions = buildList {
-    add(Manifest.permission.READ_CALL_LOG); add(Manifest.permission.READ_PHONE_STATE); add(Manifest.permission.CALL_PHONE)
+    add(Manifest.permission.READ_CALL_LOG); add(Manifest.permission.READ_PHONE_STATE); add(Manifest.permission.CALL_PHONE); add(Manifest.permission.READ_PHONE_NUMBERS)
     if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
 }
 
@@ -116,7 +117,7 @@ fun PermissionScreen(onDone: () -> Unit) {
         Perm(Icons.Default.Call, "Make calls", "Call leads with one tap, on the SIM you choose.")
         Perm(Icons.Default.List, "Call history", "Your calls are uploaded to your company's Closer OS so no call needs to be typed in.")
         Perm(Icons.Default.Phone, "Phone & SIM", "To know which SIM each call used.")
-        Perm(Icons.Default.Notifications, "Notifications", "Follow-up reminders.")
+        Perm(Icons.Default.Notifications, "Notifications", "Reminders 5 minutes before, at, and after each follow-up — with a Call button.")
         Text("Your company has chosen to track all calls on this phone. Use a work phone/SIM for Closer OS.", fontSize = 13.sp, color = Brand.muted)
         Button(onClick = { launcher.launch(requiredPermissions.toTypedArray()) }, modifier = Modifier.fillMaxWidth().height(50.dp)) { Text("Allow and continue") }
     }
@@ -315,9 +316,12 @@ fun ProfileScreen(vm: AppViewModel) {
         Text(vm.profile?.full_name ?: "", fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Text("${vm.profile?.email ?: ""}\n${vm.membership?.organization?.name ?: ""} · ${vm.membership?.role?.replaceFirstChar { it.uppercase() } ?: ""}", color = Brand.muted)
         HorizontalDivider()
-        Text("SIM cards", fontWeight = FontWeight.SemiBold)
+        Text("My numbers", fontWeight = FontWeight.SemiBold)
+        Text("Mobile: ${vm.profile?.phone?.let { fmtPhone(it) } ?: "not set"}")
         if (sims.isEmpty()) Text("No SIM found (or phone permission not given).", color = Brand.muted)
-        sims.forEach { Text(it.label + if (vm.store.preferredSim == it.slot) "  ✓ last used" else "") }
+        sims.forEach { Text(it.label + " — " + (vm.store.simNumber(it.slot)?.let { n -> fmtPhone(n) } ?: "number not set") + if (vm.store.preferredSim == it.slot) "  ✓ last used" else "") }
+        TextButton(onClick = { vm.needsSetup = true }) { Text("Edit my numbers") }
+        if (android.os.Build.VERSION.SDK_INT >= 31 && !com.closeros.app.calls.FollowUpAlarms.canExact(ctx)) ExactAlarmHint()
         HorizontalDivider()
         Text("Sync", fontWeight = FontWeight.SemiBold)
         Text(if (vm.store.lastSyncMs == 0L) "Not synced yet" else "Last sync ${fmtWhen(Instant.ofEpochMilli(vm.store.lastSyncMs).toString())}", color = Brand.muted)

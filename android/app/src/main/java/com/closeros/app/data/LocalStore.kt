@@ -43,5 +43,18 @@ class LocalStore(ctx: Context) {
         get() = p.getInt("preferred_sim", -1)
         set(v) { p.edit().putInt("preferred_sim", v).apply() }
 
+    /** Follow-ups that currently have reminders scheduled. */
+    var scheduledFollowUps: Set<String>
+        get() = p.getStringSet("scheduled_fu", emptySet()) ?: emptySet()
+        set(v) { p.edit().putStringSet("scheduled_fu", v).apply() }
+
+    /** Phone number of each SIM slot, confirmed by the rep ("1" → "+9198…"). */
+    fun simNumber(slot: Int?): String? = slot?.let { p.getString("sim_number_$it", null) }
+    fun setSimNumber(slot: Int, number: String) { p.edit().putString("sim_number_$slot", number.trim()).apply() }
+
+    var setupDone: Boolean
+        get() = p.getBoolean("setup_done", false)
+        set(v) { p.edit().putBoolean("setup_done", v).apply() }
+
     fun clear() { p.edit().clear().apply() }
 }

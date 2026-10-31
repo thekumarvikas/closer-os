@@ -78,11 +78,11 @@ export default function BatchDetail() {
 
   return (
     <>
-      <Link to="/webinars" className="mb-3 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"><ArrowLeft className="h-4 w-4" /> Webinars</Link>
+      <Link to="/webinars" className="mb-3 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"><ArrowLeft className="h-4 w-4" /> Events & Batches</Link>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-semibold text-slate-900">{batch.name}
-            {isManager && <button onClick={() => setModal('edit')} className="text-slate-400 hover:text-slate-700" aria-label="Edit webinar"><Pencil className="h-4 w-4" /></button>}
+            {isManager && <button onClick={() => setModal('edit')} className="text-slate-400 hover:text-slate-700" aria-label="Edit"><Pencil className="h-4 w-4" /></button>}
           </h1>
           <p className="mt-0.5 text-sm text-slate-500">{fmtDateTime(batch.webinar_at, org)} · hot lead = {batch.hot_minutes}+ min · guided target {batch.guided_target_pct}%{batch.holdout_pct > 0 ? ` · test group ${batch.holdout_pct}%` : ''}
             {batch.zoom_uploaded_at ? <> · Zoom report uploaded {fmtDateTime(batch.zoom_uploaded_at, org)}</> : null}</p>
@@ -91,7 +91,7 @@ export default function BatchDetail() {
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={() => setModal('import')}><Upload className="h-4 w-4" /> Add registrations</Button>
             <Button variant="secondary" onClick={() => setModal('remind')}><UserPlus className="h-4 w-4" /> Assign reminder calls</Button>
-            <Button onClick={() => setModal('zoom')}><Video className="h-4 w-4" /> Upload Zoom report</Button>
+            <Button onClick={() => setModal('zoom')}><Video className="h-4 w-4" /> Upload attendance (Zoom)</Button>
           </div>
         )}
       </div>
@@ -134,7 +134,7 @@ function BatchReport({ batch, purpose, dir }: { batch: Batch; purpose: Purpose; 
   if (error) return <ErrorBox error={error} />
   if (!data) return <Spinner />
   const total = data.reps.find(r => r.g === 1)
-  if (!total || total.assigned === 0) return <Card><Empty icon={<Video className="h-6 w-6" />} title="No leads in this webinar yet" text="Use “Add registrations” to import the people who registered." /></Card>
+  if (!total || total.assigned === 0) return <Card><Empty icon={<Video className="h-6 w-6" />} title="No leads here yet" text="Use “Add registrations” to import the people who registered." /></Card>
 
   const metrics = purpose === 'sales' ? salesMetrics(batch.hot_minutes) : reminderMetrics
   const shown = metrics.filter(m => more || m.main)

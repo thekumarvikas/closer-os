@@ -5,7 +5,7 @@ export interface Organization {
   currency: string; timezone: string; date_format: string
   settings: { call_tracking?: 'all' | 'leads' } & Record<string, unknown>
 }
-export interface Profile { id: string; email: string | null; full_name: string | null; avatar_url: string | null }
+export interface Profile { id: string; email: string | null; full_name: string | null; avatar_url: string | null; phone?: string | null }
 export interface Member { org_id: string; user_id: string; role: Role; status: 'active' | 'deactivated'; joined_at: string; profile?: Profile | null }
 export interface Team { id: string; org_id: string; name: string }
 export interface TeamMember { team_id: string; user_id: string; org_id: string; is_manager: boolean }
@@ -35,6 +35,6 @@ export interface Rule {
 }
 export interface Batch {
   id: string; org_id: string; name: string; webinar_at: string; hot_minutes: number; guided_target_pct: number
-  zoom_uploaded_at: string | null; is_archived: boolean; created_at: string; holdout_pct: number
+  zoom_uploaded_at: string | null; is_archived: boolean; created_at: string; holdout_pct: number; kind?: 'webinar' | 'event' | 'batch'
 }
 export interface ProfessionCategory { id: string; name: string; keywords: string[]; position: number }

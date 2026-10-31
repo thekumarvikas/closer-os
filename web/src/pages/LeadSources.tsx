@@ -137,9 +137,9 @@ function SourceForm({ kind, source, dir, batches, onClose, onSaved }:
           <Field label="Lead source shown on leads"><input className="input" value={label} onChange={e => setLabel(e.target.value)} /></Field>
           <Field label="Campaign (if the lead has none)"><input className="input" value={campaign} onChange={e => setCampaign(e.target.value)} placeholder="optional" /></Field>
         </div>
-        <Field label="Add leads to webinar" hint="Registrations from this source join this webinar. Change it when you start a new webinar.">
+        <Field label="Add leads to webinar / event / batch" hint="Registrations from this source join this webinar. Change it when you start a new webinar.">
           <select className="input" value={batch} onChange={e => setBatch(e.target.value)}>
-            <option value="">No webinar</option>
+            <option value="">None</option>
             {batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
         </Field>

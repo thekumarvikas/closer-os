@@ -33,7 +33,7 @@ export default function OutcomeReportView({ org, dir, from, to, users, fileTag, 
 
   if (error) return <ErrorBox error={error} />
   if (!r) return <Spinner />
-  if (r.total.calls === 0) return <Card><Empty icon={<Target className="h-6 w-6" />} title="No lead calls in this period" text="Outcomes are recorded when reps finish a call to a lead in the Closer OS app." /></Card>
+  if (r.total.calls === 0) return <Card><Empty icon={<Target className="h-6 w-6" />} title="No calls in this period" text="Outcomes are recorded when reps finish a call to a lead in the Closer OS app." /></Card>
 
   // Outcomes in the company's order; hidden ones still appear if they were used.
   const used = dir.outcomes.filter(o => o.is_active || r.byOutcome.has(o.id))
@@ -45,9 +45,11 @@ export default function OutcomeReportView({ org, dir, from, to, users, fileTag, 
   const pipeline = (m: Map<string | null, OutcomeCell>) => dir.outcomes.filter(o => o.category === 'positive').reduce((s, o) => s + get(m, o.id).deal_value, 0)
   const max = Math.max(1, ...used.map(o => get(r.byOutcome, o.id).calls))
   const cols = used.filter(o => get(r.byOutcome, o.id).calls > 0)
+  const groups: [string, string[]][] = [['Not connected', ['not_connected']], ['Follow-up', ['connected']], ['Interested', ['positive']],
+    ['Won', ['won']], ['Lost', ['lost']], ['Invalid', ['invalid']]]
 
   const tiles: [string, string, string?, ('red' | 'green')?][] = [
-    ['Lead calls', r.total.calls.toLocaleString('en-IN'), `${r.total.leads.toLocaleString('en-IN')} different leads`],
+    ['Calls with outcome', r.total.calls.toLocaleString('en-IN'), `${r.total.leads.toLocaleString('en-IN')} different leads`],
     ['Outcome filled', `${pct(filled, r.total.calls)}%`, `${get(r.byOutcome, null).calls} not filled yet`, get(r.byOutcome, null).calls ? 'red' : undefined],
     ['Interested / qualified', sumCat(r.byOutcome, ['positive']).toLocaleString('en-IN'), pipeline(r.byOutcome) ? `Potential ${fmtMoney(pipeline(r.byOutcome), org)}` : `${pct(sumCat(r.byOutcome, ['positive']), filled)}% of outcomes`],
     ['Sales closed', sumCat(r.byOutcome, ['won']).toLocaleString('en-IN'), fmtMoney(revenue(r.byOutcome), org), 'green'],
@@ -57,11 +59,11 @@ export default function OutcomeReportView({ org, dir, from, to, users, fileTag, 
 
   function exportCsv() {
     if (view === 'employees') {
-      downloadCsv(`closer-os-outcomes-by-employee_${fileTag}.csv`, ['Employee', 'Lead calls', ...cols.map(o => o.label), 'Not filled', 'Sales', 'Revenue'],
+      downloadCsv(`closer-os-outcomes-by-employee_${fileTag}.csv`, ['Person', 'Calls', ...cols.map(o => o.label), 'Not filled', 'Sales', 'Revenue'],
         [...[...r!.byUser].map(([u, v]) => [dir.nameOf(u), v.total.calls, ...cols.map(o => get(v.outcomes, o.id).calls), get(v.outcomes, null).calls, sumCat(v.outcomes, ['won']), revenue(v.outcomes)]),
           ['TOTAL', r!.total.calls, ...cols.map(o => get(r!.byOutcome, o.id).calls), get(r!.byOutcome, null).calls, sumCat(r!.byOutcome, ['won']), revenue(r!.byOutcome)]])
     } else {
-      downloadCsv(`closer-os-outcomes-by-day_${fileTag}.csv`, ['Date', 'Lead calls', ...cols.map(o => o.label), 'Not filled', 'Sales', 'Revenue'],
+      downloadCsv(`closer-os-outcomes-by-day_${fileTag}.csv`, ['Date', 'Calls', ...cols.map(o => o.label), 'Not filled', 'Sales', 'Revenue'],
         [...r!.byDay].map(([d, v]) => [d, v.total.calls, ...cols.map(o => get(v.outcomes, o.id).calls), get(v.outcomes, null).calls, sumCat(v.outcomes, ['won']), revenue(v.outcomes)]))
     }
   }
@@ -107,7 +109,7 @@ export default function OutcomeReportView({ org, dir, from, to, users, fileTag, 
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex rounded-lg bg-slate-100 p-1 text-sm">
-          {([['employees', 'By employee'], ['days', 'By day']] as const).map(([k, l]) => (
+          {([['employees', 'By person'], ['days', 'By day']] as const).map(([k, l]) => (
             <button key={k} onClick={() => setView(k)} className={`rounded-md px-3 py-1.5 font-medium ${view === k ? 'bg-white shadow-sm' : 'text-slate-600'}`}>{l}</button>
           ))}
         </div>
@@ -116,9 +118,9 @@ export default function OutcomeReportView({ org, dir, from, to, users, fileTag, 
       <Card className="overflow-x-auto">
         <table className="min-w-full divide-y divide-slate-100">
           <thead className="bg-slate-50"><tr>
-            <th className="th sticky left-0 bg-slate-50">{view === 'employees' ? 'Employee' : 'Date'}</th>
-            <th className="th">Lead calls</th>
-            {cols.map(o => <th key={o.id} className="th">{o.label}</th>)}
+            <th className="th sticky left-0 bg-slate-50">{view === 'employees' ? 'Person' : 'Date'}</th>
+            <th className="th">Calls</th>
+            {groups.map(([g]) => <th key={g} className="th">{g}</th>)}
             <th className="th">Not filled</th><th className="th">Interested %</th><th className="th">Sales</th><th className="th">Revenue</th>
           </tr></thead>
           <tbody className="divide-y divide-slate-100">
@@ -128,7 +130,7 @@ export default function OutcomeReportView({ org, dir, from, to, users, fileTag, 
                 <tr key={k} className="hover:bg-slate-50">
                   <td className="td sticky left-0 bg-white font-medium">{view === 'employees' ? dir.nameOf(k) : fmtYmd(k, true)}</td>
                   <td className="td tabular-nums">{v.total.calls}</td>
-                  {cols.map(o => { const n = get(v.outcomes, o.id).calls; return <td key={o.id} className={`td tabular-nums ${n ? '' : 'text-slate-300'}`}>{n}</td> })}
+                  {groups.map(([g, cats]) => { const n = sumCat(v.outcomes, cats); return <td key={g} className={`td tabular-nums ${n ? '' : 'text-slate-300'}`}>{n}</td> })}
                   <td className={`td tabular-nums ${get(v.outcomes, null).calls ? 'text-red-600' : 'text-slate-300'}`}>{get(v.outcomes, null).calls}</td>
                   <td className="td tabular-nums">{pct(sumCat(v.outcomes, ['positive', 'won']), f)}%</td>
                   <td className="td tabular-nums font-medium text-emerald-700">{sumCat(v.outcomes, ['won'])}</td>
@@ -139,7 +141,7 @@ export default function OutcomeReportView({ org, dir, from, to, users, fileTag, 
             {view === 'employees' && (
               <tr className="bg-slate-50 font-semibold">
                 <td className="td sticky left-0 bg-slate-50">Total</td><td className="td">{r.total.calls}</td>
-                {cols.map(o => <td key={o.id} className="td tabular-nums">{get(r.byOutcome, o.id).calls}</td>)}
+                {groups.map(([g, cats]) => <td key={g} className="td tabular-nums">{sumCat(r.byOutcome, cats)}</td>)}
                 <td className="td">{get(r.byOutcome, null).calls}</td><td className="td">{pct(sumCat(r.byOutcome, ['positive', 'won']), filled)}%</td>
                 <td className="td text-emerald-700">{sumCat(r.byOutcome, ['won'])}</td><td className="td">{fmtMoney(revenue(r.byOutcome), org)}</td>
               </tr>
@@ -147,7 +149,7 @@ export default function OutcomeReportView({ org, dir, from, to, users, fileTag, 
           </tbody>
         </table>
       </Card>
-      <p className="text-xs text-slate-500">Counts are calls. "Leads" counts each lead once even if called several times. Interested % = interested, qualified and won outcomes out of all filled outcomes.</p>
+      <p className="text-xs text-slate-500">The table groups outcomes by type; the CSV has every outcome separately. Counts are calls. "Leads" counts each lead once even if called several times. Interested % = interested, qualified and won outcomes out of all filled outcomes.</p>
     </div>
   )
 }

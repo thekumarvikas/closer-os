@@ -17,7 +17,7 @@ import java.util.UUID
 /** One entry of the phone's call log. */
 data class LogCall(
     val id: String, val phone: String, val direction: String, val startedAtMs: Long, val durationSec: Int,
-    val simSlot: Int?, val simLabel: String?,
+    val simSlot: Int?, val simLabel: String?, val simNumber: String? = null,
 )
 
 data class Sim(val slot: Int, val label: String, val handle: PhoneAccountHandle?)
@@ -47,6 +47,18 @@ object PhoneCalls {
         }
     }
 
+    /** The SIM's own number, if the phone reveals it (many phones don't — then the rep types it). */
+    @SuppressLint("MissingPermission", "HardwareIds")
+    fun simOwnNumber(ctx: Context, slot: Int): String? = runCatching {
+        val sm = ctx.getSystemService(SubscriptionManager::class.java)
+        val sub = sm.activeSubscriptionInfoList.orEmpty().firstOrNull { it.simSlotIndex + 1 == slot } ?: return null
+        val n = if (android.os.Build.VERSION.SDK_INT >= 33) sm.getPhoneNumber(sub.subscriptionId) else @Suppress("DEPRECATION") sub.number
+        n?.takeIf { it.filter { c -> c.isDigit() }.length >= 10 }
+    }.getOrNull()
+
+    /** Reads the whole call log (newest first) for the Calls screen. */
+    fun history(ctx: Context, limit: Int): List<LogCall> = readLog(ctx, 0, 100_000).takeLast(limit).reversed()
+
     /** Starts a normal phone call on the chosen SIM. The phone's own app handles (and records) it. */
     @SuppressLint("MissingPermission")
     fun call(ctx: Context, phone: String, sim: Sim?) {
@@ -70,6 +82,7 @@ object PhoneCalls {
     fun readLog(ctx: Context, sinceMs: Long, limit: Int = 2000): List<LogCall> {
         if (!has(ctx, android.Manifest.permission.READ_CALL_LOG)) return emptyList()
         val sims = sims(ctx)
+        val store = com.closeros.app.data.LocalStore(ctx)
         val subs = runCatching { ctx.getSystemService(SubscriptionManager::class.java).activeSubscriptionInfoList.orEmpty() }.getOrDefault(emptyList())
         val out = mutableListOf<LogCall>()
         val cols = arrayOf(CallLog.Calls._ID, CallLog.Calls.NUMBER, CallLog.Calls.TYPE, CallLog.Calls.DATE, CallLog.Calls.DURATION, CallLog.Calls.PHONE_ACCOUNT_ID)
@@ -92,7 +105,7 @@ object PhoneCalls {
                     id = stableId(ctx, c.getLong(0), date), phone = number, direction = dir, startedAtMs = date,
                     // MIUI stores ring time as "duration" for missed calls: only answered calls have talk time.
                     durationSec = if (dir == "incoming" || dir == "outgoing") c.getInt(4) else 0,
-                    simSlot = sim?.slot, simLabel = sim?.label,
+                    simSlot = sim?.slot, simLabel = sim?.label, simNumber = store.simNumber(sim?.slot),
                 )
             }
         }

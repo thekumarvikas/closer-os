@@ -33,7 +33,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     // Join any company that invited this email address.
     await supabase.rpc('accept_my_invitations')
     const [{ data: p }, { data: m }] = await Promise.all([
-      supabase.from('profiles').select('id,email,full_name,avatar_url').eq('id', s.user.id).single(),
+      supabase.from('profiles').select('id,email,full_name,avatar_url,phone').eq('id', s.user.id).single(),
       supabase.from('org_members').select('*, organization:organizations(*)').eq('user_id', s.user.id).eq('status', 'active'),
     ])
     setProfile(p as Profile | null)

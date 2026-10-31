@@ -48,7 +48,7 @@ object Backend {
     val timezone: String = "Asia/Kolkata",
 )
 @Serializable data class Membership(val org_id: String, val role: String, val organization: Org)
-@Serializable data class Profile(val id: String, val email: String? = null, val full_name: String? = null)
+@Serializable data class Profile(val id: String, val email: String? = null, val full_name: String? = null, val phone: String? = null)
 
 @Serializable data class Lead(
     val id: String, val org_id: String, val name: String = "", val phone: String, val email: String? = null,
@@ -141,6 +141,26 @@ object Repo {
             limit(200)
         }.decodeList()
     }
+
+    suspend fun setMyPhone(orgId: String, phone: String) {
+        db.rpc("set_member_phone", buildJsonObject { put("p_org", orgId); put("p_user", Backend.uid); put("p_phone", phone) })
+    }
+
+    /** Leads (visible to me) for a list of numbers, keyed by the number as stored (+91…). */
+    suspend fun leadsByPhones(orgId: String, phones: List<String>): Map<String, Lead> {
+        if (phones.isEmpty()) return emptyMap()
+        return Backend.client.from("leads").select {
+            filter { eq("org_id", orgId); isIn("phone", phones.distinct()); filter("deleted_at", FilterOperator.IS, "null") }
+        }.decodeList<Lead>().associateBy { it.phone }
+    }
+
+    /** Adds a lead from the phone (it is assigned to the rep who adds it). */
+    suspend fun createLead(orgId: String, name: String, phone: String, profession: String?, notes: String?): Lead =
+        Backend.client.from("leads").insert(buildJsonObject {
+            put("org_id", orgId); put("name", name.trim()); put("phone", phone); put("source", "Phone call")
+            profession?.takeIf { it.isNotBlank() }?.let { put("profession", it.trim()) }
+            notes?.takeIf { it.isNotBlank() }?.let { put("notes", it.trim()) }
+        }) { select() }.decodeSingle()
 
     /** Saves a call with its outcome (see log_call in the database). */
     suspend fun logCall(payload: JsonObject) {

@@ -1,6 +1,7 @@
 package com.closeros.app
 
 import android.app.Application
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.*
@@ -33,6 +35,18 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent { CloserTheme { Root(vm) } }
+        handle(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handle(intent)
+    }
+
+    /** Taps on follow-up notifications: open the lead, or start the call. */
+    private fun handle(i: Intent?) {
+        i?.getStringExtra("call_lead")?.let { vm.callLeadById(it); i.removeExtra("call_lead") }
+        i?.getStringExtra("open_lead")?.let { vm.openLeadId = it; i.removeExtra("open_lead") }
     }
 
     override fun onResume() {
@@ -47,14 +61,17 @@ fun Root(vm: AppViewModel) {
     var permsAsked by remember { mutableStateOf(requiredPermissions.all { PhoneCalls.has(ctx, it) }) }
     var simChoice by remember { mutableStateOf<Pair<Lead, List<Sim>>?>(null) }
 
-    LaunchedEffect(vm.message) {
-        vm.message?.let { Toast.makeText(ctx, it, Toast.LENGTH_SHORT).show(); vm.message = null }
-    }
-
     fun call(lead: Lead) {
         val sims = vm.sims()
         val preferred = sims.firstOrNull { it.slot == vm.store.preferredSim }
         if (sims.size > 1) simChoice = lead to sims else vm.startCall(lead, preferred ?: sims.firstOrNull())
+    }
+
+    LaunchedEffect(vm.callRequest) {
+        vm.callRequest?.let { lead -> vm.callRequest = null; if (vm.pending == null) call(lead) else vm.message = "Save the outcome of your last call first" }
+    }
+    LaunchedEffect(vm.message) {
+        vm.message?.let { Toast.makeText(ctx, it, Toast.LENGTH_SHORT).show(); vm.message = null }
     }
 
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -64,11 +81,12 @@ fun Root(vm: AppViewModel) {
             vm.loadingOrg && vm.membership == null -> Loading()
             vm.membership == null -> NoCompanyScreen(vm)
             !permsAsked -> PermissionScreen { permsAsked = true; com.closeros.app.calls.CallSync.syncNow(ctx) }
+            vm.needsSetup -> SetupScreen(vm)
             vm.pending != null -> OutcomeScreen(vm)
             vm.openLeadId != null -> LeadDetailScreen(vm, vm.openLeadId!!) { call(it) }
             else -> Scaffold(bottomBar = {
                 NavigationBar {
-                    listOf(Triple(Tab.Home, "Home", Icons.Default.Home), Triple(Tab.Leads, "My Leads", Icons.Default.Phone),
+                    listOf(Triple(Tab.Home, "Home", Icons.Default.Home), Triple(Tab.Leads, "Leads", Icons.Default.Phone), Triple(Tab.Calls, "Calls", Icons.Default.List),
                         Triple(Tab.FollowUps, "Follow-ups", Icons.Default.DateRange), Triple(Tab.Profile, "Profile", Icons.Default.Person)).forEach { (t, label, icon) ->
                         NavigationBarItem(selected = vm.tab == t, onClick = { vm.tab = t }, icon = { Icon(icon, null) }, label = { Text(label) })
                     }
@@ -78,6 +96,7 @@ fun Root(vm: AppViewModel) {
                     when (vm.tab) {
                         Tab.Home -> HomeScreen(vm)
                         Tab.Leads -> LeadsScreen(vm) { call(it) }
+                        Tab.Calls -> CallHistoryScreen(vm)
                         Tab.FollowUps -> FollowUpsScreen(vm)
                         Tab.Profile -> ProfileScreen(vm)
                     }

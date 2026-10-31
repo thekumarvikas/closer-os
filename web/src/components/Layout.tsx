@@ -1,14 +1,15 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, type FormEvent } from 'react'
 import { LayoutDashboard, BarChart3, Video, Plug, Users, PhoneCall, CalendarClock, UserCog, Settings, LogOut, Menu, X } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { supabase, errorText } from '../lib/supabase'
+import { Button, ErrorBox, Field, Modal } from './ui'
 import { useSession } from '../lib/session'
 import { roleLabel } from '../lib/format'
 
 const nav = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
-  { to: '/webinars', label: 'Webinars', icon: Video },
+  { to: '/webinars', label: 'Events & Batches', icon: Video },
   { to: '/leads', label: 'Leads', icon: Users },
   { to: '/lead-sources', label: 'Lead sources', icon: Plug, manager: true },
   { to: '/calls', label: 'Calls', icon: PhoneCall },
@@ -20,6 +21,7 @@ const nav = [
 export default function Layout() {
   const { org, role, profile, memberships, selectOrg, isAdmin, isManager } = useSession()
   const [open, setOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
 
   const sidebar = (
     <div className="flex h-full flex-col">
@@ -43,7 +45,7 @@ export default function Layout() {
         ))}
       </nav>
       <div className="border-t border-white/10 p-4">
-        <p className="truncate text-sm font-medium text-white">{profile?.full_name || profile?.email}</p>
+        <button onClick={() => setProfileOpen(true)} className="block w-full truncate text-left text-sm font-medium text-white hover:underline" title="My profile">{profile?.full_name || profile?.email}</button>
         <p className="text-xs text-brand-200">{role ? roleLabel[role] : ''}</p>
         <button onClick={() => supabase.auth.signOut()} className="mt-3 flex items-center gap-2 text-sm text-brand-100 hover:text-white">
           <LogOut className="h-4 w-4" /> Sign out
@@ -68,6 +70,33 @@ export default function Layout() {
         <span className="font-semibold">Closer OS</span>
       </header>
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8"><Outlet /></main>
+      {profileOpen && <MyProfile onClose={() => setProfileOpen(false)} />}
     </div>
+  )
+}
+
+function MyProfile({ onClose }: { onClose: () => void }) {
+  const { profile, org, session, refresh } = useSession()
+  const [name, setName] = useState(profile?.full_name ?? '')
+  const [phone, setPhone] = useState((profile as { phone?: string | null } | null)?.phone ?? '')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  async function save(e: FormEvent) {
+    e.preventDefault(); setBusy(true); setError(null)
+    const a = await supabase.from('profiles').update({ full_name: name.trim() }).eq('id', session!.user.id)
+    const b = org ? await supabase.rpc('set_member_phone', { p_org: org.id, p_user: session!.user.id, p_phone: phone }) : { error: null }
+    setBusy(false)
+    if (a.error || b.error) return setError(errorText(a.error || b.error))
+    await refresh(); onClose()
+  }
+  return (
+    <Modal open onClose={onClose} title="My profile" footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" form="me" loading={busy}>Save</Button></>}>
+      <form id="me" onSubmit={save} className="space-y-3">
+        <Field label="Your name"><input className="input" required value={name} onChange={e => setName(e.target.value)} /></Field>
+        <Field label="Your mobile number" hint="Shown to managers next to your name in reports and call history."><input className="input" value={phone} onChange={e => setPhone(e.target.value)} inputMode="tel" /></Field>
+        <p className="text-sm text-slate-500">{profile?.email}</p>
+        <ErrorBox error={error} />
+      </form>
+    </Modal>
   )
 }

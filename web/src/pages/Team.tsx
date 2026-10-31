@@ -40,13 +40,19 @@ export default function Team() {
 
       <Card className="mb-6 overflow-x-auto">
         <table className="min-w-full divide-y divide-slate-100">
-          <thead className="bg-slate-50"><tr><th className="th">Name</th><th className="th">Email</th><th className="th">Role</th><th className="th">Teams</th><th className="th">Joined</th><th className="th">Status</th></tr></thead>
+          <thead className="bg-slate-50"><tr><th className="th">Name</th><th className="th">Phone</th><th className="th">Email</th><th className="th">Role</th><th className="th">Teams</th><th className="th">Joined</th><th className="th">Status</th></tr></thead>
           <tbody className="divide-y divide-slate-100">
             {dir.members.map(m => {
               const me = m.user_id === session?.user.id
               return (
                 <tr key={m.user_id} className={m.status === 'deactivated' ? 'opacity-60' : ''}>
                   <td className="td font-medium">{m.profile?.full_name || '—'} {me && <Badge color="brand">You</Badge>}</td>
+                  <td className="td">
+                    {isAdmin || me ? (
+                      <input className="input !w-40 !py-1" placeholder="Add phone" defaultValue={dir.phoneOf(m.user_id)}
+                        onBlur={e => e.target.value !== dir.phoneOf(m.user_id) && run(supabase.rpc('set_member_phone', { p_org: org.id, p_user: m.user_id, p_phone: e.target.value }))} />
+                    ) : dir.phoneOf(m.user_id) || '—'}
+                  </td>
                   <td className="td text-slate-600">{m.profile?.email}</td>
                   <td className="td">
                     {isAdmin && !me && (m.role !== 'owner' || myRole === 'owner') ? (

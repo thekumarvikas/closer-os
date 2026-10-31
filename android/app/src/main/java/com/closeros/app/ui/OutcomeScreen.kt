@@ -127,6 +127,7 @@ fun OutcomeScreen(vm: AppViewModel) {
                 put("started_at", Instant.ofEpochMilli(log?.startedAtMs ?: p.startedAtMs).toString())
                 put("duration_sec", log?.durationSec ?: 0)
                 log?.simSlot?.let { put("sim_slot", it) }; log?.simLabel?.let { put("sim_label", it) }
+                log?.simNumber?.let { put("sim_number", it) }
                 put("device_id", PhoneCalls.deviceId(ctx)); put("from_dialer_queue", false)
                 put("outcome_id", o.id)
                 put("outcome_data", buildJsonObject {

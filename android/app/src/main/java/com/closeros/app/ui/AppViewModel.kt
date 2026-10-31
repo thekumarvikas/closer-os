@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.closeros.app.calls.CallSync
+import com.closeros.app.calls.FollowUpAlarms
 import com.closeros.app.calls.LogCall
 import com.closeros.app.calls.PhoneCalls
 import com.closeros.app.calls.Sim
@@ -28,7 +29,22 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import java.util.UUID
 
-enum class Tab { Home, Leads, FollowUps, Profile }
+enum class Tab { Home, Leads, Calls, FollowUps, Profile }
+
+data class HistoryItem(val log: LogCall, val phone: String, val lead: Lead?)
+
+/** +91 98765 43210 / 098765… / 98765… → +919876543210 (same rule as the server). */
+fun normalizePhone(raw: String, prefix: String = "+91"): String {
+    val d = raw.filter { it.isDigit() }
+    val p = prefix.filter { it.isDigit() }
+    return when {
+        raw.trim().startsWith("+") -> "+$d"
+        d.startsWith("00") -> "+" + d.drop(2)
+        d.length == 11 && d.startsWith("0") -> "+$p" + d.drop(1)
+        d.length == 10 -> "+$p$d"
+        else -> "+$d"
+    }
+}
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val ctx get() = getApplication<Application>()
@@ -50,6 +66,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var message by mutableStateOf<String?>(null)
 
     /** The call waiting for its outcome, and what the call log says about it. */
+    var needsSetup by mutableStateOf(!store.setupDone)
+    var callRequest by mutableStateOf<Lead?>(null)
+    var history by mutableStateOf<List<HistoryItem>?>(null)
+
     var pending by mutableStateOf(store.pendingCall)
     var pendingLog by mutableStateOf<LogCall?>(null)
 
@@ -87,7 +107,40 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun refreshHome() = viewModelScope.launch {
         val m = membership ?: return@launch
         runCatching { stats = Repo.todayStats(m.organization) }
-        runCatching { followUps = Repo.followUps(m.org_id) }
+        runCatching { followUps = Repo.followUps(m.org_id); FollowUpAlarms.scheduleAll(ctx, followUps) }
+    }
+
+    private val prefix get() = membership?.organization?.phone_prefix ?: "+91"
+
+    /** Phone call history, with lead names where the number is a lead. */
+    fun loadHistory() = viewModelScope.launch {
+        val m = membership ?: return@launch
+        val logs = PhoneCalls.history(ctx, 300)
+        val phones = logs.map { normalizePhone(it.phone, prefix) }
+        val leadsByPhone = runCatching { Repo.leadsByPhones(m.org_id, phones) }.getOrDefault(emptyMap())
+        history = logs.mapIndexed { i, l -> HistoryItem(l, phones[i], leadsByPhone[phones[i]]) }
+    }
+
+    fun addLeadFromCall(phone: String, name: String, profession: String, notes: String, onDone: () -> Unit) = viewModelScope.launch {
+        val m = membership ?: return@launch
+        runCatching { Repo.createLead(m.org_id, name, phone, profession, notes) }
+            .onSuccess { message = "Lead added"; onDone(); loadHistory(); reloadLeads(); CallSync.syncNow(ctx) }
+            .onFailure { message = if (it.message?.contains("leads_org_phone_uq") == true) "This number is already a lead" else "Couldn't add the lead: ${it.message?.take(80)}" }
+    }
+
+    /** From a notification's Call button. */
+    fun callLeadById(id: String) = viewModelScope.launch {
+        runCatching { Repo.lead(id) }.getOrNull()?.let { callRequest = it } ?: run { message = "Lead not found" }
+    }
+
+    fun saveSetup(myPhone: String, sims: Map<Int, String>, onError: (String) -> Unit) = viewModelScope.launch {
+        val m = membership ?: return@launch
+        val ok = runCatching { if (myPhone.isNotBlank()) Repo.setMyPhone(m.org_id, myPhone) }.isSuccess
+        if (!ok) { onError("Couldn't save your number. Check your internet."); return@launch }
+        sims.forEach { (slot, n) -> if (n.isNotBlank()) store.setSimNumber(slot, normalizePhone(n, prefix)) }
+        store.setupDone = true; needsSetup = false
+        profile = runCatching { Repo.profile() }.getOrNull() ?: profile
+        CallSync.syncNow(ctx)
     }
 
     fun reloadLeads() { page = 0; leadsEnd = false; leads.clear(); loadMoreLeads() }
@@ -118,7 +171,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun signOut() = viewModelScope.launch { runCatching { Repo.signOut() }; store.clear(); leads.clear(); pending = null }
+    fun signOut() = viewModelScope.launch { runCatching { Repo.signOut() }; FollowUpAlarms.scheduleAll(ctx, emptyList()); store.clear(); leads.clear(); pending = null; needsSetup = true }
 
     // ───────────── Calling ─────────────
 
@@ -153,6 +206,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             store.addToOutbox(payload)
             message = "No internet — saved on the phone, will send automatically"
         } else message = "Saved"
+        pending?.let { FollowUpAlarms.cancelForLead(ctx, it.leadId, followUps) }
         discardPending()
         onDone()
         refreshHome(); reloadLeads(); CallSync.syncNow(ctx)

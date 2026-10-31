@@ -45,6 +45,7 @@ object CallSync {
                         put("started_at", Instant.ofEpochMilli(c.startedAtMs).toString()); put("duration_sec", c.durationSec)
                         put("device_id", device)
                         c.simSlot?.let { put("sim_slot", it) }; c.simLabel?.let { put("sim_label", JsonPrimitive(it)) }
+                        c.simNumber?.let { put("sim_number", JsonPrimitive(it)) }
                     })
                 }
             }
@@ -52,6 +53,8 @@ object CallSync {
             store.callLogCursorMs = chunk.last().startedAtMs
         }
         store.lastSyncMs = System.currentTimeMillis()
+        // 3) Refresh follow-up reminders.
+        runCatching { FollowUpAlarms.scheduleAll(ctx, Repo.followUps(orgId)) }
         sent
     }
 

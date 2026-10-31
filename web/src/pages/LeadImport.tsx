@@ -171,9 +171,9 @@ export default function LeadImport({ orgId, dir, onClose, onDone, batchId }:
             <Field label="Lead source (if not in the file)"><input className="input" value={source} onChange={e => setSource(e.target.value)} placeholder="e.g. Facebook Ads" /></Field>
             <Field label="Campaign (if not in the file)"><input className="input" value={campaign} onChange={e => setCampaign(e.target.value)} placeholder="e.g. Diwali Webinar" /></Field>
           </div>
-          <Field label="Webinar batch" hint="With a batch, numbers already in Closer OS join the batch (marked Repeated) instead of being skipped.">
+          <Field label="Add to webinar / event / batch" hint="With a batch, numbers already in Closer OS join the batch (marked Repeated) instead of being skipped.">
             <select className="input" value={batch} onChange={e => setBatch(e.target.value)} disabled={!!batchId}>
-              <option value="">No batch</option>
+              <option value="">None</option>
               {batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>
           </Field>

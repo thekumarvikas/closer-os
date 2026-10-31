@@ -1,33 +1,33 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import {
-  CheckCircle2, Circle, Phone, Clock, PhoneIncoming, PhoneOutgoing, PhoneMissed, Ban, PhoneOff, UserX,
-  Users, Timer, Link2, Info,
-} from 'lucide-react'
+import { CheckCircle2, Circle } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
 import { useDirectory } from '../lib/directory'
-import { fetchReport, zonedMidnight, zonedYmd, addDays, fmtYmd, hms, pct, type Bucket, type Report } from '../lib/report'
+import { fetchReport, zonedMidnight, zonedYmd, addDays, fmtYmd, pct, type Bucket, type Report } from '../lib/report'
 import { fmtMoney, startOfToday } from '../lib/format'
 import { Card, ErrorBox, PageHeader, Spinner, Stat } from '../components/ui'
+import { T, Hint, dur, definitions } from '../components/terms'
 
-export const definitions: Record<string, string> = {
-  connected: 'Incoming or outgoing calls where both sides talked (duration above 0 seconds).',
-  not_picked: 'Outgoing calls the customer did not answer.',
-  never_attended: 'Missed or rejected calls that nobody called back afterwards.',
-  uniq: 'Different phone numbers called or received.',
-  work: 'For each rep and day: time from the first call to the end of the last call.',
-  idle: 'Working time minus talk time.',
-}
-
-export function Hint({ k }: { k: keyof typeof definitions }) {
-  return <span title={definitions[k]} className="inline-flex cursor-help text-slate-400"><Info className="h-3.5 w-3.5" /></span>
-}
+// Each row of the comparison table: label, value, and whether "more" is bad (shown red when > 0).
+const rows: { label: string; hint?: keyof typeof definitions; value: (b: Bucket) => ReactNode; bad?: keyof Bucket; strong?: boolean }[] = [
+  { label: T.calls, value: b => b.calls.toLocaleString('en-IN'), strong: true },
+  { label: T.dialled, value: b => b.out.toLocaleString('en-IN') },
+  { label: T.received, value: b => b.inc.toLocaleString('en-IN') },
+  { label: T.conversations, hint: 'conversations', value: b => <>{b.conn.toLocaleString('en-IN')} <span className="text-xs text-slate-500">{pct(b.conn, b.calls)}%</span></>, strong: true },
+  { label: T.talk, value: b => dur(b.dur), strong: true },
+  { label: T.avgConv, value: b => dur(b.conn ? b.conn_dur / b.conn : 0) },
+  { label: T.noAnswer, hint: 'noAnswer', value: b => b.not_picked.toLocaleString('en-IN') },
+  { label: T.missed, value: b => b.missed.toLocaleString('en-IN'), bad: 'missed' },
+  { label: T.declined, value: b => b.rejected.toLocaleString('en-IN'), bad: 'rejected' },
+  { label: T.neverCalledBack, hint: 'neverCalledBack', value: b => b.never_attended.toLocaleString('en-IN'), bad: 'never_attended' },
+  { label: T.contacts, hint: 'contacts', value: b => b.uniq.toLocaleString('en-IN') },
+  { label: T.active, hint: 'active', value: b => dur(b.work) },
+]
 
 export default function Overview() {
   const { org, isManager, isAdmin, profile } = useOrg()
   const dir = useDirectory(org.id)
-  const [leadOnly, setLeadOnly] = useState(false)
   const [periods, setPeriods] = useState<{ title: string; sub: string; report: Report }[] | null>(null)
   const [extra, setExtra] = useState({ due: 0, overdue: 0, leads: 0, unassigned: 0, sales: 0, revenue: 0 })
   const [error, setError] = useState<string | null>(null)
@@ -37,13 +37,12 @@ export default function Overview() {
     const ranges = [
       { title: 'Today', sub: fmtYmd(today), from: today, to: addDays(today, 1) },
       { title: 'Yesterday', sub: fmtYmd(addDays(today, -1)), from: addDays(today, -1), to: today },
-      { title: 'Last 7 days', sub: `${fmtYmd(addDays(today, -7))} – ${fmtYmd(addDays(today, -1))}`, from: addDays(today, -7), to: today },
+      { title: 'Last 7 days', sub: `${fmtYmd(addDays(today, -7)).slice(0, 6)} – ${fmtYmd(addDays(today, -1)).slice(0, 6)}`, from: addDays(today, -7), to: today },
     ]
-    setPeriods(null)
-    Promise.all(ranges.map(r => fetchReport(org.id, zonedMidnight(r.from, org), zonedMidnight(r.to, org), [], leadOnly)))
+    Promise.all(ranges.map(r => fetchReport(org.id, zonedMidnight(r.from, org), zonedMidnight(r.to, org), [], false)))
       .then(reps => setPeriods(ranges.map((r, i) => ({ title: r.title, sub: r.sub, report: reps[i] }))))
       .catch(e => setError(errorText(e)))
-  }, [org, leadOnly])
+  }, [org])
 
   useEffect(() => {
     const now = new Date().toISOString()
@@ -57,35 +56,23 @@ export default function Overview() {
       supabase.from('leads').select('id', head).eq('org_id', org.id).is('deleted_at', null).is('assigned_to', null),
       supabase.from('calls').select('outcome_data, outcome:call_outcomes!inner(category)').eq('org_id', org.id).gte('started_at', sod).eq('outcome.category', 'won').limit(1000),
     ]).then(([a, b, c, d, e]) => setExtra({
-      due: a.count ?? 0, overdue: b.count ?? 0, leads: c.count ?? 0, unassigned: d.count ?? 0,
-      sales: e.data?.length ?? 0,
+      due: a.count ?? 0, overdue: b.count ?? 0, leads: c.count ?? 0, unassigned: d.count ?? 0, sales: e.data?.length ?? 0,
       revenue: (e.data ?? []).reduce((s, x) => s + (Number((x.outcome_data as Record<string, unknown>)?.amount) || 0), 0),
     }))
   }, [org])
 
-  const firstName = profile?.full_name?.split(' ')[0]
   const h = new Date().getHours()
   const steps = dir ? [
     { done: dir.members.length > 1, label: 'Invite your sales team', to: '/team' },
-    { done: extra.leads > 0, label: 'Import your first leads', to: '/leads' },
+    { done: extra.leads > 0, label: 'Add leads (import, or connect a lead source)', to: '/lead-sources' },
     { done: dir.teams.length > 0, label: 'Create a team and pick its manager', to: '/team' },
     { done: (periods?.[2]?.report.total.calls ?? 0) + (periods?.[0]?.report.total.calls ?? 0) > 0, label: 'Reps install the Closer OS app and make a call', to: '/calls' },
   ] : []
 
   return (
     <>
-      <PageHeader title={`Good ${h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening'}${firstName ? `, ${firstName}` : ''}`}
-        subtitle={org.name}
-        actions={
-          <div className="flex rounded-lg bg-slate-100 p-1 text-sm">
-            {[['All calls', false], ['Lead calls only', true]].map(([l, v]) => (
-              <button key={String(l)} onClick={() => setLeadOnly(v as boolean)}
-                className={`rounded-md px-3 py-1.5 font-medium ${leadOnly === v ? 'bg-white shadow-sm' : 'text-slate-600'}`}>{l as string}</button>
-            ))}
-          </div>
-        } />
+      <PageHeader title={`Good ${h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening'}${profile?.full_name ? `, ${profile.full_name.split(' ')[0]}` : ''}`} subtitle={org.name} />
       <ErrorBox error={error} />
-
       {isAdmin && steps.some(s => !s.done) && (
         <Card className="mb-6 p-5">
           <h2 className="font-semibold">Get started</h2>
@@ -100,13 +87,7 @@ export default function Overview() {
         </Card>
       )}
 
-      {!periods ? <Spinner /> : (
-        <div className="grid gap-4 xl:grid-cols-3">
-          {periods.map(p => <PeriodCard key={p.title} title={p.title} sub={p.sub} b={p.report.total} />)}
-        </div>
-      )}
-
-      <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Stat label="Follow-ups due today" value={extra.due} />
         <Stat label="Overdue follow-ups" value={extra.overdue} tone={extra.overdue ? 'red' : undefined} />
         <Stat label="Sales today" value={extra.sales} tone={extra.sales ? 'green' : undefined} />
@@ -115,68 +96,58 @@ export default function Overview() {
         <Stat label="Unassigned leads" value={extra.unassigned.toLocaleString('en-IN')} tone={extra.unassigned ? 'red' : undefined} />
       </div>
 
-      {isManager && periods && dir && (
-        <>
-          <div className="mb-2 mt-8 flex items-center justify-between">
-            <h2 className="font-semibold">Team today</h2>
-            <Link to="/reports" className="text-sm text-brand-700 hover:underline">Full reports →</Link>
-          </div>
-          <Card className="overflow-x-auto">
+      <div className="grid gap-6 xl:grid-cols-5">
+        <Card className="overflow-hidden xl:col-span-2">
+          <div className="border-b border-slate-200 px-4 py-3"><h2 className="font-semibold">Calling activity</h2></div>
+          {!periods ? <Spinner /> : (
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50"><tr>
+                <th className="th"></th>
+                {periods.map(p => <th key={p.title} className="th !text-right"><span className="block normal-case tracking-normal text-slate-800">{p.title}</span><span className="font-normal normal-case tracking-normal">{p.sub}</span></th>)}
+              </tr></thead>
+              <tbody className="divide-y divide-slate-100">
+                {rows.map(r => (
+                  <tr key={r.label} className={r.strong ? 'font-semibold' : ''}>
+                    <td className="px-3 py-2 text-slate-700"><span className="flex items-center gap-1">{r.label}{r.hint && <Hint k={r.hint} />}</span></td>
+                    {periods.map(p => (
+                      <td key={p.title} className={`px-3 py-2 text-right tabular-nums ${r.bad && p.report.total[r.bad] > 0 ? 'text-red-600' : ''}`}>{r.value(p.report.total)}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
+
+        {isManager && periods && dir && (
+          <Card className="overflow-hidden xl:col-span-3">
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+              <h2 className="font-semibold">Team today</h2>
+              <Link to="/reports" className="text-sm text-brand-700 hover:underline">Full reports →</Link>
+            </div>
             {periods[0].report.byUser.length === 0 ? <p className="p-6 text-center text-sm text-slate-500">No calls yet today.</p> : (
-              <table className="min-w-full divide-y divide-slate-100">
+              <table className="w-full text-sm">
                 <thead className="bg-slate-50"><tr>
-                  <th className="th">Rep</th><th className="th">Calls</th><th className="th">Connected</th><th className="th">Connect %</th>
-                  <th className="th">Talk time</th><th className="th">Not picked</th><th className="th">Missed</th><th className="th">Working time</th>
+                  <th className="th">Person</th><th className="th !text-right">{T.calls}</th><th className="th !text-right">{T.conversations}</th>
+                  <th className="th !text-right">{T.talk}</th><th className="th !text-right">{T.noAnswer}</th><th className="th !text-right">{T.active}</th>
                 </tr></thead>
                 <tbody className="divide-y divide-slate-100">
                   {periods[0].report.byUser.map(u => (
                     <tr key={u.user_id}>
-                      <td className="td font-medium">{dir.nameOf(u.user_id)}</td><td className="td">{u.total.calls}</td><td className="td">{u.total.conn}</td>
-                      <td className="td">{pct(u.total.conn, u.total.calls)}%</td><td className="td">{hms(u.total.conn_dur)}</td>
-                      <td className="td">{u.total.not_picked}</td><td className="td">{u.total.missed}</td><td className="td">{hms(u.total.work)}</td>
+                      <td className="px-3 py-2"><span className="font-medium">{dir.nameOf(u.user_id)}</span>{dir.phoneOf(u.user_id) && <span className="block text-xs text-slate-500">{dir.phoneOf(u.user_id)}</span>}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{u.total.calls}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{u.total.conn} <span className="text-xs text-slate-500">{pct(u.total.conn, u.total.calls)}%</span></td>
+                      <td className="px-3 py-2 text-right tabular-nums">{dur(u.total.conn_dur)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{u.total.not_picked}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{dur(u.total.work)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             )}
           </Card>
-        </>
-      )}
-    </>
-  )
-}
-
-function Tile({ icon, value, label, tone, hint }: { icon: ReactNode; value: ReactNode; label: string; tone?: 'in' | 'out' | 'bad'; hint?: keyof typeof definitions }) {
-  const color = tone === 'in' ? 'text-emerald-700' : tone === 'out' ? 'text-orange-700' : tone === 'bad' ? 'text-red-600' : 'text-slate-500'
-  return (
-    <div className="rounded-lg bg-slate-50 px-3 py-2.5">
-      <p className="text-lg font-semibold tabular-nums text-slate-900">{value}</p>
-      <p className={`flex items-center gap-1.5 text-xs font-medium ${color}`}>{icon}{label}{hint && <Hint k={hint} />}</p>
-    </div>
-  )
-}
-
-function PeriodCard({ title, sub, b }: { title: string; sub: string; b: Bucket }) {
-  const i = 'h-3.5 w-3.5'
-  return (
-    <Card className="p-4">
-      <h2 className="mb-3 text-lg font-semibold">{title} <span className="text-xs font-normal text-slate-500">{sub}</span></h2>
-      <div className="grid grid-cols-2 gap-2">
-        <Tile icon={<Phone className={i} />} value={b.calls.toLocaleString('en-IN')} label="Total calls" />
-        <Tile icon={<Clock className={i} />} value={hms(b.dur)} label="Call duration" />
-        <Tile icon={<PhoneIncoming className={i} />} value={b.inc} label="Incoming" tone="in" />
-        <Tile icon={<PhoneIncoming className={i} />} value={b.inc ? hms(b.inc_dur) : '–'} label="Incoming duration" tone="in" />
-        <Tile icon={<PhoneOutgoing className={i} />} value={b.out} label="Outgoing" tone="out" />
-        <Tile icon={<PhoneOutgoing className={i} />} value={b.out ? hms(b.out_dur) : '–'} label="Outgoing duration" tone="out" />
-        <Tile icon={<PhoneMissed className={i} />} value={b.missed} label="Missed" tone="bad" />
-        <Tile icon={<Ban className={i} />} value={b.rejected} label="Rejected" tone="bad" />
-        <Tile icon={<UserX className={i} />} value={b.never_attended} label="Never attended" tone="bad" hint="never_attended" />
-        <Tile icon={<PhoneOff className={i} />} value={b.not_picked} label="Not picked by client" tone="bad" hint="not_picked" />
-        <Tile icon={<Users className={i} />} value={b.uniq} label="Unique clients" hint="uniq" />
-        <Tile icon={<Timer className={i} />} value={hms(b.work)} label="Working hours" hint="work" />
-        <Tile icon={<Link2 className={i} />} value={b.conn} label="Connected calls" hint="connected" />
-        <Tile icon={<Link2 className={i} />} value={`${pct(b.conn, b.calls)}%`} label="Connect rate" hint="connected" />
+        )}
       </div>
-    </Card>
+    </>
   )
 }

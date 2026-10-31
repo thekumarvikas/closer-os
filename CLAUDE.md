@@ -79,9 +79,11 @@ intelligence → Play Store launch.
   stages, distribution rules). Invites work by email: the person signs up with that email.
 - End-to-end test: `web/tests/e2e.cjs` (see its README). Node needs NODE_USE_ENV_PROXY=1 and
   NODE_EXTRA_CA_CERTS; Chromium needs the proxy CA in ~/.pki/nssdb (certutil) + launch proxy.
-- Status: built and tested end to end; NOT yet hosted (plan: Vercel, root dir `web`).
-- Supabase auth still uses the built-in email sender (2 emails/hour) and Site URL localhost:3000;
-  set Site URL/redirects once hosted, and add SMTP (e.g. Resend) before real users.
+- LIVE at https://closer-os-liard.vercel.app (Vercel, root dir `web`, auto-deploys on push to main).
+  This sandbox cannot reach vercel.app (network policy), so verify there via the owner.
+- Supabase auth: Site URL = the Vercel URL; redirect allow-list has it + localhost:4173/5173 +
+  closeros:// (Android). Still the built-in email sender (2 emails/hour): add SMTP (Resend) before
+  real users.
 
 ## Webinars (batches) — Nov 2026
 - Owner's workflow: webinar businesses. Leads register for a webinar (batch); reminder calls happen

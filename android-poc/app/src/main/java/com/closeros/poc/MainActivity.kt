@@ -124,6 +124,7 @@ private fun Screen(onPlay: (Uri) -> Unit) {
                     style = MaterialTheme.typography.bodySmall, color = Color.Gray,
                 )
             }
+            item { InAppRecordingTest(onPlay) }
             if (device.isNotEmpty()) {
                 item { Section("Device") { device.forEach { (k, v) -> Text("$k: $v") } } }
                 item {
@@ -171,6 +172,75 @@ private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) 
             Text(title, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(4.dp))
             content()
+        }
+    }
+}
+
+@Composable
+private fun InAppRecordingTest(onPlay: (Uri) -> Unit) {
+    val ctx = LocalContext.current
+    var tick by remember { mutableIntStateOf(0) }
+    DisposableEffect(Unit) {
+        RecorderService.onChange = { tick++ }
+        onDispose { RecorderService.onChange = null }
+    }
+    var source by remember { mutableStateOf("MIC") }
+    val perms = buildList {
+        add(Manifest.permission.RECORD_AUDIO)
+        if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
+    }.toTypedArray()
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
+        if (granted[Manifest.permission.RECORD_AUDIO] == true) RecorderService.start(ctx, source)
+        else Toast.makeText(ctx, "Microphone permission is needed for this test", Toast.LENGTH_LONG).show()
+    }
+    @Suppress("UNUSED_EXPRESSION") tick // re-read live values on every change
+
+    Section("Experiment: can Closer OS record the call itself?") {
+        Text(
+            "1. Pick a method and tap Start.\n" +
+            "2. Open your Phone app and call someone. Keep the phone at your ear (not speaker). Talk 20 seconds.\n" +
+            "3. End the call, come back here, tap Stop.\n" +
+            "4. Tap Play. Can you hear YOU, THEM, or BOTH?\n" +
+            "Please try all 3 methods, one call each.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            RecorderService.sources.keys.forEachIndexed { i, key ->
+                FilterChip(
+                    selected = source == key, onClick = { source = key },
+                    enabled = !RecorderService.isRecording,
+                    label = { Text("Method ${i + 1}") },
+                )
+            }
+        }
+        if (RecorderService.isRecording) {
+            Text("● Recording… loudness ${RecorderService.liveLoudness}", color = Color(0xFFB3261E), fontWeight = FontWeight.Bold)
+            Button(onClick = { RecorderService.stop(ctx) }) { Text("Stop") }
+        } else {
+            Button(onClick = { launcher.launch(perms) }) { Text("Start (Method ${RecorderService.sources.keys.indexOf(source) + 1})") }
+        }
+        RecorderService.lastError?.let { Text(it, color = Color(0xFFB3261E), style = MaterialTheme.typography.bodySmall) }
+        RecorderService.results.forEach { r ->
+            val n = RecorderService.sources.keys.indexOf(r.source) + 1
+            val silent = r.peak < 200
+            Spacer(Modifier.height(6.dp))
+            Text("Method $n · ${r.seconds}s · peak ${r.peak} · avg ${r.avgLoudness}" + if (silent) " · SILENT" else "",
+                fontWeight = FontWeight.SemiBold, color = if (silent) Color(0xFFB3261E) else Color.Unspecified)
+            TextButton(onClick = { onPlay(Uri.fromFile(r.file)) }) { Text("▶ Play Method $n") }
+        }
+        if (RecorderService.results.isNotEmpty()) {
+            OutlinedButton(onClick = {
+                val text = buildString {
+                    appendLine("IN-APP RECORDING TEST")
+                    appendLine("${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE}")
+                    RecorderService.results.forEach {
+                        appendLine("Method ${RecorderService.sources.keys.indexOf(it.source) + 1} (${it.source}): ${it.seconds}s, peak ${it.peak}, avg ${it.avgLoudness}")
+                    }
+                }
+                ctx.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("report", text))
+                Toast.makeText(ctx, "Experiment report copied", Toast.LENGTH_SHORT).show()
+            }) { Text("Copy experiment report") }
         }
     }
 }

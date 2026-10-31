@@ -11,8 +11,8 @@ android {
         applicationId = "com.closeros.poc"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.3-recording-test"
+        versionCode = 4
+        versionName = "0.4-recording-test"
     }
     // Test-only signing key, so every test build can update the previous one.
     // The Play Store release key will be separate and never committed.

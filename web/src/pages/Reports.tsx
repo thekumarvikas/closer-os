@@ -9,9 +9,10 @@ import type { Organization } from '../lib/types'
 import { Badge, Button, Card, Empty, ErrorBox, PageHeader, Spinner } from '../components/ui'
 import { Bars, Meter, SegmentBar, callColors } from '../components/charts'
 import { Hint, definitions } from './Overview'
+import OutcomeReportView from './OutcomeReport'
 
-type Tab = 'summary' | 'employees' | 'days' | 'hourly' | 'history'
-const tabs: [Tab, string][] = [['summary', 'Summary'], ['employees', 'Employees'], ['days', 'Day-wise'], ['hourly', 'Hourly'], ['history', 'Call history']]
+type Tab = 'summary' | 'outcomes' | 'employees' | 'days' | 'hourly' | 'history'
+const tabs: [Tab, string][] = [['summary', 'Summary'], ['outcomes', 'Outcomes'], ['employees', 'Employees'], ['days', 'Day-wise'], ['hourly', 'Hourly'], ['history', 'Call history']]
 
 interface Filters { from: string; to: string; users: string[]; leadOnly: boolean }
 
@@ -22,6 +23,7 @@ export default function Reports() {
   const [draft, setDraft] = useState<Filters>({ from: addDays(today, -6), to: today, users: [], leadOnly: false })
   const [applied, setApplied] = useState<Filters>(draft)
   const [tab, setTab] = useState<Tab>('summary')
+  const [historyOutcome, setHistoryOutcome] = useState('')
   const [report, setReport] = useState<Report | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -70,14 +72,16 @@ export default function Reports() {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1 text-sm">
           {tabs.map(([k, l]) => (
-            <button key={k} onClick={() => setTab(k)} className={`rounded-md px-3 py-1.5 font-medium ${tab === k ? 'bg-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>{l}</button>
+            <button key={k} onClick={() => { setTab(k); if (k !== 'history') setHistoryOutcome('') }} className={`rounded-md px-3 py-1.5 font-medium ${tab === k ? 'bg-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>{l}</button>
           ))}
         </div>
         <p className="text-sm font-medium text-slate-600">{period}{applied.leadOnly ? ' · lead calls only' : ''}</p>
       </div>
 
       <ErrorBox error={error} />
-      {tab === 'history' && dir ? <CallHistory org={org} dir={dir} f={applied} fileTag={fileTag} /> :
+      {tab === 'history' && dir ? <CallHistory org={org} dir={dir} f={applied} fileTag={fileTag} outcome={historyOutcome} setOutcome={setHistoryOutcome} /> :
+        tab === 'outcomes' && dir ? <OutcomeReportView org={org} dir={dir} from={applied.from} to={applied.to} users={applied.users} fileTag={fileTag}
+          onOpenOutcome={id => { setHistoryOutcome(id); setTab('history') }} /> :
         !report || !dir ? <Spinner /> :
         report.total.calls === 0 ? <Card><Empty icon={<BarChart3 className="h-6 w-6" />} title="No calls in this period" text="Try a longer date range, or check that your reps are using the Closer OS app." /></Card> :
         tab === 'summary' ? <Summary r={report} showLead={!applied.leadOnly} fileTag={fileTag} /> :
@@ -390,7 +394,7 @@ const durations: [string, string, number | null, number | null][] = [
 ]
 const PAGE = 100
 
-function CallHistory({ org, dir, f, fileTag }: { org: Organization; dir: Directory; f: Filters; fileTag: string }) {
+function CallHistory({ org, dir, f, fileTag, outcome, setOutcome }: { org: Organization; dir: Directory; f: Filters; fileTag: string; outcome: string; setOutcome: (v: string) => void }) {
   const [rows, setRows] = useState<HistoryRow[] | null>(null)
   const [count, setCount] = useState(0)
   const [page, setPage] = useState(0)
@@ -411,15 +415,17 @@ function CallHistory({ org, dir, f, fileTag }: { org: Organization; dir: Directo
     if (f.users.length) query = query.in('user_id', f.users)
     if (f.leadOnly) query = query.not('lead_id', 'is', null)
     if (type) query = query.eq('direction', type)
+    if (outcome === 'none') query = query.is('outcome_id', null).not('lead_id', 'is', null)
+    else if (outcome) query = query.eq('outcome_id', outcome)
     const d = durations.find(x => x[0] === dur)!
     if (d[2] !== null) query = query.gte('duration_sec', d[2])
     if (d[3] !== null) query = query.lte('duration_sec', d[3])
     if (digits.length >= 4) query = query.like('phone', `%${digits}%`)
     else if (byName) query = query.ilike('lead.name', `%${term.replace(/[%,()]/g, '')}%`)
     return query
-  }, [org, f, q, type, dur])
+  }, [org, f, q, type, dur, outcome])
 
-  useEffect(() => { setPage(0) }, [f, q, type, dur])
+  useEffect(() => { setPage(0) }, [f, q, type, dur, outcome])
   useEffect(() => {
     setRows(null)
     const t = setTimeout(() => {
@@ -454,6 +460,11 @@ function CallHistory({ org, dir, f, fileTag }: { org: Organization; dir: Directo
         <select className="input !w-auto" value={type} onChange={e => setType(e.target.value)}>
           <option value="">All call types</option><option value="incoming">Incoming</option><option value="outgoing">Outgoing</option>
           <option value="missed">Missed</option><option value="rejected">Rejected</option>
+        </select>
+        <select className="input !w-auto" value={outcome} onChange={e => setOutcome(e.target.value)}>
+          <option value="">All outcomes</option>
+          <option value="none">Outcome not filled</option>
+          {dir.outcomes.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
         </select>
         <select className="input !w-auto" value={dur} onChange={e => setDur(e.target.value)}>
           {durations.map(([k, l]) => <option key={k} value={k}>{l}</option>)}

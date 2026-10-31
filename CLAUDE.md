@@ -73,7 +73,7 @@ intelligence → Play Store launch.
 ## Web dashboard (`web/`)
 - Vite + React 18 + TypeScript + Tailwind. Public Supabase URL + publishable key live in
   `web/.env.production` (safe to commit). Pages: Dashboard (Callyzer-style Today / Yesterday /
-  Last 7 days tiles), Reports (Summary, Employees, Day-wise, Hourly, Call history; CSV export;
+  Last 7 days tiles), Reports (Summary, Outcomes [outcome_report() SQL; click an outcome → call history filtered], Employees, Day-wise, Hourly, Call history; CSV export;
   backed by `call_report()` SQL function with Total vs Lead split), Overview→Dashboard, Leads (import CSV/XLSX, assign,
   detail drawer), Calls, Follow-ups, Team (invites, teams, roles), Settings (company, outcomes,
   stages, distribution rules). Invites work by email: the person signs up with that email.

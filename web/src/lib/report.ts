@@ -121,3 +121,38 @@ export function downloadCsv(name: string, header: string[], rows: (string | numb
 }
 
 export const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0)
+
+/* ───────────── Outcome report ───────────── */
+
+export interface OutcomeCell { calls: number; leads: number; amount: number; deal_value: number; dur: number }
+interface ORow extends OutcomeCell { g: number; user_id: string | null; day: string | null; outcome_id: string | null }
+export interface OutcomeReport {
+  total: OutcomeCell
+  byOutcome: Map<string | null, OutcomeCell>                       // null = outcome not filled yet
+  byUser: Map<string, { total: OutcomeCell; outcomes: Map<string | null, OutcomeCell> }>
+  byDay: Map<string, { total: OutcomeCell; outcomes: Map<string | null, OutcomeCell> }>
+}
+const emptyCell: OutcomeCell = { calls: 0, leads: 0, amount: 0, deal_value: 0, dur: 0 }
+const cell = (r?: ORow): OutcomeCell => r ? { calls: +r.calls || 0, leads: +r.leads || 0, amount: +r.amount || 0, deal_value: +r.deal_value || 0, dur: +r.dur || 0 } : { ...emptyCell }
+
+export async function fetchOutcomeReport(orgId: string, from: Date, to: Date, users: string[]): Promise<OutcomeReport> {
+  const { data, error } = await supabase.rpc('outcome_report', {
+    p_org: orgId, p_from: from.toISOString(), p_to: to.toISOString(), p_users: users.length ? users : null,
+  })
+  if (error) throw error
+  const rows = (data.rows ?? []) as ORow[]
+  // grouping(user_id, day, outcome_id): a set bit means "not grouped by" (user=4, day=2, outcome=1).
+  // So: per user = 3, per day = 5, user×outcome = 2, day×outcome = 4, per outcome = 6, total = 7.
+  const of = (g: number) => rows.filter(r => r.g === g)
+  const byUser: OutcomeReport['byUser'] = new Map()
+  for (const r of of(3)) byUser.set(r.user_id!, { total: cell(r), outcomes: new Map() })
+  for (const r of of(2)) byUser.get(r.user_id!)?.outcomes.set(r.outcome_id, cell(r))
+  const byDay: OutcomeReport['byDay'] = new Map()
+  for (const r of of(5).sort((a, b) => b.day!.localeCompare(a.day!))) byDay.set(r.day!, { total: cell(r), outcomes: new Map() })
+  for (const r of of(4)) byDay.get(r.day!)?.outcomes.set(r.outcome_id, cell(r))
+  return {
+    total: cell(of(7)[0]),
+    byOutcome: new Map(of(6).map(r => [r.outcome_id, cell(r)])),
+    byUser, byDay,
+  }
+}

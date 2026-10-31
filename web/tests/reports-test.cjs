@@ -38,8 +38,9 @@ const ids = [];
           const dur = conn ? Math.round(20 + rnd() * rnd() * 600) : 0;
           calls.push({ id: crypto.randomUUID(), org_id: org.id, user_id: u, lead_id: lead?.id ?? null, direction: dir,
             phone: lead?.phone ?? `+9199${String(Math.floor(rnd() * 1e8)).padStart(8, '0')}`, started_at: new Date(t).toISOString(), duration_sec: dur,
-            outcome_id: lead && conn ? oc[1 + Math.floor(rnd() * 4)].id : lead ? oc[0].id : null, sim_slot: 1, sim_label: 'Jio',
+            outcome_id: lead && rnd() < 0.05 ? null : lead && conn ? oc[1 + Math.floor(rnd() * 4)].id : lead ? oc[0].id : null, sim_slot: 1, sim_label: 'Jio',
             recording_status: conn ? (rnd() < 0.9 ? 'uploaded' : 'missing') : 'not_expected', outcome_data: {} });
+          const last = calls[calls.length - 1]; if (last.outcome_id === oc[4].id) last.outcome_data = { amount: 19999 + Math.floor(rnd() * 3) * 5000 };
           t += (dur + 30 + rnd() * 300) * 1000;
         }
       });
@@ -58,6 +59,12 @@ const ids = [];
       dur: calls.reduce((s, c) => s + c.duration_sec, 0), uniq: new Set(calls.map(c => c.phone)).size };
     log(`report took ${Date.now() - t0} ms`);
     for (const k of Object.keys(expect)) log(k, 'report =', total[k], 'expected =', expect[k], total[k] === expect[k] ? 'OK' : 'MISMATCH');
+    const { data: orep, error: ore } = await user.rpc('outcome_report', { p_org: org.id, p_from: from.toISOString(), p_to: to.toISOString() }); if (ore) throw ore;
+    const leadCalls = calls.filter(c => c.lead_id);
+    log('outcome total lead calls', orep.rows.find(x => x.g === 7).calls, 'expected', leadCalls.length);
+    for (const o of oc) { const got = orep.rows.find(x => x.g === 6 && x.outcome_id === o.id)?.calls ?? 0; const exp = leadCalls.filter(c => c.outcome_id === o.id).length; log('outcome', o.label, got, exp, got === exp ? 'OK' : 'MISMATCH') }
+    log('not filled', orep.rows.find(x => x.g === 6 && x.outcome_id === null)?.calls, leadCalls.filter(c => !c.outcome_id).length);
+    const rev = orep.rows.find(x => x.g === 6 && x.outcome_id === oc[4].id).amount; log('revenue', rev, leadCalls.filter(c => c.outcome_id === oc[4].id).reduce((s, c) => s + c.outcome_data.amount, 0));
     // A rep must only see their own calls.
     const repC = createClient(URL, process.env.SB_PUB, { auth: { persistSession: false } });
     await repC.auth.signInWithPassword({ email: 'e2e-rep0@closeros-test.dev', password: 'Test-Pass-12345' });
@@ -74,6 +81,14 @@ const ids = [];
     await p.click('nav >> text=Reports'); await p.click('button:has-text("This month")');
     await p.click('button:has-text("Last 7 days")'); try { await p.waitForSelector('text=Calls by type', { timeout: 20000 }) } catch (e) { await p.screenshot({ path: `${SHOTS}/fail.png` }); console.log('ERRORS', errors); throw e } await p.waitForTimeout(800);
     await p.screenshot({ path: `${SHOTS}/2-summary.png`, fullPage: true });
+        await p.getByRole('button', { name: 'Outcomes', exact: true }).click();
+    try { await p.waitForSelector('text=Click an outcome', { timeout: 15000 }) } catch (e) { await p.screenshot({ path: `${SHOTS}/fail.png`, fullPage: true }); console.log('ERRORS', errors); throw e } await p.waitForTimeout(500);
+    await p.screenshot({ path: `${SHOTS}/10-outcomes.png`, fullPage: true });
+    await p.getByRole('button', { name: 'By day', exact: true }).click(); await p.waitForTimeout(300); await p.screenshot({ path: `${SHOTS}/11-outcomes-day.png` });
+    await p.locator('li button:has-text("Sale Closed")').click(); await p.waitForSelector('tbody tr'); await p.waitForTimeout(800);
+    log('after clicking Sale Closed, rows show only sales:', (await p.locator('tbody tr td:nth-child(7)').allInnerTexts()).every(t => t.startsWith('Sale Closed')));
+    await p.screenshot({ path: `${SHOTS}/12-outcome-drill.png` });
+    await p.getByRole('button', { name: 'Summary', exact: true }).click();
     for (const [tab, file] of [['Employees', '3-employees'], ['Day-wise', '4-daywise'], ['Hourly', '5-hourly'], ['Call history', '6-history']]) {
       await p.getByRole('button', { name: tab, exact: true }).click(); await p.waitForTimeout(1500); await p.screenshot({ path: `${SHOTS}/${file}.png`, fullPage: tab !== 'Call history' });
     }

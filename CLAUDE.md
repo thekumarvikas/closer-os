@@ -52,7 +52,9 @@ DD/MM/YYYY), but nothing India-specific hardcoded.
   on any phone. App detects which case applies per device and tells rep + manager.
   DECIDED: owner rejected B (too much hassle per call). Go with A, plus Closer OS recording itself
   if possible. v4 test app has a mic-recording experiment (MIC / VOICE_RECOGNITION /
-  VOICE_COMMUNICATION during a cellular call) to measure this; C remains the reliable fallback.
+  VOICE_COMMUNICATION during a cellular call). RESULT on 11T Pro (Android 14): audio stops the
+  moment the call starts (Android silences other apps' mic during calls). In-app recording is NOT
+  possible. FINAL: A (auto pickup) now + C (cloud-calling add-on) later.
 - Distribution: public Play Store first; later a company-specific APK downloadable from the
   dashboard. Test device: Redmi/Xiaomi.
 - Web app domain: none yet; owner has thekumarvikas.com (subdomain possible).

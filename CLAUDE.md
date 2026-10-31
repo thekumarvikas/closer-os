@@ -72,7 +72,9 @@ intelligence → Play Store launch.
 
 ## Web dashboard (`web/`)
 - Vite + React 18 + TypeScript + Tailwind. Public Supabase URL + publishable key live in
-  `web/.env.production` (safe to commit). Pages: Overview, Leads (import CSV/XLSX, assign,
+  `web/.env.production` (safe to commit). Pages: Dashboard (Callyzer-style Today / Yesterday /
+  Last 7 days tiles), Reports (Summary, Employees, Day-wise, Hourly, Call history; CSV export;
+  backed by `call_report()` SQL function with Total vs Lead split), Overview→Dashboard, Leads (import CSV/XLSX, assign,
   detail drawer), Calls, Follow-ups, Team (invites, teams, roles), Settings (company, outcomes,
   stages, distribution rules). Invites work by email: the person signs up with that email.
 - End-to-end test: `web/tests/e2e.cjs` (see its README). Node needs NODE_USE_ENV_PROXY=1 and
@@ -80,6 +82,11 @@ intelligence → Play Store launch.
 - Status: built and tested end to end; NOT yet hosted (plan: Vercel, root dir `web`).
 - Supabase auth still uses the built-in email sender (2 emails/hour) and Site URL localhost:3000;
   set Site URL/redirects once hosted, and add SMTP (e.g. Resend) before real users.
+
+## Open question for owner
+- Owner's Callyzer reference tracks ALL calls (Total vs Lead). Earlier decision was "only lead
+  numbers are uploaded". Reports support both (calls.lead_id null = unknown number). Need a
+  company setting: "Track all calls on work SIMs" vs "Lead calls only" (default TBD).
 
 ## Build notes
 - Android SDK at /opt/android-sdk (set `sdk.dir` in local.properties).

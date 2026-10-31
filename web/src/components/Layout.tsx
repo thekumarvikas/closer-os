@@ -1,12 +1,13 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useState } from 'react'
-import { LayoutDashboard, Users, PhoneCall, CalendarClock, UserCog, Settings, LogOut, Menu, X } from 'lucide-react'
+import { LayoutDashboard, BarChart3, Users, PhoneCall, CalendarClock, UserCog, Settings, LogOut, Menu, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useSession } from '../lib/session'
 import { roleLabel } from '../lib/format'
 
 const nav = [
-  { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
+  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/reports', label: 'Reports', icon: BarChart3 },
   { to: '/leads', label: 'Leads', icon: Users },
   { to: '/calls', label: 'Calls', icon: PhoneCall },
   { to: '/follow-ups', label: 'Follow-ups', icon: CalendarClock },

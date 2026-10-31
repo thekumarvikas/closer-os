@@ -9,3 +9,7 @@ users (owner + rep), checks the main flows, saves screenshots, then deletes all 
 
 `SB_SECRET`/`SB_PUB` come from the Management API (`/v1/projects/<ref>/api-keys?reveal=true`);
 never commit them. In the cloud sandbox, Chromium trusts the proxy CA via `certutil` (see CLAUDE.md).
+
+`reports-test.cjs` seeds a temporary company with 4 reps and ~30 days of calls (~8,600), checks the
+report numbers against an independent count, checks a rep only sees their own calls, takes
+screenshots of Dashboard and every Reports tab, then deletes everything. Same env vars as above.

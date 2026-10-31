@@ -8,6 +8,7 @@ import Overview from './pages/Overview'
 import Leads from './pages/Leads'
 import Reports from './pages/Reports'
 import Batches from './pages/Batches'
+import LeadSources from './pages/LeadSources'
 import BatchDetail from './pages/BatchDetail'
 import Calls from './pages/Calls'
 import FollowUps from './pages/FollowUps'
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="calls" element={<Calls />} />
         <Route path="follow-ups" element={<FollowUps />} />
         {isManager && <Route path="team" element={<Team />} />}
+        {isManager && <Route path="lead-sources" element={<LeadSources />} />}
         {isAdmin && <Route path="settings" element={<Settings />} />}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

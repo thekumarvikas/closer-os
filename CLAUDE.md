@@ -113,6 +113,23 @@ intelligence → Play Store launch.
   .call_tracking = 'all' (default) | 'leads' (Settings → Company). sync_calls() enforces it.
   Private/blank numbers are skipped. TODO: per-company "Exclude numbers" list (like Callyzer).
 
+## Lead sources (automatic lead capture) — Nov 2026
+- Owner wants ALL: Facebook Ads, Flexifunnels, YouTube (Google Ads lead forms), Pabbly, Zapier,
+  Google Sheets, generic webhook. Tables lead_sources (secret token, kind, source_label, campaign,
+  batch_id, assign_mode rules|user|none, field_map, google_key) + lead_source_events (log).
+- Public URL: <SUPABASE_URL>/functions/v1/lead-webhook/<token> — edge function
+  supabase/functions/lead-webhook (verify_jwt=false), deploy with scripts/deploy-function.sh
+  lead-webhook --no-verify-jwt. It calls ingest_lead() (service role only), which flattens JSON /
+  form posts / Google Ads user_column_data / Facebook field_data, auto-guesses fields (or uses
+  field_map), creates the lead or joins its batch as Repeated, and logs the event.
+- Facebook: via Pabbly/Zapier today. Direct "Connect Facebook Page" needs a Meta app + App
+  Review (leads_retrieval, pages permissions) + Business Verification — owner must do the Meta
+  side; the function already answers Facebook's hub.challenge verification.
+- Dashboard page "Lead sources": cards, add-source wizard, private link + copy, Send test,
+  step-by-step guides per tool (Pabbly, Zapier, Flexifunnels, Google Ads, Sheets Apps Script,
+  website form), field matching from the last payload, last 25 events.
+- Not yet: IndiaMART pull (CRM key), direct Facebook, push notification to rep on new lead.
+
 ## Android app (`android/`) — v0.1.0
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.

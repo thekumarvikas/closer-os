@@ -60,8 +60,8 @@ DD/MM/YYYY), but nothing India-specific hardcoded.
 - Web app domain: none yet; owner has thekumarvikas.com (subdomain possible).
 
 ## Build order
-Phase 1: recording test (done on Redmi K20 Pro, MIUI dialer: works) → Supabase schema + RLS
-→ web dashboard → Android app → lead integrations.
+Phase 1: recording test (done) → Supabase schema + RLS (done) → web dashboard (done, needs
+hosting) → Android app → lead integrations.
 Then: recording upload/management → billing & licences → AI → Docs/WhatsApp → management
 intelligence → Play Store launch.
 
@@ -69,6 +69,17 @@ intelligence → Play Store launch.
 - Project `closer-os`, ref `tdbqgoxxxfkfttdznzhb`, region ap-south-1 (Mumbai).
 - `SUPABASE_ACCESS_TOKEN` env var holds the owner's personal access token (Management API).
 - Migrations live in `supabase/migrations/` and are applied with `scripts/db-apply.sh`.
+
+## Web dashboard (`web/`)
+- Vite + React 18 + TypeScript + Tailwind. Public Supabase URL + publishable key live in
+  `web/.env.production` (safe to commit). Pages: Overview, Leads (import CSV/XLSX, assign,
+  detail drawer), Calls, Follow-ups, Team (invites, teams, roles), Settings (company, outcomes,
+  stages, distribution rules). Invites work by email: the person signs up with that email.
+- End-to-end test: `web/tests/e2e.cjs` (see its README). Node needs NODE_USE_ENV_PROXY=1 and
+  NODE_EXTRA_CA_CERTS; Chromium needs the proxy CA in ~/.pki/nssdb (certutil) + launch proxy.
+- Status: built and tested end to end; NOT yet hosted (plan: Vercel, root dir `web`).
+- Supabase auth still uses the built-in email sender (2 emails/hour) and Site URL localhost:3000;
+  set Site URL/redirects once hosted, and add SMTP (e.g. Resend) before real users.
 
 ## Build notes
 - Android SDK at /opt/android-sdk (set `sdk.dir` in local.properties).

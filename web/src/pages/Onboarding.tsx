@@ -1,0 +1,64 @@
+import { useState, type FormEvent } from 'react'
+import { Building2, Mail } from 'lucide-react'
+import { supabase, errorText } from '../lib/supabase'
+import { useSession } from '../lib/session'
+import { Button, Card, ErrorBox, Field } from '../components/ui'
+
+const countries = [
+  { code: 'IN', name: 'India', prefix: '+91', currency: 'INR', tz: 'Asia/Kolkata' },
+  { code: 'AE', name: 'United Arab Emirates', prefix: '+971', currency: 'AED', tz: 'Asia/Dubai' },
+  { code: 'PK', name: 'Pakistan', prefix: '+92', currency: 'PKR', tz: 'Asia/Karachi' },
+  { code: 'US', name: 'United States', prefix: '+1', currency: 'USD', tz: 'America/New_York' },
+  { code: 'GB', name: 'United Kingdom', prefix: '+44', currency: 'GBP', tz: 'Europe/London' },
+]
+
+export default function Onboarding() {
+  const { profile, refresh, selectOrg } = useSession()
+  const [name, setName] = useState('')
+  const [country, setCountry] = useState('IN')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function create(e: FormEvent) {
+    e.preventDefault()
+    const c = countries.find(x => x.code === country)!
+    setBusy(true); setError(null)
+    const { data, error } = await supabase.rpc('create_organization', {
+      p_name: name, p_country_code: c.code, p_phone_prefix: c.prefix, p_currency: c.currency, p_timezone: c.tz,
+    })
+    if (error) { setError(errorText(error)); setBusy(false); return }
+    selectOrg(data as string)
+    await refresh()
+  }
+
+  return (
+    <div className="flex min-h-screen items-center justify-center p-6">
+      <div className="w-full max-w-xl space-y-4">
+        <div className="flex items-center gap-2 text-lg font-semibold"><img src="/logo.svg" className="h-8 w-8" alt="" /> Closer OS</div>
+        <h1 className="text-2xl font-semibold">Welcome{profile?.full_name ? `, ${profile.full_name.split(' ')[0]}` : ''} 👋</h1>
+        <Card className="p-5">
+          <div className="mb-4 flex items-center gap-2 font-medium"><Building2 className="h-5 w-5 text-brand-700" /> Set up your company</div>
+          <form onSubmit={create} className="space-y-4">
+            <Field label="Company name"><input className="input" required minLength={2} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Kumar Coaching" /></Field>
+            <Field label="Country" hint="Sets phone code, currency and time zone. You can change these later.">
+              <select className="input" value={country} onChange={e => setCountry(e.target.value)}>
+                {countries.map(c => <option key={c.code} value={c.code}>{c.name} ({c.prefix}, {c.currency})</option>)}
+              </select>
+            </Field>
+            <ErrorBox error={error} />
+            <Button type="submit" loading={busy}>Create company</Button>
+          </form>
+        </Card>
+        <Card className="flex gap-3 p-5 text-sm text-slate-600">
+          <Mail className="h-5 w-5 shrink-0 text-slate-400" />
+          <div>
+            <p className="font-medium text-slate-800">Joining your team instead?</p>
+            <p>Ask your manager to invite <b>{profile?.email}</b> from the Team page, then reload this page.</p>
+            <Button variant="secondary" className="mt-3" onClick={() => refresh()}>I've been invited — check again</Button>
+          </div>
+        </Card>
+        <button className="text-sm text-slate-500 hover:underline" onClick={() => supabase.auth.signOut()}>Sign out</button>
+      </div>
+    </div>
+  )
+}

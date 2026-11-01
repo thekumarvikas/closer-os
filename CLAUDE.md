@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: IndiaMART pull (CRM key), direct Facebook, push notification to rep on new lead.
 
-## Android app (`android/`) — v0.7.0
+## Android app (`android/`) — v0.7.1
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -254,6 +254,17 @@ intelligence → Play Store launch.
   the lead has none) → log_call updates the lead.
 - Profession groups: new "Engineering" group (migration 0021); IT & Software only for software/IT
   engineers.
+
+## Play Protect block (Nov 2026)
+- 0.5.0+ was blocked on the owner's Xiaomi: "App blocked to protect your device" (Google Play Protect
+  enhanced fraud protection, India): apps installed from outside the Play Store (WhatsApp, browser,
+  file manager) are blocked if they use notification access (also SMS / accessibility).
+- Two builds now (product flavors, dimension "dist"): `full` (WhatsApp-call tracking, for the Play
+  Store) and `direct` (no NotificationListenerService; BuildConfig.WA_TRACKING=false hides WhatsApp
+  setup). Build with ./gradlew assembleDirectRelease / assembleFullRelease; outputs in
+  app/build/outputs/apk/<flavor>/release/. Owner gets the direct APK for testing.
+- Company-specific APK downloads must use `direct` (or the rep turns off Play Protect scanning).
+  WhatsApp-call tracking only via the Play Store build.
 
 ## Build notes
 - Android SDK at /opt/android-sdk (set `sdk.dir` in local.properties).

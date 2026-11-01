@@ -79,7 +79,7 @@ object PhoneSetup {
             FollowUpAlarms.canExact(ctx), Kind.Special,
             intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${ctx.packageName}")),
             steps = "Turn on the switch for Closer OS, then come back.")
-        if (store.trackWhatsapp) list += Item("whatsapp", "WhatsApp calls", "Count WhatsApp call time in your talk time.",
+        if (store.trackWhatsapp && com.closeros.app.BuildConfig.WA_TRACKING) list += Item("whatsapp", "WhatsApp calls", "Count WhatsApp call time in your talk time.",
             WhatsAppCalls.accessGranted(ctx), Kind.Special,
             intent = if (Build.VERSION.SDK_INT >= 30)
                 Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)

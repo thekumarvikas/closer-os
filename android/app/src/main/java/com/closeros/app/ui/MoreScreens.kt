@@ -153,6 +153,7 @@ fun RecordingSettings(vm: AppViewModel) {
 @Composable
 fun WhatsAppSettings(vm: AppViewModel, compact: Boolean = false) {
     val ctx = LocalContext.current
+    if (!com.closeros.app.BuildConfig.WA_TRACKING) { if (!compact) Text("WhatsApp calls: available in the Play Store version of Closer OS.", color = Brand.muted, fontSize = 14.sp); return }
     if (!vm.store.trackWhatsapp) { if (!compact) Text("WhatsApp calls: turned off by your company.", color = Brand.muted, fontSize = 14.sp); return }
     var tick by remember { mutableStateOf(0) }
     val granted = remember(tick) { com.closeros.app.calls.WhatsAppCalls.accessGranted(ctx) }

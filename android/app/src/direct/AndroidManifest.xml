@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Direct-install build: no notification reading (Play Protect blocks it outside the Play Store). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <application>
+        <service android:name=".calls.WhatsAppCallListener" tools:node="remove" />
+    </application>
+</manifest>

@@ -12,12 +12,20 @@ android {
         applicationId = "com.closeros.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 9
-        versionName = "0.7.0"
+        versionCode = 10
+        versionName = "0.7.1"
         // Public values: the publishable key is meant to be in apps; data is protected by database rules.
         buildConfigField("String", "SUPABASE_URL", "\"https://tdbqgoxxxfkfttdznzhb.supabase.co\"")
         buildConfigField("String", "SUPABASE_KEY", "\"sb_publishable_aXH8Wr7Lq1YeOWxhvxEdGQ_ePS1GYTY\"")
         buildConfigField("String", "WEB_URL", "\"https://closer-os-liard.vercel.app\"")
+    }
+    // full   = everything, for the Play Store (installs from Play are never blocked).
+    // direct = APK shared directly (WhatsApp, dashboard download): no WhatsApp-call tracking, because
+    //          Google Play Protect blocks directly-installed apps that read notifications.
+    flavorDimensions += "dist"
+    productFlavors {
+        create("full") { dimension = "dist"; buildConfigField("boolean", "WA_TRACKING", "true") }
+        create("direct") { dimension = "dist"; buildConfigField("boolean", "WA_TRACKING", "false") }
     }
     // Test-only signing key so every test build updates the previous one. Not the Play Store key.
     signingConfigs {

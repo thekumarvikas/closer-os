@@ -3,7 +3,7 @@ export type Role = 'owner' | 'admin' | 'manager' | 'rep'
 export interface Organization {
   id: string; name: string; country_code: string; phone_prefix: string
   currency: string; timezone: string; date_format: string
-  settings: { call_tracking?: 'all' | 'leads'; track_whatsapp?: boolean } & Record<string, unknown>
+  settings: { call_tracking?: 'all' | 'leads'; track_whatsapp?: boolean; note_tags?: string[] } & Record<string, unknown>
 }
 export interface Profile { id: string; email: string | null; full_name: string | null; avatar_url: string | null; phone?: string | null }
 export interface Member { org_id: string; user_id: string; role: Role; status: 'active' | 'deactivated'; joined_at: string; profile?: Profile | null }
@@ -15,7 +15,7 @@ export interface Lead {
   id: string; org_id: string; name: string; phone: string; email: string | null
   city: string | null; state: string | null; country: string | null; company: string | null; profession: string | null; profession_category_id: string | null
   source: string | null; campaign: string | null; assigned_to: string | null; stage_id: string | null
-  deal_value: number | null; tags: string[]; custom: Record<string, unknown>; notes: string | null
+  deal_value: number | null; tags: string[]; custom: Record<string, unknown>; notes: string | null; key_facts?: string | null
   last_call_at: string | null; last_outcome_id: string | null; next_follow_up_at: string | null
   do_not_call: boolean; created_at: string
 }

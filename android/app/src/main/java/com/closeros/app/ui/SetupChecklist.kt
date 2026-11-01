@@ -38,10 +38,7 @@ fun SetupChecklistScreen(vm: AppViewModel, onBack: () -> Unit) {
     val items = remember(tick) { PhoneSetup.items(ctx) }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { tick++ }
     val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        if (uri != null) {
-            ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            vm.store.recordingsFolder = uri.toString(); CallSync.syncNow(ctx); tick++
-        }
+        vm.message = PhoneSetup.saveRecordingsFolder(ctx, uri); tick++
     }
     BackHandler { onBack() }
     val needed = items.filter { it.required }

@@ -130,11 +130,7 @@ fun RecordingSettings(vm: AppViewModel) {
     val ctx = LocalContext.current
     var folder by remember { mutableStateOf(vm.store.recordingsFolder) }
     val pick = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()) { uri ->
-        if (uri != null) {
-            ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            vm.store.recordingsFolder = uri.toString(); folder = uri.toString()
-            com.closeros.app.calls.CallSync.syncNow(ctx); vm.message = "Recordings folder saved — uploading recent recordings"
-        }
+        vm.message = com.closeros.app.calls.PhoneSetup.saveRecordingsFolder(ctx, uri); folder = vm.store.recordingsFolder
     }
     Text("Call recordings", fontWeight = FontWeight.SemiBold)
     if (com.closeros.app.calls.RecordingSync.googleDialer(ctx)) {

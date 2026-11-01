@@ -14,6 +14,8 @@ class LocalStore(ctx: Context) {
         val leadId: String, val leadName: String, val phone: String, val startedAtMs: Long,
         val purpose: String = "sales", val batchId: String? = null,
         val profession: String? = null, val categoryId: String? = null,
+        /** Set for calls found in the call log (incoming, or dialled outside Closer OS). */
+        val logId: String? = null,
     )
 
     var pendingCall: PendingCall?
@@ -77,6 +79,14 @@ class LocalStore(ctx: Context) {
     /** Last filters/sort the rep used on a webinar list (per reminder / sales). */
     fun listPrefs(purpose: String): String? = p.getString("list_prefs_$purpose", null)
     fun setListPrefs(purpose: String, v: String) { p.edit().putString("list_prefs_$purpose", v).apply() }
+
+    /** Calls (call-log ids) whose outcome was saved, so they're never asked again. */
+    val loggedCalls: Set<String> get() = p.getStringSet("logged_calls", emptySet()) ?: emptySet()
+    fun markLogged(id: String) { p.edit().putStringSet("logged_calls", (loggedCalls + id).toList().takeLast(3000).toSet()).apply() }
+    /** Only calls after this time need an outcome (set the first time this version runs). */
+    var outcomeCheckFromMs: Long
+        get() = p.getLong("outcome_from", 0)
+        set(v) { p.edit().putLong("outcome_from", v).apply() }
 
     var waCursorMs: Long
         get() = p.getLong("wa_cursor", 0)

@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: IndiaMART pull (CRM key), direct Facebook, push notification to rep on new lead.
 
-## Android app (`android/`) — v0.7.2
+## Android app (`android/`) — v0.8.0
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -262,6 +262,25 @@ intelligence → Play Store launch.
   On time (last 7 days, Repo.pastFollowUps = status done). Card: big time + day, name + number,
   coloured badge (In 2h / Due now / Not called · 1h late / Called 20 min late / Called on time),
   reminder vs sales, reason/notes, Call button; 7-day summary line; "Call due follow-ups in a queue".
+
+## Owner feedback round 4 (v0.8.0, Nov 2026)
+- Mandatory outcome for ALL lead calls, not only those started in the app: vm.checkUnloggedCalls()
+  (on resume + after each save) finds call-log entries since outcomeCheckFromMs (= first run of
+  0.8.0, max 2 days back) — answered incoming or any outgoing — whose number is a lead and whose id
+  isn't in LocalStore.loggedCalls, and opens the Outcome screen (PendingCall.logId). Non-lead calls
+  are just marked. log_call gets the real direction. CallEndReceiver (PHONE_STATE → IDLE) + worker
+  posts "Save the outcome: <name>" notification.
+- Next-call picker = two taps: day (In 1 hour · Today · Tomorrow · day after · Other date · No
+  follow-up) then a horizontal row of 30-minute slots 9:00 AM–9:30 PM (+ Other time); summary line.
+- Notes (migration 0022): leads.key_facts (📌 Key facts card, editable, voice typing; app lead detail +
+  outcome screen + dashboard drawer), add_lead_note (notes without a call, with tags), lead_notes()
+  timeline (call notes + notes, newest first), quick note tags = organizations.settings.note_tags
+  (Settings → Quick note tags; call tags saved in calls.outcome_data.note_tags). Voice typing via
+  RecognizerIntent (en-IN).
+- Recordings folder on Redmi K20 Pro (MIUI 12 / Android 11) was never saved (device_status said
+  "Recordings folder not chosen"). PhoneSetup.saveRecordingsFolder() now always saves, ignores
+  takePersistable errors, counts audio files and tells the rep ("12 recordings found"); no starting
+  folder hint on Android < 12.
 
 ## Play Protect block (Nov 2026)
 - 0.5.0+ was blocked on the owner's Xiaomi: "App blocked to protect your device" (Google Play Protect

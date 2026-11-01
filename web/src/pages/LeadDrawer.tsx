@@ -9,11 +9,15 @@ import { Badge, Button, ErrorBox, Spinner } from '../components/ui'
 
 interface Activity { id: string; kind: string; data: Record<string, unknown>; created_at: string; user_id: string | null }
 
+interface NoteEntry { kind: string; at: string; text: string | null; tags: string[]; outcome?: string | null; direction?: string; by?: string | null }
+
 export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
   { leadId: string; dir: Directory; onClose: () => void; onChanged: () => void }) {
   const { org, isManager } = useOrg()
   const [lead, setLead] = useState<Lead | null>(null)
   const [calls, setCalls] = useState<Call[]>([])
+  const [notes, setNotes] = useState<NoteEntry[]>([])
+  const [facts, setFacts] = useState<string | null>(null)
   const [followUps, setFollowUps] = useState<FollowUp[]>([])
   const [acts, setActs] = useState<Activity[]>([])
   const [note, setNote] = useState('')
@@ -32,6 +36,7 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
       supabase.from('batch_leads').select('watch_minutes, attended, is_repeat, batch:batches(name, webinar_at)').eq('lead_id', leadId),
       supabase.from('profession_categories').select('*').eq('org_id', org.id).order('position'),
     ])
+    supabase.rpc('lead_notes', { p_lead: leadId }).then(({ data }) => setNotes((data ?? []) as NoteEntry[]))
     setEnrolled((en.data ?? []) as typeof enrolled)
     setBatches(((bl.data ?? []) as unknown as typeof batches).sort((x, y) => (y.batch?.webinar_at ?? '').localeCompare(x.batch?.webinar_at ?? '')))
     setCats((pc.data ?? []) as ProfessionCategory[])
@@ -48,9 +53,8 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
 
   async function addNote() {
     if (!note.trim() || !lead) return
-    const stamp = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: org.timezone }).format(new Date())
-    await update({ notes: [lead.notes, `${stamp}: ${note.trim()}`].filter(Boolean).join('\n') })
-    await supabase.from('lead_activities').insert({ org_id: org.id, lead_id: leadId, user_id: (await supabase.auth.getUser()).data.user?.id, kind: 'note', data: { text: note.trim() } })
+    const { error } = await supabase.rpc('add_lead_note', { p_lead: leadId, p_text: note.trim(), p_tags: [] })
+    if (error) return setError(errorText(error))
     setNote(''); load()
   }
 
@@ -141,8 +145,36 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
                 </section>
               )}
 
+              <section className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <h3 className="mb-1 text-sm font-semibold">📌 Key facts</h3>
+                {facts === null ? (
+                  <button className="w-full text-left text-sm text-slate-700" onClick={() => setFacts(lead.key_facts ?? '')}>
+                    {lead.key_facts || <span className="text-slate-500">Nothing yet — click to add who decides, budget, objections, best time to call.</span>}
+                  </button>
+                ) : (
+                  <div className="space-y-2">
+                    <textarea className="input min-h-[80px]" value={facts} onChange={e => setFacts(e.target.value)} />
+                    <div className="flex gap-2">
+                      <Button onClick={async () => { const { error } = await supabase.rpc('set_key_facts', { p_lead: leadId, p_text: facts }); if (error) return setError(errorText(error)); setFacts(null); load() }}>Save</Button>
+                      <Button variant="ghost" onClick={() => setFacts(null)}>Cancel</Button>
+                    </div>
+                  </div>
+                )}
+              </section>
+
               <section>
                 <h3 className="mb-2 text-sm font-semibold">Notes</h3>
+                {notes.length > 0 && (
+                  <ul className="mb-2 space-y-2">
+                    {notes.map((n, i) => (
+                      <li key={i} className="rounded-lg bg-slate-50 p-2.5 text-sm">
+                        <div className="text-xs text-slate-500">{fmtDateTime(n.at, org)}{n.by ? ` · ${n.by}` : ''}{n.kind === 'call' ? ` · ${n.direction === 'incoming' ? 'Received call' : 'Dialled'}${n.outcome ? ` · ${n.outcome}` : ''}` : ' · Note'}</div>
+                        {n.text && <div className="whitespace-pre-wrap text-slate-800">{n.text}</div>}
+                        {n.tags?.length > 0 && <div className="mt-1 flex flex-wrap gap-1">{n.tags.map(t => <span key={t} className="rounded-full bg-brand-50 px-2 py-0.5 text-xs text-brand-700">{t}</span>)}</div>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 {lead.notes && <pre className="mb-2 whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-sans text-sm text-slate-700">{lead.notes}</pre>}
                 <div className="flex gap-2">
                   <input className="input" placeholder="Add a note…" value={note} onChange={e => setNote(e.target.value)} onKeyDown={e => e.key === 'Enter' && addNote()} />

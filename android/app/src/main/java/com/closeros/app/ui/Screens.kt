@@ -196,11 +196,13 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
                 }
                 if (l.do_not_call) Text("Marked Do Not Call", color = Brand.red, fontSize = 13.sp)
             }
+            item { KeyFactsCard(l) { t -> lead = l.copy(key_facts = t) } }
             if (!l.notes.isNullOrBlank()) item {
                 Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                    Column(Modifier.padding(14.dp)) { Text("Notes", fontWeight = FontWeight.SemiBold); Text(l.notes, fontSize = 14.sp) }
+                    Column(Modifier.padding(14.dp)) { Text("Notes from import", fontWeight = FontWeight.SemiBold); Text(l.notes, fontSize = 14.sp) }
                 }
             }
+            item { NotesTimeline(vm, l.id) }
             item { Text("Calls", fontWeight = FontWeight.SemiBold) }
             if (calls.isEmpty()) item { Text("No calls yet.", color = Brand.muted) }
             items(calls) { c ->

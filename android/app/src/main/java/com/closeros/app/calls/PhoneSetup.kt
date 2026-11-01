@@ -116,8 +116,30 @@ object PhoneSetup {
         return list
     }
 
+    /** Saves the folder the rep picked and says how many recordings are in it. */
+    fun saveRecordingsFolder(ctx: Context, uri: Uri?): String {
+        if (uri == null) return "No folder chosen"
+        runCatching { ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+        LocalStore(ctx).recordingsFolder = uri.toString()
+        val n = runCatching {
+            val root = androidx.documentfile.provider.DocumentFile.fromTreeUri(ctx, uri)
+            fun count(d: androidx.documentfile.provider.DocumentFile?, depth: Int): Int = d?.listFiles()?.sumOf {
+                if (it.isDirectory && depth < 2) count(it, depth + 1) else if (it.isFile && Regex(".*\\.(mp3|m4a|amr|aac|wav|ogg|opus|3gp)$", RegexOption.IGNORE_CASE).matches(it.name.orEmpty())) 1 else 0
+            } ?: 0
+            count(root, 0)
+        }.getOrDefault(-1)
+        CallSync.syncNow(ctx)
+        val name = uri.lastPathSegment?.substringAfterLast('/')?.substringAfterLast(':') ?: "folder"
+        return when {
+            n < 0 -> "Folder saved ($name), but it can't be read. Choose it again."
+            n == 0 -> "Folder saved ($name) — but no recordings in it. Is this the right folder? Is auto-recording on?"
+            else -> "Folder saved ✓ $n recordings found in $name. Uploading…"
+        }
+    }
+
     /** Folder the picker should open at, where we know the brand's usual place. */
     fun recordingsHint(): Uri? {
+        if (Build.VERSION.SDK_INT < 31) return null   // older pickers (e.g. MIUI 12) can fail with a starting folder
         val path = when (brand) {
             "xiaomi", "redmi", "poco" -> "MIUI/sound_recorder/call_rec"
             "samsung" -> "Recordings/Call"

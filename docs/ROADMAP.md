@@ -36,6 +36,10 @@ Everything from the original product prompt plus the owner's feedback, with stat
 - ✅ Phone setup checklist in the app (every permission/setting from one screen) + per-rep status on the dashboard
 - ✅ WhatsApp call tracking (notification access; Phone / WhatsApp filters in app and reports)
 
+- ✅ Mandatory outcome after incoming calls and calls dialled outside the app (with a reminder notification)
+- ✅ Two-tap next-call picker (day, then 30-minute slot)
+- ✅ Notes: key facts, quick tags, voice typing, notes history, notes without a call
+
 ## 3. Call recording
 - ✅ Phone's own recorder files found and uploaded automatically (where the phone allows it)
 - ✅ Play in the dashboard and in the app; private links; every play audited

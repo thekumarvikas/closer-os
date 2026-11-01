@@ -355,9 +355,43 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Called when the app comes back to the front: look up the finished call in the call log. */
     fun onResume() {
-        val p = pending ?: return
-        pendingLog = PhoneCalls.findCall(ctx, p.phone, p.startedAtMs)
+        val p = pending
+        if (p == null) { checkUnloggedCalls(); return }
+        pendingLog = if (p.logId != null) PhoneCalls.readLog(ctx, p.startedAtMs - 60_000).firstOrNull { it.id == p.logId }
+                     else PhoneCalls.findCall(ctx, p.phone, p.startedAtMs)
         refreshHome()
+    }
+
+    private var checking = false
+    /**
+     * Calls with leads that happened outside Closer OS (incoming calls, or dialled from the phone app):
+     * their outcome is mandatory too, so the outcome screen opens for each one, oldest first.
+     */
+    fun checkUnloggedCalls() = viewModelScope.launch {
+        val m = membership ?: return@launch
+        if (pending != null || checking) return@launch
+        checking = true
+        try {
+            val now = System.currentTimeMillis()
+            if (store.outcomeCheckFromMs == 0L) { store.outcomeCheckFromMs = now; return@launch }   // start from now, never ask about old calls
+            val since = maxOf(store.outcomeCheckFromMs, now - 2 * 86_400_000L)
+            val logged = store.loggedCalls
+            val calls = PhoneCalls.readLog(ctx, since).filter {
+                it.id !in logged && ((it.direction == "incoming" && it.durationSec > 0) || it.direction == "outgoing")
+            }
+            if (calls.isEmpty()) return@launch
+            val phones = calls.map { normalizePhone(it.phone, prefix) }
+            val leads = runCatching { Repo.leadsByPhones(m.org_id, phones) }.getOrNull() ?: return@launch
+            val first = calls.indices.firstOrNull { leads[phones[it]] != null } ?: run {
+                calls.forEach { store.markLogged(it.id) }   // not leads: nothing to ask
+                return@launch
+            }
+            calls.take(first).forEach { store.markLogged(it.id) }
+            val c = calls[first]; val lead = leads[phones[first]]!!
+            if (pending != null) return@launch
+            val pc = LocalStore.PendingCall(lead.id, lead.name, lead.phone, c.startedAtMs, "sales", null, lead.profession, null, logId = c.id)
+            store.pendingCall = pc; pending = pc; pendingLog = c
+        } finally { checking = false }
     }
 
     fun discardPending() { store.pendingCall = null; pending = null; pendingLog = null }
@@ -377,7 +411,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             message = "No internet — saved on the phone, will send automatically"
         } else message = "Saved"
         pending?.let { FollowUpAlarms.cancelForLead(ctx, it.leadId, followUps) }
+        pendingLog?.id?.let { store.markLogged(it) }
         discardPending()
+        checkUnloggedCalls()
         onDone()
         queueAfterOutcome()
         refreshHome(); reloadLeads(); CallSync.syncNow(ctx)

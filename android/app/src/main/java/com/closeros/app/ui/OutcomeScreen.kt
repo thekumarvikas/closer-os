@@ -46,6 +46,9 @@ fun OutcomeScreen(vm: AppViewModel) {
     var followAt by remember { mutableStateOf<ZonedDateTime?>(null) }
     var noFollow by remember { mutableStateOf(false) }
     var notes by remember { mutableStateOf("") }
+    var noteTags by remember { mutableStateOf(emptyList<String>()) }
+    var lead by remember { mutableStateOf<com.closeros.app.data.Lead?>(null) }
+    LaunchedEffect(p.leadId) { lead = runCatching { com.closeros.app.data.Repo.lead(p.leadId) }.getOrNull() }
     var amount by remember { mutableStateOf("") }
     var product by remember { mutableStateOf("") }
     var interest by remember { mutableStateOf("") }
@@ -55,21 +58,20 @@ fun OutcomeScreen(vm: AppViewModel) {
     val askProfession = p.batchId != null || p.profession.isNullOrBlank()
     BackHandler { vm.message = "Save the outcome first" }
 
-    // Quick picks for the next call; "Pick date & time" opens the normal Android pickers.
+    // Next call in two taps: a day, then a time (30-minute slots). "In 1 hour" is one tap.
     val now = ZonedDateTime.now(zone)
-    val quick = listOf(
-        "In 1 hour" to now.plusHours(1),
-        "Today 6 PM" to now.withHour(18).withMinute(0).withSecond(0).let { if (it.isBefore(now.plusMinutes(30))) now.plusDays(1).withHour(11).withMinute(0) else it },
-        "Tomorrow 11 AM" to now.plusDays(1).withHour(11).withMinute(0).withSecond(0),
-        "Tomorrow 6 PM" to now.plusDays(1).withHour(18).withMinute(0).withSecond(0),
-        "In 2 days" to now.plusDays(2).withHour(11).withMinute(0).withSecond(0),
-    )
-    fun pickCustom() {
-        val start = followAt ?: now.plusDays(1)
-        DatePickerDialog(ctx, { _, y, m, d ->
-            TimePickerDialog(ctx, { _, h, min -> followAt = ZonedDateTime.of(LocalDateTime.of(y, m + 1, d, h, min), zone); noFollow = false },
-                start.hour, start.minute, false).show()
-        }, start.year, start.monthValue - 1, start.dayOfMonth).apply { datePicker.minDate = System.currentTimeMillis() - 1000 }.show()
+    val today = now.toLocalDate()
+    var day by remember { mutableStateOf<java.time.LocalDate?>(null) }
+    fun slotsFor(d: java.time.LocalDate): List<ZonedDateTime> = (0 until 26).map { i -> d.atTime(9, 0).plusMinutes(30L * i).atZone(zone) }
+        .filter { it.isAfter(now.plusMinutes(10)) }
+    fun pickOtherDate() {
+        val start = day ?: today.plusDays(3)
+        DatePickerDialog(ctx, { _, y, m, d -> day = java.time.LocalDate.of(y, m + 1, d); followAt = null; noFollow = false },
+            start.year, start.monthValue - 1, start.dayOfMonth).apply { datePicker.minDate = System.currentTimeMillis() - 1000 }.show()
+    }
+    fun pickOtherTime() {
+        val d = day ?: today
+        TimePickerDialog(ctx, { _, h, min -> followAt = d.atTime(h, min).atZone(zone); noFollow = false }, now.hour + 1, 0, false).show()
     }
 
     val canSave = outcome != null && (noFollow || followAt != null) && !busy &&
@@ -83,6 +85,7 @@ fun OutcomeScreen(vm: AppViewModel) {
                 Text(
                     when {
                         log == null -> "Call not found in the phone's call log yet"
+                        log.direction == "incoming" -> "Received call · talked ${fmtDur(log.durationSec)}" + (log.simLabel?.let { " · $it" } ?: "")
                         log.durationSec > 0 -> "Talked ${fmtDur(log.durationSec)}" + (log.simLabel?.let { " · $it" } ?: "")
                         else -> "Not answered" + (log.simLabel?.let { " · $it" } ?: "")
                     }, color = Brand.muted, fontSize = 14.sp,
@@ -120,20 +123,35 @@ fun OutcomeScreen(vm: AppViewModel) {
 
         Text("Next call", fontWeight = FontWeight.SemiBold)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            quick.forEach { (label, t) -> Chip(label, !noFollow && followAt == t) { followAt = t; noFollow = false } }
-            Chip(followAt?.takeIf { f -> quick.none { it.second == f } }?.format(DateTimeFormatter.ofPattern("dd MMM, h:mm a")) ?: "Pick date & time",
-                !noFollow && followAt != null && quick.none { it.second == followAt }) { pickCustom() }
-            Chip("No follow-up needed", noFollow) { noFollow = true; followAt = null }
+            val inHour = now.plusHours(1).withSecond(0).withNano(0)
+            Chip("In 1 hour", !noFollow && followAt == inHour) { followAt = inHour; day = null; noFollow = false }
+            if (slotsFor(today).isNotEmpty()) Chip("Today", day == today && !noFollow) { day = today; followAt = null; noFollow = false }
+            Chip("Tomorrow", day == today.plusDays(1) && !noFollow) { day = today.plusDays(1); followAt = null; noFollow = false }
+            Chip(today.plusDays(2).format(DateTimeFormatter.ofPattern("EEE d MMM")), day == today.plusDays(2) && !noFollow) { day = today.plusDays(2); followAt = null; noFollow = false }
+            val other = day?.takeIf { it.isAfter(today.plusDays(2)) }
+            Chip(other?.format(DateTimeFormatter.ofPattern("EEE d MMM")) ?: "Other date", other != null && !noFollow) { pickOtherDate() }
+            Chip("No follow-up needed", noFollow) { noFollow = true; followAt = null; day = null }
         }
+        day?.let { d ->
+            Text("Time on ${d.format(DateTimeFormatter.ofPattern("EEE d MMM"))}", fontSize = 13.sp, color = Brand.muted)
+            val slots = slotsFor(d)
+            val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+            androidx.compose.foundation.lazy.LazyRow(state = listState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(slots.size) { i -> val t = slots[i]; Chip(t.format(DateTimeFormatter.ofPattern("h:mm a")), followAt == t) { followAt = t; noFollow = false } }
+                item { Chip("Other time", followAt != null && slots.none { it == followAt }) { pickOtherTime() } }
+            }
+        }
+        followAt?.let { Text("Next call: " + it.format(DateTimeFormatter.ofPattern("EEE d MMM, h:mm a")), color = Brand.primaryDark, fontWeight = FontWeight.SemiBold) }
 
-        OutlinedTextField(notes, { notes = it }, label = { Text("Notes (optional)") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+        lead?.let { l -> KeyFactsCard(l) { t -> lead = l.copy(key_facts = t) } }
+        NoteEditor(notes, { notes = it }, noteTags, { noteTags = it }, vm.membership?.organization?.noteTags.orEmpty(), "Notes from this call")
 
         Button(onClick = {
             busy = true
             val o = outcome!!
             val payload = buildJsonObject {
                 put("id", vm.newCallId()); put("org_id", vm.membership!!.org_id); put("lead_id", p.leadId)
-                put("phone", p.phone); put("direction", "outgoing"); put("purpose", p.purpose)
+                put("phone", p.phone); put("direction", log?.direction ?: "outgoing"); put("purpose", p.purpose)
                 p.batchId?.let { put("batch_id", it) }
                 put("started_at", Instant.ofEpochMilli(log?.startedAtMs ?: p.startedAtMs).toString())
                 put("duration_sec", log?.durationSec ?: 0)
@@ -145,6 +163,7 @@ fun OutcomeScreen(vm: AppViewModel) {
                     if (amount.isNotBlank()) put(if (o.form == "sale") "amount" else "deal_value", amount.toLong())
                     if (product.isNotBlank()) put("product", product)
                     if (interest.isNotBlank()) put("interest", interest)
+                    if (noteTags.isNotEmpty()) put("note_tags", kotlinx.serialization.json.JsonArray(noteTags.map { kotlinx.serialization.json.JsonPrimitive(it) }))
                 })
                 if (notes.isNotBlank()) put("notes", notes.trim())
                 if (profession.isNotBlank() && profession.trim() != p.profession) put("profession", profession.trim())

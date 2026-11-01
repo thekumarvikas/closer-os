@@ -192,3 +192,37 @@ export function WhatsAppTemplates() {
     </Card>
   )
 }
+
+/** Quick note tags: reps add them to a call's notes with one tap in the app. */
+export function NoteTags() {
+  const { org, refresh } = useOrg()
+  const [tags, setTags] = useState<string[]>(org.settings?.note_tags ?? [])
+  const [text, setText] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+  async function save(next: string[]) {
+    setTags(next)
+    const { error } = await supabase.from('organizations').update({ settings: { ...(org.settings ?? {}), note_tags: next } }).eq('id', org.id)
+    setError(error ? errorText(error) : null)
+    if (!error) { setSaved(true); setTimeout(() => setSaved(false), 1500); refresh() }
+  }
+  return (
+    <Card className="p-5 lg:col-span-2">
+      <h2 className="font-semibold">Quick note tags {saved && <span className="ml-2 text-xs font-normal text-emerald-600">Saved ✓</span>}</h2>
+      <p className="mb-3 mt-1 text-sm text-slate-500">Reps tap these to add them to a call's notes in the app — fast, and the same words for everyone, so you can see patterns (e.g. how many leads raise a price objection).</p>
+      <ErrorBox error={error} />
+      <div className="mb-3 flex flex-wrap gap-2">
+        {tags.map(t => (
+          <span key={t} className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-3 py-1 text-sm text-brand-700">
+            {t}<button className="text-brand-700/60 hover:text-red-600" onClick={() => save(tags.filter(x => x !== t))} aria-label={`Remove ${t}`}><Trash2 className="h-3.5 w-3.5" /></button>
+          </span>
+        ))}
+        {tags.length === 0 && <span className="text-sm text-slate-500">No tags yet.</span>}
+      </div>
+      <form className="flex gap-2" onSubmit={e => { e.preventDefault(); const t = text.trim(); if (t && !tags.includes(t)) save([...tags, t]); setText('') }}>
+        <input className="input" placeholder="New tag, e.g. Wants demo" value={text} onChange={e => setText(e.target.value)} maxLength={40} />
+        <Button type="submit" disabled={!text.trim()}><Plus className="h-4 w-4" /> Add</Button>
+      </form>
+    </Card>
+  )
+}

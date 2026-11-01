@@ -5,7 +5,7 @@ import { useOrg } from '../lib/session'
 import { useDirectory } from '../lib/directory'
 import type { Rule } from '../lib/types'
 import { Badge, Button, Card, ErrorBox, Field, PageHeader, Spinner } from '../components/ui'
-import { Buyers, ProfessionCategories, WhatsAppTemplates } from './SettingsExtra'
+import { Buyers, NoteTags, ProfessionCategories, WhatsAppTemplates } from './SettingsExtra'
 
 export default function Settings() {
   const { org, refresh } = useOrg()
@@ -127,6 +127,8 @@ export default function Settings() {
           onAdd={label => run(supabase.from('pipeline_stages').insert({ org_id: org.id, name: label, position: (dir.stages.at(-1)?.position ?? 0) + 1 }))} />
 
         <WhatsAppTemplates />
+
+        <NoteTags />
 
         <ProfessionCategories />
       </div>

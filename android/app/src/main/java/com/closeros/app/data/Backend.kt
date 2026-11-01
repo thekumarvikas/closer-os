@@ -51,6 +51,10 @@ object Backend {
     val settings: JsonObject? = null,
 ) {
     val trackWhatsapp get() = settings?.get("track_whatsapp")?.jsonPrimitive?.booleanOrNull ?: true
+    /** Quick note tags set by the company (Settings on the dashboard). */
+    val noteTags: List<String> get() = runCatching { settings?.get("note_tags")?.jsonArray?.map { it.jsonPrimitive.content } }.getOrNull()
+        ?: listOf("Price objection", "Wants EMI", "Needs to ask family", "Decision maker: spouse", "Busy — call in evening",
+            "Asked for details on WhatsApp", "Comparing with others", "Very interested", "Already bought elsewhere")
 }
 @Serializable data class Membership(val org_id: String, val role: String, val organization: Org)
 @Serializable data class Profile(val id: String, val email: String? = null, val full_name: String? = null, val phone: String? = null)
@@ -61,7 +65,7 @@ object Backend {
     val source: String? = null, val campaign: String? = null, val assigned_to: String? = null,
     val stage_id: String? = null, val deal_value: Double? = null, val notes: String? = null,
     val last_call_at: String? = null, val last_outcome_id: String? = null, val next_follow_up_at: String? = null,
-    val do_not_call: Boolean = false, val last_connected_at: String? = null,
+    val do_not_call: Boolean = false, val last_connected_at: String? = null, val key_facts: String? = null,
     val batch_leads: List<BatchLink> = emptyList(),
 ) {
     /** Latest webinar/event this lead registered for. */
@@ -103,6 +107,12 @@ object Backend {
 }
 @Serializable data class BatchList(val hot_minutes: Int = 60, val webinar_at: String? = null, val leads: List<BatchRow> = emptyList())
 @Serializable data class Category(val id: String, val name: String, val position: Int = 0)
+
+/** One entry in a lead's notes history. */
+@Serializable data class NoteEntry(
+    val kind: String, val at: String, val text: String? = null, val tags: List<String> = emptyList(), val outcome: String? = null,
+    val direction: String? = null, val duration_sec: Int? = null, val purpose: String? = null, val by: String? = null,
+)
 
 @Serializable data class LeadMini(val name: String = "", val phone: String = "")
 @Serializable data class FollowUp(
@@ -164,6 +174,17 @@ object Repo {
     }
 
     suspend fun lead(id: String): Lead? = Backend.client.from("leads").select(Columns.raw(LEAD_COLUMNS)) { filter { eq("id", id) } }.decodeSingleOrNull()
+
+    suspend fun leadNotes(id: String): List<NoteEntry> =
+        json.decodeFromString(db.rpc("lead_notes", buildJsonObject { put("p_lead", id) }).data)
+
+    suspend fun addNote(leadId: String, text: String, tags: List<String>) {
+        db.rpc("add_lead_note", buildJsonObject { put("p_lead", leadId); put("p_text", text); put("p_tags", buildJsonArray { tags.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } }) })
+    }
+
+    suspend fun setKeyFacts(leadId: String, text: String) {
+        db.rpc("set_key_facts", buildJsonObject { put("p_lead", leadId); put("p_text", text) })
+    }
 
     suspend fun myBatches(orgId: String): List<BatchSummary> =
         json.decodeFromString(db.rpc("my_batches", buildJsonObject { put("p_org", orgId) }).data)

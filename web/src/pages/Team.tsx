@@ -212,6 +212,12 @@ type Device = {
   device_id: string; user_id: string; model: string | null; android: string | null; app_version: string | null
   default_dialer: string | null; rec_folder_set: boolean; rec_files_found: number | null; rec_calls_checked: number | null
   rec_matched: number | null; rec_uploaded_total: number | null; rec_last_error: string | null; rec_checked_at: string | null; updated_at: string
+  setup: Record<string, boolean> | null
+}
+
+const setupNames: Record<string, string> = {
+  calls: 'Calls & call history', notify: 'Notifications', contacts: 'Contacts', alarms: 'On-time reminders', whatsapp: 'WhatsApp calls',
+  battery: 'Background running', autostart: 'Autostart', dialer: 'Phone app', autorecord: 'Auto recording', recfolder: 'Recordings folder',
 }
 
 /** Each rep's phone: app version, phone app in use, and whether call recordings are being uploaded. */
@@ -237,11 +243,11 @@ function PhoneStatus({ orgId, nameOf, version }: { orgId: string; nameOf: (id: s
   return (
     <>
       <h2 className="mb-1 font-semibold">Phones &amp; call recordings</h2>
-      <p className="mb-2 text-sm text-slate-500">Each phone reports here after it syncs (app 0.4.1 or newer). A phone that isn't listed hasn't updated the app yet.</p>
+      <p className="mb-2 text-sm text-slate-500">Each phone reports here after it syncs (app 0.4.1 or newer). A phone that isn't listed hasn't updated the app yet. Reps fix anything "not done" in the app: Profile → Open phone setup.</p>
       <Card className="mb-6 overflow-x-auto">
         {rows.length === 0 ? <div className="p-4 text-sm text-slate-500">No phone has reported yet. Install app 0.4.1 or newer and open it once.</div> : (
           <table className="min-w-full table-fixed divide-y divide-slate-100 text-sm">
-            <thead className="bg-slate-50"><tr><th className="th w-1/5">Person</th><th className="th w-1/5">Phone</th><th className="th">Recordings</th><th className="th w-32">Last check</th></tr></thead>
+            <thead className="bg-slate-50"><tr><th className="th w-[16%]">Person</th><th className="th w-[18%]">Phone</th><th className="th">Phone setup</th><th className="th">Recordings</th><th className="th w-32">Last check</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
               {rows.map(d => {
                 const [text, c] = status(d)
@@ -249,6 +255,12 @@ function PhoneStatus({ orgId, nameOf, version }: { orgId: string; nameOf: (id: s
                   <tr key={d.device_id}>
                     <td className="td font-medium">{nameOf(d.user_id)}</td>
                     <td className="td"><div>{d.model || '—'}</div><div className="text-xs text-slate-500">Android {d.android} · app {d.app_version}</div></td>
+                    <td className="td">{(() => {
+                      if (!d.setup) return <span className="text-slate-400">—</span>
+                      const missing = Object.entries(d.setup).filter(([, v]) => !v).map(([k]) => setupNames[k] ?? k)
+                      return missing.length === 0 ? <span className="text-emerald-700">All done ✓</span>
+                        : <><div className="text-amber-700">{missing.length} not done</div><div className="text-xs text-slate-500">{missing.join(', ')}</div></>
+                    })()}</td>
                     <td className="td"><div className={color[c]}>{text}</div>
                       {d.rec_folder_set && <div className="text-xs text-slate-500">Last check: {d.rec_files_found ?? 0} files, {d.rec_matched ?? 0} of {d.rec_calls_checked ?? 0} answered calls matched</div>}</td>
                     <td className="td text-slate-500">{ago(d.rec_checked_at ?? d.updated_at)}</td>

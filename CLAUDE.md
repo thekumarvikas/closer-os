@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: IndiaMART pull (CRM key), direct Facebook, push notification to rep on new lead.
 
-## Android app (`android/`) — v0.5.1
+## Android app (`android/`) — v0.6.0
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -225,6 +225,19 @@ intelligence → Play Store launch.
   v0.5.1 / migration 0018: a WhatsApp call with only a saved name (no number) is still uploaded
   (phone = '', contact_name set) so its talk time counts; watcher re-reads active notifications on
   reconnect (resumes a call in progress); Profile tells reps to set battery "No restrictions".
+
+## Phone setup checklist (v0.6.0, Nov 2026)
+- Owner: reps aren't technical → every permission/setting must be turned on from inside Closer OS.
+- calls/PhoneSetup.kt lists items with status + most direct route: runtime perms (calls/call log/
+  phone/SIM, notifications, contacts) = in-app pop-up; exact alarms, WhatsApp notification access
+  (detail page for our listener on Android 11+), battery "no restrictions" (one-tap system dialog,
+  REQUEST_IGNORE_BATTERY_OPTIMIZATIONS), brand Autostart screen (Xiaomi/Oppo/Vivo/… — can't be
+  read, rep taps Done), default Phone app check, auto-recording (opens Phone app + brand steps, rep
+  taps Done), recordings folder (picker opens at MIUI/sound_recorder/call_rec or Recordings/Call).
+- ui/SetupChecklist.kt: "Phone setup" screen (Profile → Open phone setup), Home banner while
+  essentials are missing; status refreshes when the rep returns from Android settings.
+- device_status.setup jsonb (migration 0019) → dashboard Team → "Phone setup" column lists what's off.
+- Android limits: special switches can't be flipped by any app; we open the exact screen.
 
 ## Build notes
 - Android SDK at /opt/android-sdk (set `sdk.dir` in local.properties).

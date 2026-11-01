@@ -91,6 +91,7 @@ object CallSync {
                 put("rec_files_found", r.filesFound); put("rec_calls_checked", r.callsChecked); put("rec_matched", r.matched)
                 put("rec_uploaded_total", store.recordingsUploaded); put("rec_last_error", r.error ?: "")
                 put("rec_checked_at", Instant.now().toString())
+                put("setup", buildJsonObject { PhoneSetup.items(ctx).forEach { put(it.key, it.done) } })
             })
         }
         return r

@@ -69,6 +69,10 @@ class LocalStore(ctx: Context) {
         get() = p.getInt("rec_count", 0)
         set(v) { p.edit().putInt("rec_count", v).apply() }
 
+    /** Setup steps Android can't check (e.g. Autostart): the rep ticks them as done. */
+    fun confirmed(key: String) = p.getBoolean("confirm_$key", false)
+    fun confirm(key: String) { p.edit().putBoolean("confirm_$key", true).apply() }
+
     var waCursorMs: Long
         get() = p.getLong("wa_cursor", 0)
         set(v) { p.edit().putLong("wa_cursor", v).apply() }

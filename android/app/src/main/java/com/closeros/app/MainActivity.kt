@@ -83,6 +83,7 @@ fun Root(vm: AppViewModel) {
             vm.membership == null -> NoCompanyScreen(vm)
             !permsAsked -> PermissionScreen { permsAsked = true; com.closeros.app.calls.CallSync.syncNow(ctx) }
             vm.needsSetup -> SetupScreen(vm)
+            vm.showSetup -> SetupChecklistScreen(vm) { vm.showSetup = false }
             vm.pending != null -> OutcomeScreen(vm)
             vm.openLeadId != null -> LeadDetailScreen(vm, vm.openLeadId!!) { call(it) }
             vm.queueActive -> QueueScreen(vm)

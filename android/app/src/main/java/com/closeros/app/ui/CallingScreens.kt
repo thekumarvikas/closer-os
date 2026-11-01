@@ -70,7 +70,7 @@ fun HomeScreen(vm: AppViewModel) {
             Text("Hi ${vm.profile?.full_name?.substringBefore(' ') ?: ""} 👋", fontSize = 24.sp, fontWeight = FontWeight.Bold)
             Text(m.organization.name, color = Brand.muted)
         }
-        item { WhatsAppSettings(vm, compact = true) }
+        item { SetupBanner(vm) }
         if (vm.queueActive) item {
             Card(Modifier.fillMaxWidth().clickable { vm.queueResume() }, colors = CardDefaults.cardColors(containerColor = Brand.light)) {
                 Text("Calling queue: ${vm.queuePos + 1} of ${vm.queue.size} — tap to continue", Modifier.padding(14.dp), color = Brand.primaryDark, fontWeight = FontWeight.SemiBold)

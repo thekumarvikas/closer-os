@@ -260,6 +260,11 @@ fun ProfileScreen(vm: AppViewModel) {
         if (sims.isEmpty()) Text("No SIM found (or phone permission not given).", color = Brand.muted)
         sims.forEach { Text(it.label + " — " + (vm.store.simNumber(it.slot)?.let { n -> fmtPhone(n) } ?: "number not set") + if (vm.store.preferredSim == it.slot) "  ✓ last used" else "") }
         TextButton(onClick = { vm.needsSetup = true }) { Text("Edit my numbers") }
+        HorizontalDivider()
+        Text("Phone setup", fontWeight = FontWeight.SemiBold)
+        val setupItems = remember { com.closeros.app.calls.PhoneSetup.items(ctx) }
+        Text("${setupItems.count { it.done }} of ${setupItems.size} done — permissions, reminders, WhatsApp calls, recordings.", color = Brand.muted, fontSize = 14.sp)
+        Button(onClick = { vm.showSetup = true }) { Text("Open phone setup") }
         if (android.os.Build.VERSION.SDK_INT >= 31 && !com.closeros.app.calls.FollowUpAlarms.canExact(ctx)) ExactAlarmHint()
         HorizontalDivider()
         RecordingSettings(vm)

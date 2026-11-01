@@ -33,6 +33,7 @@ Everything from the original product prompt plus the owner's feedback, with stat
 - ⛔ Who hung up — Android doesn't tell normal apps (dropped)
 - ⛔ Voicemail drop / live objection prompts on normal SIM calls (need cloud calling)
 
+- ✅ Phone setup checklist in the app (every permission/setting from one screen) + per-rep status on the dashboard
 - ✅ WhatsApp call tracking (notification access; Phone / WhatsApp filters in app and reports)
 
 ## 3. Call recording

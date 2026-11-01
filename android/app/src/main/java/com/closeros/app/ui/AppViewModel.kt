@@ -69,6 +69,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** The call waiting for its outcome, and what the call log says about it. */
     var needsSetup by mutableStateOf(!store.setupDone)
     var callRequest by mutableStateOf<Lead?>(null)
+    var showSetup by mutableStateOf(false)
     var history by mutableStateOf<List<HistoryItem>?>(null)
     var historyLimit by mutableStateOf(300)
     var historyHasMore by mutableStateOf(false)

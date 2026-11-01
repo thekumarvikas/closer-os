@@ -27,6 +27,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.booleanOrNull
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -47,7 +48,10 @@ object Backend {
 @Serializable data class Org(
     val id: String, val name: String, val phone_prefix: String = "+91", val currency: String = "INR",
     val timezone: String = "Asia/Kolkata",
-)
+    val settings: JsonObject? = null,
+) {
+    val trackWhatsapp get() = settings?.get("track_whatsapp")?.jsonPrimitive?.booleanOrNull ?: true
+}
 @Serializable data class Membership(val org_id: String, val role: String, val organization: Org)
 @Serializable data class Profile(val id: String, val email: String? = null, val full_name: String? = null, val phone: String? = null)
 
@@ -102,7 +106,7 @@ object Repo {
         val uid = Backend.uid ?: return null
         runCatching { db.rpc("accept_my_invitations") }
         return Backend.client.from("org_members")
-            .select(Columns.raw("org_id, role, organization:organizations(id, name, phone_prefix, currency, timezone)")) {
+            .select(Columns.raw("org_id, role, organization:organizations(id, name, phone_prefix, currency, timezone, settings)")) {
                 filter { eq("user_id", uid); eq("status", "active") }
             }.decodeList<Membership>().firstOrNull()
     }

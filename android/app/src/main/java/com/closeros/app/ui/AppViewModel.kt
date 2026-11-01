@@ -108,6 +108,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         loadingOrg = true
         runCatching {
             membership = Repo.membership()
+            membership?.let { store.trackWhatsapp = it.organization.trackWhatsapp }
             profile = Repo.profile()
             membership?.let { m ->
                 store.orgId = m.org_id
@@ -131,7 +132,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun loadToday() = viewModelScope.launch {
         val m = membership ?: return@launch
         val start = java.time.LocalDate.now(java.time.ZoneId.of(m.organization.timezone)).atStartOfDay(java.time.ZoneId.of(m.organization.timezone)).toInstant().toEpochMilli()
-        val logs = PhoneCalls.readLog(ctx, start).reversed()
+        val logs = PhoneCalls.readAll(ctx, start).reversed()
         val phones = logs.map { normalizePhone(it.phone, prefix) }
         val byPhone = runCatching { Repo.leadsByPhones(m.org_id, phones) }.getOrDefault(emptyMap())
         today = logs.mapIndexed { i, l -> HistoryItem(l, phones[i], byPhone[phones[i]]) }

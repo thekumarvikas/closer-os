@@ -6,6 +6,7 @@ import android.os.Build
 import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -85,14 +86,14 @@ fun CallHistoryScreen(vm: AppViewModel) {
             Text("Call history", fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             IconButton(onClick = { vm.loadHistory() }) { Icon(Icons.Default.Refresh, "Refresh") }
         }
-        Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("all" to "All", "leads" to "Leads", "unknown" to "Not leads", "missed" to "Missed").forEach { (k, l) ->
+        Row(Modifier.padding(horizontal = 16.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("all" to "All", "phone" to "Phone", "whatsapp" to "WhatsApp", "leads" to "Leads", "unknown" to "Not leads", "missed" to "Missed").forEach { (k, l) ->
                 FilterChip(selected = filter == k, onClick = { filter = k }, label = { Text(l) })
             }
         }
         if (items == null) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }; return }
         val shown = items.filter {
-            when (filter) { "leads" -> it.lead != null; "unknown" -> it.lead == null; "missed" -> it.log.direction == "missed" || it.log.direction == "rejected"; else -> true }
+            when (filter) { "phone" -> it.log.channel == "phone"; "whatsapp" -> it.log.channel == "whatsapp"; "leads" -> it.lead != null; "unknown" -> it.lead == null; "missed" -> it.log.direction == "missed" || it.log.direction == "rejected"; else -> true }
         }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp, 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (shown.isEmpty()) item { Text("No calls here.", color = Brand.muted) }
@@ -146,4 +147,30 @@ fun RecordingSettings(vm: AppViewModel) {
         OutlinedButton(onClick = { pick.launch(null) }) { Text(if (folder == null) "Choose recordings folder" else "Change folder") }
         if (folder != null) OutlinedButton(onClick = { vm.checkRecordingsNow() }) { Text("Check now") }
     }
+}
+
+/** WhatsApp calls: the rep allows notification access once (and contacts, to know saved names' numbers). */
+@Composable
+fun WhatsAppSettings(vm: AppViewModel, compact: Boolean = false) {
+    val ctx = LocalContext.current
+    if (!vm.store.trackWhatsapp) { if (!compact) Text("WhatsApp calls: turned off by your company.", color = Brand.muted, fontSize = 14.sp); return }
+    var tick by remember { mutableStateOf(0) }
+    val granted = remember(tick) { com.closeros.app.calls.WhatsAppCalls.accessGranted(ctx) }
+    val contacts = remember(tick) { PhoneCalls.has(ctx, android.Manifest.permission.READ_CONTACTS) }
+    val askContacts = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { tick++ }
+    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) { tick++; onPauseOrDispose { } }
+    if (compact && granted && contacts) return
+    val body = @Composable {
+        Text("WhatsApp calls", fontWeight = FontWeight.SemiBold)
+        Text(if (granted) "On ✓ · ${com.closeros.app.calls.WhatsAppCalls.all(ctx).size} WhatsApp calls noted on this phone. They can't be recorded."
+             else "WhatsApp calls don't show in the phone's call history. Allow Closer OS to see WhatsApp's call notifications so your WhatsApp calls count too. Only call details (who, when, how long) are kept.",
+            color = Brand.muted, fontSize = 14.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (!granted) Button(onClick = { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }) { Text("Allow") }
+            if (!contacts) OutlinedButton(onClick = { askContacts.launch(android.Manifest.permission.READ_CONTACTS) }) { Text("Allow contacts") }
+        }
+        if (!contacts) Text("Contacts: needed to know the number when WhatsApp shows a saved name.", fontSize = 12.sp, color = Brand.muted)
+    }
+    if (compact) Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFECFDF5))) { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { body() } }
+    else Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { body() }
 }

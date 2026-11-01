@@ -18,6 +18,7 @@ import java.util.UUID
 data class LogCall(
     val id: String, val phone: String, val direction: String, val startedAtMs: Long, val durationSec: Int,
     val simSlot: Int?, val simLabel: String?, val simNumber: String? = null,
+    val channel: String = "phone", val name: String? = null,
 )
 
 data class Sim(val slot: Int, val label: String, val handle: PhoneAccountHandle?)
@@ -57,7 +58,11 @@ object PhoneCalls {
     }.getOrNull()
 
     /** Reads the whole call log (newest first) for the Calls screen. */
-    fun history(ctx: Context, limit: Int): List<LogCall> = readLog(ctx, 0, 100_000).takeLast(limit).reversed()
+    fun history(ctx: Context, limit: Int): List<LogCall> =
+        (readLog(ctx, 0, 100_000).takeLast(limit) + WhatsAppCalls.asLog(ctx, 0)).sortedByDescending { it.startedAtMs }.take(limit)
+
+    /** Phone + WhatsApp calls since a time, oldest first. */
+    fun readAll(ctx: Context, sinceMs: Long): List<LogCall> = (readLog(ctx, sinceMs) + WhatsAppCalls.asLog(ctx, sinceMs)).sortedBy { it.startedAtMs }
 
     /** Starts a normal phone call on the chosen SIM. The phone's own app handles (and records) it. */
     @SuppressLint("MissingPermission")

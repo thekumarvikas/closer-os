@@ -52,6 +52,21 @@ object CallSync {
             sent += Repo.syncCalls(orgId, arr)
             store.callLogCursorMs = chunk.last().startedAtMs
         }
+        // 2b) WhatsApp calls noted from WhatsApp's call notifications (if the rep allowed it).
+        val wa = WhatsAppCalls.since(ctx, store.waCursorMs).filter { it.phone.isNotBlank() }
+        for (chunk in wa.chunked(200)) {
+            val arr = buildJsonArray {
+                chunk.forEach { c ->
+                    add(buildJsonObject {
+                        put("id", c.id); put("phone", c.phone); put("direction", c.direction); put("channel", "whatsapp")
+                        put("started_at", Instant.ofEpochMilli(c.startedAtMs).toString()); put("duration_sec", c.durationSec)
+                        put("device_id", device); c.name?.let { put("contact_name", JsonPrimitive(it)) }
+                    })
+                }
+            }
+            sent += Repo.syncCalls(orgId, arr)
+            store.waCursorMs = chunk.last().startedAtMs
+        }
         store.lastSyncMs = System.currentTimeMillis()
         // 3) Upload the phone's call recordings for these calls, and tell the dashboard how it went.
         checkRecordings(ctx, orgId)

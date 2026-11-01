@@ -38,12 +38,14 @@ const pick = (r?: Row): Metrics => {
 }
 
 export type Dir = 'all' | 'out' | 'in'
+export type Channel = 'all' | 'phone' | 'whatsapp'
+export const chList = (c: Channel) => c === 'all' ? null : [c]
 export const dirList = (d: Dir) => d === 'out' ? ['outgoing'] : d === 'in' ? ['incoming', 'missed', 'rejected'] : null
 
-export async function fetchReport(orgId: string, from: Date, to: Date, users: string[], leadOnly: boolean, dir: Dir = 'all'): Promise<Report> {
+export async function fetchReport(orgId: string, from: Date, to: Date, users: string[], leadOnly: boolean, dir: Dir = 'all', ch: Channel = 'all'): Promise<Report> {
   const { data, error } = await supabase.rpc('call_report', {
     p_org: orgId, p_from: from.toISOString(), p_to: to.toISOString(),
-    p_users: users.length ? users : null, p_lead_only: leadOnly, p_dirs: dirList(dir),
+    p_users: users.length ? users : null, p_lead_only: leadOnly, p_dirs: dirList(dir), p_channels: chList(ch),
   })
   if (error) throw error
   const rows = (data.rows ?? []) as Row[]
@@ -99,13 +101,13 @@ export function addDays(ymd: string, n: number) {
   return d.toISOString().slice(0, 10)
 }
 
-/** "01 Oct 2026" style, as on Callyzer. */
+/** "01 Oct 2026" style. */
 export function fmtYmd(ymd: string, withDay = false) {
   const d = new Date(ymd + 'T00:00:00Z')
   return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric', weekday: withDay ? 'short' : undefined, timeZone: 'UTC' }).format(d)
 }
 
-/** Callyzer-style duration: 2h 45m 24s. */
+/** Duration like 2h 45m 24s. */
 export function hms(sec: number) {
   sec = Math.max(0, Math.round(sec))
   const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60
@@ -138,9 +140,9 @@ export interface OutcomeReport {
 const emptyCell: OutcomeCell = { calls: 0, leads: 0, amount: 0, deal_value: 0, dur: 0 }
 const cell = (r?: ORow): OutcomeCell => r ? { calls: +r.calls || 0, leads: +r.leads || 0, amount: +r.amount || 0, deal_value: +r.deal_value || 0, dur: +r.dur || 0 } : { ...emptyCell }
 
-export async function fetchOutcomeReport(orgId: string, from: Date, to: Date, users: string[], dir: Dir = 'all'): Promise<OutcomeReport> {
+export async function fetchOutcomeReport(orgId: string, from: Date, to: Date, users: string[], dir: Dir = 'all', ch: Channel = 'all'): Promise<OutcomeReport> {
   const { data, error } = await supabase.rpc('outcome_report', {
-    p_org: orgId, p_from: from.toISOString(), p_to: to.toISOString(), p_users: users.length ? users : null, p_dirs: dirList(dir),
+    p_org: orgId, p_from: from.toISOString(), p_to: to.toISOString(), p_users: users.length ? users : null, p_dirs: dirList(dir), p_channels: chList(ch),
   })
   if (error) throw error
   const rows = (data.rows ?? []) as ORow[]

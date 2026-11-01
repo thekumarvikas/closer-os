@@ -264,6 +264,8 @@ fun ProfileScreen(vm: AppViewModel) {
         HorizontalDivider()
         RecordingSettings(vm)
         HorizontalDivider()
+        WhatsAppSettings(vm)
+        HorizontalDivider()
         Text("Calling queue", fontWeight = FontWeight.SemiBold)
         Text("Seconds before the next call", color = Brand.muted, fontSize = 14.sp)
         var cd by remember { mutableStateOf(vm.store.countdownSec) }

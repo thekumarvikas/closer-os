@@ -69,6 +69,15 @@ class LocalStore(ctx: Context) {
         get() = p.getInt("rec_count", 0)
         set(v) { p.edit().putInt("rec_count", v).apply() }
 
+    var waCursorMs: Long
+        get() = p.getLong("wa_cursor", 0)
+        set(v) { p.edit().putLong("wa_cursor", v).apply() }
+
+    /** Company setting: track WhatsApp calls (read by the notification watcher). */
+    var trackWhatsapp: Boolean
+        get() = p.getBoolean("track_whatsapp", true)
+        set(v) { p.edit().putBoolean("track_whatsapp", v).apply() }
+
     var lastRecordingCheck: String?
         get() = p.getString("rec_last_check", null)
         set(v) { p.edit().putString("rec_last_check", v).apply() }

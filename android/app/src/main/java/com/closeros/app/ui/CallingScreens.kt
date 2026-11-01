@@ -70,6 +70,7 @@ fun HomeScreen(vm: AppViewModel) {
             Text("Hi ${vm.profile?.full_name?.substringBefore(' ') ?: ""} 👋", fontSize = 24.sp, fontWeight = FontWeight.Bold)
             Text(m.organization.name, color = Brand.muted)
         }
+        item { WhatsAppSettings(vm, compact = true) }
         if (vm.queueActive) item {
             Card(Modifier.fillMaxWidth().clickable { vm.queueResume() }, colors = CardDefaults.cardColors(containerColor = Brand.light)) {
                 Text("Calling queue: ${vm.queuePos + 1} of ${vm.queue.size} — tap to continue", Modifier.padding(14.dp), color = Brand.primaryDark, fontWeight = FontWeight.SemiBold)
@@ -153,14 +154,14 @@ fun HistoryRow(vm: AppViewModel, h: HistoryItem, onAdd: (() -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(10.dp))
         .clickable(enabled = h.lead != null) { h.lead?.let { vm.openLeadId = it.id } }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text(h.lead?.name?.ifBlank { null } ?: fmtPhone(h.phone), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(h.lead?.name?.ifBlank { null } ?: h.log.name ?: fmtPhone(h.phone), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val dir = when (h.log.direction) { "outgoing" -> "Dialled"; "incoming" -> "Received"; "missed" -> "Missed"; else -> "Declined" }
-            Text("$dir · ${if (h.log.durationSec > 0) fmtDur(h.log.durationSec) else "no talk"} · ${fmtWhen(Instant.ofEpochMilli(h.log.startedAtMs).toString())}",
+            Text((if (h.log.channel == "whatsapp") "WhatsApp · " else "") + "$dir · ${if (h.log.durationSec > 0) fmtDur(h.log.durationSec) else "no talk"} · ${fmtWhen(Instant.ofEpochMilli(h.log.startedAtMs).toString())}",
                 fontSize = 13.sp, color = if (h.log.direction == "missed" || h.log.direction == "rejected") Brand.red else Brand.muted)
-            if (h.lead != null) Text(fmtPhone(h.phone), fontSize = 12.sp, color = Brand.muted)
+            if (h.lead != null || h.log.name != null) Text(fmtPhone(h.phone), fontSize = 12.sp, color = Brand.muted)
         }
         when {
-            h.lead == null && onAdd != null -> OutlinedButton(onClick = onAdd, contentPadding = PaddingValues(horizontal = 10.dp)) { Text("Add lead", fontSize = 13.sp) }
+            h.lead == null && onAdd != null && h.phone.isNotBlank() -> OutlinedButton(onClick = onAdd, contentPadding = PaddingValues(horizontal = 10.dp)) { Text("Add lead", fontSize = 13.sp) }
             h.lead != null -> IconButton(onClick = { vm.callRequest = h.lead }) { Icon(Icons.Default.Call, "Call", tint = Brand.primary) }
         }
     }

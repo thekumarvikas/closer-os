@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: IndiaMART pull (CRM key), direct Facebook, push notification to rep on new lead.
 
-## Android app (`android/`) — v0.4.1
+## Android app (`android/`) — v0.5.0
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -205,6 +205,22 @@ intelligence → Play Store launch.
   Dashboard Team page → "Phones & call recordings" shows it. App Profile → Call recordings has
   "Check now" + last-check line. Matcher picks the closest file by time (name time = LAST date-time
   in the name; Samsung yyMMdd_HHmmss too), number in the name boosts the match.
+
+## WhatsApp calls (v0.5.0, Nov 2026)
+- Owner: never show the name "Callyzer" anywhere in the product (UI text, hints). Removed.
+- Reps make many sales calls on WhatsApp → tracked too. calls.channel 'phone'|'whatsapp' +
+  calls.contact_name. Company setting organizations.settings.track_whatsapp (default true;
+  Settings → Company "Call history to track"). sync_calls accepts channel/contact_name and skips
+  WhatsApp calls when the company turned it off. call_report/outcome_report take p_channels text[].
+- Web: Reports "Via: Both / Phone / WhatsApp" switch; Call log has a channel filter, "WA" badge,
+  "Dialled from" = WhatsApp, CSV column "Via".
+- App: WhatsAppCallListener (NotificationListenerService) watches only com.whatsapp / w4b call
+  notifications (ringing / calling / ongoing with chronometer); 3 s grace on removal because WhatsApp
+  swaps notifications; missed = incoming never connected. Number = title if digits, else contacts
+  lookup (READ_CONTACTS) by Person uri or display name; calls without a number stay on the phone.
+  Stored in prefs "wa_calls" (max 3000), uploaded by SyncWorker (cursor wa_cursor). Shown in Home
+  tiles + Calls tab (Phone / WhatsApp chips). Home + Profile card asks for notification access +
+  contacts. WhatsApp calls can't be recorded. Needs real-phone testing (notification texts vary).
 
 ## Build notes
 - Android SDK at /opt/android-sdk (set `sdk.dir` in local.properties).

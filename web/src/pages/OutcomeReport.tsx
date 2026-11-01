@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Target } from 'lucide-react'
 import { errorText } from '../lib/supabase'
 import type { Directory } from '../lib/directory'
-import { fetchOutcomeReport, zonedMidnight, addDays, fmtYmd, pct, downloadCsv, type OutcomeCell, type OutcomeReport, type Dir } from '../lib/report'
+import { fetchOutcomeReport, zonedMidnight, addDays, fmtYmd, pct, downloadCsv, type OutcomeCell, type OutcomeReport, type Dir, type Channel } from '../lib/report'
 import { fmtMoney } from '../lib/format'
 import type { Organization, Outcome } from '../lib/types'
 import { Badge, Button, Card, Empty, ErrorBox, Spinner } from '../components/ui'
@@ -18,8 +18,8 @@ const categoryInfo: Record<string, { label: string; color: 'gray' | 'green' | 'r
 }
 const BAR = '#156D63'
 
-export default function OutcomeReportView({ org, dir, from, to, users, fileTag, onOpenOutcome, callDir = 'all' }: {
-  org: Organization; dir: Directory; from: string; to: string; users: string[]; fileTag: string; callDir?: Dir
+export default function OutcomeReportView({ org, dir, from, to, users, fileTag, onOpenOutcome, callDir = 'all', channel = 'all' }: {
+  org: Organization; dir: Directory; from: string; to: string; users: string[]; fileTag: string; callDir?: Dir; channel?: Channel
   onOpenOutcome: (outcomeId: string | 'none') => void
 }) {
   const [r, setR] = useState<OutcomeReport | null>(null)
@@ -28,8 +28,8 @@ export default function OutcomeReportView({ org, dir, from, to, users, fileTag, 
 
   useEffect(() => {
     setR(null); setError(null)
-    fetchOutcomeReport(org.id, zonedMidnight(from, org), zonedMidnight(addDays(to, 1), org), users, callDir).then(setR).catch(e => setError(errorText(e)))
-  }, [org, from, to, users, callDir])
+    fetchOutcomeReport(org.id, zonedMidnight(from, org), zonedMidnight(addDays(to, 1), org), users, callDir, channel).then(setR).catch(e => setError(errorText(e)))
+  }, [org, from, to, users, callDir, channel])
 
   if (error) return <ErrorBox error={error} />
   if (!r) return <Spinner />

@@ -3,7 +3,7 @@ import { Download, ChevronDown, BarChart3 } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
 import { useDirectory, type Directory } from '../lib/directory'
-import { fetchReport, zonedMidnight, zonedYmd, addDays, fmtYmd, pct, downloadCsv, type Bucket, type Report, type Dir } from '../lib/report'
+import { fetchReport, zonedMidnight, zonedYmd, addDays, fmtYmd, pct, downloadCsv, type Bucket, type Report, type Dir, type Channel } from '../lib/report'
 import type { Organization } from '../lib/types'
 import { Button, Card, Empty, ErrorBox, PageHeader, Spinner } from '../components/ui'
 import { Bars, Meter, SegmentBar, callColors } from '../components/charts'
@@ -13,25 +13,25 @@ import OutcomeReportView from './OutcomeReport'
 
 type Tab = 'overview' | 'outcomes' | 'team' | 'daily' | 'hourly' | 'followups' | 'log'
 const tabs: [Tab, string][] = [['overview', 'Overview'], ['outcomes', 'Outcomes'], ['team', 'Team'], ['daily', 'Daily'], ['hourly', 'By hour'], ['followups', 'Follow-ups'], ['log', 'Call log']]
-interface Filters { from: string; to: string; users: string[]; dir: Dir }
+interface Filters { from: string; to: string; users: string[]; dir: Dir; ch: Channel }
 
 export default function Reports() {
   const { org, isManager } = useOrg()
   const dir = useDirectory(org.id)
   const today = zonedYmd(org)
-  const [draft, setDraft] = useState<Filters>({ from: addDays(today, -6), to: today, users: [], dir: 'all' })
+  const [draft, setDraft] = useState<Filters>({ from: addDays(today, -6), to: today, users: [], dir: 'all', ch: 'all' })
   const [applied, setApplied] = useState<Filters>(draft)
   const [tab, setTab] = useState<Tab>('overview')
   const [logOutcome, setLogOutcome] = useState('')
   const [report, setReport] = useState<Report | null>(null)
   const [error, setError] = useState<string | null>(null)
   const range = useMemo(() => ({ from: zonedMidnight(applied.from, org), to: zonedMidnight(addDays(applied.to, 1), org) }), [applied, org])
-  const logFilters = useMemo(() => ({ from: range.from.toISOString(), to: range.to.toISOString(), users: applied.users, dir: applied.dir }), [range, applied.users, applied.dir])
+  const logFilters = useMemo(() => ({ from: range.from.toISOString(), to: range.to.toISOString(), users: applied.users, dir: applied.dir, ch: applied.ch }), [range, applied.users, applied.dir, applied.ch])
 
   useEffect(() => {
     setReport(null); setError(null)
-    fetchReport(org.id, range.from, range.to, applied.users, false, applied.dir).then(setReport).catch(e => setError(errorText(e)))
-  }, [org.id, range, applied.users, applied.dir])
+    fetchReport(org.id, range.from, range.to, applied.users, false, applied.dir, applied.ch).then(setReport).catch(e => setError(errorText(e)))
+  }, [org.id, range, applied.users, applied.dir, applied.ch])
 
   const quick: [string, string, string][] = [
     ['Today', today, today], ['Yesterday', addDays(today, -1), addDays(today, -1)], ['Last 7 days', addDays(today, -6), today],
@@ -43,7 +43,7 @@ export default function Reports() {
 
   return (
     <>
-      <PageHeader title="Reports" subtitle={period + (applied.dir === 'out' ? ' · dialled calls only' : applied.dir === 'in' ? ' · incoming calls only' : '')} />
+      <PageHeader title="Reports" subtitle={period + (applied.dir === 'out' ? ' · dialled calls only' : applied.dir === 'in' ? ' · incoming calls only' : '') + (applied.ch === 'phone' ? ' · phone calls' : applied.ch === 'whatsapp' ? ' · WhatsApp calls' : '')} />
       <Card className="mb-4 p-4">
         <div className="flex flex-wrap items-end gap-3">
           {isManager && dir && <div className="min-w-[220px]"><span className="label">People</span><PeopleSelect dir={dir} value={draft.users} onChange={users => setDraft({ ...draft, users })} /></div>}
@@ -53,6 +53,13 @@ export default function Reports() {
             <div className="flex rounded-lg bg-slate-100 p-1 text-sm">
               {([['all', 'All'], ['out', 'Dialled'], ['in', 'Incoming']] as const).map(([k, l]) => (
                 <button key={k} onClick={() => apply({ ...draft, dir: k })} className={`rounded-md px-3 py-1 font-medium ${applied.dir === k ? 'bg-white shadow-sm' : 'text-slate-600'}`}>{l}</button>
+              ))}
+            </div>
+          </div>
+          <div><span className="label">Via</span>
+            <div className="flex rounded-lg bg-slate-100 p-1 text-sm">
+              {([['all', 'Both'], ['phone', 'Phone'], ['whatsapp', 'WhatsApp']] as const).map(([k, l]) => (
+                <button key={k} onClick={() => apply({ ...draft, ch: k })} className={`rounded-md px-3 py-1 font-medium ${applied.ch === k ? 'bg-white shadow-sm' : 'text-slate-600'}`}>{l}</button>
               ))}
             </div>
           </div>
@@ -76,7 +83,7 @@ export default function Reports() {
       <ErrorBox error={error} />
       {!dir ? <Spinner /> :
         tab === 'log' ? <CallLog org={org} dir={dir} f={logFilters} fileTag={fileTag} outcome={logOutcome} setOutcome={setLogOutcome} /> :
-        tab === 'outcomes' ? <OutcomeReportView org={org} dir={dir} from={applied.from} to={applied.to} users={applied.users} callDir={applied.dir} fileTag={fileTag} onOpenOutcome={id => { setLogOutcome(id); setTab('log') }} /> :
+        tab === 'outcomes' ? <OutcomeReportView org={org} dir={dir} from={applied.from} to={applied.to} users={applied.users} callDir={applied.dir} channel={applied.ch} fileTag={fileTag} onOpenOutcome={id => { setLogOutcome(id); setTab('log') }} /> :
         tab === 'followups' ? <FollowUpDiscipline org={org} dir={dir} from={range.from} to={range.to} users={applied.users} fileTag={fileTag} /> :
         !report ? <Spinner /> :
         report.total.calls === 0 ? <Card><Empty icon={<BarChart3 className="h-6 w-6" />} title="No calls in this period" text="Try a longer date range." /></Card> :

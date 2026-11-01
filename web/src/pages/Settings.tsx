@@ -16,6 +16,7 @@ export default function Settings() {
   const [saved, setSaved] = useState(false)
   const [company, setCompany] = useState({ name: org.name, phone_prefix: org.phone_prefix, currency: org.currency, timezone: org.timezone, date_format: org.date_format })
   const [tracking, setTracking] = useState<'all' | 'leads'>(org.settings?.call_tracking ?? 'all')
+  const [whatsapp, setWhatsapp] = useState<boolean>(org.settings?.track_whatsapp ?? true)
   const reload = () => setVersion(v => v + 1)
 
   useEffect(() => {
@@ -29,7 +30,7 @@ export default function Settings() {
 
   async function saveCompany(e: FormEvent) {
     e.preventDefault()
-    const { error } = await supabase.from('organizations').update({ ...company, settings: { ...(org.settings ?? {}), call_tracking: tracking } }).eq('id', org.id)
+    const { error } = await supabase.from('organizations').update({ ...company, settings: { ...(org.settings ?? {}), call_tracking: tracking, track_whatsapp: whatsapp } }).eq('id', org.id)
     if (error) return setError(errorText(error))
     setSaved(true); setTimeout(() => setSaved(false), 2000); refresh()
   }
@@ -55,9 +56,15 @@ export default function Settings() {
               </select>
             </Field>
             <div className="sm:col-span-2">
-              <Field label="Calls to upload from reps' phones" hint={tracking === 'all' ? 'Every call on the work phone is uploaded (best for company SIMs). Tell your reps.' : 'Only calls to numbers that are leads. Personal calls stay on the phone.'}>
+              <span className="label">Call history to track</span>
+              <div className="mb-3 flex flex-wrap gap-4 text-sm">
+                <label className="flex items-center gap-2"><input type="checkbox" checked disabled /> Phone calls (SIM)</label>
+                <label className="flex items-center gap-2"><input type="checkbox" checked={whatsapp} onChange={e => setWhatsapp(e.target.checked)} /> WhatsApp calls</label>
+              </div>
+              {whatsapp && <p className="-mt-2 mb-3 text-xs text-slate-500">Reps allow "notification access" once in the app. WhatsApp calls show talk time but can't be recorded.</p>}
+              <Field label="Which calls to upload" hint={tracking === 'all' ? 'Every call on the work phone is uploaded (best for company SIMs). Tell your reps.' : 'Only calls to numbers that are leads. Personal calls stay on the phone.'}>
                 <select className="input" value={tracking} onChange={e => setTracking(e.target.value as 'all' | 'leads')}>
-                  <option value="all">All calls (like Callyzer)</option>
+                  <option value="all">All calls</option>
                   <option value="leads">Lead calls only</option>
                 </select>
               </Field>

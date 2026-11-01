@@ -8,10 +8,11 @@ import type { Organization } from '../lib/types'
 import { Badge, Button, Card, Empty, ErrorBox, Spinner } from './ui'
 import { dur } from './terms'
 
-export interface CallLogFilters { from?: string; to?: string; users: string[]; dir?: 'all' | 'out' | 'in' } // ISO instants; empty = all time
+export interface CallLogFilters { from?: string; to?: string; users: string[]; dir?: 'all' | 'out' | 'in'; ch?: 'all' | 'phone' | 'whatsapp' } // ISO instants; empty = all time
 interface Row {
   id: string; user_id: string; phone: string; direction: string; started_at: string; duration_sec: number
   notes: string | null; outcome_id: string | null; recording_status: string; recording_path: string | null; sim_number: string | null; sim_slot: number | null; sim_label: string | null
+  channel: string; contact_name: string | null
   lead: { name: string } | null
 }
 const durations: [string, string, number | null, number | null][] = [
@@ -21,7 +22,7 @@ const durations: [string, string, number | null, number | null][] = [
 const typeName: Record<string, string> = { outgoing: 'Dialled', incoming: 'Received', missed: 'Missed', rejected: 'Declined' }
 const typeColor: Record<string, string> = { incoming: 'text-emerald-700', outgoing: 'text-sky-700', missed: 'text-red-600', rejected: 'text-red-600' }
 const PAGE = 100
-const SELECT = 'id,user_id,phone,direction,started_at,duration_sec,notes,outcome_id,recording_status,recording_path,sim_number,sim_slot,sim_label,lead:leads(name)'
+const SELECT = 'id,user_id,phone,direction,started_at,duration_sec,notes,outcome_id,recording_status,recording_path,sim_number,sim_slot,sim_label,channel,contact_name,lead:leads(name)'
 
 /** Complete, filterable call history (all time unless dates are given). */
 export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome }: {
@@ -33,6 +34,7 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
   const [q, setQ] = useState('')
   const [type, setType] = useState('')
   const [len, setLen] = useState('any')
+  const [via, setVia] = useState('')
   const [localOutcome, setLocalOutcome] = useState(outcome)
   const oc = setOutcome ? outcome : localOutcome
   const setOc = setOutcome ?? setLocalOutcome
@@ -49,6 +51,8 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
     if (type) query = query.eq('direction', type)
     else if (f.dir === 'out') query = query.eq('direction', 'outgoing')
     else if (f.dir === 'in') query = query.in('direction', ['incoming', 'missed', 'rejected'])
+    const ch = via || (f.ch && f.ch !== 'all' ? f.ch : '')
+    if (ch) query = query.eq('channel', ch)
     if (oc === 'none') query = query.is('outcome_id', null)
     else if (oc) query = query.eq('outcome_id', oc)
     const d = durations.find(x => x[0] === len)!
@@ -57,9 +61,9 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
     if (digits.length >= 4) query = query.like('phone', `%${digits}%`)
     else if (byName) query = query.ilike('lead.name', `%${term.replace(/[%,()]/g, '')}%`)
     return query
-  }, [org.id, f, q, type, len, oc])
+  }, [org.id, f, q, type, len, oc, via])
 
-  useEffect(() => { setPage(0) }, [f, q, type, len, oc])
+  useEffect(() => { setPage(0) }, [f, q, type, len, oc, via])
   useEffect(() => {
     setRows(null)
     const t = setTimeout(() => {
@@ -71,14 +75,14 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
     return () => clearTimeout(t)
   }, [build, page])
 
-  const from = (r: Row) => r.sim_number ? fmtPhone(r.sim_number) : r.sim_label || (r.sim_slot ? `SIM ${r.sim_slot}` : '—')
+  const from = (r: Row) => r.channel === 'whatsapp' ? 'WhatsApp' : r.sim_number ? fmtPhone(r.sim_number) : r.sim_label || (r.sim_slot ? `SIM ${r.sim_slot}` : '—')
   async function exportCsv() {
     setExporting(true)
     const { data, error } = await build().limit(20000)
     setExporting(false)
     if (error) return setError(errorText(error))
-    downloadCsv(`closer-os-calls_${fileTag}.csv`, ['Date & time', 'Person', 'Person phone', 'Dialled from', 'Contact', 'Contact number', 'Type', 'Duration (sec)', 'Outcome', 'Notes', 'Recording'],
-      (data as unknown as Row[]).map(c => [fmtDateTime(c.started_at, org), dir.nameOf(c.user_id), dir.phoneOf(c.user_id), from(c), c.lead?.name || '', c.phone,
+    downloadCsv(`closer-os-calls_${fileTag}.csv`, ['Date & time', 'Person', 'Person phone', 'Dialled from', 'Contact', 'Contact number', 'Via', 'Type', 'Duration (sec)', 'Outcome', 'Notes', 'Recording'],
+      (data as unknown as Row[]).map(c => [fmtDateTime(c.started_at, org), dir.nameOf(c.user_id), dir.phoneOf(c.user_id), from(c), c.lead?.name || c.contact_name || '', c.phone, c.channel === 'whatsapp' ? 'WhatsApp' : 'Phone',
         typeName[c.direction] ?? c.direction, c.duration_sec, dir.outcomeOf(c.outcome_id)?.label ?? '', c.notes ?? '', c.recording_status === 'uploaded' ? 'Yes' : '']))
   }
 
@@ -92,6 +96,9 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
         <select className="input !w-auto" value={type} onChange={e => setType(e.target.value)}>
           <option value="">All types</option><option value="outgoing">Dialled</option><option value="incoming">Received</option>
           <option value="missed">Missed</option><option value="rejected">Declined</option>
+        </select>
+        <select className="input !w-auto" value={via} onChange={e => setVia(e.target.value)}>
+          <option value="">Phone + WhatsApp</option><option value="phone">Phone calls</option><option value="whatsapp">WhatsApp calls</option>
         </select>
         <select className="input !w-auto" value={oc} onChange={e => setOc(e.target.value)}>
           <option value="">All outcomes</option><option value="none">No outcome</option>
@@ -114,9 +121,10 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
               {rows.map(c => (
                 <tr key={c.id} className="align-top hover:bg-slate-50">
                   <td className="px-3 py-2 text-slate-600">{fmtDateTime(c.started_at, org)}</td>
-                  <td className="truncate px-3 py-2">{c.lead ? <span className="font-medium">{c.lead.name || 'No name'}</span> : null}
-                    <span className={`block truncate ${c.lead ? 'text-xs text-slate-500' : ''}`}>{fmtPhone(c.phone)}</span></td>
+                  <td className="truncate px-3 py-2">{c.lead ? <span className="font-medium">{c.lead.name || 'No name'}</span> : c.contact_name ? <span className="font-medium">{c.contact_name}</span> : null}
+                    <span className={`block truncate ${c.lead || c.contact_name ? 'text-xs text-slate-500' : ''}`}>{fmtPhone(c.phone)}</span></td>
                   <td className={`px-3 py-2 font-medium ${typeColor[c.direction] ?? ''}`}>{typeName[c.direction] ?? c.direction}
+                    {c.channel === 'whatsapp' && <span className="ml-1 rounded bg-emerald-50 px-1 text-[10px] font-semibold text-emerald-700" title="WhatsApp call">WA</span>}
                     {c.recording_status === 'missing' ? <MicOff className="ml-1 inline h-3 w-3 text-red-500" /> : null}
                     {c.recording_status === 'uploaded' && c.recording_path && <PlayButton call={c} />}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{c.duration_sec ? dur(c.duration_sec) : '—'}</td>

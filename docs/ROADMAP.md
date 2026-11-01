@@ -38,7 +38,7 @@ Everything from the original product prompt plus the owner's feedback, with stat
 - ✅ Play in the dashboard and in the app; private links; every play audited
 - ✅ Missing recordings flagged
 - ⬜ Recording policy page: who has recording on, requests to switch it off, approvals, expiry
-- ⬜ Recording setup status per device on the dashboard
+- ✅ Recording setup status per device on the dashboard (Team → Phones & call recordings; app "Check now")
 - ⬜ Retention (auto-delete after N days) and deletion requests
 - ⛔ Phones with Google's Phone app keep recordings private → paid cloud-calling add-on later
 

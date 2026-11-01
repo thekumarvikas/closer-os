@@ -141,5 +141,9 @@ fun RecordingSettings(vm: AppViewModel) {
     }
     Text(if (folder == null) "Not set up. Turn on auto call recording in your phone app, then choose the folder where recordings are saved (Xiaomi: MIUI › sound_recorder › call_rec)."
          else "Folder set ✓ · ${vm.store.recordingsUploaded} recordings uploaded", color = Brand.muted, fontSize = 14.sp)
-    OutlinedButton(onClick = { pick.launch(null) }) { Text(if (folder == null) "Choose recordings folder" else "Change folder") }
+    vm.store.lastRecordingCheck?.let { Text("Last check: $it", fontSize = 12.sp, color = Brand.muted) }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(onClick = { pick.launch(null) }) { Text(if (folder == null) "Choose recordings folder" else "Change folder") }
+        if (folder != null) OutlinedButton(onClick = { vm.checkRecordingsNow() }) { Text("Check now") }
+    }
 }

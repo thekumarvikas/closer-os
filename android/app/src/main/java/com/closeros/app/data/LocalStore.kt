@@ -69,6 +69,10 @@ class LocalStore(ctx: Context) {
         get() = p.getInt("rec_count", 0)
         set(v) { p.edit().putInt("rec_count", v).apply() }
 
+    var lastRecordingCheck: String?
+        get() = p.getString("rec_last_check", null)
+        set(v) { p.edit().putString("rec_last_check", v).apply() }
+
     /** Seconds before the next call in the calling queue (3, 5 or 10). */
     var countdownSec: Int
         get() = p.getInt("countdown", 5)

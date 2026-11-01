@@ -142,6 +142,8 @@ object Repo {
         return Backend.client.storage.from("recordings").createSignedUrl(path, kotlin.time.Duration.parse("15m"))
     }
 
+    suspend fun reportDevice(p: JsonObject) { db.rpc("report_device_status", buildJsonObject { put("p", p) }) }
+
     suspend fun saveMyTemplate(orgId: String, name: String, body: String) {
         Backend.client.from("message_templates").insert(buildJsonObject {
             put("org_id", orgId); put("name", name); put("body", body); put("owner_id", Backend.uid); put("position", 1000)

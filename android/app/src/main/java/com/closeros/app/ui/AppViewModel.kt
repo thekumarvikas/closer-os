@@ -178,6 +178,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun queueResume() { queuePaused = false; countdown = store.countdownSec }
     fun queueStop() { queueActive = false; countdown = null; queue = emptyList() }
 
+    /** "Check now" in Profile: upload recordings straight away and show what happened. */
+    fun checkRecordingsNow() = viewModelScope.launch {
+        val m = membership ?: return@launch
+        message = "Checking recordings…"
+        val r = CallSync.checkRecordings(ctx, m.org_id)
+        message = r.error?.let { "Recordings: $it" } ?: "Recordings: ${r.uploaded} uploaded (${r.matched} of ${r.callsChecked} calls matched)"
+    }
+
     fun saveMyTemplate(name: String, body: String) = viewModelScope.launch {
         val m = membership ?: return@launch
         runCatching { Repo.saveMyTemplate(m.org_id, name.ifBlank { "My message" }, body) }

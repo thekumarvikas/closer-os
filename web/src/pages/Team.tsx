@@ -80,6 +80,8 @@ export default function Team() {
         </table>
       </Card>
 
+      <PhoneStatus orgId={org.id} nameOf={dir.nameOf} version={version} />
+
       {isAdmin && invites.length > 0 && (
         <>
           <h2 className="mb-2 font-semibold">Pending invitations</h2>
@@ -203,5 +205,60 @@ function InviteModal({ teams, roles, onClose, onDone }: { teams: { id: string; n
         </form>
       )}
     </Modal>
+  )
+}
+
+type Device = {
+  device_id: string; user_id: string; model: string | null; android: string | null; app_version: string | null
+  default_dialer: string | null; rec_folder_set: boolean; rec_files_found: number | null; rec_calls_checked: number | null
+  rec_matched: number | null; rec_uploaded_total: number | null; rec_last_error: string | null; rec_checked_at: string | null; updated_at: string
+}
+
+/** Each rep's phone: app version, phone app in use, and whether call recordings are being uploaded. */
+function PhoneStatus({ orgId, nameOf, version }: { orgId: string; nameOf: (id: string) => string; version: number }) {
+  const [rows, setRows] = useState<Device[] | null>(null)
+  useEffect(() => {
+    supabase.from('device_status').select('*').eq('org_id', orgId).order('updated_at', { ascending: false })
+      .then(({ data }) => setRows((data ?? []) as Device[]))
+  }, [orgId, version])
+  if (!rows) return null
+  const ago = (t: string | null) => {
+    if (!t) return 'never'
+    const m = Math.round((Date.now() - new Date(t).getTime()) / 60000)
+    return m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`
+  }
+  const status = (d: Device): [string, 'green' | 'amber' | 'red'] => {
+    if (d.default_dialer === 'com.google.android.dialer') return ["Google's Phone app keeps recordings private — can't upload on this phone", 'red']
+    if (!d.rec_folder_set) return ['Recordings folder not chosen (app → Profile → Call recordings)', 'amber']
+    if (d.rec_last_error) return [d.rec_last_error, 'amber']
+    return [`Working · ${d.rec_uploaded_total ?? 0} uploaded`, 'green']
+  }
+  const color = { green: 'text-emerald-700', amber: 'text-amber-700', red: 'text-red-700' }
+  return (
+    <>
+      <h2 className="mb-1 font-semibold">Phones &amp; call recordings</h2>
+      <p className="mb-2 text-sm text-slate-500">Each phone reports here after it syncs (app 0.4.1 or newer). A phone that isn't listed hasn't updated the app yet.</p>
+      <Card className="mb-6 overflow-x-auto">
+        {rows.length === 0 ? <div className="p-4 text-sm text-slate-500">No phone has reported yet. Install app 0.4.1 or newer and open it once.</div> : (
+          <table className="min-w-full table-fixed divide-y divide-slate-100 text-sm">
+            <thead className="bg-slate-50"><tr><th className="th w-1/5">Person</th><th className="th w-1/5">Phone</th><th className="th">Recordings</th><th className="th w-32">Last check</th></tr></thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map(d => {
+                const [text, c] = status(d)
+                return (
+                  <tr key={d.device_id}>
+                    <td className="td font-medium">{nameOf(d.user_id)}</td>
+                    <td className="td"><div>{d.model || '—'}</div><div className="text-xs text-slate-500">Android {d.android} · app {d.app_version}</div></td>
+                    <td className="td"><div className={color[c]}>{text}</div>
+                      {d.rec_folder_set && <div className="text-xs text-slate-500">Last check: {d.rec_files_found ?? 0} files, {d.rec_matched ?? 0} of {d.rec_calls_checked ?? 0} answered calls matched</div>}</td>
+                    <td className="td text-slate-500">{ago(d.rec_checked_at ?? d.updated_at)}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
+      </Card>
+    </>
   )
 }

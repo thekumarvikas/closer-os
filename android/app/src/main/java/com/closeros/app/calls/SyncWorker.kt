@@ -53,11 +53,32 @@ object CallSync {
             store.callLogCursorMs = chunk.last().startedAtMs
         }
         store.lastSyncMs = System.currentTimeMillis()
-        // 3) Upload the phone's call recordings for these calls.
-        runCatching { store.recordingsUploaded += RecordingSync.run(ctx, orgId) }
+        // 3) Upload the phone's call recordings for these calls, and tell the dashboard how it went.
+        checkRecordings(ctx, orgId)
         // 4) Refresh follow-up reminders.
         runCatching { FollowUpAlarms.scheduleAll(ctx, Repo.followUps(orgId)) }
         sent
+    }
+
+    /** Runs the recording upload and reports this phone's status to the dashboard. */
+    suspend fun checkRecordings(ctx: Context, orgId: String): RecordingSync.Result {
+        val store = LocalStore(ctx)
+        val r = runCatching { RecordingSync.run(ctx, orgId) }.getOrElse { RecordingSync.Result(error = it.message ?: "Recording check failed") }
+        store.lastRecordingCheck = "${java.time.LocalTime.now().withNano(0)} · ${r.filesFound} files · ${r.matched}/${r.callsChecked} calls matched · ${r.uploaded} uploaded" +
+            (r.error?.let { " · $it" } ?: "")
+        runCatching {
+            Repo.reportDevice(buildJsonObject {
+                put("org_id", orgId); put("device_id", PhoneCalls.deviceId(ctx))
+                put("model", "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}"); put("android", android.os.Build.VERSION.RELEASE)
+                put("app_version", com.closeros.app.BuildConfig.VERSION_NAME)
+                put("default_dialer", ctx.getSystemService(android.telecom.TelecomManager::class.java)?.defaultDialerPackage ?: "")
+                put("rec_folder_set", store.recordingsFolder != null)
+                put("rec_files_found", r.filesFound); put("rec_calls_checked", r.callsChecked); put("rec_matched", r.matched)
+                put("rec_uploaded_total", store.recordingsUploaded); put("rec_last_error", r.error ?: "")
+                put("rec_checked_at", Instant.now().toString())
+            })
+        }
+        return r
     }
 
     private val online = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()

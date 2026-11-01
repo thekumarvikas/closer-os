@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: IndiaMART pull (CRM key), direct Facebook, push notification to rep on new lead.
 
-## Android app (`android/`) — v0.4.0
+## Android app (`android/`) — v0.4.1
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -197,6 +197,14 @@ intelligence → Play Store launch.
   (every 15 min + on app open). First sync uploads the last 2 days of call log.
 - NOT yet: calling queue + countdown, webinar reminder/sales queues (purpose + batch_id),
   recording upload, Room offline lead cache, notifications for follow-ups, device/SIM licences.
+
+## Recording diagnostics (v0.4.1, Nov 2026)
+- Owner saw no recordings on the dashboard: DB had 0 uploads (play button only shows when uploaded).
+- Table device_status + report_device_status(p jsonb): each phone reports model, Android, app version,
+  default dialer, folder set, files found, calls matched, uploaded total, last error (after every sync).
+  Dashboard Team page → "Phones & call recordings" shows it. App Profile → Call recordings has
+  "Check now" + last-check line. Matcher picks the closest file by time (name time = LAST date-time
+  in the name; Samsung yyMMdd_HHmmss too), number in the name boosts the match.
 
 ## Build notes
 - Android SDK at /opt/android-sdk (set `sdk.dir` in local.properties).

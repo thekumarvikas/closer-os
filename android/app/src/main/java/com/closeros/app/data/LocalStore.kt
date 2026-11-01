@@ -56,5 +56,23 @@ class LocalStore(ctx: Context) {
         get() = p.getBoolean("setup_done", false)
         set(v) { p.edit().putBoolean("setup_done", v).apply() }
 
+    /** Folder where the phone's dialer saves call recordings (picked once by the rep). */
+    var recordingsFolder: String?
+        get() = p.getString("rec_folder", null)
+        set(v) { p.edit().putString("rec_folder", v).apply() }
+
+    val uploadedRecordings: Set<String> get() = p.getStringSet("rec_uploaded", emptySet()) ?: emptySet()
+    fun markRecordingUploaded(callId: String) {
+        p.edit().putStringSet("rec_uploaded", (uploadedRecordings + callId).toList().takeLast(3000).toSet()).apply()
+    }
+    var recordingsUploaded: Int
+        get() = p.getInt("rec_count", 0)
+        set(v) { p.edit().putInt("rec_count", v).apply() }
+
+    /** Seconds before the next call in the calling queue (3, 5 or 10). */
+    var countdownSec: Int
+        get() = p.getInt("countdown", 5)
+        set(v) { p.edit().putInt("countdown", v).apply() }
+
     fun clear() { p.edit().clear().apply() }
 }

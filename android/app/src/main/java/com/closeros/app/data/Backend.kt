@@ -56,8 +56,16 @@ object Backend {
     val source: String? = null, val campaign: String? = null, val assigned_to: String? = null,
     val stage_id: String? = null, val deal_value: Double? = null, val notes: String? = null,
     val last_call_at: String? = null, val last_outcome_id: String? = null, val next_follow_up_at: String? = null,
-    val do_not_call: Boolean = false,
-)
+    val do_not_call: Boolean = false, val last_connected_at: String? = null,
+    val batch_leads: List<BatchLink> = emptyList(),
+) {
+    /** Latest webinar/event this lead registered for. */
+    val latestBatch: BatchLink? get() = batch_leads.maxByOrNull { it.batch?.webinar_at ?: "" }
+}
+
+@Serializable data class BatchMini(val name: String = "", val webinar_at: String? = null)
+@Serializable data class BatchLink(val watch_minutes: Int? = null, val attended: Boolean = false, val batch: BatchMini? = null)
+@Serializable data class Template(val id: String, val name: String, val body: String, val position: Int = 0)
 
 @Serializable data class Outcome(
     val id: String, val code: String, val label: String, val category: String, val form: String? = null,
@@ -75,6 +83,8 @@ object Backend {
 )
 
 data class TodayStats(val calls: Int = 0, val connected: Int = 0, val talkSec: Int = 0, val notPicked: Int = 0, val missed: Int = 0)
+
+private const val LEAD_COLUMNS = "*, batch_leads(watch_minutes, attended, batch:batches(name, webinar_at))"
 
 object Repo {
     private val db get() = Backend.client.postgrest
@@ -103,7 +113,7 @@ object Repo {
     suspend fun leads(orgId: String, query: String, page: Int, mineOnly: Boolean): List<Lead> {
         val q = query.trim()
         val digits = q.filter { it.isDigit() }
-        return Backend.client.from("leads").select {
+        return Backend.client.from("leads").select(Columns.raw(LEAD_COLUMNS)) {
             filter {
                 eq("org_id", orgId)
                 filter("deleted_at", FilterOperator.IS, "null")
@@ -119,7 +129,15 @@ object Repo {
         }.decodeList()
     }
 
-    suspend fun lead(id: String): Lead? = Backend.client.from("leads").select { filter { eq("id", id) } }.decodeSingleOrNull()
+    suspend fun lead(id: String): Lead? = Backend.client.from("leads").select(Columns.raw(LEAD_COLUMNS)) { filter { eq("id", id) } }.decodeSingleOrNull()
+
+    suspend fun leadsByIds(ids: List<String>): List<Lead> = if (ids.isEmpty()) emptyList() else
+        Backend.client.from("leads").select(Columns.raw(LEAD_COLUMNS)) { filter { isIn("id", ids.distinct()) } }.decodeList()
+
+    suspend fun templates(orgId: String): List<Template> = Backend.client.from("message_templates").select {
+        filter { eq("org_id", orgId); eq("is_active", true) }
+        order("position", Order.ASCENDING)
+    }.decodeList()
 
     suspend fun leadCalls(id: String): List<CallRow> = Backend.client.from("calls")
         .select(Columns.raw("id, direction, started_at, duration_sec, outcome_id, notes")) {
@@ -149,9 +167,11 @@ object Repo {
     /** Leads (visible to me) for a list of numbers, keyed by the number as stored (+91…). */
     suspend fun leadsByPhones(orgId: String, phones: List<String>): Map<String, Lead> {
         if (phones.isEmpty()) return emptyMap()
-        return Backend.client.from("leads").select {
-            filter { eq("org_id", orgId); isIn("phone", phones.distinct()); filter("deleted_at", FilterOperator.IS, "null") }
-        }.decodeList<Lead>().associateBy { it.phone }
+        return phones.distinct().chunked(150).flatMap { chunk ->
+            Backend.client.from("leads").select(Columns.raw(LEAD_COLUMNS)) {
+                filter { eq("org_id", orgId); isIn("phone", chunk); filter("deleted_at", FilterOperator.IS, "null") }
+            }.decodeList<Lead>()
+        }.associateBy { it.phone }
     }
 
     /** Adds a lead from the phone (it is assigned to the rep who adds it). */

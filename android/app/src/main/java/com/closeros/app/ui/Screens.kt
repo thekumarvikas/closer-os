@@ -132,91 +132,20 @@ private fun Perm(icon: androidx.compose.ui.graphics.vector.ImageVector, title: S
     }
 }
 
-// ───────────── Home ─────────────
-
-@Composable
-fun HomeScreen(vm: AppViewModel) {
-    val m = vm.membership ?: return
-    val now = System.currentTimeMillis()
-    val due = vm.followUps.count { runCatching { Instant.parse(it.due_at).toEpochMilli() }.getOrDefault(0) < now + 86_400_000 }
-    val overdue = vm.followUps.count { runCatching { Instant.parse(it.due_at).toEpochMilli() }.getOrDefault(0) < now }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item {
-            Text("Hi ${vm.profile?.full_name?.substringBefore(' ') ?: ""} 👋", fontSize = 24.sp, fontWeight = FontWeight.Bold)
-            Text(m.organization.name, color = Brand.muted)
-        }
-        item {
-            Text("Today", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                StatTile("Calls", vm.stats.calls.toString(), Modifier.weight(1f))
-                StatTile("Connected", vm.stats.connected.toString(), Modifier.weight(1f))
-            }
-            Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                StatTile("Talk time", fmtDur(vm.stats.talkSec), Modifier.weight(1f))
-                StatTile("Not picked", vm.stats.notPicked.toString(), Modifier.weight(1f))
-            }
-        }
-        item {
-            Card(Modifier.fillMaxWidth().clickable { vm.tab = Tab.FollowUps }, colors = CardDefaults.cardColors(containerColor = if (overdue > 0) Color(0xFFFEF2F2) else Color.White)) {
-                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.DateRange, null, tint = if (overdue > 0) Brand.red else Brand.primary)
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("Follow-ups", fontWeight = FontWeight.SemiBold)
-                        Text("$due due within 24 hours" + if (overdue > 0) " · $overdue overdue" else "", color = if (overdue > 0) Brand.red else Brand.muted, fontSize = 14.sp)
-                    }
-                    Icon(Icons.Default.KeyboardArrowRight, null, tint = Brand.muted)
-                }
-            }
-        }
-        item {
-            Button(onClick = { vm.tab = Tab.Leads }, modifier = Modifier.fillMaxWidth().height(56.dp)) {
-                Icon(Icons.Default.Call, null); Spacer(Modifier.width(8.dp)); Text("Start calling", fontSize = 17.sp)
-            }
-        }
-        item {
-            val last = vm.store.lastSyncMs
-            Text(if (last == 0L) "Calls not synced yet" else "Calls synced ${fmtWhen(Instant.ofEpochMilli(last).toString())}" +
-                    if (vm.store.outbox.isNotEmpty()) " · ${vm.store.outbox.size} outcome(s) waiting for internet" else "",
-                fontSize = 12.sp, color = Brand.muted)
-        }
-    }
-}
-
-@Composable
-fun StatTile(label: String, value: String, modifier: Modifier = Modifier) {
-    Card(modifier, colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Column(Modifier.padding(14.dp)) {
-            Text(label, fontSize = 13.sp, color = Brand.muted)
-            Text(value, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
 // ───────────── Leads ─────────────
 
 @Composable
 fun LeadsScreen(vm: AppViewModel, onCall: (Lead) -> Unit) {
-    val outcomes = vm.outcomes.associateBy { it.id }
     Column(Modifier.fillMaxSize()) {
-        OutlinedTextField(vm.leadsQuery, { vm.search(it) }, placeholder = { Text("Search name or phone") }, singleLine = true,
-            leadingIcon = { Icon(Icons.Default.Search, null) }, modifier = Modifier.fillMaxWidth().padding(16.dp, 12.dp, 16.dp, 4.dp))
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp, 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(vm.leads, key = { it.id }) { l ->
-                Card(Modifier.fillMaxWidth().clickable { vm.openLeadId = l.id }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(l.name.ifBlank { "No name" }, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(fmtPhone(l.phone), fontSize = 14.sp, color = Brand.muted)
-                            val sub = listOfNotNull(outcomes[l.last_outcome_id]?.label, l.next_follow_up_at?.let { "Next: ${fmtWhen(it)}" }).joinToString(" · ")
-                            if (sub.isNotEmpty()) Text(sub, fontSize = 12.sp, color = Brand.primary)
-                        }
-                        FilledIconButton(onClick = { onCall(l) }, enabled = !l.do_not_call) { Icon(Icons.Default.Call, "Call ${l.name}") }
-                    }
-                }
-            }
+        Row(Modifier.fillMaxWidth().padding(16.dp, 12.dp, 16.dp, 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(vm.leadsQuery, { vm.search(it) }, placeholder = { Text("Search name or phone") }, singleLine = true,
+                leadingIcon = { Icon(Icons.Default.Search, null) }, modifier = Modifier.weight(1f))
+        }
+        if (vm.leads.isNotEmpty()) TextButton(onClick = { vm.startQueue(vm.leads.toList()) }, modifier = Modifier.padding(horizontal = 8.dp)) {
+            Icon(Icons.Default.Call, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Call these ${vm.leads.size}${if (vm.leadsEnd) "" else "+"} leads in a queue")
+        }
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(vm.leads, key = { it.id }) { l -> LeadCard(vm, l, onCall) }
             item {
                 if (vm.leadsLoading) Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 else if (vm.leads.isEmpty()) Text("No leads yet. Leads assigned to you on the dashboard appear here.", color = Brand.muted, modifier = Modifier.padding(16.dp))
@@ -237,6 +166,8 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
         calls = runCatching { Repo.leadCalls(leadId) }.getOrDefault(emptyList())
     }
     val outcomes = vm.outcomes.associateBy { it.id }
+    var waOpen by remember { mutableStateOf(false) }
+    if (waOpen && lead != null) WhatsAppPicker(vm, lead!!) { waOpen = false }
     Scaffold(topBar = {
         TopAppBar(title = { Text(lead?.name?.ifBlank { "Lead" } ?: "Lead") },
             navigationIcon = { IconButton(onClick = { vm.openLeadId = null }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } })
@@ -249,13 +180,17 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
                 listOfNotNull(l.profession, l.company, l.city).joinToString(" · ").takeIf { it.isNotEmpty() }?.let { Text(it, color = Brand.muted) }
                 listOfNotNull(l.source, l.campaign).joinToString(" · ").takeIf { it.isNotEmpty() }?.let { Text("Source: $it", color = Brand.muted, fontSize = 14.sp) }
                 l.next_follow_up_at?.let { Text("Next follow-up: ${fmtWhen(it)}", color = Brand.primary, fontSize = 14.sp) }
+                l.batch_leads.sortedByDescending { it.batch?.webinar_at ?: "" }.forEach { b ->
+                    Text("${b.batch?.name ?: "Webinar"}: " + when { b.watch_minutes == null -> "attendance not uploaded"; b.watch_minutes > 0 -> "watched ${b.watch_minutes} min"; else -> "didn't join" },
+                        fontSize = 14.sp, color = Brand.muted)
+                }
             }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Button(onClick = { onCall(l) }, enabled = !l.do_not_call, modifier = Modifier.weight(1f).height(52.dp)) {
                         Icon(Icons.Default.Call, null); Spacer(Modifier.width(6.dp)); Text("Call")
                     }
-                    OutlinedButton(onClick = { PhoneCalls.whatsapp(ctx, l.phone, "Hi ${l.name.substringBefore(' ')}, ") }, modifier = Modifier.weight(1f).height(52.dp)) {
+                    OutlinedButton(onClick = { waOpen = true }, modifier = Modifier.weight(1f).height(52.dp)) {
                         Icon(Icons.Default.Send, null); Spacer(Modifier.width(6.dp)); Text("WhatsApp")
                     }
                 }
@@ -322,6 +257,15 @@ fun ProfileScreen(vm: AppViewModel) {
         sims.forEach { Text(it.label + " — " + (vm.store.simNumber(it.slot)?.let { n -> fmtPhone(n) } ?: "number not set") + if (vm.store.preferredSim == it.slot) "  ✓ last used" else "") }
         TextButton(onClick = { vm.needsSetup = true }) { Text("Edit my numbers") }
         if (android.os.Build.VERSION.SDK_INT >= 31 && !com.closeros.app.calls.FollowUpAlarms.canExact(ctx)) ExactAlarmHint()
+        HorizontalDivider()
+        RecordingSettings(vm)
+        HorizontalDivider()
+        Text("Calling queue", fontWeight = FontWeight.SemiBold)
+        Text("Seconds before the next call", color = Brand.muted, fontSize = 14.sp)
+        var cd by remember { mutableStateOf(vm.store.countdownSec) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(3, 5, 10).forEach { n -> FilterChip(selected = cd == n, onClick = { vm.store.countdownSec = n; cd = n }, label = { Text("$n sec") }) }
+        }
         HorizontalDivider()
         Text("Sync", fontWeight = FontWeight.SemiBold)
         Text(if (vm.store.lastSyncMs == 0L) "Not synced yet" else "Last sync ${fmtWhen(Instant.ofEpochMilli(vm.store.lastSyncMs).toString())}", color = Brand.muted)

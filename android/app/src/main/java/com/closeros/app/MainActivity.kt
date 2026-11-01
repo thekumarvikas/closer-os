@@ -64,7 +64,8 @@ fun Root(vm: AppViewModel) {
     fun call(lead: Lead) {
         val sims = vm.sims()
         val preferred = sims.firstOrNull { it.slot == vm.store.preferredSim }
-        if (sims.size > 1) simChoice = lead to sims else vm.startCall(lead, preferred ?: sims.firstOrNull())
+        // In a queue, keep using the SIM chosen for the first call instead of asking every time.
+        if (sims.size > 1 && !(vm.queueActive && preferred != null)) simChoice = lead to sims else vm.startCall(lead, preferred ?: sims.firstOrNull())
     }
 
     LaunchedEffect(vm.callRequest) {
@@ -84,6 +85,8 @@ fun Root(vm: AppViewModel) {
             vm.needsSetup -> SetupScreen(vm)
             vm.pending != null -> OutcomeScreen(vm)
             vm.openLeadId != null -> LeadDetailScreen(vm, vm.openLeadId!!) { call(it) }
+            vm.queueActive -> QueueScreen(vm)
+            vm.todayFilter != null -> TodayListScreen(vm, vm.todayFilter!!)
             else -> Scaffold(bottomBar = {
                 NavigationBar {
                     listOf(Triple(Tab.Home, "Home", Icons.Default.Home), Triple(Tab.Leads, "Leads", Icons.Default.Phone), Triple(Tab.Calls, "Calls", Icons.Default.List),

@@ -128,6 +128,29 @@ intelligence → Play Store launch.
   "Add lead"; one-time setup of own number + SIM numbers; a lead created later links its
   earlier calls (trigger link_calls_to_new_lead).
 
+## Owner feedback round 2 (Nov 2026)
+- App Home: 10 tiles from the phone's own call log for today (All calls, Dialled, Received,
+  Conversations, No answer, Missed/declined, Talk time, Avg, Unique contacts, Leads called); each
+  opens a list; leads in a list can go straight into the calling queue.
+- Calling queue (app): startQueue(leads); after each saved outcome a 3/5/10 s countdown (Profile
+  setting) then the next call; Pause / Skip / Stop / Call now; same SIM reused within a queue;
+  "Call due follow-ups" and "Call these N leads" entry points.
+- Lead cards: company/profession/city, latest batch + watch minutes, last talked / last outcome,
+  next call, colour tags (Interested/Won green, 🔥 Hot = watched 60+ min orange, DNC red).
+- WhatsApp templates: table message_templates (5 seeded per org), edited in dashboard Settings;
+  app picker fills {{leadName}} {{repName}} {{companyName}} {{batchName}} {{batchDate}}
+  {{followUpTime}} {{city}} {{profession}}, editable before opening WhatsApp.
+- Calls tab shows the phone's ENTIRE call log ("Load older calls" pages of 500).
+- leads.last_connected_at (trigger on calls with talk time).
+- Recordings: private storage bucket `recordings` at <org>/<user>/<call_id>.<ext>; storage RLS:
+  rep uploads to own folder; anyone who can see the call can sign a URL. App RecordingSync (in
+  SyncWorker) matches files in the SAF folder the rep picks (Profile → Call recordings) to answered
+  calls of the last 7 days by number + time, uploads, then set_call_recording(). Google Phone app
+  phones are detected and told it's not possible. Dashboard call log has a Play button
+  (createSignedUrl 15 min, log_recording_access → audit). mark_missing_recordings() flags calls
+  with talk time but no recording after 6 h (only for reps who do upload recordings).
+- Reports → Team has "Compare the team" bars (metric switch, team-average line, ranking).
+
 ## Call tracking (decided Nov 2026)
 - Owner chose B: upload ALL calls (like Callyzer). Company setting organizations.settings
   .call_tracking = 'all' (default) | 'leads' (Settings → Company). sync_calls() enforces it.
@@ -150,7 +173,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: IndiaMART pull (CRM key), direct Facebook, push notification to rep on new lead.
 
-## Android app (`android/`) — v0.2.0
+## Android app (`android/`) — v0.3.0
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats

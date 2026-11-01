@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -95,21 +96,10 @@ fun CallHistoryScreen(vm: AppViewModel) {
         }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp, 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (shown.isEmpty()) item { Text("No calls here.", color = Brand.muted) }
-            items(shown, key = { it.log.id }) { h ->
-                Row(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(10.dp))
-                    .clickable(enabled = h.lead != null) { h.lead?.let { vm.openLeadId = it.id } }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(h.lead?.name?.ifBlank { null } ?: fmtPhone(h.phone), fontWeight = FontWeight.SemiBold)
-                        val dir = when (h.log.direction) { "outgoing" -> "Dialled"; "incoming" -> "Received"; "missed" -> "Missed"; else -> "Declined" }
-                        Text("$dir · ${if (h.log.durationSec > 0) fmtDur(h.log.durationSec) else "no talk"} · ${fmtWhen(Instant.ofEpochMilli(h.log.startedAtMs).toString())}",
-                            fontSize = 13.sp, color = if (h.log.direction == "missed" || h.log.direction == "rejected") Brand.red else Brand.muted)
-                        if (h.lead != null) Text(fmtPhone(h.phone), fontSize = 12.sp, color = Brand.muted)
-                    }
-                    if (h.lead == null) OutlinedButton(onClick = { adding = h }, contentPadding = PaddingValues(horizontal = 10.dp)) {
-                        Icon(Icons.Default.Add, null, Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text("Add lead", fontSize = 13.sp)
-                    } else IconButton(onClick = { vm.callRequest = h.lead }) { Icon(Icons.Default.Call, "Call", tint = Brand.primary) }
-                }
-            }
+            items(shown, key = { it.log.id }) { h -> HistoryRow(vm, h, onAdd = { adding = h }) }
+            if (vm.historyHasMore) item {
+                OutlinedButton(onClick = { vm.historyLimit += 500; vm.loadHistory() }, modifier = Modifier.fillMaxWidth()) { Text("Load older calls") }
+            } else if (items.isNotEmpty()) item { Text("That's every call saved on this phone (${items.size}).", fontSize = 12.sp, color = Brand.muted) }
         }
     }
     adding?.let { h -> AddLeadDialog(h.phone, onDismiss = { adding = null }) { name, prof, notes -> vm.addLeadFromCall(h.phone, name, prof, notes) { adding = null } } }
@@ -131,4 +121,25 @@ private fun AddLeadDialog(phone: String, onDismiss: () -> Unit, onSave: (String,
         },
         confirmButton = { Button(onClick = { onSave(name, prof, notes) }) { Text("Add lead") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
+}
+
+/** Recordings: pick the folder where the phone's own dialer saves call recordings. */
+@Composable
+fun RecordingSettings(vm: AppViewModel) {
+    val ctx = LocalContext.current
+    var folder by remember { mutableStateOf(vm.store.recordingsFolder) }
+    val pick = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            vm.store.recordingsFolder = uri.toString(); folder = uri.toString()
+            com.closeros.app.calls.CallSync.syncNow(ctx); vm.message = "Recordings folder saved — uploading recent recordings"
+        }
+    }
+    Text("Call recordings", fontWeight = FontWeight.SemiBold)
+    if (com.closeros.app.calls.RecordingSync.googleDialer(ctx)) {
+        Text("This phone uses Google's Phone app, which keeps recordings private. Closer OS can't upload them on this phone.", color = Brand.red, fontSize = 14.sp)
+    }
+    Text(if (folder == null) "Not set up. Turn on auto call recording in your phone app, then choose the folder where recordings are saved (Xiaomi: MIUI › sound_recorder › call_rec)."
+         else "Folder set ✓ · ${vm.store.recordingsUploaded} recordings uploaded", color = Brand.muted, fontSize = 14.sp)
+    OutlinedButton(onClick = { pick.launch(null) }) { Text(if (folder == null) "Choose recordings folder" else "Change folder") }
 }

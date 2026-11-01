@@ -171,11 +171,55 @@ const teamCols: { label: string; sort: (b: Bucket) => number; cell: (b: Bucket) 
   { label: T.active, sort: b => b.work, cell: b => <Two a={dur(b.work)} b={`gap ${dur(Math.max(0, b.work - b.conn_dur))}`} />, csv: b => [dur(b.work), dur(Math.max(0, b.work - b.conn_dur))], csvHead: [T.active, T.gap] },
 ]
 
+const compareMetrics: { label: string; value: (b: Bucket) => number; show: (n: number) => string }[] = [
+  { label: T.calls, value: b => b.calls, show: n => num(n) },
+  { label: T.conversations, value: b => b.conn, show: n => num(n) },
+  { label: T.convRate, value: b => pct(b.conn, b.calls), show: n => `${n}%` },
+  { label: T.talk, value: b => b.conn_dur, show: n => dur(n) },
+  { label: T.avgConv, value: b => b.conn ? b.conn_dur / b.conn : 0, show: n => dur(n) },
+  { label: T.contacts, value: b => b.uniq, show: n => num(n) },
+  { label: T.active, value: b => b.work, show: n => dur(n) },
+]
+
+/** Side-by-side bars of one measure for every person, with the team average. */
+function TeamCompare({ r, dir }: { r: Report; dir: Directory }) {
+  const [m, setM] = useState(0)
+  const metric = compareMetrics[m]
+  const rows = [...r.byUser].map(u => ({ id: u.user_id, v: metric.value(u.total) })).sort((a, b) => b.v - a.v)
+  const max = Math.max(1, ...rows.map(x => x.v))
+  const avg = rows.length ? rows.reduce((s, x) => s + x.v, 0) / rows.length : 0
+  return (
+    <Card className="p-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-semibold">Compare the team</h3>
+        <div className="flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1 text-xs">
+          {compareMetrics.map((x, i) => <button key={x.label} onClick={() => setM(i)} className={`rounded-md px-2.5 py-1 font-medium ${m === i ? 'bg-white shadow-sm' : 'text-slate-600'}`}>{x.label}</button>)}
+        </div>
+      </div>
+      <ul className="space-y-1.5">
+        {rows.map((x, i) => (
+          <li key={x.id} className="grid grid-cols-[24px_minmax(120px,200px)_1fr_80px] items-center gap-3 text-sm">
+            <span className={`text-right text-xs font-semibold ${i === 0 ? 'text-gold-500' : 'text-slate-400'}`}>{i + 1}</span>
+            <span className="truncate">{dir.nameOf(x.id)}</span>
+            <span className="relative h-3 rounded bg-slate-100">
+              <span className="absolute inset-y-0 left-0 rounded" style={{ width: `${(x.v / max) * 100}%`, background: x.v >= avg ? '#156D63' : '#94a3b8' }} />
+              <span className="absolute inset-y-[-3px] w-0.5 bg-slate-700" style={{ left: `${(avg / max) * 100}%` }} title={`Team average: ${metric.show(avg)}`} />
+            </span>
+            <span className="text-right tabular-nums">{metric.show(x.v)}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 text-xs text-slate-500">Dark line = team average ({metric.show(avg)}). Green = at or above average, grey = below.</p>
+    </Card>
+  )
+}
+
 function Team({ r, dir, fileTag }: { r: Report; dir: Directory; fileTag: string }) {
   const [sort, setSort] = useState(0)
   const rows = useMemo(() => [...r.byUser].sort((a, b) => teamCols[sort].sort(b.total) - teamCols[sort].sort(a.total)), [r, sort])
   return (
     <div className="space-y-3">
+      {r.byUser.length > 1 && <TeamCompare r={r} dir={dir} />}
       <div className="flex justify-end"><Csv onClick={() => downloadCsv(`closer-os-team_${fileTag}.csv`, ['Person', 'Phone', ...teamCols.flatMap(c => c.csvHead)],
         [...rows.map(u => [dir.nameOf(u.user_id), dir.phoneOf(u.user_id), ...teamCols.flatMap(c => c.csv(u.total))]), ['TOTAL', '', ...teamCols.flatMap(c => c.csv(r.total))]])} /></div>
       <Card className="overflow-hidden">

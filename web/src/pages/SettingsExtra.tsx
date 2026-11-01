@@ -156,3 +156,39 @@ function BuyersUpload({ onClose, onDone }: { onClose: () => void; onDone: () => 
     </Modal>
   )
 }
+
+interface Template { id: string; name: string; body: string; position: number; is_active: boolean }
+const variables = ['{{leadName}}', '{{repName}}', '{{companyName}}', '{{batchName}}', '{{batchDate}}', '{{followUpTime}}', '{{city}}', '{{profession}}']
+
+/** WhatsApp messages reps can pick in the app; variables are filled in for each lead. */
+export function WhatsAppTemplates() {
+  const { org } = useOrg()
+  const [rows, setRows] = useState<Template[]>([])
+  const [version, setVersion] = useState(0)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    supabase.from('message_templates').select('*').eq('org_id', org.id).order('position').then(({ data }) => setRows((data ?? []) as Template[]))
+  }, [org.id, version])
+  async function run(p: PromiseLike<{ error: unknown }>) { const { error } = await p; setError(error ? errorText(error) : null); setVersion(v => v + 1) }
+  return (
+    <Card className="p-5 lg:col-span-2">
+      <h2 className="font-semibold">WhatsApp messages</h2>
+      <p className="mb-3 mt-1 text-sm text-slate-500">Reps choose one of these in the app before WhatsApp opens. Use variables — they are replaced for each lead: {variables.map(v => <code key={v} className="mr-1 rounded bg-slate-100 px-1 text-xs">{v}</code>)}</p>
+      <ErrorBox error={error} />
+      <div className="space-y-3">
+        {rows.map(t => (
+          <div key={t.id} className={`rounded-lg border border-slate-200 p-3 ${t.is_active ? '' : 'opacity-60'}`}>
+            <div className="mb-2 flex items-center gap-2">
+              <input className="input !py-1.5 font-medium" defaultValue={t.name} onBlur={e => e.target.value.trim() && e.target.value !== t.name && run(supabase.from('message_templates').update({ name: e.target.value.trim() }).eq('id', t.id))} />
+              <button className="whitespace-nowrap text-xs text-brand-700 hover:underline" onClick={() => run(supabase.from('message_templates').update({ is_active: !t.is_active }).eq('id', t.id))}>{t.is_active ? 'Hide' : 'Show'}</button>
+              <button className="text-slate-400 hover:text-red-600" aria-label="Delete" onClick={() => confirm(`Delete "${t.name}"?`) && run(supabase.from('message_templates').delete().eq('id', t.id))}><Trash2 className="h-4 w-4" /></button>
+            </div>
+            <textarea className="input min-h-[70px] text-sm" defaultValue={t.body} onBlur={e => e.target.value !== t.body && run(supabase.from('message_templates').update({ body: e.target.value }).eq('id', t.id))} />
+          </div>
+        ))}
+      </div>
+      <Button variant="secondary" className="mt-3" onClick={() => run(supabase.from('message_templates').insert({ org_id: org.id, name: 'New message', body: 'Hi {{leadName}}, ', position: (rows.at(-1)?.position ?? 0) + 1 }))}>
+        <Plus className="h-4 w-4" /> Add message</Button>
+    </Card>
+  )
+}

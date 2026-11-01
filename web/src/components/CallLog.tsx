@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Download, ChevronLeft, ChevronRight, Search, Mic, MicOff, PhoneCall } from 'lucide-react'
+import { Download, ChevronLeft, ChevronRight, Search, Mic, MicOff, PhoneCall, Play } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import type { Directory } from '../lib/directory'
 import { downloadCsv } from '../lib/report'
@@ -11,7 +11,7 @@ import { dur } from './terms'
 export interface CallLogFilters { from?: string; to?: string; users: string[] } // ISO instants; empty = all time
 interface Row {
   id: string; user_id: string; phone: string; direction: string; started_at: string; duration_sec: number
-  notes: string | null; outcome_id: string | null; recording_status: string; sim_number: string | null; sim_slot: number | null; sim_label: string | null
+  notes: string | null; outcome_id: string | null; recording_status: string; recording_path: string | null; sim_number: string | null; sim_slot: number | null; sim_label: string | null
   lead: { name: string } | null
 }
 const durations: [string, string, number | null, number | null][] = [
@@ -21,7 +21,7 @@ const durations: [string, string, number | null, number | null][] = [
 const typeName: Record<string, string> = { outgoing: 'Dialled', incoming: 'Received', missed: 'Missed', rejected: 'Declined' }
 const typeColor: Record<string, string> = { incoming: 'text-emerald-700', outgoing: 'text-sky-700', missed: 'text-red-600', rejected: 'text-red-600' }
 const PAGE = 100
-const SELECT = 'id,user_id,phone,direction,started_at,duration_sec,notes,outcome_id,recording_status,sim_number,sim_slot,sim_label,lead:leads(name)'
+const SELECT = 'id,user_id,phone,direction,started_at,duration_sec,notes,outcome_id,recording_status,recording_path,sim_number,sim_slot,sim_label,lead:leads(name)'
 
 /** Complete, filterable call history (all time unless dates are given). */
 export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome }: {
@@ -115,7 +115,8 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
                   <td className="truncate px-3 py-2">{c.lead ? <span className="font-medium">{c.lead.name || 'No name'}</span> : null}
                     <span className={`block truncate ${c.lead ? 'text-xs text-slate-500' : ''}`}>{fmtPhone(c.phone)}</span></td>
                   <td className={`px-3 py-2 font-medium ${typeColor[c.direction] ?? ''}`}>{typeName[c.direction] ?? c.direction}
-                    {c.recording_status === 'uploaded' ? <Mic className="ml-1 inline h-3 w-3 text-emerald-600" /> : c.recording_status === 'missing' ? <MicOff className="ml-1 inline h-3 w-3 text-red-500" /> : null}</td>
+                    {c.recording_status === 'missing' ? <MicOff className="ml-1 inline h-3 w-3 text-red-500" /> : null}
+                    {c.recording_status === 'uploaded' && c.recording_path && <PlayButton call={c} />}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{c.duration_sec ? dur(c.duration_sec) : '—'}</td>
                   <td className="px-3 py-2"><span className="block truncate">{dir.outcomeOf(c.outcome_id)?.label ?? <span className="text-slate-400">—</span>}</span>
                     {c.notes && <span className="block truncate text-xs text-slate-500" title={c.notes}>{c.notes}</span>}</td>
@@ -139,5 +140,21 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
       </Card>
       <p className="text-xs text-slate-500"><Badge color="gray">Tip</Badge> “Dialled from” shows the number of the SIM the call was made on (each rep confirms their SIM numbers once in the app).</p>
     </div>
+  )
+}
+
+/** Plays a recording through a short-lived private link; every play is written to the audit log. */
+function PlayButton({ call }: { call: { id: string; recording_path: string | null } }) {
+  const [url, setUrl] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  if (url) return <audio src={url} controls autoPlay className="mt-1 h-8 w-full max-w-[220px]" />
+  return (
+    <button disabled={busy} title="Play recording" className="ml-1 inline-flex items-center gap-0.5 rounded bg-emerald-50 px-1.5 py-0.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+      onClick={async () => {
+        setBusy(true)
+        await supabase.rpc('log_recording_access', { p_call: call.id, p_action: 'play' })
+        const { data } = await supabase.storage.from('recordings').createSignedUrl(call.recording_path!, 900)
+        setBusy(false); if (data?.signedUrl) setUrl(data.signedUrl)
+      }}><Play className="h-3 w-3" /><Mic className="h-3 w-3" /></button>
   )
 }

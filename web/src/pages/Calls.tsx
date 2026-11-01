@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { supabase } from '../lib/supabase'
 import { useOrg } from '../lib/session'
 import { useDirectory } from '../lib/directory'
 import { zonedMidnight, addDays } from '../lib/report'
@@ -12,6 +13,8 @@ export default function Calls() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [user, setUser] = useState('')
+  // Flag calls with talk time that never got a recording (from reps whose phones do upload recordings).
+  useEffect(() => { if (isManager) supabase.rpc('mark_missing_recordings', { p_org: org.id }).then(() => undefined) }, [org.id, isManager])
   const f = useMemo(() => ({
     from: from ? zonedMidnight(from, org).toISOString() : undefined,
     to: to ? zonedMidnight(addDays(to, 1), org).toISOString() : undefined,

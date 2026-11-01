@@ -53,7 +53,9 @@ object CallSync {
             store.callLogCursorMs = chunk.last().startedAtMs
         }
         store.lastSyncMs = System.currentTimeMillis()
-        // 3) Refresh follow-up reminders.
+        // 3) Upload the phone's call recordings for these calls.
+        runCatching { store.recordingsUploaded += RecordingSync.run(ctx, orgId) }
+        // 4) Refresh follow-up reminders.
         runCatching { FollowUpAlarms.scheduleAll(ctx, Repo.followUps(orgId)) }
         sent
     }

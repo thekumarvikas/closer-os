@@ -21,6 +21,7 @@ import com.closeros.app.data.Outcome
 import com.closeros.app.data.Profile
 import com.closeros.app.data.Repo
 import com.closeros.app.data.TodayStats
+import com.closeros.app.data.Template
 import io.github.jan.supabase.auth.status.SessionStatus
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -69,6 +70,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var needsSetup by mutableStateOf(!store.setupDone)
     var callRequest by mutableStateOf<Lead?>(null)
     var history by mutableStateOf<List<HistoryItem>?>(null)
+    var historyLimit by mutableStateOf(300)
+    var historyHasMore by mutableStateOf(false)
+    var templates by mutableStateOf<List<Template>>(emptyList())
+
+    /** Today's calls from the phone's call log (instant, works offline), with lead names. */
+    var today by mutableStateOf<List<HistoryItem>>(emptyList())
+    var todayFilter by mutableStateOf<String?>(null)
+
+    // ───────────── Calling queue ─────────────
+    var queue by mutableStateOf<List<Lead>>(emptyList())
+    var queuePos by mutableStateOf(0)
+    var queueActive by mutableStateOf(false)
+    var queuePaused by mutableStateOf(false)
+    var countdown by mutableStateOf<Int?>(null)
+    var queueDone by mutableStateOf(0)
 
     var pending by mutableStateOf(store.pendingCall)
     var pendingLog by mutableStateOf<LogCall?>(null)
@@ -96,6 +112,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             membership?.let { m ->
                 store.orgId = m.org_id
                 outcomes = Repo.outcomes(m.org_id)
+                runCatching { templates = Repo.templates(m.org_id) }
                 refreshHome()
                 reloadLeads()
                 CallSync.schedule(ctx); CallSync.syncNow(ctx)
@@ -108,6 +125,74 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val m = membership ?: return@launch
         runCatching { stats = Repo.todayStats(m.organization) }
         runCatching { followUps = Repo.followUps(m.org_id); FollowUpAlarms.scheduleAll(ctx, followUps) }
+        loadToday()
+    }
+
+    fun loadToday() = viewModelScope.launch {
+        val m = membership ?: return@launch
+        val start = java.time.LocalDate.now(java.time.ZoneId.of(m.organization.timezone)).atStartOfDay(java.time.ZoneId.of(m.organization.timezone)).toInstant().toEpochMilli()
+        val logs = PhoneCalls.readLog(ctx, start).reversed()
+        val phones = logs.map { normalizePhone(it.phone, prefix) }
+        val byPhone = runCatching { Repo.leadsByPhones(m.org_id, phones) }.getOrDefault(emptyMap())
+        today = logs.mapIndexed { i, l -> HistoryItem(l, phones[i], byPhone[phones[i]]) }
+    }
+
+    /** Queue of leads whose follow-ups are due within 24 hours (overdue first). */
+    fun startFollowUpQueue() = viewModelScope.launch {
+        val soon = System.currentTimeMillis() + 86_400_000
+        val due = followUps.filter { runCatching { java.time.Instant.parse(it.due_at).toEpochMilli() }.getOrDefault(0) < soon }.sortedBy { it.due_at }
+        val leads = runCatching { Repo.leadsByIds(due.map { it.lead_id }) }.getOrDefault(emptyList()).associateBy { it.id }
+        startQueue(due.mapNotNull { leads[it.lead_id] })
+    }
+
+    /** Starts calling the given leads one after another. */
+    fun startQueue(leads: List<Lead>) {
+        val list = leads.filter { !it.do_not_call }.distinctBy { it.id }
+        if (list.isEmpty()) { message = "No leads to call"; return }
+        queue = list; queuePos = 0; queueDone = 0; queueActive = true; queuePaused = false; countdown = null
+        todayFilter = null; openLeadId = null
+        callRequest = list.first()
+    }
+
+    /** After an outcome is saved: count down, then call the next lead (unless paused). */
+    private fun queueAfterOutcome() {
+        if (!queueActive) return
+        queueDone++
+        queuePos++
+        if (queuePos >= queue.size) { queueActive = false; message = "Queue finished — $queueDone calls"; return }
+        countdown = if (queuePaused) null else store.countdownSec
+    }
+
+    fun queueTick() {
+        val c = countdown ?: return
+        if (queuePaused) { countdown = null; return }
+        if (c <= 1) { countdown = null; queue.getOrNull(queuePos)?.let { callRequest = it } } else countdown = c - 1
+    }
+
+    fun queueCallNow() { countdown = null; queue.getOrNull(queuePos)?.let { callRequest = it } }
+    fun queueSkip() {
+        countdown = null; queuePos++
+        if (queuePos >= queue.size) { queueActive = false; message = "Queue finished" } else if (!queuePaused) countdown = store.countdownSec
+    }
+    fun queuePause() { queuePaused = true; countdown = null }
+    fun queueResume() { queuePaused = false; countdown = store.countdownSec }
+    fun queueStop() { queueActive = false; countdown = null; queue = emptyList() }
+
+    /** Fills a WhatsApp template for one lead. */
+    fun fillTemplate(body: String, lead: Lead): String {
+        val b = lead.latestBatch?.batch
+        val tz = java.time.ZoneId.of(membership?.organization?.timezone ?: "Asia/Kolkata")
+        val df = java.time.format.DateTimeFormatter.ofPattern("d MMM, h:mm a").withZone(tz)
+        fun t(iso: String?) = iso?.let { runCatching { df.format(java.time.Instant.parse(it)) }.getOrNull() } ?: ""
+        return body
+            .replace("{{leadName}}", lead.name.substringBefore(' ').ifBlank { "there" })
+            .replace("{{repName}}", profile?.full_name?.substringBefore(' ') ?: "")
+            .replace("{{companyName}}", membership?.organization?.name ?: "")
+            .replace("{{batchName}}", b?.name ?: "the session")
+            .replace("{{batchDate}}", t(b?.webinar_at))
+            .replace("{{followUpTime}}", t(lead.next_follow_up_at).ifBlank { "a convenient time" })
+            .replace("{{city}}", lead.city ?: "")
+            .replace("{{profession}}", lead.profession ?: "")
     }
 
     private val prefix get() = membership?.organization?.phone_prefix ?: "+91"
@@ -115,7 +200,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Phone call history, with lead names where the number is a lead. */
     fun loadHistory() = viewModelScope.launch {
         val m = membership ?: return@launch
-        val logs = PhoneCalls.history(ctx, 300)
+        val all = PhoneCalls.history(ctx, historyLimit + 1)
+        historyHasMore = all.size > historyLimit
+        val logs = all.take(historyLimit)
         val phones = logs.map { normalizePhone(it.phone, prefix) }
         val leadsByPhone = runCatching { Repo.leadsByPhones(m.org_id, phones) }.getOrDefault(emptyMap())
         history = logs.mapIndexed { i, l -> HistoryItem(l, phones[i], leadsByPhone[phones[i]]) }
@@ -195,6 +282,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun discardPending() { store.pendingCall = null; pending = null; pendingLog = null }
 
+    /** "The call didn't happen" while in a queue: go on with the next lead. */
+    fun discardAndContinue() { discardPending(); if (queueActive) { queuePos++; if (queuePos >= queue.size) queueActive = false else countdown = store.countdownSec } }
+
     /** Saves the outcome. If there is no internet it is kept on the phone and sent later. */
     fun saveOutcome(payload: JsonObject, onDone: () -> Unit) = viewModelScope.launch {
         val sent = runCatching { Repo.logCall(payload) }
@@ -209,6 +299,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         pending?.let { FollowUpAlarms.cancelForLead(ctx, it.leadId, followUps) }
         discardPending()
         onDone()
+        queueAfterOutcome()
         refreshHome(); reloadLeads(); CallSync.syncNow(ctx)
     }
 

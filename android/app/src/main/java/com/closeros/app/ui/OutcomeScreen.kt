@@ -144,7 +144,7 @@ fun OutcomeScreen(vm: AppViewModel) {
         if (outcome == null || (!noFollow && followAt == null)) {
             Text("Choose an outcome and the next call time (or “No follow-up needed”).", fontSize = 13.sp, color = Brand.muted)
         }
-        if (log == null) TextButton(onClick = { vm.discardPending() }) { Text("The call didn't happen — discard") }
+        if (log == null) TextButton(onClick = { vm.discardAndContinue() }) { Text("The call didn't happen — discard") }
     }
 }
 

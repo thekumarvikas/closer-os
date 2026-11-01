@@ -13,6 +13,7 @@ class LocalStore(ctx: Context) {
     @Serializable data class PendingCall(
         val leadId: String, val leadName: String, val phone: String, val startedAtMs: Long,
         val purpose: String = "sales", val batchId: String? = null,
+        val profession: String? = null, val categoryId: String? = null,
     )
 
     var pendingCall: PendingCall?
@@ -72,6 +73,10 @@ class LocalStore(ctx: Context) {
     /** Setup steps Android can't check (e.g. Autostart): the rep ticks them as done. */
     fun confirmed(key: String) = p.getBoolean("confirm_$key", false)
     fun confirm(key: String) { p.edit().putBoolean("confirm_$key", true).apply() }
+
+    /** Last filters/sort the rep used on a webinar list (per reminder / sales). */
+    fun listPrefs(purpose: String): String? = p.getString("list_prefs_$purpose", null)
+    fun setListPrefs(purpose: String, v: String) { p.edit().putString("list_prefs_$purpose", v).apply() }
 
     var waCursorMs: Long
         get() = p.getLong("wa_cursor", 0)

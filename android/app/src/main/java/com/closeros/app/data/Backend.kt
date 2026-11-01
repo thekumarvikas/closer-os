@@ -77,6 +77,33 @@ object Backend {
     val purpose: String = "sales", val position: Int = 0, val is_active: Boolean = true,
 )
 
+/** A webinar / event with how many leads I (or my team) have to call. */
+@Serializable data class BatchSummary(
+    val id: String, val name: String, val kind: String = "webinar", val webinar_at: String, val hot_minutes: Int = 60,
+    val zoom_uploaded: Boolean = false, val reminder_mine: Int = 0, val sales_mine: Int = 0,
+    val reminder_all: Int = 0, val sales_all: Int = 0, val attended: Int = 0,
+)
+
+/** One lead in a webinar's calling list, with what's needed to filter and sort. */
+@Serializable data class BatchRow(
+    val id: String, val org_id: String, val name: String = "", val phone: String, val email: String? = null,
+    val city: String? = null, val state: String? = null, val company: String? = null, val profession: String? = null,
+    val category_id: String? = null, val category: String? = null, val source: String? = null, val campaign: String? = null,
+    val rep: String? = null, val assigned_to: String? = null, val do_not_call: Boolean = false,
+    val watch_minutes: Int? = null, val attended: Boolean = false, val is_hot: Boolean = false, val is_repeat: Boolean = false,
+    val registered_at: String? = null, val attempts: Int = 0, val talked: Boolean = false, val last_called_at: String? = null,
+    val last_outcome_id: String? = null, val next_follow_up_at: String? = null, val bought: Boolean = false,
+) {
+    fun toLead(batchName: String, webinarAt: String) = Lead(
+        id = id, org_id = org_id, name = name, phone = phone, email = email, city = city, state = state, company = company,
+        profession = profession, source = source, campaign = campaign, assigned_to = assigned_to, last_call_at = last_called_at,
+        last_outcome_id = last_outcome_id, next_follow_up_at = next_follow_up_at, do_not_call = do_not_call,
+        batch_leads = listOf(BatchLink(watch_minutes, attended, BatchMini(batchName, webinarAt))),
+    )
+}
+@Serializable data class BatchList(val hot_minutes: Int = 60, val webinar_at: String? = null, val leads: List<BatchRow> = emptyList())
+@Serializable data class Category(val id: String, val name: String, val position: Int = 0)
+
 @Serializable data class LeadMini(val name: String = "", val phone: String = "")
 @Serializable data class FollowUp(
     val id: String, val lead_id: String, val due_at: String, val status: String, val reason: String? = null,
@@ -136,6 +163,16 @@ object Repo {
     }
 
     suspend fun lead(id: String): Lead? = Backend.client.from("leads").select(Columns.raw(LEAD_COLUMNS)) { filter { eq("id", id) } }.decodeSingleOrNull()
+
+    suspend fun myBatches(orgId: String): List<BatchSummary> =
+        json.decodeFromString(db.rpc("my_batches", buildJsonObject { put("p_org", orgId) }).data)
+
+    suspend fun batchCallList(batchId: String, purpose: String, everyone: Boolean): BatchList =
+        json.decodeFromString(db.rpc("batch_call_list", buildJsonObject { put("p_batch", batchId); put("p_purpose", purpose); put("p_everyone", everyone) }).data)
+
+    suspend fun categories(orgId: String): List<Category> = Backend.client.from("profession_categories").select {
+        filter { eq("org_id", orgId) }; order("position", Order.ASCENDING)
+    }.decodeList()
 
     suspend fun leadsByIds(ids: List<String>): List<Lead> = if (ids.isEmpty()) emptyList() else
         Backend.client.from("leads").select(Columns.raw(LEAD_COLUMNS)) { filter { isIn("id", ids.distinct()) } }.decodeList()

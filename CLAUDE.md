@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: IndiaMART pull (CRM key), direct Facebook, push notification to rep on new lead.
 
-## Android app (`android/`) — v0.6.0
+## Android app (`android/`) — v0.7.0
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -238,6 +238,22 @@ intelligence → Play Store launch.
   essentials are missing; status refreshes when the rep returns from Android settings.
 - device_status.setup jsonb (migration 0019) → dashboard Team → "Phone setup" column lists what's off.
 - Android limits: special switches can't be flipped by any app; we open the exact screen.
+
+## Webinar calling in the app (v0.7.0, Nov 2026)
+- my_batches(org) → webinars/events of the last 120 days with counts (mine / whole team for managers).
+  batch_call_list(batch, purpose, everyone) → each lead's watch minutes, hot, attended, profession
+  group, source, repeat, registered_at, attempts/talked/last outcome for THIS purpose, next follow-up,
+  bought (buyers list or won). Reminder lists skip test-group (holdout) leads.
+- App: Home → "Webinars & events" → Reminder calls / Sales calls → list with "Sort & filter":
+  search (profession/company/city/name), Sort by + Then by (watch time ↑↓, profession group in MY
+  tap order, registered, fewest calls, not called longest, follow-up due, name, city), filters
+  (attendance hot/attended/low/absent, calling status, profession groups, last outcome, source,
+  new/repeat, hide bought). Choices saved per list type (LocalStore list_prefs_<purpose>).
+  "Call these N in order" = queue tagged purpose + batch_id; single calls and lead details opened
+  from the list are tagged too. Outcome screen asks profession + group for webinar calls (or when
+  the lead has none) → log_call updates the lead.
+- Profession groups: new "Engineering" group (migration 0021); IT & Software only for software/IT
+  engineers.
 
 ## Build notes
 - Android SDK at /opt/android-sdk (set `sdk.dir` in local.properties).

@@ -26,7 +26,7 @@ Everything from the original product prompt plus the owner's feedback, with stat
 - ✅ Follow-up reminders: 5 min before, at time (Call button), 5 and 10 min after; late flag at 15 min
 - ✅ WhatsApp: company + personal messages, filled in per lead
 - 🟡 Pre-call summary — lead card / details show last outcome, notes, webinar, watch time; a dedicated 3-second "glance" screen before each queued call is still to do
-- ⬜ Webinar / event queues: reminder calls before, sales calls after (purpose + batch on every call, profession capture)
+- ✅ Webinar / event queues: reminder calls before, sales calls after (purpose + batch on every call, profession capture), with sort (watch time, profession priority, …) and filters
 - ⬜ SIM licences (each SIM registered to a company, confirmed by the rep)
 - ⬜ Offline lead cache (leads viewable without internet)
 - ⬜ Best-time-to-call ordering of the queue

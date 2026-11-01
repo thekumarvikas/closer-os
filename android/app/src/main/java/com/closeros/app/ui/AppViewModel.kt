@@ -13,6 +13,9 @@ import com.closeros.app.calls.LogCall
 import com.closeros.app.calls.PhoneCalls
 import com.closeros.app.calls.Sim
 import com.closeros.app.data.Backend
+import com.closeros.app.data.BatchRow
+import com.closeros.app.data.BatchSummary
+import com.closeros.app.data.Category
 import com.closeros.app.data.FollowUp
 import com.closeros.app.data.Lead
 import com.closeros.app.data.LocalStore
@@ -79,6 +82,51 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var today by mutableStateOf<List<HistoryItem>>(emptyList())
     var todayFilter by mutableStateOf<String?>(null)
 
+    // ───────────── Webinar / event lists ─────────────
+    var categories by mutableStateOf<List<Category>>(emptyList())
+    var showBatches by mutableStateOf(false)
+    var batches by mutableStateOf<List<BatchSummary>?>(null)
+    var openList by mutableStateOf<Pair<BatchSummary, String>?>(null)   // batch + "reminder" | "sales"
+    var listRows by mutableStateOf<List<BatchRow>?>(null)
+    var listEveryone by mutableStateOf(false)
+    /** Profession group of leads in the open list, so the outcome screen can show it. */
+    private var rowCategory: Map<String, String?> = emptyMap()
+
+    val isManager get() = membership?.role in setOf("owner", "admin", "manager")
+
+    fun loadBatches() = viewModelScope.launch {
+        val m = membership ?: return@launch
+        batches = runCatching { Repo.myBatches(m.org_id) }.onFailure { message = "Couldn't load webinars: ${it.message}" }.getOrDefault(emptyList())
+    }
+
+    fun openBatchList(b: BatchSummary, purpose: String) { openList = b to purpose; loadList() }
+
+    fun loadList() = viewModelScope.launch {
+        val (b, purpose) = openList ?: return@launch
+        listRows = null
+        runCatching { Repo.batchCallList(b.id, purpose, listEveryone && isManager) }
+            .onSuccess { r -> listRows = r.leads; rowCategory = r.leads.associate { it.id to it.category_id } }
+            .onFailure { message = "Couldn't load the list: ${it.message}"; listRows = emptyList() }
+    }
+
+    /** Call the filtered, sorted list one after another; every call is tagged with this webinar. */
+    fun callList(rows: List<BatchRow>) {
+        val (b, purpose) = openList ?: return
+        startQueue(rows.map { it.toLead(b.name, b.webinar_at) }, purpose, b.id)
+    }
+
+    /** Call one lead from a webinar list (tagged with the webinar). */
+    fun callFromList(row: BatchRow) {
+        val (b, purpose) = openList ?: return
+        if (pending != null) { message = "Save the outcome of your last call first"; return }
+        callContext = purpose to b.id
+        callRequest = row.toLead(b.name, b.webinar_at)
+    }
+
+    private var callContext: Pair<String, String>? = null
+    private var queuePurpose = "sales"
+    private var queueBatchId: String? = null
+
     // ───────────── Calling queue ─────────────
     var queue by mutableStateOf<List<Lead>>(emptyList())
     var queuePos by mutableStateOf(0)
@@ -114,6 +162,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             membership?.let { m ->
                 store.orgId = m.org_id
                 outcomes = Repo.outcomes(m.org_id)
+                runCatching { categories = Repo.categories(m.org_id) }
                 runCatching { templates = Repo.templates(m.org_id) }
                 refreshHome()
                 reloadLeads()
@@ -148,7 +197,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Starts calling the given leads one after another. */
-    fun startQueue(leads: List<Lead>) {
+    fun startQueue(leads: List<Lead>, purpose: String = "sales", batchId: String? = null) {
+        queuePurpose = purpose; queueBatchId = batchId
         val list = leads.filter { !it.do_not_call }.distinctBy { it.id }
         if (list.isEmpty()) { message = "No leads to call"; return }
         queue = list; queuePos = 0; queueDone = 0; queueActive = true; queuePaused = false; countdown = null
@@ -288,9 +338,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun sims(): List<Sim> = PhoneCalls.sims(ctx)
 
     /** Starts a call and remembers it, so the outcome form appears when the rep comes back. */
-    fun startCall(lead: Lead, sim: Sim?, purpose: String = "sales", batchId: String? = null) {
+    fun startCall(lead: Lead, sim: Sim?) {
         if (pending != null) { message = "Save the outcome of your last call first"; return }
-        val p = LocalStore.PendingCall(lead.id, lead.name, lead.phone, System.currentTimeMillis(), purpose, batchId)
+        // Tag the call with its webinar when it comes from a webinar list or queue.
+        val ctxPair = callContext ?: if (queueActive && queue.any { it.id == lead.id }) queuePurpose to queueBatchId
+            else openList?.takeIf { o -> listRows?.any { it.id == lead.id } == true }?.let { (b, purpose) -> purpose to b.id }
+        callContext = null
+        val p = LocalStore.PendingCall(lead.id, lead.name, lead.phone, System.currentTimeMillis(),
+            ctxPair?.first ?: "sales", ctxPair?.second, lead.profession, rowCategory[lead.id])
         store.pendingCall = p; pending = p; pendingLog = null
         sim?.let { store.preferredSim = it.slot }
         PhoneCalls.call(ctx, lead.phone, sim)
@@ -324,6 +379,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         onDone()
         queueAfterOutcome()
         refreshHome(); reloadLeads(); CallSync.syncNow(ctx)
+        if (openList != null) loadList()
     }
 
     fun newCallId(): String = pendingLog?.id ?: UUID.randomUUID().toString()

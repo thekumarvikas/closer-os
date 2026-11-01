@@ -50,6 +50,9 @@ fun OutcomeScreen(vm: AppViewModel) {
     var product by remember { mutableStateOf("") }
     var interest by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+    var profession by remember { mutableStateOf(p.profession.orEmpty()) }
+    var categoryId by remember { mutableStateOf(p.categoryId) }
+    val askProfession = p.batchId != null || p.profession.isNullOrBlank()
     BackHandler { vm.message = "Save the outcome first" }
 
     // Quick picks for the next call; "Pick date & time" opens the normal Android pickers.
@@ -107,6 +110,14 @@ fun OutcomeScreen(vm: AppViewModel) {
             }
         }
 
+        if (askProfession && vm.categories.isNotEmpty()) {
+            Text("Profession", fontWeight = FontWeight.SemiBold)
+            OutlinedTextField(profession, { profession = it }, label = { Text("What do they do? e.g. civil engineer, shop owner") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                vm.categories.forEach { c -> Chip(c.name, categoryId == c.id) { categoryId = if (categoryId == c.id) null else c.id } }
+            }
+        }
+
         Text("Next call", fontWeight = FontWeight.SemiBold)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             quick.forEach { (label, t) -> Chip(label, !noFollow && followAt == t) { followAt = t; noFollow = false } }
@@ -136,6 +147,8 @@ fun OutcomeScreen(vm: AppViewModel) {
                     if (interest.isNotBlank()) put("interest", interest)
                 })
                 if (notes.isNotBlank()) put("notes", notes.trim())
+                if (profession.isNotBlank() && profession.trim() != p.profession) put("profession", profession.trim())
+                if (categoryId != null && categoryId != p.categoryId) put("profession_category_id", categoryId)
                 if (noFollow) put("no_follow_up", true) else put("follow_up_at", followAt!!.toInstant().toString())
             }
             vm.saveOutcome(payload) { busy = false }

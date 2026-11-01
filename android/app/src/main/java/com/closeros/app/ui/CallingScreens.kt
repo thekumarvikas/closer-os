@@ -71,6 +71,17 @@ fun HomeScreen(vm: AppViewModel) {
             Text(m.organization.name, color = Brand.muted)
         }
         item { SetupBanner(vm) }
+        item {
+            Card(Modifier.fillMaxWidth().clickable { vm.showBatches = true }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Webinars & events", fontWeight = FontWeight.SemiBold)
+                        Text("Reminder calls before, sales calls after — sort by watch time, profession and more", fontSize = 13.sp, color = Brand.muted)
+                    }
+                    Text("Open ›", color = Brand.primary, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
         if (vm.queueActive) item {
             Card(Modifier.fillMaxWidth().clickable { vm.queueResume() }, colors = CardDefaults.cardColors(containerColor = Brand.light)) {
                 Text("Calling queue: ${vm.queuePos + 1} of ${vm.queue.size} — tap to continue", Modifier.padding(14.dp), color = Brand.primaryDark, fontWeight = FontWeight.SemiBold)

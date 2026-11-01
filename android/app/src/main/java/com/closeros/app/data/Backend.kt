@@ -108,6 +108,7 @@ object Backend {
 @Serializable data class FollowUp(
     val id: String, val lead_id: String, val due_at: String, val status: String, val reason: String? = null,
     val notes: String? = null, val purpose: String = "sales", val lead: LeadMini? = null,
+    val dialled_at: String? = null, val completed_at: String? = null,
 )
 @Serializable data class CallRow(
     val id: String, val direction: String, val started_at: String, val duration_sec: Int = 0,
@@ -216,6 +217,16 @@ object Repo {
             filter { eq("org_id", orgId); eq("assigned_to", uid); eq("status", "pending") }
             order("due_at", Order.ASCENDING)
             limit(200)
+        }.decodeList()
+    }
+
+    /** Follow-ups of the last 7 days that are finished, to show on time / late / not called. */
+    suspend fun pastFollowUps(orgId: String): List<FollowUp> {
+        val uid = Backend.uid ?: return emptyList()
+        return Backend.client.from("follow_ups").select(Columns.raw("*, lead:leads(name, phone)")) {
+            filter { eq("org_id", orgId); eq("assigned_to", uid); eq("status", "done"); gte("due_at", Instant.now().minusSeconds(7 * 86400).toString()) }
+            order("due_at", Order.DESCENDING)
+            limit(300)
         }.decodeList()
     }
 

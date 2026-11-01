@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: IndiaMART pull (CRM key), direct Facebook, push notification to rep on new lead.
 
-## Android app (`android/`) — v0.7.1
+## Android app (`android/`) — v0.7.2
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -254,6 +254,14 @@ intelligence → Play Store launch.
   the lead has none) → log_call updates the lead.
 - Profession groups: new "Engineering" group (migration 0021); IT & Software only for software/IT
   engineers.
+
+## App Follow-ups tab (v0.7.2, Nov 2026)
+- Owner: follow-ups tab had no categories, no clear time, nothing marked late. Rebuilt
+  (ui/FollowUpsScreen.kt) with the dashboard's rule (on time ≤ 15 min after due via dialled_at;
+  late > 15; not called = 15 min passed, no call). Tabs: Today · Not called · Upcoming · Called late ·
+  On time (last 7 days, Repo.pastFollowUps = status done). Card: big time + day, name + number,
+  coloured badge (In 2h / Due now / Not called · 1h late / Called 20 min late / Called on time),
+  reminder vs sales, reason/notes, Call button; 7-day summary line; "Call due follow-ups in a queue".
 
 ## Play Protect block (Nov 2026)
 - 0.5.0+ was blocked on the owner's Xiaomi: "App blocked to protect your device" (Google Play Protect

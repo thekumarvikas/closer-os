@@ -61,6 +61,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var outcomes by mutableStateOf<List<Outcome>>(emptyList())
     var stats by mutableStateOf(TodayStats())
     var followUps by mutableStateOf<List<FollowUp>>(emptyList())
+    var pastFollowUps by mutableStateOf<List<FollowUp>>(emptyList())
     val leads = mutableStateListOf<Lead>()
     var leadsQuery by mutableStateOf("")
     var leadsEnd by mutableStateOf(false)
@@ -176,6 +177,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val m = membership ?: return@launch
         runCatching { stats = Repo.todayStats(m.organization) }
         runCatching { followUps = Repo.followUps(m.org_id); FollowUpAlarms.scheduleAll(ctx, followUps) }
+        runCatching { pastFollowUps = Repo.pastFollowUps(m.org_id) }
         loadToday()
     }
 

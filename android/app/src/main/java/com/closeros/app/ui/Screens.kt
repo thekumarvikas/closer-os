@@ -223,27 +223,7 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
 // ───────────── Follow-ups ─────────────
 
 @Composable
-fun FollowUpsScreen(vm: AppViewModel) {
-    val now = System.currentTimeMillis()
-    LaunchedEffect(Unit) { vm.refreshHome() }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        item { Text("Follow-ups", fontSize = 22.sp, fontWeight = FontWeight.Bold) }
-        if (vm.followUps.isEmpty()) item { Text("Nothing pending. Follow-ups appear when you save a call with a next-call time.", color = Brand.muted) }
-        items(vm.followUps, key = { it.id }) { f ->
-            val overdue = runCatching { Instant.parse(f.due_at).toEpochMilli() < now }.getOrDefault(false)
-            Card(Modifier.fillMaxWidth().clickable { vm.openLeadId = f.lead_id }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(f.lead?.name?.ifBlank { null } ?: fmtPhone(f.lead?.phone ?: ""), fontWeight = FontWeight.SemiBold)
-                        Text((if (overdue) "Overdue · " else "") + fmtWhen(f.due_at), color = if (overdue) Brand.red else Brand.muted, fontSize = 14.sp)
-                        f.reason?.let { Text(it, fontSize = 13.sp) }
-                    }
-                    Icon(Icons.Default.KeyboardArrowRight, null, tint = Brand.muted)
-                }
-            }
-        }
-    }
-}
+fun FollowUpsScreen(vm: AppViewModel) = FollowUpsTabs(vm)
 
 // ───────────── Profile ─────────────
 

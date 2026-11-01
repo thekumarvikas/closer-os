@@ -167,13 +167,13 @@ export function WhatsAppTemplates() {
   const [version, setVersion] = useState(0)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
-    supabase.from('message_templates').select('*').eq('org_id', org.id).order('position').then(({ data }) => setRows((data ?? []) as Template[]))
+    supabase.from('message_templates').select('*').eq('org_id', org.id).is('owner_id', null).order('position').then(({ data }) => setRows((data ?? []) as Template[]))
   }, [org.id, version])
   async function run(p: PromiseLike<{ error: unknown }>) { const { error } = await p; setError(error ? errorText(error) : null); setVersion(v => v + 1) }
   return (
     <Card className="p-5 lg:col-span-2">
-      <h2 className="font-semibold">WhatsApp messages</h2>
-      <p className="mb-3 mt-1 text-sm text-slate-500">Reps choose one of these in the app before WhatsApp opens. Use variables — they are replaced for each lead: {variables.map(v => <code key={v} className="mr-1 rounded bg-slate-100 px-1 text-xs">{v}</code>)}</p>
+      <h2 className="font-semibold">Company WhatsApp messages</h2>
+      <p className="mb-3 mt-1 text-sm text-slate-500">Every rep sees these in the app (reps can also save their own). Reps pick one before WhatsApp opens. Use variables — they are replaced for each lead: {variables.map(v => <code key={v} className="mr-1 rounded bg-slate-100 px-1 text-xs">{v}</code>)}</p>
       <ErrorBox error={error} />
       <div className="space-y-3">
         {rows.map(t => (

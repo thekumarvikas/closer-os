@@ -13,6 +13,7 @@ import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
 import io.github.jan.supabase.postgrest.query.filter.FilterOperator
 import io.github.jan.supabase.serializer.KotlinXSerializer
+import io.github.jan.supabase.storage.storage
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -65,7 +66,7 @@ object Backend {
 
 @Serializable data class BatchMini(val name: String = "", val webinar_at: String? = null)
 @Serializable data class BatchLink(val watch_minutes: Int? = null, val attended: Boolean = false, val batch: BatchMini? = null)
-@Serializable data class Template(val id: String, val name: String, val body: String, val position: Int = 0)
+@Serializable data class Template(val id: String, val name: String, val body: String, val position: Int = 0, val owner_id: String? = null)
 
 @Serializable data class Outcome(
     val id: String, val code: String, val label: String, val category: String, val form: String? = null,
@@ -80,6 +81,7 @@ object Backend {
 @Serializable data class CallRow(
     val id: String, val direction: String, val started_at: String, val duration_sec: Int = 0,
     val outcome_id: String? = null, val notes: String? = null,
+    val recording_status: String? = null, val recording_path: String? = null,
 )
 
 data class TodayStats(val calls: Int = 0, val connected: Int = 0, val talkSec: Int = 0, val notPicked: Int = 0, val missed: Int = 0)
@@ -134,13 +136,27 @@ object Repo {
     suspend fun leadsByIds(ids: List<String>): List<Lead> = if (ids.isEmpty()) emptyList() else
         Backend.client.from("leads").select(Columns.raw(LEAD_COLUMNS)) { filter { isIn("id", ids.distinct()) } }.decodeList()
 
+    /** Short-lived private link to play a recording; each play is written to the audit log. */
+    suspend fun recordingUrl(callId: String, path: String): String {
+        runCatching { db.rpc("log_recording_access", buildJsonObject { put("p_call", callId); put("p_action", "play") }) }
+        return Backend.client.storage.from("recordings").createSignedUrl(path, kotlin.time.Duration.parse("15m"))
+    }
+
+    suspend fun saveMyTemplate(orgId: String, name: String, body: String) {
+        Backend.client.from("message_templates").insert(buildJsonObject {
+            put("org_id", orgId); put("name", name); put("body", body); put("owner_id", Backend.uid); put("position", 1000)
+        })
+    }
+
+    suspend fun deleteTemplate(id: String) { Backend.client.from("message_templates").delete { filter { eq("id", id) } } }
+
     suspend fun templates(orgId: String): List<Template> = Backend.client.from("message_templates").select {
         filter { eq("org_id", orgId); eq("is_active", true) }
         order("position", Order.ASCENDING)
     }.decodeList()
 
     suspend fun leadCalls(id: String): List<CallRow> = Backend.client.from("calls")
-        .select(Columns.raw("id, direction, started_at, duration_sec, outcome_id, notes")) {
+        .select(Columns.raw("id, direction, started_at, duration_sec, outcome_id, notes, recording_status, recording_path")) {
             filter { eq("lead_id", id) }
             order("started_at", Order.DESCENDING)
             limit(20)

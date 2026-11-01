@@ -37,10 +37,13 @@ const pick = (r?: Row): Metrics => {
   return m
 }
 
-export async function fetchReport(orgId: string, from: Date, to: Date, users: string[], leadOnly: boolean): Promise<Report> {
+export type Dir = 'all' | 'out' | 'in'
+export const dirList = (d: Dir) => d === 'out' ? ['outgoing'] : d === 'in' ? ['incoming', 'missed', 'rejected'] : null
+
+export async function fetchReport(orgId: string, from: Date, to: Date, users: string[], leadOnly: boolean, dir: Dir = 'all'): Promise<Report> {
   const { data, error } = await supabase.rpc('call_report', {
     p_org: orgId, p_from: from.toISOString(), p_to: to.toISOString(),
-    p_users: users.length ? users : null, p_lead_only: leadOnly,
+    p_users: users.length ? users : null, p_lead_only: leadOnly, p_dirs: dirList(dir),
   })
   if (error) throw error
   const rows = (data.rows ?? []) as Row[]
@@ -135,9 +138,9 @@ export interface OutcomeReport {
 const emptyCell: OutcomeCell = { calls: 0, leads: 0, amount: 0, deal_value: 0, dur: 0 }
 const cell = (r?: ORow): OutcomeCell => r ? { calls: +r.calls || 0, leads: +r.leads || 0, amount: +r.amount || 0, deal_value: +r.deal_value || 0, dur: +r.dur || 0 } : { ...emptyCell }
 
-export async function fetchOutcomeReport(orgId: string, from: Date, to: Date, users: string[]): Promise<OutcomeReport> {
+export async function fetchOutcomeReport(orgId: string, from: Date, to: Date, users: string[], dir: Dir = 'all'): Promise<OutcomeReport> {
   const { data, error } = await supabase.rpc('outcome_report', {
-    p_org: orgId, p_from: from.toISOString(), p_to: to.toISOString(), p_users: users.length ? users : null,
+    p_org: orgId, p_from: from.toISOString(), p_to: to.toISOString(), p_users: users.length ? users : null, p_dirs: dirList(dir),
   })
   if (error) throw error
   const rows = (data.rows ?? []) as ORow[]

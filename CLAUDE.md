@@ -151,6 +151,16 @@ intelligence → Play Store launch.
   with talk time but no recording after 6 h (only for reps who do upload recordings).
 - Reports → Team has "Compare the team" bars (metric switch, team-average line, ranking).
 
+## Owner feedback round 3 (Nov 2026)
+- message_templates.owner_id: null = company message (managers edit, everyone sees); set = a rep's
+  personal message (only they see/edit). App picker shows both; "Save as my message" stores the
+  text with the lead's first name replaced by {{leadName}}. {{leadFullName}} also supported.
+- App plays recordings in lead details (Repo.recordingUrl → signed URL + audit; MediaPlayer).
+- call_report / outcome_report take p_dirs text[] (null = all); Reports has All / Dialled /
+  Incoming switch (incoming = incoming + missed + rejected); Call log follows it.
+- docs/ROADMAP.md = the full feature checklist (status of everything from the original prompt).
+  Keep it updated after every round.
+
 ## Call tracking (decided Nov 2026)
 - Owner chose B: upload ALL calls (like Callyzer). Company setting organizations.settings
   .call_tracking = 'all' (default) | 'leads' (Settings → Company). sync_calls() enforces it.
@@ -173,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: IndiaMART pull (CRM key), direct Facebook, push notification to rep on new lead.
 
-## Android app (`android/`) — v0.3.0
+## Android app (`android/`) — v0.4.0
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats

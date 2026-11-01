@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import com.closeros.app.calls.PhoneCalls
 import com.closeros.app.data.Lead
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.time.Instant
 
 // ───────────── Today's numbers (from the phone's own call log) ─────────────
@@ -262,24 +263,89 @@ fun LeadCard(vm: AppViewModel, l: Lead, onCall: ((Lead) -> Unit)?) {
     if (wa) WhatsAppPicker(vm, l) { wa = false }
 }
 
-/** Choose a company message, see it filled in for this lead, edit if needed, then open WhatsApp. */
+/**
+ * Choose a company message or one of my own; it is filled in for this lead (name etc.), can be edited,
+ * then WhatsApp opens with it. My own messages can be saved from here.
+ */
 @Composable
 fun WhatsAppPicker(vm: AppViewModel, lead: Lead, onDismiss: () -> Unit) {
     val ctx = LocalContext.current
     var text by remember { mutableStateOf<String?>(null) }
+    var saving by remember { mutableStateOf(false) }
+    var saveName by remember { mutableStateOf("") }
+    val first = lead.name.substringBefore(' ')
+    val company = vm.templates.filter { it.owner_id == null }
+    val mine = vm.templates.filter { it.owner_id != null }
     AlertDialog(onDismissRequest = onDismiss,
-        title = { Text(if (text == null) "Choose a message" else "WhatsApp to ${lead.name.substringBefore(' ').ifBlank { "lead" }}") },
+        title = { Text(if (text == null) "Choose a message" else "WhatsApp to ${first.ifBlank { "lead" }}") },
         text = {
             if (text == null) Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                vm.templates.forEach { t ->
-                    Column(Modifier.fillMaxWidth().background(Brand.bg, RoundedCornerShape(10.dp)).clickable { text = vm.fillTemplate(t.body, lead) }.padding(10.dp)) {
-                        Text(t.name, fontWeight = FontWeight.SemiBold)
-                        Text(vm.fillTemplate(t.body, lead), fontSize = 12.sp, color = Brand.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-                TextButton(onClick = { text = "Hi ${lead.name.substringBefore(' ')}, " }) { Text("Write my own message") }
-            } else OutlinedTextField(text!!, { text = it }, modifier = Modifier.fillMaxWidth(), minLines = 5)
+                if (company.isNotEmpty()) Text("Company messages", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Brand.muted)
+                company.forEach { t -> TemplateRow(vm, t.name, vm.fillTemplate(t.body, lead), null) { text = vm.fillTemplate(t.body, lead) } }
+                if (mine.isNotEmpty()) Text("My messages", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Brand.muted, modifier = Modifier.padding(top = 6.dp))
+                mine.forEach { t -> TemplateRow(vm, t.name, vm.fillTemplate(t.body, lead), onDelete = { vm.deleteMyTemplate(t.id) }) { text = vm.fillTemplate(t.body, lead) } }
+                TextButton(onClick = { text = "Hi ${first.ifBlank { "there" }}, " }) { Text("Write a new message") }
+            } else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(text!!, { text = it }, modifier = Modifier.fillMaxWidth(), minLines = 5)
+                if (saving) {
+                    OutlinedTextField(saveName, { saveName = it }, label = { Text("Name for this message") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Button(onClick = {
+                        // Save with a placeholder instead of this lead's name, so it fills in for every lead.
+                        val body = if (first.length >= 2) text!!.replace(first, "{{leadName}}") else text!!
+                        vm.saveMyTemplate(saveName, body); saving = false
+                    }) { Text("Save to My messages") }
+                } else TextButton(onClick = { saving = true }) { Text("Save as my message for next time") }
+            }
         },
         confirmButton = { if (text != null) Button(onClick = { PhoneCalls.whatsapp(ctx, lead.phone, text!!); onDismiss() }) { Text("Open WhatsApp") } },
-        dismissButton = { TextButton(onClick = { if (text != null) text = null else onDismiss() }) { Text(if (text != null) "Back" else "Cancel") } })
+        dismissButton = { TextButton(onClick = { if (text != null) { text = null; saving = false } else onDismiss() }) { Text(if (text != null) "Back" else "Cancel") } })
+}
+
+@Composable
+private fun TemplateRow(vm: AppViewModel, name: String, preview: String, onDelete: (() -> Unit)?, onPick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().background(Brand.bg, RoundedCornerShape(10.dp)).clickable(onClick = onPick).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(name, fontWeight = FontWeight.SemiBold)
+            Text(preview, fontSize = 12.sp, color = Brand.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+        if (onDelete != null) TextButton(onClick = onDelete) { Text("Delete", color = Brand.red, fontSize = 12.sp) }
+    }
+}
+
+/** Plays a call recording inside the app (private link, 15 minutes). */
+@Composable
+fun RecordingPlayer(callId: String, path: String) {
+    val scope = rememberCoroutineScope()
+    var player by remember { mutableStateOf<android.media.MediaPlayer?>(null) }
+    var state by remember { mutableStateOf("idle") } // idle, loading, playing, paused, error
+    DisposableEffect(Unit) { onDispose { player?.release() } }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        when (state) {
+            "loading" -> Text("Loading…", fontSize = 13.sp, color = Brand.muted)
+            "error" -> Text("Couldn't play the recording", fontSize = 13.sp, color = Brand.red)
+            else -> TextButton(onClick = {
+                val p = player
+                when {
+                    p != null && state == "playing" -> { p.pause(); state = "paused" }
+                    p != null && state == "paused" -> { p.start(); state = "playing" }
+                    else -> {
+                        state = "loading"
+                        scope.launch {
+                            runCatching { com.closeros.app.data.Repo.recordingUrl(callId, path) }.onSuccess { url ->
+                                player = android.media.MediaPlayer().apply {
+                                    setDataSource(url)
+                                    setOnPreparedListener { it.start(); state = "playing" }
+                                    setOnCompletionListener { state = "paused"; it.seekTo(0) }
+                                    setOnErrorListener { _, _, _ -> state = "error"; true }
+                                    prepareAsync()
+                                }
+                            }.onFailure { state = "error" }
+                        }
+                    }
+                }
+            }, contentPadding = PaddingValues(horizontal = 8.dp)) {
+                Text(when (state) { "playing" -> "❚❚ Pause"; "paused" -> "▶ Resume"; else -> "▶ Play recording" }, fontSize = 13.sp, color = Brand.primary)
+            }
+        }
+    }
 }

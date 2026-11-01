@@ -209,7 +209,11 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
                         Text("${c.direction.replaceFirstChar { it.uppercase() }} · ${if (c.duration_sec > 0) fmtDur(c.duration_sec) else "not connected"}", fontSize = 14.sp)
                         Text(fmtWhen(c.started_at), fontSize = 12.sp, color = Brand.muted)
                     }
-                    Text(outcomes[c.outcome_id]?.label ?: "", fontSize = 13.sp, color = Brand.primary)
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(outcomes[c.outcome_id]?.label ?: "", fontSize = 13.sp, color = Brand.primary)
+                        if (c.recording_status == "uploaded" && c.recording_path != null) RecordingPlayer(c.id, c.recording_path)
+                        else if (c.recording_status == "missing") Text("No recording", fontSize = 11.sp, color = Brand.red)
+                    }
                 }
             }
         }

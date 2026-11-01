@@ -8,7 +8,7 @@ import type { Organization } from '../lib/types'
 import { Badge, Button, Card, Empty, ErrorBox, Spinner } from './ui'
 import { dur } from './terms'
 
-export interface CallLogFilters { from?: string; to?: string; users: string[] } // ISO instants; empty = all time
+export interface CallLogFilters { from?: string; to?: string; users: string[]; dir?: 'all' | 'out' | 'in' } // ISO instants; empty = all time
 interface Row {
   id: string; user_id: string; phone: string; direction: string; started_at: string; duration_sec: number
   notes: string | null; outcome_id: string | null; recording_status: string; recording_path: string | null; sim_number: string | null; sim_slot: number | null; sim_label: string | null
@@ -47,6 +47,8 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
     if (f.to) query = query.lt('started_at', f.to)
     if (f.users.length) query = query.in('user_id', f.users)
     if (type) query = query.eq('direction', type)
+    else if (f.dir === 'out') query = query.eq('direction', 'outgoing')
+    else if (f.dir === 'in') query = query.in('direction', ['incoming', 'missed', 'rejected'])
     if (oc === 'none') query = query.is('outcome_id', null)
     else if (oc) query = query.eq('outcome_id', oc)
     const d = durations.find(x => x[0] === len)!

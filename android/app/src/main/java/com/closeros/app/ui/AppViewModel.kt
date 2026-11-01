@@ -178,6 +178,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun queueResume() { queuePaused = false; countdown = store.countdownSec }
     fun queueStop() { queueActive = false; countdown = null; queue = emptyList() }
 
+    fun saveMyTemplate(name: String, body: String) = viewModelScope.launch {
+        val m = membership ?: return@launch
+        runCatching { Repo.saveMyTemplate(m.org_id, name.ifBlank { "My message" }, body) }
+            .onSuccess { templates = Repo.templates(m.org_id); message = "Saved to My messages" }
+            .onFailure { message = "Couldn't save the message" }
+    }
+
+    fun deleteMyTemplate(id: String) = viewModelScope.launch {
+        val m = membership ?: return@launch
+        runCatching { Repo.deleteTemplate(id) }; runCatching { templates = Repo.templates(m.org_id) }
+    }
+
     /** Fills a WhatsApp template for one lead. */
     fun fillTemplate(body: String, lead: Lead): String {
         val b = lead.latestBatch?.batch
@@ -186,6 +198,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         fun t(iso: String?) = iso?.let { runCatching { df.format(java.time.Instant.parse(it)) }.getOrNull() } ?: ""
         return body
             .replace("{{leadName}}", lead.name.substringBefore(' ').ifBlank { "there" })
+            .replace("{{leadFullName}}", lead.name.ifBlank { "there" })
             .replace("{{repName}}", profile?.full_name?.substringBefore(' ') ?: "")
             .replace("{{companyName}}", membership?.organization?.name ?: "")
             .replace("{{batchName}}", b?.name ?: "the session")

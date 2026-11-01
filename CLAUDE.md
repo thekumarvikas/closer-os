@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: IndiaMART pull (CRM key), direct Facebook, push notification to rep on new lead.
 
-## Android app (`android/`) — v0.5.0
+## Android app (`android/`) — v0.5.1
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -221,6 +221,10 @@ intelligence → Play Store launch.
   Stored in prefs "wa_calls" (max 3000), uploaded by SyncWorker (cursor wa_cursor). Shown in Home
   tiles + Calls tab (Phone / WhatsApp chips). Home + Profile card asks for notification access +
   contacts. WhatsApp calls can't be recorded. Needs real-phone testing (notification texts vary).
+- Owner's goal for WhatsApp: only call history + duration, so the rep's real talk time counts.
+  v0.5.1 / migration 0018: a WhatsApp call with only a saved name (no number) is still uploaded
+  (phone = '', contact_name set) so its talk time counts; watcher re-reads active notifications on
+  reconnect (resumes a call in progress); Profile tells reps to set battery "No restrictions".
 
 ## Build notes
 - Android SDK at /opt/android-sdk (set `sdk.dir` in local.properties).

@@ -170,6 +170,10 @@ fun WhatsAppSettings(vm: AppViewModel, compact: Boolean = false) {
             if (!contacts) OutlinedButton(onClick = { askContacts.launch(android.Manifest.permission.READ_CONTACTS) }) { Text("Allow contacts") }
         }
         if (!contacts) Text("Contacts: needed to know the number when WhatsApp shows a saved name.", fontSize = 12.sp, color = Brand.muted)
+        if (granted && !compact) {
+            Text("So long WhatsApp calls are never missed, don't let the phone put Closer OS to sleep: Battery → No restrictions (Xiaomi: also turn on Autostart).", fontSize = 12.sp, color = Brand.muted)
+            TextButton(onClick = { ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}"))) }) { Text("Open app settings") }
+        }
     }
     if (compact) Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFECFDF5))) { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { body() } }
     else Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { body() }

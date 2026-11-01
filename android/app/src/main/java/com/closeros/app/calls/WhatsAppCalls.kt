@@ -126,6 +126,11 @@ class WhatsAppCallListener : NotificationListenerService() {
         }
     }
 
+    /** If Android restarted the watcher during a call, pick the call up again (its start time is in the notification). */
+    override fun onListenerConnected() {
+        runCatching { activeNotifications?.filter { WhatsAppCalls.isPackage(it.packageName) }?.forEach { onNotificationPosted(it) } }
+    }
+
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
         val l = live ?: return
         if (sbn.key != l.key) return

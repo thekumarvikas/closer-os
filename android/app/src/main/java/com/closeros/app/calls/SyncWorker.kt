@@ -53,7 +53,7 @@ object CallSync {
             store.callLogCursorMs = chunk.last().startedAtMs
         }
         // 2b) WhatsApp calls noted from WhatsApp's call notifications (if the rep allowed it).
-        val wa = WhatsAppCalls.since(ctx, store.waCursorMs).filter { it.phone.isNotBlank() }
+        val wa = WhatsAppCalls.since(ctx, store.waCursorMs).filter { it.phone.isNotBlank() || !it.name.isNullOrBlank() }
         for (chunk in wa.chunked(200)) {
             val arr = buildJsonArray {
                 chunk.forEach { c ->

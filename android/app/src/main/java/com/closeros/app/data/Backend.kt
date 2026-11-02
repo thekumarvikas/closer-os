@@ -165,7 +165,7 @@ data class LeadFilters(
 @Serializable data class CallRow(
     val id: String, val direction: String, val started_at: String, val duration_sec: Int = 0,
     val outcome_id: String? = null, val notes: String? = null,
-    val recording_status: String? = null, val recording_path: String? = null,
+    val recording_status: String? = null, val recording_path: String? = null, val sim_slot: Int? = null, val channel: String = "phone",
 )
 
 data class TodayStats(val calls: Int = 0, val connected: Int = 0, val talkSec: Int = 0, val notPicked: Int = 0, val missed: Int = 0)
@@ -200,6 +200,11 @@ object Repo {
         json.decodeFromString(db.rpc("lead_filter_options", buildJsonObject { put("p_org", orgId) }).data)
 
     suspend fun leads(orgId: String, query: String, page: Int, mineOnly: Boolean, f: LeadFilters = LeadFilters()): List<Lead> {
+        // Text search covers name, phone, email, company, profession, city, own fields, key facts and all notes.
+        val ids: List<String>? = if (query.trim().length >= 2) runCatching {
+            json.decodeFromString<List<String>>(db.rpc("search_leads", buildJsonObject { put("p_org", orgId); put("p_q", query.trim()) }).data)
+        }.getOrNull() else null
+        if (ids != null && ids.isEmpty()) return emptyList()
         fun inList(v: Collection<String>) = "(" + v.joinToString(",") { "\"" + it.replace("\"", "") + "\"" } + ")"
         val q = query.trim()
         val digits = q.filter { it.isDigit() }
@@ -209,6 +214,7 @@ object Repo {
                 filter("deleted_at", FilterOperator.IS, "null")
                 if (mineOnly) Backend.uid?.let { eq("assigned_to", it) }
                 when {
+                    ids != null -> filter("id", FilterOperator.IN, inList(ids))
                     digits.length >= 4 -> ilike("phone", "%$digits%")
                     q.isNotEmpty() -> ilike("name", "%${q.replace("%", "")}%")
                 }
@@ -304,6 +310,24 @@ object Repo {
         return f
     }
 
+    // ── Reports in the app (same functions as the dashboard) ──
+    suspend fun report(name: String, orgId: String, from: Instant, to: Instant, users: List<String>?): JsonElement =
+        json.parseToJsonElement(db.rpc(name, buildJsonObject {
+            put("p_org", orgId); put("p_from", from.toString()); put("p_to", to.toString())
+            put("p_users", users?.let { u -> buildJsonArray { u.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } } } ?: kotlinx.serialization.json.JsonNull)
+        }).data)
+
+    suspend fun targetsFor(orgId: String, from: LocalDate, to: LocalDate, users: List<String>?): ProgressReport =
+        json.decodeFromString(db.rpc("target_progress", buildJsonObject {
+            put("p_org", orgId); put("p_from", from.toString()); put("p_to", to.toString())
+            put("p_users", users?.let { u -> buildJsonArray { u.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } } } ?: kotlinx.serialization.json.JsonNull)
+        }).data)
+
+    suspend fun teamBrief(orgId: String): List<IdName> =
+        json.parseToJsonElement(db.rpc("team_brief", buildJsonObject { put("p_org", orgId) }).data).jsonArray.map {
+            IdName(it.jsonObject["user_id"]!!.jsonPrimitive.content, it.jsonObject["name"]?.jsonPrimitive?.content ?: "")
+        }
+
     suspend fun myBatches(orgId: String): List<BatchSummary> =
         json.decodeFromString(db.rpc("my_batches", buildJsonObject { put("p_org", orgId) }).data)
 
@@ -339,7 +363,7 @@ object Repo {
     }.decodeList()
 
     suspend fun leadCalls(id: String): List<CallRow> = Backend.client.from("calls")
-        .select(Columns.raw("id, direction, started_at, duration_sec, outcome_id, notes, recording_status, recording_path")) {
+        .select(Columns.raw("id, direction, started_at, duration_sec, outcome_id, notes, recording_status, recording_path, sim_slot, channel")) {
             filter { eq("lead_id", id) }
             order("started_at", Order.DESCENDING)
             limit(20)

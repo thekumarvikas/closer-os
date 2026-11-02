@@ -89,6 +89,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var needsSetup by mutableStateOf(!store.setupDone)
     var callRequest by mutableStateOf<Lead?>(null)
     var showSetup by mutableStateOf(false)
+    var showDialer by mutableStateOf(false)
+    var showReports by mutableStateOf(false)
     var access by mutableStateOf<com.closeros.app.data.OrgAccess?>(null)
     var showFeedback by mutableStateOf(false)
     var reviews by mutableStateOf<List<com.closeros.app.data.CallReview>>(emptyList())

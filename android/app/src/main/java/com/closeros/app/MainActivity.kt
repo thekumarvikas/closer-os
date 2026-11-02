@@ -92,12 +92,14 @@ fun Root(vm: AppViewModel) {
             vm.announcements.isNotEmpty() -> AnnouncementScreen(vm, vm.announcements.first())
             vm.showPlaybook -> PlaybookScreen(vm)
             vm.showFeedback -> FeedbackScreen(vm)
+            vm.showDialer -> DialerScreen(vm)
+            vm.showReports -> ReportsScreen(vm)
             vm.openLeadId != null -> LeadDetailScreen(vm, vm.openLeadId!!) { call(it) }
             vm.queueActive -> QueueScreen(vm)
             vm.openList != null -> BatchListScreen(vm)
             vm.showBatches -> BatchesScreen(vm)
             vm.todayFilter != null -> TodayListScreen(vm, vm.todayFilter!!)
-            else -> Scaffold(bottomBar = {
+            else -> { TripleBackToExit(vm); Scaffold(bottomBar = {
                 NavigationBar {
                     listOf(Triple(Tab.Home, "Home", Icons.Default.Home), Triple(Tab.Leads, "Leads", Icons.Default.Phone), Triple(Tab.Calls, "Calls", Icons.Default.List),
                         Triple(Tab.FollowUps, "Follow-ups", Icons.Default.DateRange), Triple(Tab.Profile, "Profile", Icons.Default.Person)).forEach { (t, label, icon) ->
@@ -114,10 +116,29 @@ fun Root(vm: AppViewModel) {
                         Tab.Profile -> ProfileScreen(vm)
                     }
                 }
-            }
+            } }
         }
         simChoice?.let { (lead, sims) ->
             SimPicker(sims, onPick = { simChoice = null; vm.startCall(lead, it) }, onDismiss = { simChoice = null })
+        }
+    }
+}
+
+/** Back on the main tabs: go to Home first; on Home, press back 3 times quickly to leave the app. */
+@Composable
+private fun TripleBackToExit(vm: AppViewModel) {
+    val ctx = LocalContext.current
+    var presses by remember { mutableStateOf(0) }
+    var last by remember { mutableStateOf(0L) }
+    androidx.activity.compose.BackHandler {
+        if (vm.tab != Tab.Home) { vm.tab = Tab.Home; return@BackHandler }
+        val now = System.currentTimeMillis()
+        presses = if (now - last < 2000) presses + 1 else 1
+        last = now
+        when (presses) {
+            1 -> Toast.makeText(ctx, "Press back 2 more times to exit", Toast.LENGTH_SHORT).show()
+            2 -> Toast.makeText(ctx, "Press back once more to exit", Toast.LENGTH_SHORT).show()
+            else -> (ctx as? android.app.Activity)?.finish()
         }
     }
 }

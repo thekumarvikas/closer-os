@@ -84,6 +84,7 @@ fun CallHistoryScreen(vm: AppViewModel) {
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(16.dp, 12.dp, 8.dp, 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Call history", fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            TextButton(onClick = { vm.showDialer = true }) { Text("☎ Dial pad") }
             IconButton(onClick = { vm.loadHistory() }) { Icon(Icons.Default.Refresh, "Refresh") }
         }
         Row(Modifier.padding(horizontal = 16.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

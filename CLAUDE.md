@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.9.4
+## Android app (`android/`) — v0.9.5
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -387,6 +387,22 @@ intelligence → Play Store launch.
 - WhatsApp calls not tracked on owner's phone because he installs the `direct` build (no
   notification access); full build sent as CloserOS-<ver>-with-WhatsApp-calls.apk (needs Play
   Protect scanning off while installing).
+
+## Owner feedback round 6 (v0.9.5, Nov 2026)
+- Back on main tabs: non-Home tab → Home; on Home 3 presses within 2 s exit (toasts count down).
+- SIM labels ("SIM 1 · …") on call-history rows, dialer history and lead-detail calls (CallRow.sim_slot).
+- search_leads(org, q, limit) (migration 0031): name, phone digits, email, company, profession,
+  city, state, source, campaign, key facts, imported notes, custom fields (custom::text), note
+  activities and call notes; reps only their own (assigned / reminder_by). Used by app Repo.leads
+  and dashboard Leads (search + export). pg_trgm installed (no indexes yet — add if slow).
+- In-app dial pad (ui/DialerScreen.kt; Home "☎ Dial a number", Calls tab "Dial pad"): keypad (long
+  press 0 = +), live matches (leads + phone call history containing the digits), WhatsApp / SMS /
+  Add lead, one Call button per SIM; exact lead match goes through the normal lead call flow.
+- App Reports screen (ui/ReportsScreen.kt; Home "📊 My reports"/"Reports — me & my team"): presets
+  Today / Yesterday / Last 7 days / This month / Last month / Pick dates; managers choose Everyone /
+  Me / a person (team_brief RPC). Tiles (call_report g=15), targets (target_progress), outcomes
+  (outcome_report g=6), follow-ups (follow_up_report g=1), team by talk time (g=7), day by day
+  (g=11), by hour (g=13).
 
 ## Play Protect block (Nov 2026)
 - 0.5.0+ was blocked on the owner's Xiaomi: "App blocked to protect your device" (Google Play Protect

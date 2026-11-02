@@ -164,7 +164,12 @@ fun HomeScreen(vm: AppViewModel) {
                 Icon(Icons.Default.Call, null); Spacer(Modifier.width(8.dp)); Text("Call due follow-ups (${dueSoon.size})", fontSize = 16.sp)
             }
             Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = { vm.selectMode = true; vm.tab = Tab.Leads }, modifier = Modifier.fillMaxWidth().height(50.dp)) { Text("Pick leads to call") }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { vm.selectMode = true; vm.tab = Tab.Leads }, modifier = Modifier.weight(1f).height(50.dp)) { Text("Pick leads to call") }
+                OutlinedButton(onClick = { vm.showDialer = true }, modifier = Modifier.weight(1f).height(50.dp)) { Text("☎ Dial a number") }
+            }
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = { vm.showReports = true }, modifier = Modifier.fillMaxWidth().height(50.dp)) { Text(if (vm.isManager) "📊 Reports — me & my team" else "📊 My reports") }
         }
         item {
             val last = vm.store.lastSyncMs
@@ -210,7 +215,7 @@ fun HistoryRow(vm: AppViewModel, h: HistoryItem, onAdd: (() -> Unit)? = null) {
         .clickable(enabled = h.lead != null) { h.lead?.let { vm.openLeadId = it.id } }.padding(12.dp, 10.dp, 4.dp, 4.dp)) {
         Text(h.lead?.name?.ifBlank { null } ?: h.log.name ?: fmtPhone(h.phone), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         val dir = when (h.log.direction) { "outgoing" -> "Dialled"; "incoming" -> "Received"; "missed" -> "Missed"; else -> "Declined" }
-        Text((if (h.log.channel == "whatsapp") "WhatsApp · " else "") + "$dir · ${if (h.log.durationSec > 0) fmtDur(h.log.durationSec) else "no talk"} · ${fmtWhen(Instant.ofEpochMilli(h.log.startedAtMs).toString())}",
+        Text((if (h.log.channel == "whatsapp") "WhatsApp · " else h.log.simSlot?.let { "SIM $it · " } ?: "") + "$dir · ${if (h.log.durationSec > 0) fmtDur(h.log.durationSec) else "no talk"} · ${fmtWhen(Instant.ofEpochMilli(h.log.startedAtMs).toString())}",
             fontSize = 13.sp, color = if (h.log.direction == "missed" || h.log.direction == "rejected") Brand.red else Brand.muted)
         if (h.lead != null || h.log.name != null) Text(fmtPhone(h.phone), fontSize = 12.sp, color = Brand.muted)
         if (h.phone.isNotBlank()) Row(verticalAlignment = Alignment.CenterVertically) {

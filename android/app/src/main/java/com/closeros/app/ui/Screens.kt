@@ -191,7 +191,7 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
             items(calls) { c ->
                 Row(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(10.dp)).padding(12.dp)) {
                     Column(Modifier.weight(1f)) {
-                        Text("${c.direction.replaceFirstChar { it.uppercase() }} · ${if (c.duration_sec > 0) fmtDur(c.duration_sec) else "not connected"}", fontSize = 14.sp)
+                        Text((if (c.channel == "whatsapp") "WhatsApp · " else c.sim_slot?.let { "SIM $it · " } ?: "") + "${when (c.direction) { "outgoing" -> "Dialled"; "incoming" -> "Received"; "missed" -> "Missed"; else -> "Declined" }} · ${if (c.duration_sec > 0) fmtDur(c.duration_sec) else "not connected"}", fontSize = 14.sp)
                         Text(fmtWhen(c.started_at), fontSize = 12.sp, color = Brand.muted)
                     }
                     Column(horizontalAlignment = Alignment.End) {

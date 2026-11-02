@@ -31,29 +31,31 @@ export default function Leads() {
   const [error, setError] = useState<string | null>(null)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const filtered = useCallback((query: any) => {
-    const term = q.trim()
-    if (term) {
-      const digits = term.replace(/\D/g, '')
-      query = digits.length >= 4
-        ? query.like('phone', `%${digits}%`)
-        : query.or(`name.ilike.%${term.replace(/[,()%]/g, '')}%,email.ilike.%${term.replace(/[,()%]/g, '')}%`)
-    }
+  const filtered = useCallback((query: any, ids: string[] | null) => {
+    // Search covers name, phone, email, company, profession, city, your own fields, key facts and all notes.
+    if (ids) query = query.in('id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000'])
     if (assignee === 'none') query = query.is('assigned_to', null)
     else if (assignee) query = query.eq('assigned_to', assignee)
     if (stage) query = query.eq('stage_id', stage)
     if (source) query = query.ilike('source', source)
     return query
-  }, [q, assignee, stage, source])
+  }, [assignee, stage, source])
+  const searchIds = useCallback(async (): Promise<string[] | null> => {
+    const term = q.trim()
+    if (term.length < 2) return null
+    const { data } = await supabase.rpc('search_leads', { p_org: org.id, p_q: term, p_limit: 1000 })
+    return (data ?? []) as string[]
+  }, [q, org.id])
 
   const load = useCallback(async () => {
+    const ids = await searchIds()
     const query = filtered(supabase.from('leads').select('*', { count: 'exact' })
       .eq('org_id', org.id).is('deleted_at', null)
-      .order('created_at', { ascending: false }).range(page * PAGE, page * PAGE + PAGE - 1))
+      .order('created_at', { ascending: false }).range(page * PAGE, page * PAGE + PAGE - 1), ids)
     const { data, count, error } = await query
     if (error) { setError(errorText(error)); return }
     setError(null); setLeads(data as Lead[]); setCount(count ?? 0)
-  }, [org.id, page, filtered])
+  }, [org.id, page, filtered, searchIds])
 
   const [exporting, setExporting] = useState(false)
   /** Every lead matching the current filters (in pages of 1,000), as a spreadsheet file. */
@@ -61,9 +63,10 @@ export default function Leads() {
     if (!dir) return
     setExporting(true)
     const all: Lead[] = []
+    const ids = await searchIds()
     for (let from = 0; from < 50000; from += 1000) {
       const { data, error } = await filtered(supabase.from('leads').select('*').eq('org_id', org.id).is('deleted_at', null)
-        .order('created_at', { ascending: false }).range(from, from + 999))
+        .order('created_at', { ascending: false }).range(from, from + 999), ids)
       if (error) { setExporting(false); return setError(errorText(error)) }
       all.push(...(data as Lead[]))
       if ((data as Lead[]).length < 1000) break
@@ -98,7 +101,7 @@ export default function Leads() {
         <div className="flex flex-wrap gap-2 border-b border-slate-200 p-3">
           <div className="relative min-w-[200px] flex-1">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-            <input className="input pl-9" placeholder="Search name, phone or email" value={q} onChange={e => setQ(e.target.value)} />
+            <input className="input pl-9" placeholder="Search name, phone, city, notes, any field…" value={q} onChange={e => setQ(e.target.value)} />
           </div>
           {isManager && (
             <select className="input !w-auto" value={assignee} onChange={e => setAssignee(e.target.value)}>

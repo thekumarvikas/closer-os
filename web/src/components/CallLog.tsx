@@ -154,7 +154,7 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
 }
 
 /** Plays a recording through a short-lived private link; every play is written to the audit log. */
-function PlayButton({ call }: { call: { id: string; recording_path: string | null } }) {
+export function PlayButton({ call }: { call: { id: string; recording_path: string | null } }) {
   const [url, setUrl] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   if (url) return <audio src={url} controls autoPlay className="mt-1 h-8 w-full max-w-[220px]" />

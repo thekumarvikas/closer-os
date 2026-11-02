@@ -90,6 +90,7 @@ fun Root(vm: AppViewModel) {
             vm.pending != null -> OutcomeScreen(vm)
             vm.announcements.isNotEmpty() -> AnnouncementScreen(vm, vm.announcements.first())
             vm.showPlaybook -> PlaybookScreen(vm)
+            vm.showFeedback -> FeedbackScreen(vm)
             vm.openLeadId != null -> LeadDetailScreen(vm, vm.openLeadId!!) { call(it) }
             vm.queueActive -> QueueScreen(vm)
             vm.openList != null -> BatchListScreen(vm)

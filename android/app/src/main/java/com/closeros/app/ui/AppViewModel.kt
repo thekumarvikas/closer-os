@@ -75,6 +75,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var needsSetup by mutableStateOf(!store.setupDone)
     var callRequest by mutableStateOf<Lead?>(null)
     var showSetup by mutableStateOf(false)
+    var showFeedback by mutableStateOf(false)
+    var reviews by mutableStateOf<List<com.closeros.app.data.CallReview>>(emptyList())
+    fun loadReviews() = viewModelScope.launch {
+        val m = membership ?: return@launch
+        runCatching { Repo.myReviews(m.org_id) }.onSuccess { reviews = it }
+    }
+    fun markReview(r: com.closeros.app.data.CallReview, taskDone: Boolean) = viewModelScope.launch {
+        runCatching { Repo.markReview(r.id, taskDone) }.onSuccess { loadReviews() }.onFailure { if (taskDone) message = "No internet — try again" }
+    }
     var announcements by mutableStateOf<List<com.closeros.app.data.Announcement>>(emptyList())
     fun checkAlerts() = viewModelScope.launch {
         val m = membership ?: return@launch
@@ -199,6 +208,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         runCatching { followUps = Repo.followUps(m.org_id); FollowUpAlarms.scheduleAll(ctx, followUps) }
         runCatching { pastFollowUps = Repo.pastFollowUps(m.org_id) }
         runCatching { progress = Repo.myProgressToday(m.organization) }
+        loadReviews()
         checkAlerts()
         loadToday()
     }

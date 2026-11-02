@@ -129,6 +129,13 @@ object Backend {
 )
 @Serializable data class NewLeads(val count: Int = 0, val names: List<String> = emptyList(), val latest: String? = null)
 
+@Serializable data class CallReview(
+    val id: String, val call_id: String, val rep_id: String, val reviewer: String? = null, val scores: Map<String, Int> = emptyMap(),
+    val score_pct: Int? = null, val went_well: String? = null, val improve: String? = null, val task: String? = null, val task_due: String? = null,
+    val task_done_at: String? = null, val seen_at: String? = null, val created_at: String, val started_at: String? = null,
+    val duration_sec: Int = 0, val lead_name: String? = null, val phone: String = "", val recording_status: String? = null, val recording_path: String? = null,
+)
+
 @Serializable data class LeadMini(val name: String = "", val phone: String = "")
 @Serializable data class FollowUp(
     val id: String, val lead_id: String, val due_at: String, val status: String, val reason: String? = null,
@@ -235,6 +242,16 @@ object Repo {
 
     suspend fun myNewLeads(orgId: String, sinceIso: String): NewLeads =
         json.decodeFromString(db.rpc("my_new_leads", buildJsonObject { put("p_org", orgId); put("p_since", sinceIso) }).data)
+
+    suspend fun myReviews(orgId: String): List<CallReview> {
+        val uid = Backend.uid ?: return emptyList()
+        val all: List<CallReview> = json.decodeFromString(db.rpc("review_list", buildJsonObject { put("p_org", orgId); put("p_limit", 100) }).data)
+        return all.filter { it.rep_id == uid }
+    }
+
+    suspend fun markReview(id: String, taskDone: Boolean) {
+        db.rpc("mark_review", buildJsonObject { put("p_id", id); put("p_task_done", taskDone) })
+    }
 
     suspend fun myBatches(orgId: String): List<BatchSummary> =
         json.decodeFromString(db.rpc("my_batches", buildJsonObject { put("p_org", orgId) }).data)

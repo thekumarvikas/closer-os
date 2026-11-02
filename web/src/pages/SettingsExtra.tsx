@@ -193,23 +193,23 @@ export function WhatsAppTemplates() {
   )
 }
 
-/** Quick note tags: reps add them to a call's notes with one tap in the app. */
-export function NoteTags() {
+/** A company list kept in organizations.settings (quick note tags, call review checklist). */
+function SettingList({ settingKey, title, text, placeholder, fallback = [] }: { settingKey: 'note_tags' | 'review_criteria'; title: string; text: string; placeholder: string; fallback?: string[] }) {
   const { org, refresh } = useOrg()
-  const [tags, setTags] = useState<string[]>(org.settings?.note_tags ?? [])
-  const [text, setText] = useState('')
+  const [tags, setTags] = useState<string[]>((org.settings?.[settingKey] as string[] | undefined) ?? fallback)
+  const [value, setValue] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   async function save(next: string[]) {
     setTags(next)
-    const { error } = await supabase.from('organizations').update({ settings: { ...(org.settings ?? {}), note_tags: next } }).eq('id', org.id)
+    const { error } = await supabase.from('organizations').update({ settings: { ...(org.settings ?? {}), [settingKey]: next } }).eq('id', org.id)
     setError(error ? errorText(error) : null)
     if (!error) { setSaved(true); setTimeout(() => setSaved(false), 1500); refresh() }
   }
   return (
     <Card className="p-5 lg:col-span-2">
-      <h2 className="font-semibold">Quick note tags {saved && <span className="ml-2 text-xs font-normal text-emerald-600">Saved ✓</span>}</h2>
-      <p className="mb-3 mt-1 text-sm text-slate-500">Reps tap these to add them to a call's notes in the app — fast, and the same words for everyone, so you can see patterns (e.g. how many leads raise a price objection).</p>
+      <h2 className="font-semibold">{title} {saved && <span className="ml-2 text-xs font-normal text-emerald-600">Saved ✓</span>}</h2>
+      <p className="mb-3 mt-1 text-sm text-slate-500">{text}</p>
       <ErrorBox error={error} />
       <div className="mb-3 flex flex-wrap gap-2">
         {tags.map(t => (
@@ -217,15 +217,22 @@ export function NoteTags() {
             {t}<button className="text-brand-700/60 hover:text-red-600" onClick={() => save(tags.filter(x => x !== t))} aria-label={`Remove ${t}`}><Trash2 className="h-3.5 w-3.5" /></button>
           </span>
         ))}
-        {tags.length === 0 && <span className="text-sm text-slate-500">No tags yet.</span>}
+        {tags.length === 0 && <span className="text-sm text-slate-500">Nothing yet.</span>}
       </div>
-      <form className="flex gap-2" onSubmit={e => { e.preventDefault(); const t = text.trim(); if (t && !tags.includes(t)) save([...tags, t]); setText('') }}>
-        <input className="input" placeholder="New tag, e.g. Wants demo" value={text} onChange={e => setText(e.target.value)} maxLength={40} />
-        <Button type="submit" disabled={!text.trim()}><Plus className="h-4 w-4" /> Add</Button>
+      <form className="flex gap-2" onSubmit={e => { e.preventDefault(); const t = value.trim(); if (t && !tags.includes(t)) save([...tags, t]); setValue('') }}>
+        <input className="input" placeholder={placeholder} value={value} onChange={e => setValue(e.target.value)} maxLength={40} />
+        <Button type="submit" disabled={!value.trim()}><Plus className="h-4 w-4" /> Add</Button>
       </form>
     </Card>
   )
 }
+
+export const NoteTags = () => <SettingList settingKey="note_tags" title="Quick note tags" placeholder="New tag, e.g. Wants demo"
+  text="Reps tap these to add them to a call's notes in the app — fast, and the same words for everyone, so you can see patterns (e.g. how many leads raise a price objection)." />
+
+export const ReviewChecklist = () => <SettingList settingKey="review_criteria" title="Call review checklist" placeholder="New item, e.g. Mentioned the offer deadline"
+  fallback={['Opening & rapport', 'Understanding the need', 'Explaining the offer', 'Handling objections', 'Closing / next step', 'Tone & confidence']}
+  text="What managers score (1–5) when they review a call on the Call reviews page. Changing it doesn't change old reviews." />
 
 /** Numbers never tracked: personal, family, office lines. Their calls are not uploaded. */
 export function ExcludedNumbers() {

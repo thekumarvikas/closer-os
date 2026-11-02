@@ -64,7 +64,7 @@ Everything from the original product prompt plus the owner's feedback, with stat
 - ✅ All / Dialled / Incoming filter
 - ✅ Follow-up discipline (on time / late / not called)
 - ✅ Targets per rep (daily calls, conversations, talk time, sales) and achievement % — dashboard Reports → Targets, app Home
-- ⬜ Call auditing: score a call, feedback, coaching tasks
+- ✅ Call reviews: score a call on the company checklist, feedback, coaching tasks; reps see it in the app; team scores
 - ⬜ Leaderboard in the app
 
 ## 6. Docs (sales knowledge hub)

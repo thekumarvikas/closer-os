@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.9.1
+## Android app (`android/`) — v0.9.2
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -326,6 +326,18 @@ intelligence → Play Store launch.
   "Check IndiaMART now" calls it with ?source=<id> + user JWT. Calls IndiaMART CRM API v2
   (crmListing, IST times, max 7-day window) → ingest_lead (default field_map sender_city/state,
   query_product_name). Not tested against a real key yet.
+
+## Call reviews / coaching (v0.9.2, Nov 2026)
+- call_reviews (migration 0027): one per call; scores jsonb {checklist item: 1–5}, score_pct (avg×20),
+  went_well, improve, task + task_due, task_done_at, seen_at. Checklist =
+  organizations.settings.review_criteria (6 defaults; Settings → Call review checklist).
+  save_call_review (managers, not own calls), calls_to_review (recorded first, min length, not yet
+  reviewed), review_list, mark_review (rep: seen / task done), review_scores (avg per rep per item).
+- Dashboard "Call reviews" page (managers): filters, To review (+ random call), Reviewed (score,
+  task status, seen), Team scores (per item, red < 3, CSV); review modal plays the recording
+  (PlayButton exported from CallLog), 1–5 buttons per item, feedback, coaching task.
+- App: Home "🎯 New feedback from your manager" card → FeedbackScreen (stars per item, 👍/🎯 text,
+  coaching task with "Mark as done", play the call); opening marks it seen.
 
 ## Play Protect block (Nov 2026)
 - 0.5.0+ was blocked on the owner's Xiaomi: "App blocked to protect your device" (Google Play Protect

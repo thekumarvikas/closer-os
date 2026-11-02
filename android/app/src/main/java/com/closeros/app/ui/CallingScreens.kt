@@ -72,6 +72,21 @@ fun HomeScreen(vm: AppViewModel) {
         }
         item { SetupBanner(vm) }
         vm.progress?.let { p -> item { TargetsCard(p) } }
+        val newFeedback = vm.reviews.count { it.seen_at == null }
+        val openTasks = vm.reviews.count { it.task != null && it.task_done_at == null }
+        if (vm.reviews.isNotEmpty()) item {
+            Card(Modifier.fillMaxWidth().clickable { vm.showFeedback = true },
+                colors = CardDefaults.cardColors(containerColor = if (newFeedback > 0) Color(0xFFEFF6FF) else Color.White)) {
+                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(if (newFeedback > 0) "🎯 New feedback from your manager ($newFeedback)" else "🎯 My call feedback", fontWeight = FontWeight.SemiBold)
+                        Text(listOfNotNull(vm.reviews.mapNotNull { it.score_pct }.takeIf { it.isNotEmpty() }?.let { "Average score ${it.average().toInt()}%" },
+                            if (openTasks > 0) "$openTasks coaching task${if (openTasks > 1) "s" else ""} to do" else null).joinToString(" · "), fontSize = 13.sp, color = Brand.muted)
+                    }
+                    Text("Open ›", color = Brand.primary, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
         item {
             Card(Modifier.fillMaxWidth().clickable { vm.openPlaybook(null) }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
                 Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {

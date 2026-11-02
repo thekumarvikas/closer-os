@@ -3,7 +3,7 @@ export type Role = 'owner' | 'admin' | 'manager' | 'rep'
 export interface Organization {
   id: string; name: string; country_code: string; phone_prefix: string
   currency: string; timezone: string; date_format: string
-  settings: { call_tracking?: 'all' | 'leads'; track_whatsapp?: boolean; note_tags?: string[] } & Record<string, unknown>
+  settings: { call_tracking?: 'all' | 'leads'; track_whatsapp?: boolean; note_tags?: string[]; review_criteria?: string[] } & Record<string, unknown>
 }
 export interface Profile { id: string; email: string | null; full_name: string | null; avatar_url: string | null; phone?: string | null }
 export interface Member { org_id: string; user_id: string; role: Role; status: 'active' | 'deactivated'; joined_at: string; profile?: Profile | null }

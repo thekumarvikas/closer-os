@@ -11,6 +11,7 @@ import Batches from './pages/Batches'
 import LeadSources from './pages/LeadSources'
 import Playbook from './pages/Playbook'
 import Announcements from './pages/Announcements'
+import Reviews from './pages/Reviews'
 import BatchDetail from './pages/BatchDetail'
 import Calls from './pages/Calls'
 import FollowUps from './pages/FollowUps'
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="playbook" element={<Playbook />} />
         {isManager && <Route path="team" element={<Team />} />}
         {isManager && <Route path="announcements" element={<Announcements />} />}
+        {isManager && <Route path="reviews" element={<Reviews />} />}
         {isManager && <Route path="lead-sources" element={<LeadSources />} />}
         {isAdmin && <Route path="settings" element={<Settings />} />}
         <Route path="*" element={<Navigate to="/" replace />} />

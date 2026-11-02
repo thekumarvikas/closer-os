@@ -78,6 +78,7 @@ fun HomeScreen(vm: AppViewModel) {
             }
         }
         item { SetupBanner(vm) }
+        if (vm.leaderboard.size >= 2) item { LeaderboardCard(vm) }
         item {
             vm.progress?.let { p -> TargetsCard(p) } ?: Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
                 Column(Modifier.padding(14.dp)) {

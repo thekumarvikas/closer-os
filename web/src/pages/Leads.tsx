@@ -85,6 +85,11 @@ export default function Leads() {
   useEffect(() => { setPage(0) }, [q, assignee, stage, source])
 
   const refresh = () => { setSelected(new Set()); load(); setVersion(v => v + 1) }
+  async function bulk(p: Record<string, unknown>) {
+    const { data, error } = await supabase.rpc('bulk_update_leads', { p_org: org.id, p_ids: [...selected], p })
+    if (error) return setError(errorText(error))
+    setError(null); alert(`${data} lead${data === 1 ? '' : 's'} updated`); refresh()
+  }
   const allOnPage = !!leads?.length && leads.every(l => selected.has(l.id))
 
   return (
@@ -121,6 +126,14 @@ export default function Leads() {
           <div className="flex items-center gap-3 border-b border-slate-200 bg-brand-50 px-4 py-2 text-sm">
             <b>{selected.size} selected</b>
             <Button variant="secondary" className="!py-1" onClick={() => setShowAssign(true)}><UserPlus className="h-4 w-4" /> Assign</Button>
+            {dir && dir.stages.length > 0 && (
+              <select className="input !w-auto !py-1" value="" onChange={e => e.target.value && bulk({ stage_id: e.target.value })}>
+                <option value="">Move to stage…</option>{dir.stages.map(st => <option key={st.id} value={st.id}>{st.name}</option>)}
+              </select>
+            )}
+            <Button variant="secondary" className="!py-1" onClick={() => { const t = prompt('Tag to add (e.g. VIP, Hindi, Batch 12)')?.trim(); if (t) bulk({ add_tag: t }) }}>+ Tag</Button>
+            <Button variant="secondary" className="!py-1" onClick={() => bulk({ do_not_call: true })}>Do not call</Button>
+            <Button variant="ghost" className="!py-1 text-red-600" onClick={() => confirm(`Delete ${selected.size} leads? Their calls stay in reports.`) && bulk({ delete: true })}>Delete</Button>
             <button className="text-slate-500 hover:underline" onClick={() => setSelected(new Set())}>Clear</button>
           </div>
         )}

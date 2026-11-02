@@ -162,6 +162,7 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
                 listOfNotNull(l.profession, l.company, l.city).joinToString(" · ").takeIf { it.isNotEmpty() }?.let { Text(it, color = Brand.muted) }
                 listOfNotNull(l.source, l.campaign).joinToString(" · ").takeIf { it.isNotEmpty() }?.let { Text("Source: $it", color = Brand.muted, fontSize = 14.sp) }
                 l.next_follow_up_at?.let { Text("Next follow-up: ${fmtWhen(it)}", color = Brand.primary, fontSize = 14.sp) }
+                BestTimeLine(l.id)
                 l.batch_leads.sortedByDescending { it.batch?.webinar_at ?: "" }.forEach { b ->
                     Text("${b.batch?.name ?: "Webinar"}: " + when { b.watch_minutes == null -> "attendance not uploaded"; b.watch_minutes > 0 -> "watched ${b.watch_minutes} min"; else -> "didn't join" },
                         fontSize = 14.sp, color = Brand.muted)

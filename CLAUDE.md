@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.9.6
+## Android app (`android/`) — v0.9.7
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -415,6 +415,24 @@ intelligence → Play Store launch.
 - Android 13+ "Restricted setting" when enabling notification access for a sideloaded app: fix is
   App info → ⋮ → "Allow restricted settings". Phone setup WhatsApp item explains it + "Open app
   info" button.
+
+## Speed + tools (v0.9.7, Nov 2026)
+- Migration 0033: trigram GIN indexes (lead_search_text(leads) immutable fn, phone, note text, call
+  notes) + btree (leads org/created, org/assigned/assigned_at, org/last_outcome; follow_ups org/due;
+  announcement_acks open; calls with recordings). search_leads rewritten as UNION of indexed
+  lookups. recording_status gains 'expired' (enum value must be added in its own statement).
+- bulk_update_leads(org, ids, {stage_id|assigned_to|do_not_call|add_tag|remove_tag|delete}) —
+  managers, audit-logged; dashboard Leads selected-bar: Assign, Move to stage, + Tag, Do not call,
+  Delete (soft).
+- leaderboard(org, from, to): talk_sec, conversations, calls, sales for active reps/managers (+
+  anyone with calls); hidden from reps if settings.show_leaderboard = false. App Home card
+  "🏆 Leaderboard today" + LeaderboardScreen (today/week/month × metric).
+- best_time_to_call(lead): lead's most frequent pick-up hour, else team's best connect-rate hour
+  (30 days, ≥20 calls). Shown in GlanceCard and lead detail (BestTimeLine).
+- Recording retention: settings.recording_retention_days (Settings → Recordings & team); pg_cron
+  'recording-cleanup' daily → edge function recording-cleanup (cron secret) deletes files via
+  Storage API and marks calls 'expired'.
+- App Home refresh loads its RPCs in parallel.
 
 ## Play Protect block (Nov 2026)
 - 0.5.0+ was blocked on the owner's Xiaomi: "App blocked to protect your device" (Google Play Protect

@@ -331,3 +331,29 @@ export function AppLeadFilters() {
     </Card>
   )
 }
+
+/** Recordings kept for N days, and whether reps see the team leaderboard. */
+export function RecordingAndTeamSettings() {
+  const { org, refresh } = useOrg()
+  const [days, setDays] = useState<string>(String(org.settings?.recording_retention_days ?? ''))
+  const [board, setBoard] = useState<boolean>(org.settings?.show_leaderboard ?? true)
+  const [saved, setSaved] = useState(false)
+  async function save(next: { recording_retention_days?: number | null; show_leaderboard?: boolean }) {
+    await supabase.from('organizations').update({ settings: { ...(org.settings ?? {}), ...next } }).eq('id', org.id)
+    setSaved(true); setTimeout(() => setSaved(false), 1500); refresh()
+  }
+  return (
+    <Card className="p-5 lg:col-span-2">
+      <h2 className="font-semibold">Recordings & team {saved && <span className="ml-2 text-xs font-normal text-emerald-600">Saved ✓</span>}</h2>
+      <div className="mt-3 grid gap-4 sm:grid-cols-2">
+        <Field label="Keep call recordings for" hint="Older recordings are deleted automatically every night (saves storage, respects privacy). Call details stay.">
+          <select className="input" value={days} onChange={e => { setDays(e.target.value); save({ recording_retention_days: e.target.value ? +e.target.value : null }) }}>
+            <option value="">Always keep</option>{[30, 60, 90, 180, 365].map(d => <option key={d} value={d}>{d} days</option>)}
+          </select>
+        </Field>
+        <label className="flex items-center gap-2 pt-6 text-sm"><input type="checkbox" checked={board} onChange={e => { setBoard(e.target.checked); save({ show_leaderboard: e.target.checked }) }} />
+          Show the team leaderboard to reps in the app (talk time, conversations, sales)</label>
+      </div>
+    </Card>
+  )
+}

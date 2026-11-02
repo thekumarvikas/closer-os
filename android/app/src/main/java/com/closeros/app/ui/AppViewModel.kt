@@ -89,6 +89,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var needsSetup by mutableStateOf(!store.setupDone)
     var callRequest by mutableStateOf<Lead?>(null)
     var showSetup by mutableStateOf(false)
+    var leaderboard by mutableStateOf<List<com.closeros.app.data.BoardRow>>(emptyList())
+    var showLeaderboard by mutableStateOf(false)
     var showDialer by mutableStateOf(false)
     var showReports by mutableStateOf(false)
     var access by mutableStateOf<com.closeros.app.data.OrgAccess?>(null)
@@ -221,11 +223,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun refreshHome() = viewModelScope.launch {
         val m = membership ?: return@launch
-        runCatching { stats = Repo.todayStats(m.organization) }
-        runCatching { followUps = Repo.followUps(m.org_id); FollowUpAlarms.scheduleAll(ctx, followUps) }
-        runCatching { pastFollowUps = Repo.pastFollowUps(m.org_id) }
-        runCatching { progress = Repo.myProgressToday(m.organization) }
-        runCatching { access = Repo.orgAccess(m.org_id) }
+        // Load everything Home needs at the same time (faster than one after another).
+        kotlinx.coroutines.coroutineScope {
+            launch { runCatching { stats = Repo.todayStats(m.organization) } }
+            launch { runCatching { followUps = Repo.followUps(m.org_id); FollowUpAlarms.scheduleAll(ctx, followUps) } }
+            launch { runCatching { pastFollowUps = Repo.pastFollowUps(m.org_id) } }
+            launch { runCatching { progress = Repo.myProgressToday(m.organization) } }
+            launch { runCatching { access = Repo.orgAccess(m.org_id) } }
+            launch { runCatching { leaderboard = Repo.leaderboard(m.organization, "today") } }
+        }
         loadReviews()
         checkAlerts()
         loadToday()

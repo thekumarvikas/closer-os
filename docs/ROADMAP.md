@@ -13,7 +13,7 @@ Everything from the original product prompt plus the owner's feedback, with stat
 - 🟡 Facebook / Instagram Ads — works through Pabbly/Zapier; direct "Connect Facebook Page" needs Meta approval
 - ✅ IndiaMART direct connection (CRM key, every 10 minutes) — needs the owner's key to test
 - ✅ Notification to the rep when a new lead is assigned
-- 🟡 Lead export (CSV) from the Leads page ✅; bulk edit (stage, tags) still to do
+- ✅ Lead export (CSV) and bulk actions (assign, stage, tag, do-not-call, delete)
 - ✅ Per-company "Numbers not to track" list
 
 ## 2. Calling (Android app)
@@ -29,7 +29,7 @@ Everything from the original product prompt plus the owner's feedback, with stat
 - ✅ Webinar / event queues: reminder calls before, sales calls after (purpose + batch on every call, profession capture), with sort (watch time, profession priority, …) and filters
 - ⬜ SIM licences (each SIM registered to a company, confirmed by the rep)
 - ⬜ Offline lead cache (leads viewable without internet)
-- ⬜ Best-time-to-call ordering of the queue
+- 🟡 Best time to call shown per lead ✅; ordering the queue by it still to do
 - ⛔ Who hung up — Android doesn't tell normal apps (dropped)
 - ⛔ Voicemail drop / live objection prompts on normal SIM calls (need cloud calling)
 
@@ -48,7 +48,7 @@ Everything from the original product prompt plus the owner's feedback, with stat
 - ✅ Missing recordings flagged
 - ⬜ Recording policy page: who has recording on, requests to switch it off, approvals, expiry
 - ✅ Recording setup status per device on the dashboard (Team → Phones & call recordings; app "Check now")
-- ⬜ Retention (auto-delete after N days) and deletion requests
+- 🟡 Retention: auto-delete recordings after N days ✅; deletion requests still to do
 - ⛔ Phones with Google's Phone app keep recordings private → paid cloud-calling add-on later
 
 ## 4. Webinars, events & batches
@@ -65,7 +65,7 @@ Everything from the original product prompt plus the owner's feedback, with stat
 - ✅ Follow-up discipline (on time / late / not called)
 - ✅ Targets per rep (daily calls, conversations, talk time, sales) and achievement % — dashboard Reports → Targets, app Home
 - ✅ Call reviews: score a call on the company checklist, feedback, coaching tasks; reps see it in the app; team scores
-- ⬜ Leaderboard in the app
+- ✅ Leaderboard in the app (today / week / month)
 
 ## 6. Docs (sales knowledge hub)
 - 🟡 WhatsApp messages (company + personal)

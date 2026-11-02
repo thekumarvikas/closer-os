@@ -156,6 +156,9 @@ data class LeadFilters(
         (if (neverCalled) 1 else 0) + custom.count { it.value.isNotEmpty() }
 }
 
+@Serializable data class BoardRow(val user_id: String, val name: String = "", val calls: Int = 0, val conversations: Int = 0, val talk_sec: Int = 0, val sales: Int = 0)
+@Serializable data class BestTime(val hour: Int, val source: String, val picked: Int? = null, val tries: Int? = null, val rate: Int? = null)
+
 @Serializable data class LeadMini(val name: String = "", val phone: String = "")
 @Serializable data class FollowUp(
     val id: String, val lead_id: String, val due_at: String, val status: String, val reason: String? = null,
@@ -330,6 +333,20 @@ object Repo {
             put("p_from", from?.let { kotlinx.serialization.json.JsonPrimitive(it.toString()) } ?: kotlinx.serialization.json.JsonNull)
             put("p_to", to?.let { kotlinx.serialization.json.JsonPrimitive(it.toString()) } ?: kotlinx.serialization.json.JsonNull)
         }).data).jsonObject
+
+    suspend fun leaderboard(org: Org, period: String): List<BoardRow> {
+        val zone = runCatching { ZoneId.of(org.timezone) }.getOrDefault(ZoneId.of("Asia/Kolkata"))
+        val today = LocalDate.now(zone)
+        val from = when (period) { "week" -> today.minusDays((today.dayOfWeek.value - 1).toLong()); "month" -> today.withDayOfMonth(1); else -> today }
+        return json.decodeFromString(db.rpc("leaderboard", buildJsonObject {
+            put("p_org", org.id); put("p_from", from.atStartOfDay(zone).toInstant().toString()); put("p_to", today.plusDays(1).atStartOfDay(zone).toInstant().toString())
+        }).data)
+    }
+
+    suspend fun bestTime(leadId: String): BestTime? = runCatching {
+        val d = db.rpc("best_time_to_call", buildJsonObject { put("p_lead", leadId) }).data
+        if (d.isBlank() || d == "null") null else json.decodeFromString<BestTime>(d)
+    }.getOrNull()
 
     suspend fun teamBrief(orgId: String): List<IdName> =
         json.parseToJsonElement(db.rpc("team_brief", buildJsonObject { put("p_org", orgId) }).data).jsonArray.map {

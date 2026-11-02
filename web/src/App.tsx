@@ -12,6 +12,8 @@ import LeadSources from './pages/LeadSources'
 import Playbook from './pages/Playbook'
 import Announcements from './pages/Announcements'
 import Reviews from './pages/Reviews'
+import Billing from './pages/Billing'
+import SuperAdmin from './pages/SuperAdmin'
 import BatchDetail from './pages/BatchDetail'
 import Calls from './pages/Calls'
 import FollowUps from './pages/FollowUps'
@@ -19,7 +21,7 @@ import Team from './pages/Team'
 import Settings from './pages/Settings'
 
 export default function App() {
-  const { session, loading, org, isAdmin, isManager } = useSession()
+  const { session, loading, org, isAdmin, isManager, profile } = useSession()
   if (loading) return <Spinner />
   if (!session) return <AuthPage />
   if (!org) return <Onboarding />
@@ -39,6 +41,8 @@ export default function App() {
         {isManager && <Route path="reviews" element={<Reviews />} />}
         {isManager && <Route path="lead-sources" element={<LeadSources />} />}
         {isAdmin && <Route path="settings" element={<Settings />} />}
+        {isAdmin && <Route path="billing" element={<Billing />} />}
+        {profile?.is_super_admin && <Route path="admin" element={<SuperAdmin />} />}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

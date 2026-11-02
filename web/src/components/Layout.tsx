@@ -1,6 +1,6 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, Link, useLocation } from 'react-router-dom'
 import { useState, type FormEvent } from 'react'
-import { LayoutDashboard, BarChart3, Video, Plug, BookOpen, Megaphone, ClipboardCheck, Users, PhoneCall, CalendarClock, UserCog, Settings, LogOut, Menu, X } from 'lucide-react'
+import { LayoutDashboard, BarChart3, Video, Plug, BookOpen, Megaphone, ClipboardCheck, CreditCard, ShieldCheck, Users, PhoneCall, CalendarClock, UserCog, Settings, LogOut, Menu, X } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { Button, ErrorBox, Field, Modal } from './ui'
 import { useSession } from '../lib/session'
@@ -19,10 +19,13 @@ const nav = [
   { to: '/announcements', label: 'Announcements', icon: Megaphone, manager: true },
   { to: '/team', label: 'Team', icon: UserCog, manager: true },
   { to: '/settings', label: 'Settings', icon: Settings, admin: true },
+  { to: '/billing', label: 'Plan & billing', icon: CreditCard, admin: true },
+  { to: '/admin', label: 'Super Admin', icon: ShieldCheck, superAdmin: true },
 ]
 
 export default function Layout() {
-  const { org, role, profile, memberships, selectOrg, isAdmin, isManager } = useSession()
+  const { org, role, profile, memberships, selectOrg, isAdmin, isManager, access } = useSession()
+  const location = useLocation()
   const [open, setOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
 
@@ -40,7 +43,7 @@ export default function Layout() {
         <p className="mx-5 mb-3 truncate text-sm text-brand-200">{org?.name}</p>
       )}
       <nav className="flex-1 space-y-0.5 px-3">
-        {nav.filter(n => (!n.admin || isAdmin) && (!n.manager || isManager)).map(n => (
+        {nav.filter(n => (!n.admin || isAdmin) && (!n.manager || isManager) && (!('superAdmin' in n) || profile?.is_super_admin)).map(n => (
           <NavLink key={n.to} to={n.to} end={n.end} onClick={() => setOpen(false)}
             className={({ isActive }) => `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${isActive ? 'bg-white/15 text-white' : 'text-brand-100 hover:bg-white/10 hover:text-white'}`}>
             <n.icon className="h-4 w-4" /> {n.label}
@@ -72,7 +75,23 @@ export default function Layout() {
         <button onClick={() => setOpen(true)} aria-label="Open menu"><Menu className="h-5 w-5" /></button>
         <span className="font-semibold">Closer OS</span>
       </header>
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8"><Outlet /></main>
+      {access && access.state !== 'active' && (
+        <div className={`px-4 py-2 text-center text-sm ${access.state === 'trial' ? 'bg-sky-50 text-sky-800' : 'bg-red-50 text-red-800'}`}>
+          {access.state === 'trial' && <>Free trial: <b>{access.days_left} day{access.days_left === 1 ? '' : 's'} left</b>. </>}
+          {access.state === 'grace' && <>Your plan has ended — please renew to keep using Closer OS. </>}
+          {access.state === 'expired' && <>Your plan has ended. Your data is safe. </>}
+          {isAdmin ? <Link to="/billing" className="font-semibold underline">{access.state === 'trial' ? 'Choose a plan' : 'Renew now'}</Link> : 'Please ask your company owner to renew.'}
+        </div>
+      )}
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        {access?.state === 'expired' && !profile?.is_super_admin && !['/billing', '/admin'].includes(location.pathname) ? (
+          <div className="mx-auto mt-16 max-w-md rounded-xl bg-white p-8 text-center shadow">
+            <h2 className="text-xl font-semibold">Your Closer OS plan has ended</h2>
+            <p className="mt-2 text-slate-600">Nothing is deleted — all your leads, calls and reports are kept. {isAdmin ? 'Renew to continue.' : 'Ask your company owner to renew the plan.'}</p>
+            {isAdmin && <Link to="/billing" className="mt-4 inline-block rounded-lg bg-brand-600 px-4 py-2 font-medium text-white">Go to Plan & billing</Link>}
+          </div>
+        ) : <Outlet />}
+      </main>
       {profileOpen && <MyProfile onClose={() => setProfileOpen(false)} />}
     </div>
   )

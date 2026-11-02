@@ -75,6 +75,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var needsSetup by mutableStateOf(!store.setupDone)
     var callRequest by mutableStateOf<Lead?>(null)
     var showSetup by mutableStateOf(false)
+    var access by mutableStateOf<com.closeros.app.data.OrgAccess?>(null)
     var showFeedback by mutableStateOf(false)
     var reviews by mutableStateOf<List<com.closeros.app.data.CallReview>>(emptyList())
     fun loadReviews() = viewModelScope.launch {
@@ -208,6 +209,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         runCatching { followUps = Repo.followUps(m.org_id); FollowUpAlarms.scheduleAll(ctx, followUps) }
         runCatching { pastFollowUps = Repo.pastFollowUps(m.org_id) }
         runCatching { progress = Repo.myProgressToday(m.organization) }
+        runCatching { access = Repo.orgAccess(m.org_id) }
         loadReviews()
         checkAlerts()
         loadToday()

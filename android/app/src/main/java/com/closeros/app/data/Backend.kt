@@ -136,6 +136,8 @@ object Backend {
     val duration_sec: Int = 0, val lead_name: String? = null, val phone: String = "", val recording_status: String? = null, val recording_path: String? = null,
 )
 
+@Serializable data class OrgAccess(val state: String = "active", val ends_at: String? = null, val grace_ends_at: String? = null, val days_left: Int? = null)
+
 @Serializable data class LeadMini(val name: String = "", val phone: String = "")
 @Serializable data class FollowUp(
     val id: String, val lead_id: String, val due_at: String, val status: String, val reason: String? = null,
@@ -252,6 +254,9 @@ object Repo {
     suspend fun markReview(id: String, taskDone: Boolean) {
         db.rpc("mark_review", buildJsonObject { put("p_id", id); put("p_task_done", taskDone) })
     }
+
+    suspend fun orgAccess(orgId: String): OrgAccess =
+        json.decodeFromString(db.rpc("org_access", buildJsonObject { put("p_org", orgId) }).data)
 
     suspend fun myBatches(orgId: String): List<BatchSummary> =
         json.decodeFromString(db.rpc("my_batches", buildJsonObject { put("p_org", orgId) }).data)

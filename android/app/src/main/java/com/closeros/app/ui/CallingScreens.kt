@@ -70,6 +70,12 @@ fun HomeScreen(vm: AppViewModel) {
             Text("Hi ${vm.profile?.full_name?.substringBefore(' ') ?: ""} 👋", fontSize = 24.sp, fontWeight = FontWeight.Bold)
             Text(m.organization.name, color = Brand.muted)
         }
+        if (vm.access?.state == "grace") item {
+            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFEE2E2))) {
+                Text("Your company's Closer OS plan has ended. Please ask your company owner to renew it on the dashboard soon.",
+                    Modifier.padding(14.dp), color = Brand.red, fontSize = 14.sp)
+            }
+        }
         item { SetupBanner(vm) }
         vm.progress?.let { p -> item { TargetsCard(p) } }
         val newFeedback = vm.reviews.count { it.seen_at == null }

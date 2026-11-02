@@ -41,3 +41,16 @@ fun AnnouncementScreen(vm: AppViewModel, a: Announcement) {
         Text("Your manager sees when you acknowledged it.", fontSize = 12.sp, color = Brand.muted, modifier = Modifier.align(Alignment.CenterHorizontally))
     }
 }
+
+/** The company's plan has ended (after the grace period). Nothing to buy here — the owner renews on the dashboard. */
+@Composable
+fun PlanEndedScreen(vm: AppViewModel) {
+    Column(Modifier.fillMaxSize().background(Brand.bg).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("Closer OS is paused", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text("Your company's Closer OS plan has ended. Your leads, calls and notes are safe. Please ask your company owner or manager to renew it.",
+            color = Brand.muted, fontSize = 16.sp, lineHeight = 24.sp)
+        OutlinedButton(onClick = { vm.refreshHome() }) { Text("Check again") }
+        TextButton(onClick = { vm.signOut() }) { Text("Sign out") }
+    }
+}

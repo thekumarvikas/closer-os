@@ -78,11 +78,11 @@ Everything from the original product prompt plus the owner's feedback, with stat
 - ⬜ AI insights dashboard (common objections, skill gaps)
 
 ## 8. Subscriptions & billing
-- ⬜ Product catalogue (Call History per SIM, Power Dialer per seat, Recording per SIM, add-ons, bundles), monthly/annual, regional prices
-- ⬜ Entitlement engine (features switched on/off by what's paid)
-- ⬜ Razorpay checkout on the dashboard + Flexifunnels webhook for new customers; invoices
-- ⬜ Trial (7/14 days configurable), grace period, suspension without deleting data
-- ⬜ Super Admin area for Closer OS (all companies, pricing, coupons, revenue)
+- 🟡 Plans per user, monthly/yearly, set by Super Admin ✅; per-SIM add-ons, bundles, regional prices still to do
+- 🟡 Entitlements: trial/active/grace/expired + seat limit ✅; switching features off by plan still to do
+- 🟡 Razorpay checkout on the dashboard + receipts ✅; Flexifunnels new-customer signup still to do
+- ✅ Trial (7/14/21/30 days, set by Super Admin), grace period, pause without deleting data
+- 🟡 Super Admin area (companies, plans & prices, payment setup, revenue) ✅; coupons still to do
 
 ## 9. Platform & launch
 - ✅ Secure login, roles, company data isolation, audit log

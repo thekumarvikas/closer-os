@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.9.2
+## Android app (`android/`) — v0.9.3
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -338,6 +338,33 @@ intelligence → Play Store launch.
   (PlayButton exported from CallLog), 1–5 buttons per item, feedback, coaching task.
 - App: Home "🎯 New feedback from your manager" card → FeedbackScreen (stars per item, 👍/🎯 text,
   coaching task with "Mark as done", play the call); opening marks it seen.
+
+## Billing & subscriptions (v0.9.3, Nov 2026)
+- Migration 0028: plans (per-user price_month / price_year in ₹, features jsonb, min_seats,
+  is_public; example plans Starter 399/3990, Growth 699/6990, Pro 999/9990 — PLACEHOLDERS, owner sets
+  real prices in Super Admin), platform_settings (trial_days 14, grace_days 7, razorpay_key_id,
+  seller name/address), subscriptions (one per org: trialing|active|cancelled|complimentary, seats,
+  cycle, trial_ends_at, current_period_end, note), payments (Razorpay order/payment ids, period,
+  receipt_no from receipt_no_seq starting 1001). Trigger start_trial on new org (Growth trial).
+  Owner's org "Vikas Kumar Consulting" = complimentary; its owner (thesaleskumar@gmail.com — the
+  login email, not the account email) is profiles.is_super_admin.
+- org_access(org) → state trial|active|grace|expired (+ days_left, seats, seats_used, features).
+  price_quote (owner/admin), apply_payment (service role, idempotent, extends from current end).
+  Super Admin RPCs sa_companies, sa_update_subscription (audit-logged), sa_save_plan,
+  sa_save_settings (Razorpay key secret + webhook secret → Vault, never returned),
+  sa_secrets_status, sa_revenue; billing_secret(kind) service-role only.
+- Migration 0029: seat limit trigger on org_members for paid (active) subscriptions.
+- Edge function `billing` (verify_jwt=false): action order (price_quote as user → Razorpay Orders
+  API → payments row), action verify (HMAC order|payment with key secret → apply_payment),
+  /billing/webhook (X-Razorpay-Signature with webhook secret; payment.captured / order.paid).
+- Dashboard: "Plan & billing" (owner/admin): plan cards, monthly/yearly, users, total, Razorpay
+  Checkout (checkout.js), payments + printable receipt (no GST — not registered). "Super Admin"
+  (is_super_admin): companies (status, users, calls 7d, paid; edit: trial +7/+14, paid until,
+  complimentary, note), plans & prices, payments setup (trial/grace, receipts, Razorpay keys,
+  webhook URL), revenue by month. Banner for trial / grace; lock screen when expired (except
+  /billing and /admin). App: grace warning card; PlanEndedScreen when expired (never sells in app).
+- Not yet: Flexifunnels landing page → Razorpay → auto-create company; recurring auto-debit
+  (Razorpay Subscriptions); coupons; feature-by-plan gating (features stored, not enforced).
 
 ## Play Protect block (Nov 2026)
 - 0.5.0+ was blocked on the owner's Xiaomi: "App blocked to protect your device" (Google Play Protect

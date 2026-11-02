@@ -5,7 +5,10 @@ export interface Organization {
   currency: string; timezone: string; date_format: string
   settings: { call_tracking?: 'all' | 'leads'; track_whatsapp?: boolean; note_tags?: string[]; review_criteria?: string[] } & Record<string, unknown>
 }
-export interface Profile { id: string; email: string | null; full_name: string | null; avatar_url: string | null; phone?: string | null }
+export interface Profile { id: string; email: string | null; full_name: string | null; avatar_url: string | null; phone?: string | null; is_super_admin?: boolean }
+/** What the company may do now (org_access()). state: trial | active | grace | expired. */
+export interface Access { state: 'trial' | 'active' | 'grace' | 'expired'; status: string; plan: string | null; plan_id: string | null; features: Record<string, boolean>
+  seats: number; seats_used: number; cycle: 'month' | 'year' | null; ends_at: string | null; grace_ends_at: string | null; days_left: number | null }
 export interface Member { org_id: string; user_id: string; role: Role; status: 'active' | 'deactivated'; joined_at: string; profile?: Profile | null }
 export interface Team { id: string; org_id: string; name: string }
 export interface TeamMember { team_id: string; user_id: string; org_id: string; is_manager: boolean }

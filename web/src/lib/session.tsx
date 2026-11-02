@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
-import type { Member, Organization, Profile, Role } from './types'
+import type { Access, Member, Organization, Profile, Role } from './types'
 
 interface Ctx {
   session: Session | null
@@ -14,6 +14,8 @@ interface Ctx {
   isManager: boolean
   selectOrg: (id: string) => void
   refresh: () => Promise<void>
+  access: Access | null
+  reloadAccess: () => void
 }
 
 const SessionContext = createContext<Ctx | null>(null)
@@ -33,7 +35,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     // Join any company that invited this email address.
     await supabase.rpc('accept_my_invitations')
     const [{ data: p }, { data: m }] = await Promise.all([
-      supabase.from('profiles').select('id,email,full_name,avatar_url,phone').eq('id', s.user.id).single(),
+      supabase.from('profiles').select('id,email,full_name,avatar_url,phone,is_super_admin').eq('id', s.user.id).single(),
       supabase.from('org_members').select('*, organization:organizations(*)').eq('user_id', s.user.id).eq('status', 'active'),
     ])
     setProfile(p as Profile | null)
@@ -51,6 +53,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [load])
 
   const current = memberships.find(m => m.org_id === orgId) ?? memberships[0] ?? null
+  const [access, setAccess] = useState<Access | null>(null)
+  const [accessVersion, setAccessVersion] = useState(0)
+  useEffect(() => {
+    if (!current) { setAccess(null); return }
+    supabase.rpc('org_access', { p_org: current.org_id }).then(({ data }) => setAccess((data as Access) ?? null))
+  }, [current?.org_id, accessVersion]) // eslint-disable-line react-hooks/exhaustive-deps
   const value = useMemo<Ctx>(() => ({
     session, loading, profile, memberships,
     org: current?.organization ?? null,
@@ -59,7 +67,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     isManager: current?.role === 'owner' || current?.role === 'admin' || current?.role === 'manager',
     selectOrg: (id: string) => { setOrgId(id); try { localStorage.setItem(ORG_KEY, id) } catch { /* private mode */ } },
     refresh: () => load(session),
-  }), [session, loading, profile, memberships, current, load])
+    access, reloadAccess: () => setAccessVersion(v => v + 1),
+  }), [session, loading, profile, memberships, current, load, access])
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>
 }

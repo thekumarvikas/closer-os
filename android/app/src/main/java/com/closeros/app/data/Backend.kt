@@ -123,6 +123,12 @@ object Backend {
     val purpose: String = "both", val position: Int = 0, val status: String = "published", val created_by: String? = null, val review_note: String? = null,
 )
 
+@Serializable data class Announcement(
+    val id: String, val title: String, val body: String, val urgent: Boolean = false, val created_at: String,
+    val reminded_at: String? = null, val from: String? = null,
+)
+@Serializable data class NewLeads(val count: Int = 0, val names: List<String> = emptyList(), val latest: String? = null)
+
 @Serializable data class LeadMini(val name: String = "", val phone: String = "")
 @Serializable data class FollowUp(
     val id: String, val lead_id: String, val due_at: String, val status: String, val reason: String? = null,
@@ -219,6 +225,16 @@ object Repo {
             put("status", "pending"); put("created_by", Backend.uid)
         })
     }
+
+    suspend fun myAnnouncements(orgId: String): List<Announcement> =
+        json.decodeFromString(db.rpc("my_announcements", buildJsonObject { put("p_org", orgId) }).data)
+
+    suspend fun markAnnouncement(id: String, ack: Boolean) {
+        db.rpc("mark_announcement", buildJsonObject { put("p_id", id); put("p_ack", ack) })
+    }
+
+    suspend fun myNewLeads(orgId: String, sinceIso: String): NewLeads =
+        json.decodeFromString(db.rpc("my_new_leads", buildJsonObject { put("p_org", orgId); put("p_since", sinceIso) }).data)
 
     suspend fun myBatches(orgId: String): List<BatchSummary> =
         json.decodeFromString(db.rpc("my_batches", buildJsonObject { put("p_org", orgId) }).data)

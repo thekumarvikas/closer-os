@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity() {
     private fun handle(i: Intent?) {
         i?.getStringExtra("call_lead")?.let { vm.callLeadById(it); i.removeExtra("call_lead") }
         i?.getStringExtra("open_lead")?.let { vm.openLeadId = it; i.removeExtra("open_lead") }
+        i?.getStringExtra("open_tab")?.let { if (it == "leads") { vm.tab = Tab.Leads; vm.reloadLeads() }; i.removeExtra("open_tab") }
     }
 
     override fun onResume() {
@@ -71,6 +72,8 @@ fun Root(vm: AppViewModel) {
     LaunchedEffect(vm.callRequest) {
         vm.callRequest?.let { lead -> vm.callRequest = null; if (vm.pending == null) call(lead) else vm.message = "Save the outcome of your last call first" }
     }
+    // While the app is open, check for announcements every minute.
+    LaunchedEffect(vm.membership) { while (vm.membership != null) { vm.checkAlerts(); kotlinx.coroutines.delay(60_000) } }
     LaunchedEffect(vm.message) {
         vm.message?.let { Toast.makeText(ctx, it, Toast.LENGTH_SHORT).show(); vm.message = null }
     }
@@ -85,6 +88,7 @@ fun Root(vm: AppViewModel) {
             vm.needsSetup -> SetupScreen(vm)
             vm.showSetup -> SetupChecklistScreen(vm) { vm.showSetup = false }
             vm.pending != null -> OutcomeScreen(vm)
+            vm.announcements.isNotEmpty() -> AnnouncementScreen(vm, vm.announcements.first())
             vm.showPlaybook -> PlaybookScreen(vm)
             vm.openLeadId != null -> LeadDetailScreen(vm, vm.openLeadId!!) { call(it) }
             vm.queueActive -> QueueScreen(vm)

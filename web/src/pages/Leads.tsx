@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
-import { Plus, Upload, Search, Users, ChevronLeft, ChevronRight, UserPlus } from 'lucide-react'
+import { Plus, Upload, Search, Users, ChevronLeft, ChevronRight, UserPlus, Download } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
 import { useDirectory, type Directory } from '../lib/directory'
-import { fmtDate, fmtPhone, fmtMoney } from '../lib/format'
+import { fmtDate, fmtDateTime, fmtPhone, fmtMoney } from '../lib/format'
+import { downloadCsv } from '../lib/report'
 import type { Lead } from '../lib/types'
 import { Badge, Button, Card, Empty, ErrorBox, Field, Modal, PageHeader, Spinner } from '../components/ui'
 import LeadImport from './LeadImport'
@@ -29,10 +30,8 @@ export default function Leads() {
   const [openLead, setOpenLead] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
-    let query = supabase.from('leads').select('*', { count: 'exact' })
-      .eq('org_id', org.id).is('deleted_at', null)
-      .order('created_at', { ascending: false }).range(page * PAGE, page * PAGE + PAGE - 1)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const filtered = useCallback((query: any) => {
     const term = q.trim()
     if (term) {
       const digits = term.replace(/\D/g, '')
@@ -44,10 +43,40 @@ export default function Leads() {
     else if (assignee) query = query.eq('assigned_to', assignee)
     if (stage) query = query.eq('stage_id', stage)
     if (source) query = query.ilike('source', source)
+    return query
+  }, [q, assignee, stage, source])
+
+  const load = useCallback(async () => {
+    const query = filtered(supabase.from('leads').select('*', { count: 'exact' })
+      .eq('org_id', org.id).is('deleted_at', null)
+      .order('created_at', { ascending: false }).range(page * PAGE, page * PAGE + PAGE - 1))
     const { data, count, error } = await query
     if (error) { setError(errorText(error)); return }
     setError(null); setLeads(data as Lead[]); setCount(count ?? 0)
-  }, [org.id, page, q, assignee, stage, source])
+  }, [org.id, page, filtered])
+
+  const [exporting, setExporting] = useState(false)
+  /** Every lead matching the current filters (in pages of 1,000), as a spreadsheet file. */
+  async function exportCsv() {
+    if (!dir) return
+    setExporting(true)
+    const all: Lead[] = []
+    for (let from = 0; from < 50000; from += 1000) {
+      const { data, error } = await filtered(supabase.from('leads').select('*').eq('org_id', org.id).is('deleted_at', null)
+        .order('created_at', { ascending: false }).range(from, from + 999))
+      if (error) { setExporting(false); return setError(errorText(error)) }
+      all.push(...(data as Lead[]))
+      if ((data as Lead[]).length < 1000) break
+    }
+    setExporting(false)
+    const d = (x: string | null | undefined) => x ? fmtDateTime(x, org) : ''
+    downloadCsv(`closer-os-leads_${new Date().toISOString().slice(0, 10)}.csv`,
+      ['Name', 'Phone', 'Email', 'City', 'State', 'Company', 'Profession', 'Source', 'Campaign', 'Stage', 'Assigned to', 'Assigned on', 'Added on',
+       'Last call', 'Last outcome', 'Next follow-up', 'Deal value', 'Tags', 'Key facts', 'Notes'],
+      all.map(l => [l.name, l.phone, l.email ?? '', l.city ?? '', l.state ?? '', l.company ?? '', l.profession ?? '', l.source ?? '', l.campaign ?? '',
+        dir.stageOf(l.stage_id)?.name ?? '', dir.nameOf(l.assigned_to), d(l.assigned_at), d(l.created_at), d(l.last_call_at),
+        dir.outcomeOf(l.last_outcome_id)?.label ?? '', d(l.next_follow_up_at), l.deal_value ?? '', (l.tags ?? []).join(', '), l.key_facts ?? '', l.notes ?? '']))
+  }
 
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t) }, [load])
   useEffect(() => { setPage(0) }, [q, assignee, stage, source])
@@ -60,6 +89,7 @@ export default function Leads() {
       <PageHeader title="Leads" subtitle={`${count.toLocaleString('en-IN')} leads`} actions={
         <>
           {isManager && <Button variant="secondary" onClick={() => setShowImport(true)}><Upload className="h-4 w-4" /> Import</Button>}
+          {isManager && <Button variant="secondary" onClick={exportCsv} loading={exporting}><Download className="h-4 w-4" /> Export</Button>}
           <Button onClick={() => setShowAdd(true)}><Plus className="h-4 w-4" /> Add lead</Button>
         </>
       } />

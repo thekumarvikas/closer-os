@@ -164,7 +164,7 @@ intelligence → Play Store launch.
 ## Call tracking (decided Nov 2026)
 - Owner chose B: upload ALL calls (like Callyzer). Company setting organizations.settings
   .call_tracking = 'all' (default) | 'leads' (Settings → Company). sync_calls() enforces it.
-  Private/blank numbers are skipped. TODO: per-company "Exclude numbers" list (like Callyzer).
+  Private/blank numbers are skipped. Exclude list = excluded_numbers (Settings → Numbers not to track).
 
 ## Lead sources (automatic lead capture) — Nov 2026
 - Owner wants ALL: Facebook Ads, Flexifunnels, YouTube (Google Ads lead forms), Pabbly, Zapier,
@@ -181,9 +181,9 @@ intelligence → Play Store launch.
 - Dashboard page "Lead sources": cards, add-source wizard, private link + copy, Send test,
   step-by-step guides per tool (Pabbly, Zapier, Flexifunnels, Google Ads, Sheets Apps Script,
   website form), field matching from the last payload, last 25 events.
-- Not yet: IndiaMART pull (CRM key), direct Facebook, push notification to rep on new lead.
+- Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.9.0
+## Android app (`android/`) — v0.9.1
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -304,6 +304,28 @@ intelligence → Play Store launch.
 - App: Home "📖 Playbook" card, lead detail and queue ("Script & answers for this call") open
   PlaybookScreen; with a lead it fills variables; search; Copy / Open / Send on WhatsApp; Suggest
   dialog (with voice typing) → pending.
+
+## Announcements + lead tools (v0.9.1, Nov 2026)
+- Owner's idea: management sends a message every rep MUST acknowledge. announcements +
+  announcement_acks (migration 0025); send_announcement(org, {title, body, urgent, audience
+  all|teams|people, team_ids, user_ids}) creates an ack row per recipient; my_announcements,
+  mark_announcement(id, ack) (seen/acked), announcement_report, remind_announcement(id, close).
+  Dashboard page "Announcements" (managers): compose, progress "12 of 15 acknowledged", who
+  hasn't, Remind, Close. App: calls/TeamAlerts.kt pins an ongoing (non-swipeable) notification per
+  unacknowledged announcement (re-alerts after Remind); AnnouncementScreen blocks the app (after the
+  outcome screen) until "I have read and understood" + Acknowledge. Checked on sync (15 min), app
+  open and every minute while open. No Firebase push yet (owner would need a Firebase project) —
+  delivery is by polling.
+- New-lead alert: my_new_leads(org, since) → notification "3 new leads assigned to you" (opens Leads).
+- Lead export: Leads page "Export" (managers) = all leads matching filters, pages of 1,000, CSV.
+- excluded_numbers + set_excluded_number (admins; removes earlier non-lead calls with that number);
+  sync_calls skips them.
+- IndiaMART (migration 0026): lead_sources kind 'indiamart' + api_key, pulled_until, last_pull_at,
+  last_pull_error. pg_cron job 'indiamart-pull' every 10 min → pg_net POST to edge function
+  indiamart-pull (verify_jwt=false) with x-cron-secret from Vault (check_cron_secret()); manager
+  "Check IndiaMART now" calls it with ?source=<id> + user JWT. Calls IndiaMART CRM API v2
+  (crmListing, IST times, max 7-day window) → ingest_lead (default field_map sender_city/state,
+  query_product_name). Not tested against a real key yet.
 
 ## Play Protect block (Nov 2026)
 - 0.5.0+ was blocked on the owner's Xiaomi: "App blocked to protect your device" (Google Play Protect

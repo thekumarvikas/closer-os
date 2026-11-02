@@ -7,11 +7,11 @@ import { fmtDateTime } from '../lib/format'
 import type { Batch } from '../lib/types'
 import { Badge, Button, Card, Empty, ErrorBox, Field, Modal, PageHeader, Spinner } from '../components/ui'
 
-type Kind = 'facebook' | 'google_ads' | 'flexifunnels' | 'pabbly' | 'zapier' | 'webhook' | 'google_sheets'
+type Kind = 'facebook' | 'google_ads' | 'flexifunnels' | 'pabbly' | 'zapier' | 'webhook' | 'google_sheets' | 'indiamart'
 interface Source {
   id: string; org_id: string; name: string; kind: Kind; token: string; source_label: string | null; campaign: string | null
   batch_id: string | null; assign_mode: 'rules' | 'user' | 'none'; assign_to: string | null; field_map: Record<string, string>
-  google_key: string | null; is_active: boolean; received_count: number; last_received_at: string | null; created_at: string
+  google_key: string | null; api_key?: string | null; last_pull_at?: string | null; last_pull_error?: string | null; is_active: boolean; received_count: number; last_received_at: string | null; created_at: string
 }
 interface Event { id: number; received_at: string; payload: Record<string, unknown>; status: string; lead_id: string | null; error: string | null }
 
@@ -21,6 +21,7 @@ const kinds: { kind: Kind; title: string; text: string; label: string; color: st
   { kind: 'flexifunnels', title: 'Flexifunnels', text: 'Funnel and webinar registration forms', label: 'Flexifunnels', color: '#F97316' },
   { kind: 'pabbly', title: 'Pabbly Connect', text: 'Any app connected through Pabbly', label: 'Pabbly', color: '#22A06B' },
   { kind: 'zapier', title: 'Zapier', text: 'Any app connected through Zapier', label: 'Zapier', color: '#FF4F00' },
+  { kind: 'indiamart', title: 'IndiaMART', text: 'Buyer enquiries, pulled every 10 minutes', label: 'IndiaMART', color: '#2E3192' },
   { kind: 'google_sheets', title: 'Google Sheets', text: 'New rows in a sheet become leads', label: 'Google Sheets', color: '#0F9D58' },
   { kind: 'webhook', title: 'Website / any webhook', text: 'Your website form or any tool that can POST', label: 'Website', color: '#475569' },
 ]
@@ -113,15 +114,18 @@ function SourceForm({ kind, source, dir, batches, onClose, onSaved }:
   const [to, setTo] = useState(source?.assign_to ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [apiKey, setApiKey] = useState(source?.api_key ?? '')
 
   async function save(e: FormEvent) {
     e.preventDefault(); setBusy(true); setError(null)
     const row = { name: name.trim(), source_label: label.trim() || null, campaign: campaign.trim() || null, batch_id: batch || null,
-      assign_mode: mode, assign_to: mode === 'user' ? to || null : null }
+      assign_mode: mode, assign_to: mode === 'user' ? to || null : null,
+      ...(kind === 'indiamart' ? { api_key: apiKey.trim() || null } : {}) }
     const res = source
       ? await supabase.from('lead_sources').update(row).eq('id', source.id).select().single()
       : await supabase.from('lead_sources').insert({ ...row, kind, org_id: org.id, created_by: session?.user.id,
-          google_key: kind === 'google_ads' ? Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10) : null }).select().single()
+          google_key: kind === 'google_ads' ? Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10) : null,
+          ...(kind === 'indiamart' ? { field_map: { city: 'sender_city', state: 'sender_state', campaign: 'query_product_name' } } : {}) }).select().single()
     setBusy(false)
     if (res.error) return setError(errorText(res.error))
     onSaved(res.data.id); onClose()
@@ -133,6 +137,9 @@ function SourceForm({ kind, source, dir, batches, onClose, onSaved }:
     </>}>
       <form id="src-form" onSubmit={save} className="space-y-3">
         <Field label="Name (for you)"><input className="input" required value={name} onChange={e => setName(e.target.value)} /></Field>
+        {kind === 'indiamart' && <Field label="IndiaMART CRM key" hint="IndiaMART seller panel → Lead Manager → CRM Integration / API key → Generate key. Paste it here.">
+          <input className="input font-mono" required value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="Paste the key" autoComplete="off" />
+        </Field>}
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Lead source shown on leads"><input className="input" value={label} onChange={e => setLabel(e.target.value)} /></Field>
           <Field label="Campaign (if the lead has none)"><input className="input" value={campaign} onChange={e => setCampaign(e.target.value)} placeholder="optional" /></Field>
@@ -213,6 +220,19 @@ function SourceDrawer({ s, dir, batches, onClose, onChanged }: { s: Source; dir:
     if (error) return setError(errorText(error))
     onChanged()
   }
+  const [pulling, setPulling] = useState(false)
+  const [pullInfo, setPullInfo] = useState<string | null>(null)
+  async function pullNow() {
+    setPulling(true); setPullInfo(null)
+    const { data: sess } = await supabase.auth.getSession()
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/indiamart-pull?source=${s.id}`, {
+      method: 'POST', headers: { Authorization: `Bearer ${sess.session?.access_token}`, apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? '' } })
+    const j = await res.json().catch(() => ({}))
+    setPulling(false)
+    const r0 = j.results?.[0]
+    setPullInfo(j.ok === false ? j.error : r0?.error ? `IndiaMART: ${r0.error}` : r0 ? `Done — ${r0.received} enquiries found, ${r0.created} new leads.` : 'Done')
+    onChanged()
+  }
   async function sendTest() {
     setTesting(true); setError(null)
     try {
@@ -236,8 +256,18 @@ function SourceDrawer({ s, dir, batches, onClose, onChanged }: { s: Source; dir:
         </div>
         <div className="space-y-6 p-5">
           <ErrorBox error={error} />
+          {s.kind === 'indiamart' && (
+            <section className="rounded-lg bg-slate-50 p-3 text-sm">
+              <p><b>Status:</b> {!s.api_key ? <span className="text-red-600">CRM key missing — click Edit settings</span>
+                : s.last_pull_error ? <span className="text-red-600">{s.last_pull_error}</span>
+                : s.last_pull_at ? <span className="text-emerald-700">Working — last checked {new Date(s.last_pull_at).toLocaleString('en-IN')}</span>
+                : 'Waiting for the first check (every 10 minutes)'}</p>
+              <Button className="mt-2" variant="secondary" onClick={pullNow} loading={pulling}>Check IndiaMART now</Button>
+              {pullInfo && <p className="mt-2 text-slate-700">{pullInfo}</p>}
+            </section>
+          )}
           <section>
-            <p className="label">Your private link (keep it secret — anyone with it can add leads)</p>
+            <p className="label">{s.kind === 'indiamart' ? 'Optional: IndiaMART Push link (if you prefer IndiaMART sending leads instantly)' : 'Your private link (keep it secret — anyone with it can add leads)'}</p>
             <CopyBox value={url} />
             {s.kind === 'google_ads' && s.google_key && <><p className="label mt-3">Google key</p><CopyBox value={s.google_key} /></>}
             <div className="mt-3 flex flex-wrap gap-2">
@@ -338,6 +368,17 @@ function Guide({ kind, url }: { kind: Kind; url: string; googleKey?: string | nu
     <>Under Data, add <b>name</b>, <b>phone</b>, <b>email</b> (and e.g. <b>profession</b>, <b>city</b>) mapped to the trigger's fields.</>,
     <>Click <b>Test step</b> — it appears below. Then <b>Publish</b>.</>,
   ]
+  if (kind === 'indiamart') return (
+    <div className="space-y-3">
+      <Steps items={[
+        <>Log in to your <b>IndiaMART seller account</b> (seller.indiamart.com) on a computer.</>,
+        <>Open <b>Lead Manager</b>, then find <b>CRM Integration</b> (sometimes under Settings or the ⋮ menu) and click <b>Generate CRM Key</b>.</>,
+        <>Copy the key, click <b>Edit settings</b> above and paste it in <b>IndiaMART CRM key</b>.</>,
+        <>Click <b>Check IndiaMART now</b>. New enquiries then arrive every 10 minutes and are given to your reps by your distribution rules.</>,
+      ]} />
+      <p className="text-xs text-slate-500">IndiaMART allows a check only every few minutes; if you see “asked too often”, just wait — the next automatic check works.</p>
+    </div>
+  )
   if (kind === 'facebook') return (
     <div className="space-y-4">
       <p className="rounded-lg bg-blue-50 p-3 text-sm text-blue-900">Facebook and Instagram lead forms connect through <b>Pabbly</b> or <b>Zapier</b> today. A direct “Connect Facebook Page” button is coming once Meta approves Closer OS.</p>

@@ -226,3 +226,47 @@ export function NoteTags() {
     </Card>
   )
 }
+
+/** Numbers never tracked: personal, family, office lines. Their calls are not uploaded. */
+export function ExcludedNumbers() {
+  const { org } = useOrg()
+  const [rows, setRows] = useState<{ phone: string; label: string | null }[]>([])
+  const [phone, setPhone] = useState('')
+  const [label, setLabel] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
+  const [version, setVersion] = useState(0)
+  useEffect(() => {
+    supabase.from('excluded_numbers').select('phone, label').eq('org_id', org.id).order('created_at', { ascending: false })
+      .then(({ data }) => setRows((data ?? []) as { phone: string; label: string | null }[]))
+  }, [org.id, version])
+  async function call(p_phone: string, remove: boolean) {
+    const { data, error } = await supabase.rpc('set_excluded_number', { p_org: org.id, p_phone, p_label: label, p_remove: remove })
+    setError(error ? errorText(error) : null)
+    if (!error) { setInfo(remove ? 'Removed' : `Added${data ? ` — ${data} earlier calls with this number were removed from reports` : ''}`); setPhone(''); setLabel('') }
+    setVersion(v => v + 1)
+  }
+  return (
+    <Card className="p-5 lg:col-span-2">
+      <h2 className="font-semibold">Numbers not to track</h2>
+      <p className="mb-3 mt-1 text-sm text-slate-500">Calls with these numbers are never uploaded (family, personal, office lines). Leads are never excluded.</p>
+      <ErrorBox error={error} />
+      {info && <p className="mb-2 text-sm text-emerald-700">{info}</p>}
+      <form className="mb-3 flex flex-wrap gap-2" onSubmit={e => { e.preventDefault(); if (phone.trim()) call(phone, false) }}>
+        <input className="input !w-48" placeholder="Phone number" value={phone} onChange={e => setPhone(e.target.value)} inputMode="tel" />
+        <input className="input !w-56" placeholder="Label (optional), e.g. Office" value={label} onChange={e => setLabel(e.target.value)} />
+        <Button type="submit" disabled={!phone.trim()}><Plus className="h-4 w-4" /> Add</Button>
+      </form>
+      {rows.length === 0 ? <p className="text-sm text-slate-500">No numbers yet.</p> : (
+        <div className="flex flex-wrap gap-2">
+          {rows.map(r => (
+            <span key={r.phone} className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm">
+              {r.phone}{r.label && <span className="text-slate-500">· {r.label}</span>}
+              <button onClick={() => call(r.phone, true)} className="text-slate-400 hover:text-red-600" aria-label="Remove"><Trash2 className="h-3.5 w-3.5" /></button>
+            </span>
+          ))}
+        </div>
+      )}
+    </Card>
+  )
+}

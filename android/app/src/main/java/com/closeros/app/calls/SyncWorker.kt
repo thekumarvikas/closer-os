@@ -70,7 +70,9 @@ object CallSync {
         store.lastSyncMs = System.currentTimeMillis()
         // 3) Upload the phone's call recordings for these calls, and tell the dashboard how it went.
         checkRecordings(ctx, orgId)
-        // 4) Refresh follow-up reminders.
+        // 4) Announcements from management + new leads assigned to me.
+        runCatching { TeamAlerts.check(ctx, orgId) }
+        // 5) Refresh follow-up reminders.
         runCatching { FollowUpAlarms.scheduleAll(ctx, Repo.followUps(orgId)) }
         sent
     }

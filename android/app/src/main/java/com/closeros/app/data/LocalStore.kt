@@ -88,6 +88,14 @@ class LocalStore(ctx: Context) {
         get() = p.getLong("outcome_from", 0)
         set(v) { p.edit().putLong("outcome_from", v).apply() }
 
+    /** New-lead alerts: leads assigned after this time are announced. */
+    var newLeadsSince: String?
+        get() = p.getString("new_leads_since", null)
+        set(v) { p.edit().putString("new_leads_since", v).apply() }
+    /** Announcement notifications already shown (id + reminder time), so a reminder rings again. */
+    val shownAnnouncements: Set<String> get() = p.getStringSet("ann_shown", emptySet()) ?: emptySet()
+    fun setShownAnnouncements(v: Set<String>) { p.edit().putStringSet("ann_shown", v).apply() }
+
     var waCursorMs: Long
         get() = p.getLong("wa_cursor", 0)
         set(v) { p.edit().putLong("wa_cursor", v).apply() }

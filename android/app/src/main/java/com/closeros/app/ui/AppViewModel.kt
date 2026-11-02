@@ -75,6 +75,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var needsSetup by mutableStateOf(!store.setupDone)
     var callRequest by mutableStateOf<Lead?>(null)
     var showSetup by mutableStateOf(false)
+    var announcements by mutableStateOf<List<com.closeros.app.data.Announcement>>(emptyList())
+    fun checkAlerts() = viewModelScope.launch {
+        val m = membership ?: return@launch
+        announcements = com.closeros.app.calls.TeamAlerts.check(ctx, m.org_id)
+    }
+    fun acknowledge(a: com.closeros.app.data.Announcement, ack: Boolean) = viewModelScope.launch {
+        runCatching { Repo.markAnnouncement(a.id, ack) }
+            .onSuccess { if (ack) { com.closeros.app.calls.TeamAlerts.clearAnnouncement(ctx, a.id); announcements = announcements.filter { it.id != a.id } } }
+            .onFailure { if (ack) message = "No internet — couldn't acknowledge yet" }
+    }
     var showPlaybook by mutableStateOf(false)
     /** The lead the playbook was opened for (fills {{leadName}} etc.). */
     var playbookLead by mutableStateOf<Lead?>(null)
@@ -189,6 +199,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         runCatching { followUps = Repo.followUps(m.org_id); FollowUpAlarms.scheduleAll(ctx, followUps) }
         runCatching { pastFollowUps = Repo.pastFollowUps(m.org_id) }
         runCatching { progress = Repo.myProgressToday(m.organization) }
+        checkAlerts()
         loadToday()
     }
 

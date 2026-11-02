@@ -14,7 +14,7 @@ export interface Outcome { id: string; code: string; label: string; category: st
 export interface Lead {
   id: string; org_id: string; name: string; phone: string; email: string | null
   city: string | null; state: string | null; country: string | null; company: string | null; profession: string | null; profession_category_id: string | null
-  source: string | null; campaign: string | null; assigned_to: string | null; stage_id: string | null
+  source: string | null; campaign: string | null; assigned_to: string | null; assigned_at?: string | null; stage_id: string | null
   deal_value: number | null; tags: string[]; custom: Record<string, unknown>; notes: string | null; key_facts?: string | null
   last_call_at: string | null; last_outcome_id: string | null; next_follow_up_at: string | null
   do_not_call: boolean; created_at: string

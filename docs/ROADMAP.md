@@ -11,10 +11,10 @@ Everything from the original product prompt plus the owner's feedback, with stat
 - ✅ Activity timeline per lead
 - ✅ Automatic lead capture: webhook, Zapier, Pabbly, Flexifunnels, Google Ads / YouTube lead forms, Google Sheets, website forms
 - 🟡 Facebook / Instagram Ads — works through Pabbly/Zapier; direct "Connect Facebook Page" needs Meta approval
-- ⬜ IndiaMART direct connection (CRM API key)
-- ⬜ Notification to the rep when a new lead is assigned
-- ⬜ Lead export (CSV) from the Leads page; bulk edit (stage, tags)
-- ⬜ Per-company "Exclude numbers" list (keep personal numbers out of reports)
+- ✅ IndiaMART direct connection (CRM key, every 10 minutes) — needs the owner's key to test
+- ✅ Notification to the rep when a new lead is assigned
+- 🟡 Lead export (CSV) from the Leads page ✅; bulk edit (stage, tags) still to do
+- ✅ Per-company "Numbers not to track" list
 
 ## 2. Calling (Android app)
 - ✅ Tap-to-call through the phone's own dialer, SIM 1 / SIM 2 choice
@@ -39,6 +39,8 @@ Everything from the original product prompt plus the owner's feedback, with stat
 - ✅ Mandatory outcome after incoming calls and calls dialled outside the app (with a reminder notification)
 - ✅ Two-tap next-call picker (day, then 30-minute slot)
 - ✅ Notes: key facts, quick tags, voice typing, notes history, notes without a call
+
+- ✅ Announcements from management that each rep must acknowledge (pinned notification + blocking screen; dashboard shows who acknowledged)
 
 ## 3. Call recording
 - ✅ Phone's own recorder files found and uploaded automatically (where the phone allows it)

@@ -1,6 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useState, type FormEvent } from 'react'
-import { LayoutDashboard, BarChart3, Video, Plug, Users, PhoneCall, CalendarClock, UserCog, Settings, LogOut, Menu, X } from 'lucide-react'
+import { LayoutDashboard, BarChart3, Video, Plug, BookOpen, Users, PhoneCall, CalendarClock, UserCog, Settings, LogOut, Menu, X } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { Button, ErrorBox, Field, Modal } from './ui'
 import { useSession } from '../lib/session'
@@ -13,6 +13,7 @@ const nav = [
   { to: '/leads', label: 'Leads', icon: Users },
   { to: '/lead-sources', label: 'Lead sources', icon: Plug, manager: true },
   { to: '/calls', label: 'Calls', icon: PhoneCall },
+  { to: '/playbook', label: 'Playbook', icon: BookOpen },
   { to: '/follow-ups', label: 'Follow-ups', icon: CalendarClock },
   { to: '/team', label: 'Team', icon: UserCog, manager: true },
   { to: '/settings', label: 'Settings', icon: Settings, admin: true },

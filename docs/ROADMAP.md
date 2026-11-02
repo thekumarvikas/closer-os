@@ -67,8 +67,8 @@ Everything from the original product prompt plus the owner's feedback, with stat
 
 ## 6. Docs (sales knowledge hub)
 - 🟡 WhatsApp messages (company + personal)
-- ⬜ Scripts, ad sections, important links — managed centrally, shown in the app
-- ⬜ Team submissions with approval (submitted → approved → published)
+- ✅ Playbook: scripts, objection answers, links, documents/ad copy — managed on the dashboard, shown in the app (personalised per lead)
+- ✅ Team suggestions with manager approval
 
 ## 7. AI
 - ⬜ Transcription with a choice of provider (Sarvam, LemonFox, Gemini, OpenAI-compatible); own key or Closer OS credits

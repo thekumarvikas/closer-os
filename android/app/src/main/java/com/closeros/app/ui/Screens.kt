@@ -195,6 +195,7 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
                     }
                 }
                 if (l.do_not_call) Text("Marked Do Not Call", color = Brand.red, fontSize = 13.sp)
+                TextButton(onClick = { vm.openPlaybook(l) }) { Text("📖 Script, objection answers & links") }
             }
             item { KeyFactsCard(l) { t -> lead = l.copy(key_facts = t) } }
             if (!l.notes.isNullOrBlank()) item {

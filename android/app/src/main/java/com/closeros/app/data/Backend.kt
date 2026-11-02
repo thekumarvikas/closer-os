@@ -118,6 +118,11 @@ object Backend {
 @Serializable data class Progress(val user_id: String, val target: Nums = Nums(), val actual: Nums = Nums())
 @Serializable data class ProgressReport(val work_days: Int = 0, val rows: List<Progress> = emptyList())
 
+@Serializable data class PlaybookItem(
+    val id: String, val kind: String, val section: String? = null, val title: String, val body: String? = null, val url: String? = null,
+    val purpose: String = "both", val position: Int = 0, val status: String = "published", val created_by: String? = null, val review_note: String? = null,
+)
+
 @Serializable data class LeadMini(val name: String = "", val phone: String = "")
 @Serializable data class FollowUp(
     val id: String, val lead_id: String, val due_at: String, val status: String, val reason: String? = null,
@@ -200,6 +205,19 @@ object Repo {
             put("p_users", buildJsonArray { add(kotlinx.serialization.json.JsonPrimitive(uid)) })
         }).data)
         return r.rows.firstOrNull { it.user_id == uid }?.takeIf { p -> listOf(p.target.calls, p.target.conversations, p.target.talk_minutes, p.target.sales).any { (it ?: 0) > 0 } }
+    }
+
+    suspend fun playbook(orgId: String): List<PlaybookItem> = Backend.client.from("playbook_items").select {
+        filter { eq("org_id", orgId); neq("status", "archived") }
+        order("position", Order.ASCENDING)
+    }.decodeList()
+
+    /** A rep's suggestion: waits for a manager's approval. */
+    suspend fun suggestPlaybook(orgId: String, kind: String, title: String, body: String, url: String?) {
+        Backend.client.from("playbook_items").insert(buildJsonObject {
+            put("org_id", orgId); put("kind", kind); put("title", title); put("body", body); url?.let { put("url", it) }
+            put("status", "pending"); put("created_by", Backend.uid)
+        })
     }
 
     suspend fun myBatches(orgId: String): List<BatchSummary> =

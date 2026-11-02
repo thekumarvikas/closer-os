@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: IndiaMART pull (CRM key), direct Facebook, push notification to rep on new lead.
 
-## Android app (`android/`) — v0.8.1
+## Android app (`android/`) — v0.9.0
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -292,6 +292,18 @@ intelligence → Play Store launch.
   capped 150%, CSV, "Set targets" modal). App Home "Today's targets" card (Repo.myProgressToday).
 - Queue shows GlanceCard for the next lead: name, phone, profession/company/city, tags, latest
   webinar watch time, 📌 key facts, last call (time + outcome) and the latest note with tags.
+
+## Playbook (v0.9.0, Nov 2026)
+- playbook_items (migration 0024): kind script|objection|link|doc, section, title, body (variables
+  {{leadName}} etc.), url, purpose sales|reminder|both, status published|pending|rejected|archived.
+  RLS: members read published + own; managers write all; reps insert only status pending.
+  review_playbook_item(id, approve, note). seed_playbook() starter content (3 scripts, 3 objection
+  answers) + trigger for new companies.
+- Dashboard page "Playbook" (nav, all roles): tabs by type, sections, add/edit modal, approvals box
+  for managers; reps' "Suggest" goes to approval.
+- App: Home "📖 Playbook" card, lead detail and queue ("Script & answers for this call") open
+  PlaybookScreen; with a lead it fills variables; search; Copy / Open / Send on WhatsApp; Suggest
+  dialog (with voice typing) → pending.
 
 ## Play Protect block (Nov 2026)
 - 0.5.0+ was blocked on the owner's Xiaomi: "App blocked to protect your device" (Google Play Protect

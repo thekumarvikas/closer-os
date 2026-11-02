@@ -73,6 +73,17 @@ fun HomeScreen(vm: AppViewModel) {
         item { SetupBanner(vm) }
         vm.progress?.let { p -> item { TargetsCard(p) } }
         item {
+            Card(Modifier.fillMaxWidth().clickable { vm.openPlaybook(null) }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("📖 Playbook", fontWeight = FontWeight.SemiBold)
+                        Text("Scripts, objection answers, links", fontSize = 13.sp, color = Brand.muted)
+                    }
+                    Text("Open ›", color = Brand.primary, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+        item {
             Card(Modifier.fillMaxWidth().clickable { vm.showBatches = true }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
                 Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -197,6 +208,7 @@ fun QueueScreen(vm: AppViewModel) {
         if (next == null) { Button(onClick = { vm.queueStop() }) { Text("Finish") }; return@Column }
         Text("Next call", fontWeight = FontWeight.SemiBold)
         GlanceCard(vm, next)
+        TextButton(onClick = { vm.queuePause(); vm.openPlaybook(next) }) { Text("📖 Script & answers for this call") }
         when {
             vm.countdown != null -> {
                 Text("Calling in ${vm.countdown}…", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Brand.primary, modifier = Modifier.align(Alignment.CenterHorizontally))

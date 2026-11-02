@@ -75,6 +75,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var needsSetup by mutableStateOf(!store.setupDone)
     var callRequest by mutableStateOf<Lead?>(null)
     var showSetup by mutableStateOf(false)
+    var showPlaybook by mutableStateOf(false)
+    /** The lead the playbook was opened for (fills {{leadName}} etc.). */
+    var playbookLead by mutableStateOf<Lead?>(null)
+    var playbook by mutableStateOf<List<com.closeros.app.data.PlaybookItem>?>(null)
+    fun openPlaybook(lead: Lead?) { playbookLead = lead; showPlaybook = true; loadPlaybook() }
+    fun loadPlaybook() = viewModelScope.launch {
+        val m = membership ?: return@launch
+        runCatching { Repo.playbook(m.org_id) }.onSuccess { playbook = it }.onFailure { if (playbook == null) playbook = emptyList(); message = "Couldn't load the playbook" }
+    }
     var history by mutableStateOf<List<HistoryItem>?>(null)
     var historyLimit by mutableStateOf(300)
     var historyHasMore by mutableStateOf(false)

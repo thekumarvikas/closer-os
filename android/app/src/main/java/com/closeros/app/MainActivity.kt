@@ -85,6 +85,7 @@ fun Root(vm: AppViewModel) {
             vm.needsSetup -> SetupScreen(vm)
             vm.showSetup -> SetupChecklistScreen(vm) { vm.showSetup = false }
             vm.pending != null -> OutcomeScreen(vm)
+            vm.showPlaybook -> PlaybookScreen(vm)
             vm.openLeadId != null -> LeadDetailScreen(vm, vm.openLeadId!!) { call(it) }
             vm.queueActive -> QueueScreen(vm)
             vm.openList != null -> BatchListScreen(vm)

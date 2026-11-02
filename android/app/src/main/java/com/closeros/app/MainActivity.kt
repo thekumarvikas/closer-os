@@ -21,6 +21,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.sp
 import com.closeros.app.calls.PhoneCalls
 import com.closeros.app.calls.Sim
 import com.closeros.app.data.Lead
@@ -99,7 +100,11 @@ fun Root(vm: AppViewModel) {
             vm.openList != null -> BatchListScreen(vm)
             vm.showBatches -> BatchesScreen(vm)
             vm.todayFilter != null -> TodayListScreen(vm, vm.todayFilter!!)
-            else -> { TripleBackToExit(vm); Scaffold(bottomBar = {
+            else -> { TripleBackToExit(vm); Scaffold(floatingActionButton = {
+                // Dial pad is always one tap away, on every tab.
+                if (vm.tab != Tab.Profile && !vm.selectMode) FloatingActionButton(onClick = { vm.showDialer = true }, containerColor = androidx.compose.ui.graphics.Color(0xFF16A34A),
+                    contentColor = androidx.compose.ui.graphics.Color.White) { Text("☎", fontSize = 26.sp) }
+            }, bottomBar = {
                 NavigationBar {
                     listOf(Triple(Tab.Home, "Home", Icons.Default.Home), Triple(Tab.Leads, "Leads", Icons.Default.Phone), Triple(Tab.Calls, "Calls", Icons.Default.List),
                         Triple(Tab.FollowUps, "Follow-ups", Icons.Default.DateRange), Triple(Tab.Profile, "Profile", Icons.Default.Person)).forEach { (t, label, icon) ->

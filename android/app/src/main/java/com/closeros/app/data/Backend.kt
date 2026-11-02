@@ -323,6 +323,14 @@ object Repo {
             put("p_users", users?.let { u -> buildJsonArray { u.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } } } ?: kotlinx.serialization.json.JsonNull)
         }).data)
 
+    suspend fun leadStatus(orgId: String, users: List<String>?, from: Instant?, to: Instant?): JsonObject =
+        json.parseToJsonElement(db.rpc("lead_status_report", buildJsonObject {
+            put("p_org", orgId)
+            put("p_users", users?.let { u -> buildJsonArray { u.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } } } ?: kotlinx.serialization.json.JsonNull)
+            put("p_from", from?.let { kotlinx.serialization.json.JsonPrimitive(it.toString()) } ?: kotlinx.serialization.json.JsonNull)
+            put("p_to", to?.let { kotlinx.serialization.json.JsonPrimitive(it.toString()) } ?: kotlinx.serialization.json.JsonNull)
+        }).data).jsonObject
+
     suspend fun teamBrief(orgId: String): List<IdName> =
         json.parseToJsonElement(db.rpc("team_brief", buildJsonObject { put("p_org", orgId) }).data).jsonArray.map {
             IdName(it.jsonObject["user_id"]!!.jsonPrimitive.content, it.jsonObject["name"]?.jsonPrimitive?.content ?: "")

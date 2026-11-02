@@ -3,6 +3,7 @@ import { Download, ChevronDown, BarChart3 } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
 import Targets from './Targets'
+import LeadStatus from '../components/LeadStatus'
 import { useDirectory, type Directory } from '../lib/directory'
 import { fetchReport, zonedMidnight, zonedYmd, addDays, fmtYmd, pct, downloadCsv, type Bucket, type Report, type Dir, type Channel } from '../lib/report'
 import type { Organization } from '../lib/types'
@@ -84,7 +85,7 @@ export default function Reports() {
       <ErrorBox error={error} />
       {!dir ? <Spinner /> :
         tab === 'log' ? <CallLog org={org} dir={dir} f={logFilters} fileTag={fileTag} outcome={logOutcome} setOutcome={setLogOutcome} /> :
-        tab === 'outcomes' ? <OutcomeReportView org={org} dir={dir} from={applied.from} to={applied.to} users={applied.users} callDir={applied.dir} channel={applied.ch} fileTag={fileTag} onOpenOutcome={id => { setLogOutcome(id); setTab('log') }} /> :
+        tab === 'outcomes' ? <><LeadStatus orgId={org.id} dir={dir} users={applied.users} from={range.from} to={range.to} /><OutcomeReportView org={org} dir={dir} from={applied.from} to={applied.to} users={applied.users} callDir={applied.dir} channel={applied.ch} fileTag={fileTag} onOpenOutcome={id => { setLogOutcome(id); setTab('log') }} /></> :
         tab === 'targets' ? <Targets dir={dir} from={applied.from} to={applied.to} users={applied.users} fileTag={fileTag} /> :
         tab === 'followups' ? <FollowUpDiscipline org={org} dir={dir} from={range.from} to={range.to} users={applied.users} fileTag={fileTag} /> :
         !report ? <Spinner /> :

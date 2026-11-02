@@ -83,6 +83,9 @@ private fun Section(title: String, list: List<PhoneSetup.Item>, vm: AppViewModel
                                         .onFailure { _ -> ctx.startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
                                 }
                             }, contentPadding = PaddingValues(horizontal = 14.dp)) { Text(if (it.kind == PhoneSetup.Kind.Runtime) "Allow" else if (it.key == "autorecord") "Open Phone app" else "Turn on") }
+                            if (it.key == "whatsapp" && android.os.Build.VERSION.SDK_INT >= 33) OutlinedButton(onClick = {
+                                ctx.startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                            }) { Text("Open app info") }
                             if (it.kind == PhoneSetup.Kind.Confirm) OutlinedButton(onClick = { vm.store.confirm(it.key); refresh() }) { Text("Done") }
                         }
                     }

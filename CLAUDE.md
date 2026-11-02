@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.9.5
+## Android app (`android/`) — v0.9.6
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -403,6 +403,18 @@ intelligence → Play Store launch.
   Me / a person (team_brief RPC). Tiles (call_report g=15), targets (target_progress), outcomes
   (outcome_report g=6), follow-ups (follow_up_report g=1), team by talk time (g=7), day by day
   (g=11), by hour (g=13).
+
+## Owner feedback round 7 (v0.9.6, Nov 2026)
+- Owner confirmed: triple-back exit and search work.
+- Floating green ☎ dial-pad button on every main tab (except Profile / select mode).
+- lead_status_report(org, users, from?, to?) (migration 0032): total leads, called, reached,
+  never called, latest outcome per lead (by_outcome / by_category), per rep (total, called,
+  reached, interested, won, lost). Optional period = leads ASSIGNED in it. Shown in app Reports
+  ("Leads — where they stand", All leads / Assigned in this period) and dashboard Reports →
+  Outcomes (components/LeadStatus.tsx, per-person conversion table).
+- Android 13+ "Restricted setting" when enabling notification access for a sideloaded app: fix is
+  App info → ⋮ → "Allow restricted settings". Phone setup WhatsApp item explains it + "Open app
+  info" button.
 
 ## Play Protect block (Nov 2026)
 - 0.5.0+ was blocked on the owner's Xiaomi: "App blocked to protect your device" (Google Play Protect

@@ -48,6 +48,8 @@ fun ReportsScreen(vm: AppViewModel) {
     var team by remember { mutableStateOf<List<IdName>>(emptyList()) }
     var data by remember { mutableStateOf<Rep?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var leadScope by remember { mutableStateOf("all") }   // all = every lead · period = leads assigned in this period
+    var status by remember { mutableStateOf<JsonObject?>(null) }
     LaunchedEffect(Unit) { if (vm.isManager) team = runCatching { Repo.teamBrief(m.org_id) }.getOrDefault(emptyList()) }
     LaunchedEffect(from, to, who) {
         data = null; error = null
@@ -60,6 +62,14 @@ fun ReportsScreen(vm: AppViewModel) {
             val tg = runCatching { Repo.targetsFor(m.org_id, from, to, users) }.getOrNull()
             Rep(cr, or, fu, tg)
         }.onSuccess { data = it }.onFailure { error = it.message?.substringAfter("ERROR:")?.take(120) ?: "Couldn't load the report" }
+    }
+    LaunchedEffect(from, to, who, leadScope) {
+        status = null
+        val users = when (who) { "all" -> null; "me" -> listOfNotNull(com.closeros.app.data.Backend.uid); else -> listOf(who) }
+        status = runCatching {
+            if (leadScope == "all") Repo.leadStatus(m.org_id, users, null, null)
+            else Repo.leadStatus(m.org_id, users, from.atStartOfDay(zone).toInstant(), to.plusDays(1).atStartOfDay(zone).toInstant())
+        }.getOrNull()
     }
     fun pickDates() {
         DatePickerDialog(ctx, { _, y, mo, d ->
@@ -126,6 +136,42 @@ fun ReportsScreen(vm: AppViewModel) {
                     }
                 }
             }
+            status?.let { st -> item {
+                val total = st.i("total")
+                fun pct(n: Int) = if (total > 0) "${n * 100 / total}%" else "—"
+                val cat = st["by_category"]?.jsonObject ?: JsonObject(emptyMap())
+                val interested = cat["positive"]?.jsonPrimitive?.intOrNull ?: 0
+                val won = cat["won"]?.jsonPrimitive?.intOrNull ?: 0
+                Section("Leads — where they stand") {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FilterChip(leadScope == "all", { leadScope = "all" }, { Text("All leads") })
+                        FilterChip(leadScope == "period", { leadScope = "period" }, { Text("Assigned in this period") })
+                    }
+                    Text("$total leads" + if (who == "all") " (whole team)" else "", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    listOf(Triple("Called at least once", st.i("called"), Brand.primary), Triple("Talked to (reached)", st.i("reached"), Color(0xFF0EA5E9)),
+                        Triple("Interested now", interested, Color(0xFF34D399)), Triple("Sales (won)", won, Color(0xFF10B981)),
+                        Triple("Never called yet", st.i("never_called"), Color(0xFFF59E0B))).forEach { (l, n, c) ->
+                        BarRow(l, if (total > 0) n.toFloat() / total else 0f, "$n · ${pct(n)}", c)
+                    }
+                    val byOut = st["by_outcome"]?.jsonArray?.map { it.jsonObject }.orEmpty()
+                    if (byOut.isNotEmpty()) {
+                        Text("Latest outcome of each lead (% of all $total leads)", fontSize = 13.sp, color = Brand.muted, modifier = Modifier.padding(top = 4.dp))
+                        byOut.forEach { o ->
+                            val oc = vm.outcomes.firstOrNull { it.id == o.s("outcome_id") }
+                            BarRow(oc?.label ?: "Other", if (total > 0) o.i("leads").toFloat() / total else 0f, "${o.i("leads")} · ${pct(o.i("leads"))}", Brand.primary)
+                        }
+                    }
+                    val reps = st["by_rep"]?.jsonArray?.map { it.jsonObject }.orEmpty()
+                    if (who == "all" && reps.size > 1) {
+                        Text("Per person (leads · called · reached · interested · won · conversion)", fontSize = 13.sp, color = Brand.muted, modifier = Modifier.padding(top = 4.dp))
+                        reps.forEach { r ->
+                            val t = r.i("total").coerceAtLeast(1)
+                            Text("${team.firstOrNull { it.id == r.s("assigned_to") }?.name ?: "Someone"}: ${r.i("total")} · ${r.i("called") * 100 / t}% · ${r.i("reached") * 100 / t}% · ${r.i("interested")} · ${r.i("won")} · ${r.i("won") * 100 / t}%",
+                                fontSize = 13.sp)
+                        }
+                    }
+                }
+            } }
             val outs = d.outcomes.filter { it.i("g") == 6 && it.s("outcome_id") != null }.sortedByDescending { it.i("calls") }
             if (outs.isNotEmpty()) item {
                 val max = outs.maxOf { it.i("calls") }.coerceAtLeast(1)

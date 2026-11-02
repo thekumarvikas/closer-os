@@ -85,7 +85,8 @@ object PhoneSetup {
                 Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
                     .putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, WhatsAppCalls.listenerComponent(ctx).flattenToString())
             else Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS),
-            steps = "Turn on \"Closer OS\" and tap Allow, then come back.")
+            steps = "Turn on \"Closer OS\" and tap Allow, then come back." + if (Build.VERSION.SDK_INT >= 33)
+                "\nIf it says \"Restricted setting\": tap \"Open app info\" below → ⋮ (top right) → \"Allow restricted settings\" → confirm, then come back and tap Turn on again." else "")
         list += Item("battery", "Keep running in background", "So calls and reminders are never missed, even when the app is closed.",
             pm.isIgnoringBatteryOptimizations(ctx.packageName), Kind.Special,
             intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${ctx.packageName}")),

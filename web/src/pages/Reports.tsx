@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Download, ChevronDown, BarChart3 } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
+import Targets from './Targets'
 import { useDirectory, type Directory } from '../lib/directory'
 import { fetchReport, zonedMidnight, zonedYmd, addDays, fmtYmd, pct, downloadCsv, type Bucket, type Report, type Dir, type Channel } from '../lib/report'
 import type { Organization } from '../lib/types'
@@ -11,8 +12,8 @@ import { T, Hint, dur } from '../components/terms'
 import CallLog from '../components/CallLog'
 import OutcomeReportView from './OutcomeReport'
 
-type Tab = 'overview' | 'outcomes' | 'team' | 'daily' | 'hourly' | 'followups' | 'log'
-const tabs: [Tab, string][] = [['overview', 'Overview'], ['outcomes', 'Outcomes'], ['team', 'Team'], ['daily', 'Daily'], ['hourly', 'By hour'], ['followups', 'Follow-ups'], ['log', 'Call log']]
+type Tab = 'overview' | 'outcomes' | 'targets' | 'team' | 'daily' | 'hourly' | 'followups' | 'log'
+const tabs: [Tab, string][] = [['overview', 'Overview'], ['outcomes', 'Outcomes'], ['targets', 'Targets'], ['team', 'Team'], ['daily', 'Daily'], ['hourly', 'By hour'], ['followups', 'Follow-ups'], ['log', 'Call log']]
 interface Filters { from: string; to: string; users: string[]; dir: Dir; ch: Channel }
 
 export default function Reports() {
@@ -84,6 +85,7 @@ export default function Reports() {
       {!dir ? <Spinner /> :
         tab === 'log' ? <CallLog org={org} dir={dir} f={logFilters} fileTag={fileTag} outcome={logOutcome} setOutcome={setLogOutcome} /> :
         tab === 'outcomes' ? <OutcomeReportView org={org} dir={dir} from={applied.from} to={applied.to} users={applied.users} callDir={applied.dir} channel={applied.ch} fileTag={fileTag} onOpenOutcome={id => { setLogOutcome(id); setTab('log') }} /> :
+        tab === 'targets' ? <Targets dir={dir} from={applied.from} to={applied.to} users={applied.users} fileTag={fileTag} /> :
         tab === 'followups' ? <FollowUpDiscipline org={org} dir={dir} from={range.from} to={range.to} users={applied.users} fileTag={fileTag} /> :
         !report ? <Spinner /> :
         report.total.calls === 0 ? <Card><Empty icon={<BarChart3 className="h-6 w-6" />} title="No calls in this period" text="Try a longer date range." /></Card> :

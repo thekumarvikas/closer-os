@@ -71,6 +71,7 @@ fun HomeScreen(vm: AppViewModel) {
             Text(m.organization.name, color = Brand.muted)
         }
         item { SetupBanner(vm) }
+        vm.progress?.let { p -> item { TargetsCard(p) } }
         item {
             Card(Modifier.fillMaxWidth().clickable { vm.showBatches = true }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
                 Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -194,8 +195,8 @@ fun QueueScreen(vm: AppViewModel) {
         LinearProgressIndicator(progress = { vm.queuePos.toFloat() / vm.queue.size.coerceAtLeast(1) }, modifier = Modifier.fillMaxWidth())
         Text("${vm.queueDone} calls done · ${vm.queue.size - vm.queuePos} left", color = Brand.muted, fontSize = 14.sp)
         if (next == null) { Button(onClick = { vm.queueStop() }) { Text("Finish") }; return@Column }
-        Text("Next", fontWeight = FontWeight.SemiBold)
-        LeadCard(vm, next, onCall = null)
+        Text("Next call", fontWeight = FontWeight.SemiBold)
+        GlanceCard(vm, next)
         when {
             vm.countdown != null -> {
                 Text("Calling in ${vm.countdown}…", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Brand.primary, modifier = Modifier.align(Alignment.CenterHorizontally))

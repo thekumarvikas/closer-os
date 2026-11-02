@@ -114,6 +114,10 @@ object Backend {
     val direction: String? = null, val duration_sec: Int? = null, val purpose: String? = null, val by: String? = null,
 )
 
+@Serializable data class Nums(val calls: Int? = null, val conversations: Int? = null, val talk_minutes: Int? = null, val sales: Int? = null)
+@Serializable data class Progress(val user_id: String, val target: Nums = Nums(), val actual: Nums = Nums())
+@Serializable data class ProgressReport(val work_days: Int = 0, val rows: List<Progress> = emptyList())
+
 @Serializable data class LeadMini(val name: String = "", val phone: String = "")
 @Serializable data class FollowUp(
     val id: String, val lead_id: String, val due_at: String, val status: String, val reason: String? = null,
@@ -184,6 +188,18 @@ object Repo {
 
     suspend fun setKeyFacts(leadId: String, text: String) {
         db.rpc("set_key_facts", buildJsonObject { put("p_lead", leadId); put("p_text", text) })
+    }
+
+    /** My targets vs what I've done today (null when no targets are set). */
+    suspend fun myProgressToday(org: Org): Progress? {
+        val uid = Backend.uid ?: return null
+        val zone = runCatching { ZoneId.of(org.timezone) }.getOrDefault(ZoneId.of("Asia/Kolkata"))
+        val today = LocalDate.now(zone).toString()
+        val r: ProgressReport = json.decodeFromString(db.rpc("target_progress", buildJsonObject {
+            put("p_org", org.id); put("p_from", today); put("p_to", today)
+            put("p_users", buildJsonArray { add(kotlinx.serialization.json.JsonPrimitive(uid)) })
+        }).data)
+        return r.rows.firstOrNull { it.user_id == uid }?.takeIf { p -> listOf(p.target.calls, p.target.conversations, p.target.talk_minutes, p.target.sales).any { (it ?: 0) > 0 } }
     }
 
     suspend fun myBatches(orgId: String): List<BatchSummary> =

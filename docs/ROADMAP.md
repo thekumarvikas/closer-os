@@ -25,7 +25,7 @@ Everything from the original product prompt plus the owner's feedback, with stat
 - ✅ Full phone call history with "Add as lead"
 - ✅ Follow-up reminders: 5 min before, at time (Call button), 5 and 10 min after; late flag at 15 min
 - ✅ WhatsApp: company + personal messages, filled in per lead
-- 🟡 Pre-call summary — lead card / details show last outcome, notes, webinar, watch time; a dedicated 3-second "glance" screen before each queued call is still to do
+- ✅ Pre-call glance card in the queue (key facts, last call + note, webinar watch time)
 - ✅ Webinar / event queues: reminder calls before, sales calls after (purpose + batch on every call, profession capture), with sort (watch time, profession priority, …) and filters
 - ⬜ SIM licences (each SIM registered to a company, confirmed by the rep)
 - ⬜ Offline lead cache (leads viewable without internet)
@@ -61,7 +61,7 @@ Everything from the original product prompt plus the owner's feedback, with stat
 - ✅ Reports: Overview, Outcomes, Team (+ comparison chart), Daily, By hour, Follow-ups, Call log; CSV everywhere
 - ✅ All / Dialled / Incoming filter
 - ✅ Follow-up discipline (on time / late / not called)
-- ⬜ Targets per rep (daily calls, conversations, sales) and achievement %
+- ✅ Targets per rep (daily calls, conversations, talk time, sales) and achievement % — dashboard Reports → Targets, app Home
 - ⬜ Call auditing: score a call, feedback, coaching tasks
 - ⬜ Leaderboard in the app
 

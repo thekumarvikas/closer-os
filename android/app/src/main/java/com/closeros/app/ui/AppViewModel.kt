@@ -62,6 +62,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var stats by mutableStateOf(TodayStats())
     var followUps by mutableStateOf<List<FollowUp>>(emptyList())
     var pastFollowUps by mutableStateOf<List<FollowUp>>(emptyList())
+    var progress by mutableStateOf<com.closeros.app.data.Progress?>(null)
     val leads = mutableStateListOf<Lead>()
     var leadsQuery by mutableStateOf("")
     var leadsEnd by mutableStateOf(false)
@@ -178,6 +179,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         runCatching { stats = Repo.todayStats(m.organization) }
         runCatching { followUps = Repo.followUps(m.org_id); FollowUpAlarms.scheduleAll(ctx, followUps) }
         runCatching { pastFollowUps = Repo.pastFollowUps(m.org_id) }
+        runCatching { progress = Repo.myProgressToday(m.organization) }
         loadToday()
     }
 

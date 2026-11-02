@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: IndiaMART pull (CRM key), direct Facebook, push notification to rep on new lead.
 
-## Android app (`android/`) — v0.8.0
+## Android app (`android/`) — v0.8.1
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -281,6 +281,17 @@ intelligence → Play Store launch.
   "Recordings folder not chosen"). PhoneSetup.saveRecordingsFolder() now always saves, ignores
   takePersistable errors, counts audio files and tells the rep ("12 recordings found"); no starting
   folder hint on Android < 12.
+
+## Targets + pre-call glance (v0.8.1, Nov 2026)
+- rep_targets (migration 0023): per working day calls / conversations / talk_minutes / sales; user_id
+  null = company default, a person's row overrides. set_rep_target(org, user|null, jsonb) managers
+  only. target_progress(org, from date, to date, users) = target × working days
+  (organizations.settings.work_days, default Mon–Sat) vs actual (calls = outgoing, conversations =
+  talk > 0, talk minutes, sales = won outcome).
+- Dashboard Reports → Targets tab (bars, % colours ≥100 green / ≥70 amber / red, overall = average
+  capped 150%, CSV, "Set targets" modal). App Home "Today's targets" card (Repo.myProgressToday).
+- Queue shows GlanceCard for the next lead: name, phone, profession/company/city, tags, latest
+  webinar watch time, 📌 key facts, last call (time + outcome) and the latest note with tags.
 
 ## Play Protect block (Nov 2026)
 - 0.5.0+ was blocked on the owner's Xiaomi: "App blocked to protect your device" (Google Play Protect

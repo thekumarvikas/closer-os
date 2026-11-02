@@ -113,10 +113,18 @@ class FollowUpReceiver : BroadcastReceiver() {
         val call = PendingIntent.getActivity(ctx, fu.hashCode() + 1,
             Intent(ctx, MainActivity::class.java).putExtra("call_lead", lead).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val timeText = "Due at " + java.time.format.DateTimeFormatter.ofPattern("h:mm a").withZone(java.time.ZoneId.systemDefault()).format(Instant.ofEpochMilli(due)) +
+            (if (phone.isNotEmpty()) " · $phone" else "")
+        val big = android.widget.RemoteViews(ctx.packageName, com.closeros.app.R.layout.notif_followup).apply {
+            setTextViewText(com.closeros.app.R.id.n_title, title)
+            setTextViewText(com.closeros.app.R.id.n_time, timeText)
+            setTextViewText(com.closeros.app.R.id.n_text, text)
+        }
         val n = NotificationCompat.Builder(ctx, FollowUpAlarms.CHANNEL)
             .setSmallIcon(android.R.drawable.sym_action_call)
             .setContentTitle(title).setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+            .setCustomContentView(big).setCustomBigContentView(big).setCustomHeadsUpContentView(big)
             .setPriority(NotificationCompat.PRIORITY_HIGH).setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setColor(0xFF0E5E57.toInt())
             .setContentIntent(open).setAutoCancel(true)

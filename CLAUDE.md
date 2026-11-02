@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.9.3
+## Android app (`android/`) — v0.9.4
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -365,6 +365,28 @@ intelligence → Play Store launch.
   /billing and /admin). App: grace warning card; PlanEndedScreen when expired (never sells in app).
 - Not yet: Flexifunnels landing page → Razorpay → auto-create company; recurring auto-debit
   (Razorpay Subscriptions); coupons; feature-by-plan gating (features stored, not enforced).
+
+## Owner feedback round 5 (v0.9.4, Nov 2026)
+- Leads tab (ui/LeadsTab.kt): "Select to call" mode (checkboxes, All, "Call N" → queue); Home "Pick
+  leads to call" opens it. Filter sheet; filters shown = organizations.settings.app_lead_filters
+  (dashboard Settings → Lead filters in the app; default followup, outcome, stage, source, category,
+  city, never_called + company's own fields). lead_filter_options(org) (migration 0030) returns
+  stages, categories, sources, campaigns, cities, custom keys from leads.custom with top values.
+  Repo.leads applies LeadFilters via PostgREST (in, ilike, custom->>key in).
+- Calls tab rows: Call / WhatsApp / SMS buttons for every number (non-leads call directly, no
+  outcome), "+ Add lead".
+- Home always shows a Today's targets card (explains when none are set).
+- Follow-up reminders use a custom large-text layout (res/layout/notif_followup.xml: 20sp title,
+  due time, 16sp text).
+- WhatsApp messages with media: message_templates.media_path/type/name + private bucket
+  template-media (<org>/<file>, managers upload). Dashboard Settings → attach photo/video/PDF ≤16 MB.
+  App picker downloads to cache/shared, shares via FileProvider (${applicationId}.files) with
+  ACTION_SEND + jid extra to WhatsApp; reps can also attach from their phone.
+- Old dashboard notes ("dd/mm hh:mm: text" lines in leads.notes) converted to note activities;
+  label now "Notes from the imported file". Dashboard adds notes with add_lead_note.
+- WhatsApp calls not tracked on owner's phone because he installs the `direct` build (no
+  notification access); full build sent as CloserOS-<ver>-with-WhatsApp-calls.apk (needs Play
+  Protect scanning off while installing).
 
 ## Play Protect block (Nov 2026)
 - 0.5.0+ was blocked on the owner's Xiaomi: "App blocked to protect your device" (Google Play Protect

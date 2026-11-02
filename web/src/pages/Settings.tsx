@@ -5,7 +5,7 @@ import { useOrg } from '../lib/session'
 import { useDirectory } from '../lib/directory'
 import type { Rule } from '../lib/types'
 import { Badge, Button, Card, ErrorBox, Field, PageHeader, Spinner } from '../components/ui'
-import { Buyers, ExcludedNumbers, NoteTags, ProfessionCategories, ReviewChecklist, WhatsAppTemplates } from './SettingsExtra'
+import { AppLeadFilters, Buyers, ExcludedNumbers, NoteTags, ProfessionCategories, ReviewChecklist, WhatsAppTemplates } from './SettingsExtra'
 
 export default function Settings() {
   const { org, refresh } = useOrg()
@@ -129,6 +129,8 @@ export default function Settings() {
         <WhatsAppTemplates />
 
         <NoteTags />
+
+        <AppLeadFilters />
 
         <ReviewChecklist />
 

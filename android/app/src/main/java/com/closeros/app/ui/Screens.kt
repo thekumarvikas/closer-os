@@ -135,25 +135,7 @@ private fun Perm(icon: androidx.compose.ui.graphics.vector.ImageVector, title: S
 // ───────────── Leads ─────────────
 
 @Composable
-fun LeadsScreen(vm: AppViewModel, onCall: (Lead) -> Unit) {
-    Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(16.dp, 12.dp, 16.dp, 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(vm.leadsQuery, { vm.search(it) }, placeholder = { Text("Search name or phone") }, singleLine = true,
-                leadingIcon = { Icon(Icons.Default.Search, null) }, modifier = Modifier.weight(1f))
-        }
-        if (vm.leads.isNotEmpty()) TextButton(onClick = { vm.startQueue(vm.leads.toList()) }, modifier = Modifier.padding(horizontal = 8.dp)) {
-            Icon(Icons.Default.Call, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Call these ${vm.leads.size}${if (vm.leadsEnd) "" else "+"} leads in a queue")
-        }
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(vm.leads, key = { it.id }) { l -> LeadCard(vm, l, onCall) }
-            item {
-                if (vm.leadsLoading) Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                else if (vm.leads.isEmpty()) Text("No leads yet. Leads assigned to you on the dashboard appear here.", color = Brand.muted, modifier = Modifier.padding(16.dp))
-                else if (!vm.leadsEnd) LaunchedEffect(vm.leads.size) { vm.loadMoreLeads() }
-            }
-        }
-    }
-}
+fun LeadsScreen(vm: AppViewModel, onCall: (Lead) -> Unit) = LeadsTab(vm, onCall)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -200,7 +182,7 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
             item { KeyFactsCard(l) { t -> lead = l.copy(key_facts = t) } }
             if (!l.notes.isNullOrBlank()) item {
                 Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                    Column(Modifier.padding(14.dp)) { Text("Notes from import", fontWeight = FontWeight.SemiBold); Text(l.notes, fontSize = 14.sp) }
+                    Column(Modifier.padding(14.dp)) { Text("Notes from the imported file", fontWeight = FontWeight.SemiBold); Text(l.notes, fontSize = 14.sp) }
                 }
             }
             item { NotesTimeline(vm, l.id) }

@@ -64,6 +64,23 @@ object PhoneCalls {
     /** Phone + WhatsApp calls since a time, oldest first. */
     fun readAll(ctx: Context, sinceMs: Long): List<LogCall> = (readLog(ctx, sinceMs) + WhatsAppCalls.asLog(ctx, sinceMs)).sortedBy { it.startedAtMs }
 
+    /** Opens the SMS app with the number (and text) filled in. */
+    fun sms(ctx: Context, phone: String, text: String = "") {
+        ctx.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + phone.filter { it.isDigit() || it == '+' }))
+            .putExtra("sms_body", text).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    /** Sends a photo/video/PDF with a caption straight into the person's WhatsApp chat. */
+    fun whatsappMedia(ctx: Context, phone: String, uri: Uri, mime: String, text: String) {
+        val digits = phone.filter { it.isDigit() }
+        val pkg = listOf("com.whatsapp", "com.whatsapp.w4b").firstOrNull { runCatching { ctx.packageManager.getPackageInfo(it, 0) }.isSuccess }
+        val i = Intent(Intent.ACTION_SEND).setType(mime).putExtra(Intent.EXTRA_STREAM, uri).putExtra(Intent.EXTRA_TEXT, text)
+            .putExtra("jid", "$digits@s.whatsapp.net").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        i.clipData = android.content.ClipData.newRawUri("media", uri)
+        if (pkg != null) i.setPackage(pkg)
+        ctx.startActivity(if (pkg != null) i else Intent.createChooser(i, "Send with").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
     /** Starts a normal phone call on the chosen SIM. The phone's own app handles (and records) it. */
     @SuppressLint("MissingPermission")
     fun call(ctx: Context, phone: String, sim: Sim?) {

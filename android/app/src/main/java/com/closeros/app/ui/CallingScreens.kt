@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
@@ -77,7 +78,15 @@ fun HomeScreen(vm: AppViewModel) {
             }
         }
         item { SetupBanner(vm) }
-        vm.progress?.let { p -> item { TargetsCard(p) } }
+        item {
+            vm.progress?.let { p -> TargetsCard(p) } ?: Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Column(Modifier.padding(14.dp)) {
+                    Text("Today's targets", fontWeight = FontWeight.SemiBold)
+                    Text(if (vm.isManager) "No targets set yet. Set daily targets for your team on the dashboard: Reports → Targets → Set targets."
+                         else "No targets set yet. Your manager sets your daily targets on the dashboard.", fontSize = 13.sp, color = Brand.muted)
+                }
+            }
+        }
         val newFeedback = vm.reviews.count { it.seen_at == null }
         val openTasks = vm.reviews.count { it.task != null && it.task_done_at == null }
         if (vm.reviews.isNotEmpty()) item {
@@ -155,7 +164,7 @@ fun HomeScreen(vm: AppViewModel) {
                 Icon(Icons.Default.Call, null); Spacer(Modifier.width(8.dp)); Text("Call due follow-ups (${dueSoon.size})", fontSize = 16.sp)
             }
             Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = { vm.tab = Tab.Leads }, modifier = Modifier.fillMaxWidth().height(50.dp)) { Text("Pick leads to call") }
+            OutlinedButton(onClick = { vm.selectMode = true; vm.tab = Tab.Leads }, modifier = Modifier.fillMaxWidth().height(50.dp)) { Text("Pick leads to call") }
         }
         item {
             val last = vm.store.lastSyncMs
@@ -195,20 +204,27 @@ fun TodayListScreen(vm: AppViewModel, key: String) {
 
 @Composable
 fun HistoryRow(vm: AppViewModel, h: HistoryItem, onAdd: (() -> Unit)? = null) {
-    Row(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(10.dp))
-        .clickable(enabled = h.lead != null) { h.lead?.let { vm.openLeadId = it.id } }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(h.lead?.name?.ifBlank { null } ?: h.log.name ?: fmtPhone(h.phone), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val dir = when (h.log.direction) { "outgoing" -> "Dialled"; "incoming" -> "Received"; "missed" -> "Missed"; else -> "Declined" }
-            Text((if (h.log.channel == "whatsapp") "WhatsApp · " else "") + "$dir · ${if (h.log.durationSec > 0) fmtDur(h.log.durationSec) else "no talk"} · ${fmtWhen(Instant.ofEpochMilli(h.log.startedAtMs).toString())}",
-                fontSize = 13.sp, color = if (h.log.direction == "missed" || h.log.direction == "rejected") Brand.red else Brand.muted)
-            if (h.lead != null || h.log.name != null) Text(fmtPhone(h.phone), fontSize = 12.sp, color = Brand.muted)
-        }
-        when {
-            h.lead == null && onAdd != null && h.phone.isNotBlank() -> OutlinedButton(onClick = onAdd, contentPadding = PaddingValues(horizontal = 10.dp)) { Text("Add lead", fontSize = 13.sp) }
-            h.lead != null -> IconButton(onClick = { vm.callRequest = h.lead }) { Icon(Icons.Default.Call, "Call", tint = Brand.primary) }
+    val ctx = LocalContext.current
+    var wa by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(10.dp))
+        .clickable(enabled = h.lead != null) { h.lead?.let { vm.openLeadId = it.id } }.padding(12.dp, 10.dp, 4.dp, 4.dp)) {
+        Text(h.lead?.name?.ifBlank { null } ?: h.log.name ?: fmtPhone(h.phone), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        val dir = when (h.log.direction) { "outgoing" -> "Dialled"; "incoming" -> "Received"; "missed" -> "Missed"; else -> "Declined" }
+        Text((if (h.log.channel == "whatsapp") "WhatsApp · " else "") + "$dir · ${if (h.log.durationSec > 0) fmtDur(h.log.durationSec) else "no talk"} · ${fmtWhen(Instant.ofEpochMilli(h.log.startedAtMs).toString())}",
+            fontSize = 13.sp, color = if (h.log.direction == "missed" || h.log.direction == "rejected") Brand.red else Brand.muted)
+        if (h.lead != null || h.log.name != null) Text(fmtPhone(h.phone), fontSize = 12.sp, color = Brand.muted)
+        if (h.phone.isNotBlank()) Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = {
+                if (h.lead != null) vm.callRequest = h.lead
+                else PhoneCalls.call(ctx, h.phone, vm.sims().firstOrNull { it.slot == vm.store.preferredSim } ?: vm.sims().firstOrNull())
+            }) { Icon(Icons.Default.Call, "Call", tint = Brand.primary) }
+            IconButton(onClick = { wa = true }) { Icon(Icons.Default.Send, "WhatsApp", tint = Color(0xFF16A34A)) }
+            IconButton(onClick = { PhoneCalls.sms(ctx, h.phone) }) { Icon(Icons.Default.Email, "SMS", tint = Color(0xFF475569)) }
+            Spacer(Modifier.weight(1f))
+            if (h.lead == null && onAdd != null) TextButton(onClick = onAdd) { Text("+ Add lead") }
         }
     }
+    if (wa) WhatsAppPicker(vm, h.lead ?: Lead(id = "", org_id = vm.membership?.org_id ?: "", name = h.log.name ?: "", phone = h.phone)) { wa = false }
 }
 
 // ───────────── Calling queue ─────────────
@@ -316,23 +332,40 @@ fun LeadCard(vm: AppViewModel, l: Lead, onCall: ((Lead) -> Unit)?) {
 @Composable
 fun WhatsAppPicker(vm: AppViewModel, lead: Lead, onDismiss: () -> Unit) {
     val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
     var text by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     var saveName by remember { mutableStateOf("") }
+    var picked by remember { mutableStateOf<com.closeros.app.data.Template?>(null) }   // template with company media
+    var ownMedia by remember { mutableStateOf<android.net.Uri?>(null) }               // photo/video chosen on the phone
+    var sending by remember { mutableStateOf(false) }
+    val chooseMedia = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.GetContent()) { u -> if (u != null) ownMedia = u }
     val first = lead.name.substringBefore(' ')
     val company = vm.templates.filter { it.owner_id == null }
     val mine = vm.templates.filter { it.owner_id != null }
+    fun pick(t: com.closeros.app.data.Template) { text = vm.fillTemplate(t.body, lead); picked = t.takeIf { it.media_path != null }; ownMedia = null }
     AlertDialog(onDismissRequest = onDismiss,
-        title = { Text(if (text == null) "Choose a message" else "WhatsApp to ${first.ifBlank { "lead" }}") },
+        title = { Text(if (text == null) "Choose a message" else "WhatsApp to ${first.ifBlank { fmtPhone(lead.phone) }}") },
         text = {
             if (text == null) Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (company.isNotEmpty()) Text("Company messages", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Brand.muted)
-                company.forEach { t -> TemplateRow(vm, t.name, vm.fillTemplate(t.body, lead), null) { text = vm.fillTemplate(t.body, lead) } }
+                company.forEach { t -> TemplateRow(vm, (if (t.media_path != null) mediaIcon(t.media_type) + " " else "") + t.name, vm.fillTemplate(t.body, lead), null) { pick(t) } }
                 if (mine.isNotEmpty()) Text("My messages", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Brand.muted, modifier = Modifier.padding(top = 6.dp))
-                mine.forEach { t -> TemplateRow(vm, t.name, vm.fillTemplate(t.body, lead), onDelete = { vm.deleteMyTemplate(t.id) }) { text = vm.fillTemplate(t.body, lead) } }
-                TextButton(onClick = { text = "Hi ${first.ifBlank { "there" }}, " }) { Text("Write a new message") }
+                mine.forEach { t -> TemplateRow(vm, t.name, vm.fillTemplate(t.body, lead), onDelete = { vm.deleteMyTemplate(t.id) }) { pick(t) } }
+                TextButton(onClick = { text = "Hi ${first.ifBlank { "there" }}, "; picked = null }) { Text("Write a new message") }
             } else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(text!!, { text = it }, modifier = Modifier.fillMaxWidth(), minLines = 5)
+                OutlinedTextField(text!!, { text = it }, modifier = Modifier.fillMaxWidth(), minLines = 4)
+                when {
+                    picked != null -> Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("${mediaIcon(picked!!.media_type)} ${picked!!.media_name ?: "Attachment"}", fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { picked = null }) { Text("Remove") }
+                    }
+                    ownMedia != null -> Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("📎 Photo/video from your phone", fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { ownMedia = null }) { Text("Remove") }
+                    }
+                    else -> TextButton(onClick = { chooseMedia.launch("*/*") }) { Text("📎 Add photo, video or PDF") }
+                }
                 if (saving) {
                     OutlinedTextField(saveName, { saveName = it }, label = { Text("Name for this message") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     Button(onClick = {
@@ -343,9 +376,27 @@ fun WhatsAppPicker(vm: AppViewModel, lead: Lead, onDismiss: () -> Unit) {
                 } else TextButton(onClick = { saving = true }) { Text("Save as my message for next time") }
             }
         },
-        confirmButton = { if (text != null) Button(onClick = { PhoneCalls.whatsapp(ctx, lead.phone, text!!); onDismiss() }) { Text("Open WhatsApp") } },
-        dismissButton = { TextButton(onClick = { if (text != null) { text = null; saving = false } else onDismiss() }) { Text(if (text != null) "Back" else "Cancel") } })
+        confirmButton = {
+            if (text != null) Button(enabled = !sending, onClick = {
+                val t = picked; val own = ownMedia
+                when {
+                    own != null -> { PhoneCalls.whatsappMedia(ctx, lead.phone, own, ctx.contentResolver.getType(own) ?: "*/*", text!!); onDismiss() }
+                    t?.media_path != null -> { sending = true; scope.launch {
+                        runCatching {
+                            val f = com.closeros.app.data.Repo.templateMediaFile(ctx, t.media_path, t.media_name)
+                            val uri = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
+                            PhoneCalls.whatsappMedia(ctx, lead.phone, uri, t.media_type ?: "*/*", text!!)
+                        }.onFailure { vm.message = "Couldn't get the attachment — check internet"; PhoneCalls.whatsapp(ctx, lead.phone, text!!) }
+                        sending = false; onDismiss()
+                    } }
+                    else -> { PhoneCalls.whatsapp(ctx, lead.phone, text!!); onDismiss() }
+                }
+            }) { Text(if (sending) "Preparing…" else "Open WhatsApp") }
+        },
+        dismissButton = { TextButton(onClick = { if (text != null) { text = null; saving = false; picked = null; ownMedia = null } else onDismiss() }) { Text(if (text != null) "Back" else "Cancel") } })
 }
+
+private fun mediaIcon(type: String?) = when { type == null -> "📎"; type.startsWith("image") -> "🖼️"; type.startsWith("video") -> "🎬"; type.contains("pdf") -> "📄"; else -> "📎" }
 
 @Composable
 private fun TemplateRow(vm: AppViewModel, name: String, preview: String, onDelete: (() -> Unit)?, onPick: () -> Unit) {

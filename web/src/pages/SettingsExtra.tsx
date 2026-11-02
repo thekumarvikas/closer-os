@@ -157,7 +157,7 @@ function BuyersUpload({ onClose, onDone }: { onClose: () => void; onDone: () => 
   )
 }
 
-interface Template { id: string; name: string; body: string; position: number; is_active: boolean }
+interface Template { id: string; name: string; body: string; position: number; is_active: boolean; media_path: string | null; media_type: string | null; media_name: string | null }
 const variables = ['{{leadName}}', '{{repName}}', '{{companyName}}', '{{batchName}}', '{{batchDate}}', '{{followUpTime}}', '{{city}}', '{{profession}}']
 
 /** WhatsApp messages reps can pick in the app; variables are filled in for each lead. */
@@ -173,7 +173,7 @@ export function WhatsAppTemplates() {
   return (
     <Card className="p-5 lg:col-span-2">
       <h2 className="font-semibold">Company WhatsApp messages</h2>
-      <p className="mb-3 mt-1 text-sm text-slate-500">Every rep sees these in the app (reps can also save their own). Reps pick one before WhatsApp opens. Use variables — they are replaced for each lead: {variables.map(v => <code key={v} className="mr-1 rounded bg-slate-100 px-1 text-xs">{v}</code>)}</p>
+      <p className="mb-3 mt-1 text-sm text-slate-500">Every rep sees these in the app (reps can also save their own). Reps pick one before WhatsApp opens; an attached photo, video or PDF is sent with it. Use variables — they are replaced for each lead: {variables.map(v => <code key={v} className="mr-1 rounded bg-slate-100 px-1 text-xs">{v}</code>)}</p>
       <ErrorBox error={error} />
       <div className="space-y-3">
         {rows.map(t => (
@@ -184,6 +184,25 @@ export function WhatsAppTemplates() {
               <button className="text-slate-400 hover:text-red-600" aria-label="Delete" onClick={() => confirm(`Delete "${t.name}"?`) && run(supabase.from('message_templates').delete().eq('id', t.id))}><Trash2 className="h-4 w-4" /></button>
             </div>
             <textarea className="input min-h-[70px] text-sm" defaultValue={t.body} onBlur={e => e.target.value !== t.body && run(supabase.from('message_templates').update({ body: e.target.value }).eq('id', t.id))} />
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+              {t.media_path ? <>
+                <span className="rounded bg-slate-100 px-2 py-0.5">{t.media_type?.startsWith('image') ? '🖼️' : t.media_type?.startsWith('video') ? '🎬' : '📄'} {t.media_name}</span>
+                <button className="text-xs text-red-600 hover:underline" onClick={async () => {
+                  await supabase.storage.from('template-media').remove([t.media_path!])
+                  run(supabase.from('message_templates').update({ media_path: null, media_type: null, media_name: null }).eq('id', t.id))
+                }}>Remove attachment</button>
+              </> : <label className="cursor-pointer text-xs text-brand-700 hover:underline">
+                📎 Attach photo, video or PDF (max 16 MB)
+                <input type="file" className="hidden" accept="image/*,video/*,application/pdf" onChange={async e => {
+                  const file = e.target.files?.[0]; if (!file) return
+                  if (file.size > 16 * 1024 * 1024) return setError('That file is bigger than 16 MB — WhatsApp won\'t send it.')
+                  const path = `${org.id}/${t.id}-${Date.now()}-${file.name.replace(/[^A-Za-z0-9._-]/g, '_')}`
+                  const up = await supabase.storage.from('template-media').upload(path, file, { contentType: file.type })
+                  if (up.error) return setError(errorText(up.error))
+                  run(supabase.from('message_templates').update({ media_path: path, media_type: file.type || 'application/octet-stream', media_name: file.name }).eq('id', t.id))
+                }} />
+              </label>}
+            </div>
           </div>
         ))}
       </div>
@@ -274,6 +293,41 @@ export function ExcludedNumbers() {
           ))}
         </div>
       )}
+    </Card>
+  )
+}
+
+/** Which filters reps see in the app's Leads tab. */
+export function AppLeadFilters() {
+  const { org, refresh } = useOrg()
+  const [custom, setCustom] = useState<{ key: string; label: string }[]>([])
+  const std: [string, string][] = [['followup', 'Next call (overdue / today / later)'], ['outcome', 'Last outcome'], ['stage', 'Stage'], ['source', 'Source'],
+    ['campaign', 'Campaign'], ['category', 'Profession group'], ['city', 'City'], ['never_called', 'Never called yet']]
+  const defaults = ['followup', 'outcome', 'stage', 'source', 'category', 'city', 'never_called']
+  const [on, setOn] = useState<string[] | null>(null)
+  const [saved, setSaved] = useState(false)
+  useEffect(() => {
+    supabase.rpc('lead_filter_options', { p_org: org.id }).then(({ data }) => {
+      const c = ((data?.custom ?? []) as { key: string; label: string }[])
+      setCustom(c)
+      setOn((org.settings?.app_lead_filters as string[] | undefined) ?? [...defaults, ...c.map(x => `custom.${x.key}`)])
+    })
+  }, [org.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  if (!on) return null
+  async function toggle(k: string) {
+    const next = on!.includes(k) ? on!.filter(x => x !== k) : [...on!, k]
+    setOn(next)
+    await supabase.from('organizations').update({ settings: { ...(org.settings ?? {}), app_lead_filters: next } }).eq('id', org.id)
+    setSaved(true); setTimeout(() => setSaved(false), 1200); refresh()
+  }
+  return (
+    <Card className="p-5 lg:col-span-2">
+      <h2 className="font-semibold">Lead filters in the app {saved && <span className="ml-2 text-xs font-normal text-emerald-600">Saved ✓</span>}</h2>
+      <p className="mb-3 mt-1 text-sm text-slate-500">Choose the filters your reps see in the app's Leads tab. Your own lead fields (extra columns from your imports or lead sources) appear here too.</p>
+      <div className="grid gap-1 sm:grid-cols-2">
+        {[...std, ...custom.map(c => [`custom.${c.key}`, `${c.label} (your field)`] as [string, string])].map(([k, l]) => (
+          <label key={k} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={on.includes(k)} onChange={() => toggle(k)} /> {l}</label>))}
+      </div>
     </Card>
   )
 }

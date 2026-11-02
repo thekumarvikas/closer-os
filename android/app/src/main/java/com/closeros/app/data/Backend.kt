@@ -74,7 +74,8 @@ object Backend {
 
 @Serializable data class BatchMini(val name: String = "", val webinar_at: String? = null)
 @Serializable data class BatchLink(val watch_minutes: Int? = null, val attended: Boolean = false, val batch: BatchMini? = null)
-@Serializable data class Template(val id: String, val name: String, val body: String, val position: Int = 0, val owner_id: String? = null)
+@Serializable data class Template(val id: String, val name: String, val body: String, val position: Int = 0, val owner_id: String? = null,
+    val media_path: String? = null, val media_type: String? = null, val media_name: String? = null)
 
 @Serializable data class Outcome(
     val id: String, val code: String, val label: String, val category: String, val form: String? = null,
@@ -138,6 +139,23 @@ object Backend {
 
 @Serializable data class OrgAccess(val state: String = "active", val ends_at: String? = null, val grace_ends_at: String? = null, val days_left: Int? = null)
 
+@Serializable data class IdName(val id: String, val name: String)
+@Serializable data class CustomFilter(val key: String, val label: String, val values: List<String> = emptyList())
+@Serializable data class FilterOptions(
+    val enabled: List<String>? = null, val stages: List<IdName> = emptyList(), val categories: List<IdName> = emptyList(),
+    val sources: List<String> = emptyList(), val campaigns: List<String> = emptyList(), val cities: List<String> = emptyList(),
+    val custom: List<CustomFilter> = emptyList(),
+)
+/** Filters chosen in the Leads tab. */
+data class LeadFilters(
+    val followup: String = "all", val stages: Set<String> = emptySet(), val outcomes: Set<String> = emptySet(), val sources: Set<String> = emptySet(),
+    val campaigns: Set<String> = emptySet(), val cities: Set<String> = emptySet(), val categories: Set<String> = emptySet(),
+    val neverCalled: Boolean = false, val custom: Map<String, Set<String>> = emptyMap(),
+) {
+    val count get() = (if (followup != "all") 1 else 0) + listOf(stages, outcomes, sources, campaigns, cities, categories).count { it.isNotEmpty() } +
+        (if (neverCalled) 1 else 0) + custom.count { it.value.isNotEmpty() }
+}
+
 @Serializable data class LeadMini(val name: String = "", val phone: String = "")
 @Serializable data class FollowUp(
     val id: String, val lead_id: String, val due_at: String, val status: String, val reason: String? = null,
@@ -178,7 +196,11 @@ object Repo {
         return Backend.client.from("profiles").select { filter { eq("id", uid) } }.decodeSingleOrNull<Profile>()
     }
 
-    suspend fun leads(orgId: String, query: String, page: Int, mineOnly: Boolean): List<Lead> {
+    suspend fun filterOptions(orgId: String): FilterOptions =
+        json.decodeFromString(db.rpc("lead_filter_options", buildJsonObject { put("p_org", orgId) }).data)
+
+    suspend fun leads(orgId: String, query: String, page: Int, mineOnly: Boolean, f: LeadFilters = LeadFilters()): List<Lead> {
+        fun inList(v: Collection<String>) = "(" + v.joinToString(",") { "\"" + it.replace("\"", "") + "\"" } + ")"
         val q = query.trim()
         val digits = q.filter { it.isDigit() }
         return Backend.client.from("leads").select(Columns.raw(LEAD_COLUMNS)) {
@@ -190,6 +212,22 @@ object Repo {
                     digits.length >= 4 -> ilike("phone", "%$digits%")
                     q.isNotEmpty() -> ilike("name", "%${q.replace("%", "")}%")
                 }
+                val now = Instant.now()
+                val dayEnd = LocalDate.now().plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant()
+                when (f.followup) {
+                    "overdue" -> lt("next_follow_up_at", now.toString())
+                    "today" -> { gte("next_follow_up_at", LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toString()); lt("next_follow_up_at", dayEnd.toString()) }
+                    "upcoming" -> gte("next_follow_up_at", dayEnd.toString())
+                    "none" -> filter("next_follow_up_at", FilterOperator.IS, "null")
+                }
+                if (f.stages.isNotEmpty()) filter("stage_id", FilterOperator.IN, inList(f.stages))
+                if (f.outcomes.isNotEmpty()) filter("last_outcome_id", FilterOperator.IN, inList(f.outcomes))
+                if (f.sources.isNotEmpty()) filter("source", FilterOperator.IN, inList(f.sources))
+                if (f.campaigns.isNotEmpty()) filter("campaign", FilterOperator.IN, inList(f.campaigns))
+                if (f.categories.isNotEmpty()) filter("profession_category_id", FilterOperator.IN, inList(f.categories))
+                if (f.cities.isNotEmpty()) or { f.cities.forEach { ilike("city", it.replace(",", "").trim()) } }
+                if (f.neverCalled) filter("last_call_at", FilterOperator.IS, "null")
+                f.custom.filterValues { it.isNotEmpty() }.forEach { (k, v) -> filter("custom->>$k", FilterOperator.IN, inList(v)) }
             }
             order("next_follow_up_at", Order.ASCENDING, nullsFirst = false)
             order("created_at", Order.DESCENDING)
@@ -257,6 +295,14 @@ object Repo {
 
     suspend fun orgAccess(orgId: String): OrgAccess =
         json.decodeFromString(db.rpc("org_access", buildJsonObject { put("p_org", orgId) }).data)
+
+    /** A company message's photo/video/PDF, saved in the app's cache so it can be shared to WhatsApp. */
+    suspend fun templateMediaFile(ctx: android.content.Context, path: String, name: String?): java.io.File {
+        val dir = java.io.File(ctx.cacheDir, "shared").apply { mkdirs() }
+        val f = java.io.File(dir, (name ?: path.substringAfterLast('/')).replace(Regex("[^A-Za-z0-9._ -]"), "_"))
+        if (!f.exists() || f.length() == 0L) f.writeBytes(Backend.client.storage.from("template-media").downloadAuthenticated(path))
+        return f
+    }
 
     suspend fun myBatches(orgId: String): List<BatchSummary> =
         json.decodeFromString(db.rpc("my_batches", buildJsonObject { put("p_org", orgId) }).data)

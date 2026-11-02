@@ -66,6 +66,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val leads = mutableStateListOf<Lead>()
     var leadsQuery by mutableStateOf("")
     var leadsEnd by mutableStateOf(false)
+    var leadFilters by mutableStateOf(com.closeros.app.data.LeadFilters())
+    var filterOptions by mutableStateOf<com.closeros.app.data.FilterOptions?>(null)
+    var selectMode by mutableStateOf(false)
+    val selected = androidx.compose.runtime.mutableStateMapOf<String, Lead>()
+    fun loadFilterOptions() = viewModelScope.launch {
+        val m = membership ?: return@launch
+        runCatching { Repo.filterOptions(m.org_id) }.onSuccess { filterOptions = it }
+    }
+    fun applyFilters(f: com.closeros.app.data.LeadFilters) { leadFilters = f; reloadLeads() }
+    fun toggleSelect(l: Lead) { if (selected.containsKey(l.id)) selected.remove(l.id) else selected[l.id] = l }
+    fun callSelected() {
+        val list = selected.values.toList(); selected.clear(); selectMode = false
+        startQueue(list)
+    }
     var leadsLoading by mutableStateOf(false)
     var tab by mutableStateOf(Tab.Home)
     var openLeadId by mutableStateOf<String?>(null)
@@ -346,7 +360,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (leadsLoading || leadsEnd) return
         leadsLoading = true
         viewModelScope.launch {
-            runCatching { Repo.leads(m.org_id, leadsQuery, page, mineOnly = isRep()) }
+            runCatching { Repo.leads(m.org_id, leadsQuery, page, mineOnly = isRep(), f = leadFilters) }
                 .onSuccess { leads.addAll(it); if (it.size < 50) leadsEnd = true; page++ }
                 .onFailure { message = "Couldn't load leads. Check your internet." }
             leadsLoading = false

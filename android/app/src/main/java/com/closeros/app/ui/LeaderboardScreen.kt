@@ -63,7 +63,7 @@ fun LeaderboardScreen(vm: AppViewModel) {
         if (sorted == null) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }; return }
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (sorted.isEmpty()) item { Text("No one to show yet.", color = Brand.muted) }
-            itemsIndexed(sorted, key = { _, r -> r.user_id }) { i, r ->
+            itemsIndexed(sorted.distinctBy { it.user_id }, key = { _, r -> r.user_id }) { i, r ->
                 val mine = r.user_id == Backend.uid
                 Row(Modifier.fillMaxWidth().background(if (mine) Brand.light else Color.White, RoundedCornerShape(10.dp)).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(medals.getOrNull(i) ?: "#${i + 1}", fontSize = 20.sp, modifier = Modifier.width(44.dp))

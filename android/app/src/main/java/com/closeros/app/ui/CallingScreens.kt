@@ -221,7 +221,7 @@ fun TodayListScreen(vm: AppViewModel, key: String) {
     }) { pad ->
         LazyColumn(Modifier.fillMaxSize().padding(pad), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (items.isEmpty()) item { Text("No calls here yet today.", color = Brand.muted) }
-            items(items, key = { it.log.id }) { h -> HistoryRow(vm, h) }
+            items(items.distinctBy { it.log.id }, key = { it.log.id }) { h -> HistoryRow(vm, h) }
             if (items.size > leads.size && leads.isNotEmpty()) item {
                 Text("Numbers that are not leads can't go in the queue — add them as leads from the Calls tab first.", fontSize = 12.sp, color = Brand.muted)
             }
@@ -397,7 +397,8 @@ fun WhatsAppPicker(vm: AppViewModel, lead: Lead, onDismiss: () -> Unit) {
                     OutlinedTextField(saveName, { saveName = it }, label = { Text("Name for this message") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     Button(onClick = {
                         // Save with a placeholder instead of this lead's name, so it fills in for every lead.
-                        val body = if (first.length >= 2) text!!.replace(first, "{{leadName}}") else text!!
+                        val cur = text.orEmpty()
+                        val body = if (first.length >= 2) cur.replace(first, "{{leadName}}") else cur
                         vm.saveMyTemplate(saveName, body); saving = false
                     }) { Text("Save to My messages") }
                 } else TextButton(onClick = { saving = true }) { Text("Save as my message for next time") }
@@ -405,18 +406,18 @@ fun WhatsAppPicker(vm: AppViewModel, lead: Lead, onDismiss: () -> Unit) {
         },
         confirmButton = {
             if (text != null) Button(enabled = !sending, onClick = {
-                val t = picked; val own = ownMedia
+                val t = picked; val own = ownMedia; val msg = text ?: return@Button
                 when {
-                    own != null -> { PhoneCalls.whatsappMedia(ctx, lead.phone, own, ctx.contentResolver.getType(own) ?: "*/*", text!!); onDismiss() }
+                    own != null -> { PhoneCalls.whatsappMedia(ctx, lead.phone, own, ctx.contentResolver.getType(own) ?: "*/*", msg); onDismiss() }
                     t?.media_path != null -> { sending = true; scope.launch {
                         runCatching {
                             val f = com.closeros.app.data.Repo.templateMediaFile(ctx, t.media_path, t.media_name)
                             val uri = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
-                            PhoneCalls.whatsappMedia(ctx, lead.phone, uri, t.media_type ?: "*/*", text!!)
-                        }.onFailure { vm.message = "Couldn't get the attachment — check internet"; PhoneCalls.whatsapp(ctx, lead.phone, text!!) }
+                            PhoneCalls.whatsappMedia(ctx, lead.phone, uri, t.media_type ?: "*/*", msg)
+                        }.onFailure { vm.message = "Couldn't get the attachment — check internet"; PhoneCalls.whatsapp(ctx, lead.phone, msg) }
                         sending = false; onDismiss()
                     } }
-                    else -> { PhoneCalls.whatsapp(ctx, lead.phone, text!!); onDismiss() }
+                    else -> { PhoneCalls.whatsapp(ctx, lead.phone, msg); onDismiss() }
                 }
             }) { Text(if (sending) "Preparing…" else "Open WhatsApp") }
         },

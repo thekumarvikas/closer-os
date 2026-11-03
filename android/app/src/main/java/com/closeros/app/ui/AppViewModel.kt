@@ -363,9 +363,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         history = logs.mapIndexed { i, l -> HistoryItem(l, phones[i], leadsByPhone[phones[i]]) }
     }
 
+    private var addingLead = false
     fun addLeadFromCall(phone: String, name: String, profession: String, notes: String, onDone: () -> Unit) = viewModelScope.launch {
         val m = membership ?: return@launch
+        if (addingLead) return@launch   // ignore a quick second tap
+        addingLead = true
         runCatching { Repo.createLead(m.org_id, name, phone, profession, notes) }
+            .also { addingLead = false }
             .onSuccess { message = "Lead added"; onDone(); loadHistory(); reloadLeads(); CallSync.syncNow(ctx) }
             .onFailure { message = if (it.message?.contains("leads_org_phone_uq") == true) "This number is already a lead" else "Couldn't add the lead: ${it.message?.take(80)}" }
     }
@@ -399,7 +403,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 .onSuccess {
                     if (gen != leadsGen) return@onSuccess   // an older search finished late: ignore it
                     if (first) leads.clear()   // replaces the saved copy shown meanwhile
-                    leads.addAll(it); if (it.size < 50) leadsEnd = true; page++
+                    val have = leads.mapTo(HashSet()) { l -> l.id }; leads.addAll(it.filter { l -> l.id !in have }); if (it.size < 50) leadsEnd = true; page++
                     if (first && leadsQuery.isBlank() && leadFilters.count == 0) save("leads0", it)
                 }
                 .onFailure { if (leads.isEmpty()) message = "Couldn't load leads. Check your internet." }
@@ -421,7 +425,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun signOut() = viewModelScope.launch { runCatching { Repo.signOut() }; FollowUpAlarms.scheduleAll(ctx, emptyList()); store.clear(); cache.clearCache(); leads.clear(); pending = null; needsSetup = true }
+    /** Outcomes still waiting for internet when the rep tried to sign out (asks before they are lost). */
+    var signOutWaiting by mutableStateOf<Int?>(null)
+
+    fun signOut(force: Boolean = false) = viewModelScope.launch {
+        if (!force && store.outbox.isNotEmpty()) {
+            message = "Uploading saved outcomes first…"
+            CallSync.run(ctx)
+            val left = store.outbox.size
+            if (left > 0) { signOutWaiting = left; return@launch }
+        }
+        signOutWaiting = null
+        runCatching { Repo.signOut() }; FollowUpAlarms.scheduleAll(ctx, emptyList()); store.clear(); cache.clearCache(); leads.clear(); pending = null; needsSetup = true }
 
     // ───────────── Calling ─────────────
 
@@ -563,7 +578,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val err = sent.exceptionOrNull()?.message.orEmpty()
             if (!err.contains("Unable to resolve host") && !err.contains("timeout", true)) com.closeros.app.data.AppLog.error(ctx, "save outcome", sent.exceptionOrNull())
             if (err.contains("next call time") || err.contains("Unknown outcome") || err.contains("Lead not found")) {
-                message = err.substringAfter("ERROR:").trim().ifEmpty { err }; return@launch
+                message = err.substringAfter("ERROR:").trim().ifEmpty { err }; onDone(); return@launch
             }
             store.addToOutbox(payload)
             message = "No internet — saved on the phone, will send automatically"

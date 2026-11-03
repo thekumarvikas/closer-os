@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.9.9
+## Android app (`android/`) — v0.9.10
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -494,3 +494,14 @@ intelligence → Play Store launch.
 - Maven Central rate-limits this sandbox; settings.gradle.kts uses Google's mirror
   `https://maven-central.storage-download.googleapis.com/maven2/` first.
 - Built APKs for the owner go in `downloads/` (git-ignored) and are sent with SendUserFile.
+
+## Quality pass (v0.9.10, Nov 2026)
+- Owner: "Launch should wait. Make the app perfect." Crash/robustness fixes, no new features:
+  safeStart() (calls/PhoneCalls.kt) for every intent to another app (toast instead of crash);
+  lists de-duplicate before keyed LazyColumn (duplicate key = crash) + leads paging skips ids already
+  shown; outbox add/remove under a lock and only sent items removed (an outcome saved during a sync
+  was lost before); sign-out uploads the outbox first and warns "N outcomes not uploaded" (vm.signOutWaiting);
+  Save button no longer stuck on "Saving…" after a server rejection; outcome save guards missing
+  membership; WhatsApp picker "Back" during attachment download no longer crashes; recordings-folder
+  count runs on IO (ANR on big folders); dial pad reads call history once; double-tap guards on
+  note / key facts / add lead; CallEndReceiver checks the action; telephony uses-feature not required.

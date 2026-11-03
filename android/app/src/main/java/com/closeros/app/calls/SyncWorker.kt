@@ -29,8 +29,10 @@ object CallSync {
 
         // 1) Outcomes saved while offline.
         val pending = store.outbox
-        val failed = pending.filter { runCatching { Repo.logCall(it) }.isFailure }
-        store.outbox = failed
+        val sentOk = pending.filter { o ->
+            runCatching { Repo.logCall(o) }.onFailure { com.closeros.app.data.AppLog.error(ctx, "outbox", it) }.isSuccess
+        }
+        store.removeFromOutbox(sentOk)
 
         // 2) New call-log entries (first run: the last 2 days).
         val since = store.callLogCursorMs.takeIf { it > 0 } ?: (System.currentTimeMillis() - 2 * 86_400_000L)

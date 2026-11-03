@@ -28,9 +28,12 @@ class LocalStore(ctx: Context) {
     /** Outcomes that could not be sent (no internet). Sent again by the sync worker. */
     var outbox: List<JsonObject>
         get() = p.getString("outbox", null)?.let { runCatching { json.decodeFromString<List<JsonObject>>(it) }.getOrNull() } ?: emptyList()
-        set(v) { p.edit().putString("outbox", json.encodeToString(v)).apply() }
+        set(v) { p.edit().putString("outbox", json.encodeToString(v)).commit() }
 
-    fun addToOutbox(o: JsonObject) { outbox = outbox + o }
+    fun addToOutbox(o: JsonObject) = synchronized(outboxLock) { outbox = outbox + o }
+
+    /** Removes only the outcomes that were sent, so one saved meanwhile is never lost. */
+    fun removeFromOutbox(sent: List<JsonObject>) = synchronized(outboxLock) { if (sent.isNotEmpty()) outbox = outbox.filter { it !in sent } }
 
     var lastSyncMs: Long
         get() = p.getLong("last_sync_ms", 0)
@@ -117,4 +120,6 @@ class LocalStore(ctx: Context) {
         set(v) { p.edit().putInt("countdown", v).apply() }
 
     fun clear() { p.edit().clear().apply() }
+
+    companion object { private val outboxLock = Any() }
 }

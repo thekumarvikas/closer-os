@@ -1,5 +1,6 @@
 package com.closeros.app.ui
 
+import com.closeros.app.calls.safeStart
 import android.Manifest
 import android.content.Intent
 import android.net.Uri
@@ -80,7 +81,7 @@ fun LoginScreen(vm: AppViewModel) {
                     enabled = !busy && email.isNotBlank() && password.isNotBlank(), modifier = Modifier.fillMaxWidth().height(50.dp)) {
                     if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp) else Text("Sign in", fontSize = 16.sp)
                 }
-                TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.WEB_URL))) }, modifier = Modifier.fillMaxWidth()) {
+                TextButton(onClick = { safeStart(ctx, Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.WEB_URL))) }, modifier = Modifier.fillMaxWidth()) {
                     Text("No account? Ask your manager to invite you, then sign up on the website")
                 }
             }
@@ -248,7 +249,7 @@ fun ProfileScreen(vm: AppViewModel) {
         Text(if (vm.store.lastSyncMs == 0L) "Not synced yet" else "Last sync ${fmtWhen(Instant.ofEpochMilli(vm.store.lastSyncMs).toString())}", color = Brand.muted)
         OutlinedButton(onClick = { com.closeros.app.calls.CallSync.syncNow(ctx); vm.message = "Syncing calls…" }) { Icon(Icons.Default.Refresh, null); Spacer(Modifier.width(6.dp)); Text("Sync calls now") }
         HorizontalDivider()
-        OutlinedButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.WEB_URL))) }) { Text("Open dashboard website") }
+        OutlinedButton(onClick = { safeStart(ctx, Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.WEB_URL))) }) { Text("Open dashboard website") }
         TextButton(onClick = { vm.signOut() }) { Text("Sign out", color = Brand.red) }
         Text("Closer OS ${BuildConfig.VERSION_NAME}", fontSize = 12.sp, color = Brand.muted)
     }

@@ -88,6 +88,13 @@ fun Root(vm: AppViewModel) {
     LaunchedEffect(vm.membership) { while (vm.membership != null) { kotlinx.coroutines.delay(4_000); if (vm.foreground && vm.pending == null) vm.checkCallRequests() } }
     // While the app is on screen, check for announcements every 2 minutes (background sync covers the rest).
     LaunchedEffect(vm.membership) { while (vm.membership != null) { kotlinx.coroutines.delay(120_000); if (vm.foreground) vm.checkAlerts() } }
+    vm.signOutWaiting?.let { n ->
+        androidx.compose.material3.AlertDialog(onDismissRequest = { vm.signOutWaiting = null },
+            title = { Text("$n outcome${if (n > 1) "s" else ""} not uploaded yet") },
+            text = { Text("They couldn't be sent — check your internet and try again. If you sign out now, they will be lost.") },
+            confirmButton = { androidx.compose.material3.TextButton(onClick = { vm.signOutWaiting = null; vm.signOut() }) { Text("Try again") } },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { vm.signOut(force = true) }) { Text("Sign out anyway", color = androidx.compose.ui.graphics.Color(0xFFDC2626)) } })
+    }
     LaunchedEffect(vm.message) {
         vm.message?.let { Toast.makeText(ctx, it, Toast.LENGTH_SHORT).show(); vm.message = null }
     }
@@ -109,11 +116,11 @@ fun Root(vm: AppViewModel) {
             vm.showDialer -> DialerScreen(vm)
             vm.showReports -> ReportsScreen(vm)
             vm.showLeaderboard -> LeaderboardScreen(vm)
-            vm.openLeadId != null -> LeadDetailScreen(vm, vm.openLeadId!!) { call(it) }
+            vm.openLeadId != null -> vm.openLeadId?.let { id -> LeadDetailScreen(vm, id) { call(it) } }
             vm.queueActive -> QueueScreen(vm)
             vm.openList != null -> BatchListScreen(vm)
             vm.showBatches -> BatchesScreen(vm)
-            vm.todayFilter != null -> TodayListScreen(vm, vm.todayFilter!!)
+            vm.todayFilter != null -> vm.todayFilter?.let { f -> TodayListScreen(vm, f) }
             else -> { TripleBackToExit(vm); Scaffold(floatingActionButton = {
                 // Dial pad is always one tap away, on every tab.
                 if (vm.tab != Tab.Profile && !vm.selectMode) FloatingActionButton(onClick = { vm.showDialer = true }, containerColor = androidx.compose.ui.graphics.Color(0xFF16A34A),

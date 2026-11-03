@@ -47,10 +47,12 @@ fun DialerScreen(vm: AppViewModel) {
     var adding by remember { mutableStateOf(false) }
     val sims = remember { vm.sims() }
     val digits = number.filter { it.isDigit() }
-    LaunchedEffect(digits) {
+    // The phone's call history is read once when the dial pad opens, not on every key press.
+    val allHistory by produceState<List<LogCall>?>(null) { value = withContext(Dispatchers.IO) { runCatching { PhoneCalls.history(ctx, 3000) }.getOrDefault(emptyList()) } }
+    LaunchedEffect(digits, allHistory) {
         if (digits.length < 3) { leads = emptyList(); history = emptyList(); return@LaunchedEffect }
         delay(250)
-        history = withContext(Dispatchers.IO) { PhoneCalls.history(ctx, 3000) }.filter { it.phone.filter { c -> c.isDigit() }.contains(digits) }.take(30)
+        history = allHistory.orEmpty().filter { it.phone.filter { c -> c.isDigit() }.contains(digits) }.take(30)
         val m = vm.membership
         leads = if (m != null && digits.length >= 4) runCatching { Repo.leads(m.org_id, digits, 0, vm.membership?.role == "rep") }.getOrDefault(emptyList()).take(5) else emptyList()
     }
@@ -65,7 +67,7 @@ fun DialerScreen(vm: AppViewModel) {
         // Matches: leads first, then the phone's call history with this number.
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(16.dp, 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (leads.isNotEmpty()) item { Text("Leads", fontSize = 12.sp, color = Brand.muted, fontWeight = FontWeight.SemiBold) }
-            items(leads, key = { "l" + it.id }) { l ->
+            items(leads.distinctBy { "l" + it.id }, key = { "l" + it.id }) { l ->
                 Row(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(10.dp)).combinedClickable(onClick = { vm.openLeadId = l.id; vm.showDialer = false }).padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -76,7 +78,7 @@ fun DialerScreen(vm: AppViewModel) {
                 }
             }
             if (history.isNotEmpty()) item { Text("Call history", fontSize = 12.sp, color = Brand.muted, fontWeight = FontWeight.SemiBold) }
-            items(history, key = { "h" + it.id }) { h ->
+            items(history.distinctBy { "h" + it.id }, key = { "h" + it.id }) { h ->
                 Row(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(10.dp)).combinedClickable(onClick = { number = h.phone }).padding(12.dp)) {
                     Column(Modifier.weight(1f)) {
                         Text(h.name ?: fmtPhone(h.phone), fontWeight = FontWeight.Medium)

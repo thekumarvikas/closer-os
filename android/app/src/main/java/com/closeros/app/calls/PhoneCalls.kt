@@ -79,7 +79,7 @@ object PhoneCalls {
 
     /** Opens the SMS app with the number (and text) filled in. */
     fun sms(ctx: Context, phone: String, text: String = "") {
-        ctx.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + phone.filter { it.isDigit() || it == '+' }))
+        safeStart(ctx, Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + phone.filter { it.isDigit() || it == '+' }))
             .putExtra("sms_body", text).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
@@ -91,7 +91,7 @@ object PhoneCalls {
             .putExtra("jid", "$digits@s.whatsapp.net").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
         i.clipData = android.content.ClipData.newRawUri("media", uri)
         if (pkg != null) i.setPackage(pkg)
-        ctx.startActivity(if (pkg != null) i else Intent.createChooser(i, "Send with").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        safeStart(ctx, if (pkg != null) i else Intent.createChooser(i, "Send with").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
     /** Starts a normal phone call on the chosen SIM. The phone's own app handles (and records) it. */
@@ -103,13 +103,13 @@ object PhoneCalls {
             sim?.handle?.let { extras.putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, it) }
             runCatching { ctx.getSystemService(TelecomManager::class.java).placeCall(uri, extras); return }
         }
-        ctx.startActivity(Intent(Intent.ACTION_DIAL, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        safeStart(ctx, Intent(Intent.ACTION_DIAL, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
     fun whatsapp(ctx: Context, phone: String, text: String = "") {
         val digits = phone.filter { it.isDigit() }
         val uri = Uri.parse("https://wa.me/$digits" + if (text.isNotEmpty()) "?text=${Uri.encode(text)}" else "")
-        ctx.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        safeStart(ctx, Intent(Intent.ACTION_VIEW, uri), "WhatsApp isn't installed on this phone")
     }
 
     /** Call-log entries newer than [sinceMs], oldest first. */
@@ -161,4 +161,10 @@ object PhoneCalls {
         val last10 = phone.filter { it.isDigit() }.takeLast(10)
         return readLog(ctx, afterMs - 10_000).lastOrNull { it.phone.filter { ch -> ch.isDigit() }.endsWith(last10) && it.direction == "outgoing" }
     }
+}
+
+/** Opens another app or settings screen; shows a short message instead of crashing when the phone has no app for it. */
+fun safeStart(ctx: android.content.Context, i: android.content.Intent, missing: String = "No app on this phone can open this") {
+    try { ctx.startActivity(i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    catch (e: Exception) { android.widget.Toast.makeText(ctx, missing, android.widget.Toast.LENGTH_LONG).show() }
 }

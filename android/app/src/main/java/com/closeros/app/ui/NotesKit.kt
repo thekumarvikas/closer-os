@@ -65,6 +65,7 @@ fun NoteEditor(text: String, onText: (String) -> Unit, tags: List<String>, onTag
 @Composable
 fun KeyFactsCard(lead: Lead, onSaved: (String) -> Unit) {
     var editing by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
     var text by remember(lead.id, lead.key_facts) { mutableStateOf(lead.key_facts.orEmpty()) }
     val scope = rememberCoroutineScope()
     val ctx = LocalContext.current
@@ -79,13 +80,15 @@ fun KeyFactsCard(lead: Lead, onSaved: (String) -> Unit) {
                     placeholder = { Text("e.g. Owns 2 clothing shops · wife decides · wants EMI · call after 7 PM") },
                     trailingIcon = { VoiceButton { s -> text = if (text.isBlank()) s else "$text · $s" } })
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = {
+                    Button(enabled = !saving, onClick = {
+                        saving = true
                         scope.launch {
                             runCatching { Repo.setKeyFacts(lead.id, text) }
                                 .onSuccess { editing = false; onSaved(text) }
                                 .onFailure { android.widget.Toast.makeText(ctx, "Couldn't save — check internet", android.widget.Toast.LENGTH_SHORT).show() }
+                            saving = false
                         }
-                    }) { Text("Save") }
+                    }) { Text(if (saving) "Saving…" else "Save") }
                     TextButton(onClick = { editing = false; text = lead.key_facts.orEmpty() }) { Text("Cancel") }
                 }
             } else Text(lead.key_facts?.ifBlank { null } ?: "Nothing yet. Add what matters most: who decides, budget, objections, best time to call.",
@@ -124,17 +127,20 @@ fun NotesTimeline(vm: AppViewModel, leadId: String) {
     if (adding) {
         var text by remember { mutableStateOf("") }
         var tags by remember { mutableStateOf(emptyList<String>()) }
+        var saving by remember { mutableStateOf(false) }
         val scope = rememberCoroutineScope()
         AlertDialog(onDismissRequest = { adding = false }, title = { Text("Add note") },
             text = { NoteEditor(text, { text = it }, tags, { tags = it }, vm.membership?.organization?.noteTags.orEmpty(), "Note") },
             confirmButton = {
                 Button(onClick = {
+                    saving = true
                     scope.launch {
                         runCatching { Repo.addNote(leadId, text, tags) }
                             .onSuccess { adding = false; reload++ }
-                            .onFailure { vm.message = "Couldn't save the note" }
+                            .onFailure { vm.message = "Couldn't save the note — check internet" }
+                        saving = false
                     }
-                }, enabled = text.isNotBlank() || tags.isNotEmpty()) { Text("Save") }
+                }, enabled = !saving && (text.isNotBlank() || tags.isNotEmpty())) { Text(if (saving) "Saving…" else "Save") }
             },
             dismissButton = { TextButton(onClick = { adding = false }) { Text("Cancel") } })
     }

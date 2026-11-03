@@ -105,7 +105,7 @@ fun FollowUpsTabs(vm: AppViewModel) {
                     "ontime" -> "No follow-ups called on time in the last 7 days yet."; else -> "No more follow-ups due today."
                 }, color = Brand.muted, modifier = Modifier.padding(8.dp))
             }
-            items(shown, key = { it.id }) { f -> FollowUpCard(vm, f, now, zone) }
+            items(shown.distinctBy { it.id }, key = { it.id }) { f -> FollowUpCard(vm, f, now, zone) }
         }
     }
 }

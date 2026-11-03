@@ -149,10 +149,13 @@ fun OutcomeScreen(vm: AppViewModel) {
         NoteEditor(notes, { notes = it }, noteTags, { noteTags = it }, vm.membership?.organization?.noteTags.orEmpty(), "Notes from this call")
 
         Button(onClick = {
+            val o = outcome ?: return@Button
+            val m = vm.membership ?: run { vm.message = "Still loading your company — try again in a moment"; return@Button }
+            val at = followAt
+            if (!noFollow && at == null) return@Button
             busy = true
-            val o = outcome!!
             val payload = buildJsonObject {
-                put("id", vm.newCallId()); put("org_id", vm.membership!!.org_id); put("lead_id", p.leadId)
+                put("id", vm.newCallId()); put("org_id", m.org_id); put("lead_id", p.leadId)
                 put("phone", p.phone); put("direction", log?.direction ?: "outgoing"); put("purpose", p.purpose)
                 p.batchId?.let { put("batch_id", it) }
                 put("started_at", Instant.ofEpochMilli(log?.startedAtMs ?: p.startedAtMs).toString())
@@ -162,7 +165,7 @@ fun OutcomeScreen(vm: AppViewModel) {
                 put("device_id", PhoneCalls.deviceId(ctx)); put("from_dialer_queue", false)
                 put("outcome_id", o.id)
                 put("outcome_data", buildJsonObject {
-                    if (amount.isNotBlank()) put(if (o.form == "sale") "amount" else "deal_value", amount.toLong())
+                    amount.filter { it.isDigit() }.toLongOrNull()?.let { put(if (o.form == "sale") "amount" else "deal_value", it) }
                     if (product.isNotBlank()) put("product", product)
                     if (interest.isNotBlank()) put("interest", interest)
                     if (noteTags.isNotEmpty()) put("note_tags", kotlinx.serialization.json.JsonArray(noteTags.map { kotlinx.serialization.json.JsonPrimitive(it) }))
@@ -170,7 +173,7 @@ fun OutcomeScreen(vm: AppViewModel) {
                 if (notes.isNotBlank()) put("notes", notes.trim())
                 if (profession.isNotBlank() && profession.trim() != p.profession) put("profession", profession.trim())
                 if (categoryId != null && categoryId != p.categoryId) put("profession_category_id", categoryId)
-                if (noFollow) put("no_follow_up", true) else put("follow_up_at", followAt!!.toInstant().toString())
+                if (noFollow) put("no_follow_up", true) else at?.let { put("follow_up_at", it.toInstant().toString()) }
             }
             vm.saveOutcome(payload) { busy = false }
         }, enabled = canSave, modifier = Modifier.fillMaxWidth().height(54.dp)) { Text(if (busy) "Saving…" else "Save", fontSize = 17.sp) }

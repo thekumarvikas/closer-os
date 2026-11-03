@@ -56,7 +56,7 @@ fun LeadsTab(vm: AppViewModel, onCall: (Lead) -> Unit) {
             Icon(Icons.Default.Call, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Call all ${vm.leads.size}${if (vm.leadsEnd) "" else "+"} in a queue")
         }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(vm.leads, key = { it.id }) { l ->
+            items(vm.leads.distinctBy { it.id }, key = { it.id }) { l ->
                 if (vm.selectMode) {
                     val on = vm.selected.containsKey(l.id)
                     Row(Modifier.fillMaxWidth().background(if (on) Color(0xFFE6F4F1) else Color.White, RoundedCornerShape(10.dp))

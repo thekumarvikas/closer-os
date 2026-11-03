@@ -222,7 +222,7 @@ fun ReportsScreen(vm: AppViewModel) {
                 Section("By hour (calls · conversations)") {
                     (hours.keys.min()..hours.keys.max()).forEach { h ->
                         val r = hours[h]
-                        BarRow(String.format("%d %s", if (h % 12 == 0) 12 else h % 12, if (h < 12) "AM" else "PM"), (r?.i("calls") ?: 0).toFloat() / max,
+                        BarRow("${if (h % 12 == 0) 12 else h % 12} ${if (h < 12) "AM" else "PM"}", (r?.i("calls") ?: 0).toFloat() / max,
                             "${r?.i("calls") ?: 0} · ${r?.i("conn") ?: 0}", Brand.primary)
                     }
                 }

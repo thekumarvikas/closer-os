@@ -1,5 +1,7 @@
 package com.closeros.app.ui
 
+import kotlinx.coroutines.launch
+import com.closeros.app.calls.safeStart
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -68,7 +70,7 @@ fun ExactAlarmHint() {
             Text("Allow on-time follow-up reminders", fontWeight = FontWeight.SemiBold)
             Text("So reminders ring exactly 5 minutes before and at the follow-up time.", fontSize = 14.sp, color = Brand.muted)
             TextButton(onClick = {
-                if (Build.VERSION.SDK_INT >= 31) ctx.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${ctx.packageName}")))
+                if (Build.VERSION.SDK_INT >= 31) safeStart(ctx, Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${ctx.packageName}")))
             }) { Text("Allow") }
         }
     }
@@ -98,7 +100,7 @@ fun CallHistoryScreen(vm: AppViewModel) {
         }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp, 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (shown.isEmpty()) item { Text("No calls here.", color = Brand.muted) }
-            items(shown, key = { it.log.id }) { h -> HistoryRow(vm, h, onAdd = { adding = h }) }
+            items(shown.distinctBy { it.log.id }, key = { it.log.id }) { h -> HistoryRow(vm, h, onAdd = { adding = h }) }
             if (vm.historyHasMore) item {
                 OutlinedButton(onClick = { vm.historyLimit += 500; vm.loadHistory() }, modifier = Modifier.fillMaxWidth()) { Text("Load older calls") }
             } else if (items.isNotEmpty()) item { Text("That's every call saved on this phone (${items.size}).", fontSize = 12.sp, color = Brand.muted) }
@@ -130,8 +132,10 @@ private fun AddLeadDialog(phone: String, onDismiss: () -> Unit, onSave: (String,
 fun RecordingSettings(vm: AppViewModel) {
     val ctx = LocalContext.current
     var folder by remember { mutableStateOf(vm.store.recordingsFolder) }
+    val scope = rememberCoroutineScope()
     val pick = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()) { uri ->
-        vm.message = com.closeros.app.calls.PhoneSetup.saveRecordingsFolder(ctx, uri); folder = vm.store.recordingsFolder
+        if (uri != null) vm.message = "Checking the folder…"
+        scope.launch { vm.message = com.closeros.app.calls.PhoneSetup.saveRecordingsFolder(ctx, uri); folder = vm.store.recordingsFolder }
     }
     Text("Call recordings", fontWeight = FontWeight.SemiBold)
     if (com.closeros.app.calls.RecordingSync.googleDialer(ctx)) {
@@ -164,13 +168,13 @@ fun WhatsAppSettings(vm: AppViewModel, compact: Boolean = false) {
              else "WhatsApp calls don't show in the phone's call history. Allow Closer OS to see WhatsApp's call notifications so your WhatsApp calls count too. Only call details (who, when, how long) are kept.",
             color = Brand.muted, fontSize = 14.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (!granted) Button(onClick = { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }) { Text("Allow") }
+            if (!granted) Button(onClick = { safeStart(ctx, Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }) { Text("Allow") }
             if (!contacts) OutlinedButton(onClick = { askContacts.launch(android.Manifest.permission.READ_CONTACTS) }) { Text("Allow contacts") }
         }
         if (!contacts) Text("Contacts: needed to know the number when WhatsApp shows a saved name.", fontSize = 12.sp, color = Brand.muted)
         if (granted && !compact) {
             Text("So long WhatsApp calls are never missed, don't let the phone put Closer OS to sleep: Battery → No restrictions (Xiaomi: also turn on Autostart).", fontSize = 12.sp, color = Brand.muted)
-            TextButton(onClick = { ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}"))) }) { Text("Open app settings") }
+            TextButton(onClick = { safeStart(ctx, Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}"))) }) { Text("Open app settings") }
         }
     }
     if (compact) Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFECFDF5))) { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { body() } }

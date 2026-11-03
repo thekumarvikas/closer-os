@@ -32,7 +32,7 @@ fun FeedbackScreen(vm: AppViewModel) {
         }
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (vm.reviews.isEmpty()) item { Text("No reviews yet. When your manager reviews one of your calls, the feedback appears here.", color = Brand.muted) }
-            items(vm.reviews, key = { it.id }) { r -> ReviewCard(vm, r) }
+            items(vm.reviews.distinctBy { it.id }, key = { it.id }) { r -> ReviewCard(vm, r) }
         }
     }
 }

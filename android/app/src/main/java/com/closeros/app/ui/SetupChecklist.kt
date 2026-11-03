@@ -1,5 +1,6 @@
 package com.closeros.app.ui
 
+import com.closeros.app.calls.safeStart
 import android.content.Intent
 import android.net.Uri
 import android.provider.DocumentsContract
@@ -28,17 +29,20 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.closeros.app.calls.CallSync
 import com.closeros.app.calls.PhoneSetup
+import kotlinx.coroutines.launch
 
 /** "Phone setup": every permission and setting in one list, each turned on from here. */
 @Composable
 fun SetupChecklistScreen(vm: AppViewModel, onBack: () -> Unit) {
     val ctx = LocalContext.current
     var tick by remember { mutableStateOf(0) }
+    val scope = rememberCoroutineScope()
     LifecycleResumeEffect(Unit) { tick++; onPauseOrDispose { } }
     val items = remember(tick) { PhoneSetup.items(ctx) }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { tick++ }
     val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        vm.message = PhoneSetup.saveRecordingsFolder(ctx, uri); tick++
+        if (uri != null) vm.message = "Checking the folder…"
+        scope.launch { vm.message = PhoneSetup.saveRecordingsFolder(ctx, uri); tick++ }
     }
     BackHandler { onBack() }
     val needed = items.filter { it.required }
@@ -79,12 +83,12 @@ private fun Section(title: String, list: List<PhoneSetup.Item>, vm: AppViewModel
                                 when {
                                     it.kind == PhoneSetup.Kind.Runtime -> ask.launch(it.perms.toTypedArray())
                                     it.key == "recfolder" -> pickFolder.launch(PhoneSetup.recordingsHint())
-                                    it.intent != null -> runCatching { ctx.startActivity(it.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                                        .onFailure { _ -> ctx.startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                                    it.intent != null -> runCatching { safeStart(ctx, it.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                                        .onFailure { _ -> safeStart(ctx, Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
                                 }
                             }, contentPadding = PaddingValues(horizontal = 14.dp)) { Text(if (it.kind == PhoneSetup.Kind.Runtime) "Allow" else if (it.key == "autorecord") "Open Phone app" else "Turn on") }
                             if (it.key == "whatsapp" && android.os.Build.VERSION.SDK_INT >= 33) OutlinedButton(onClick = {
-                                ctx.startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                                safeStart(ctx, Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                             }) { Text("Open app info") }
                             if (it.kind == PhoneSetup.Kind.Confirm) OutlinedButton(onClick = { vm.store.confirm(it.key); refresh() }) { Text("Done") }
                         }

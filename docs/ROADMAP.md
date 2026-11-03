@@ -93,3 +93,4 @@ Everything from the original product prompt plus the owner's feedback, with stat
 - ⬜ Custom domain (e.g. app.closeros.in)
 - ⬜ Play Store: developer account, privacy policy, call-log permission declaration, 12-tester closed test
 - ⬜ Company-specific APK download from the dashboard
+- ✅ Stability pass (v0.9.10): crash guards, no lost offline outcomes, no freezes on big recording folders

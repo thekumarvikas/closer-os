@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit
 /** When a call ends, check if it was with a lead and remind the rep to save the outcome. */
 class CallEndReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
+        if (intent.action != TelephonyManager.ACTION_PHONE_STATE_CHANGED) return
         if (intent.getStringExtra(TelephonyManager.EXTRA_STATE) != TelephonyManager.EXTRA_STATE_IDLE) return
         // The call log is written a moment after the call ends.
         WorkManager.getInstance(ctx).enqueue(OneTimeWorkRequestBuilder<CallEndWorker>().setInitialDelay(4, TimeUnit.SECONDS).build())

@@ -27,7 +27,7 @@ object PhoneSetup {
 
     val callPerms = buildList {
         add(Manifest.permission.READ_CALL_LOG); add(Manifest.permission.READ_PHONE_STATE); add(Manifest.permission.CALL_PHONE)
-        if (Build.VERSION.SDK_INT >= 26) add(Manifest.permission.READ_PHONE_NUMBERS)
+        add(Manifest.permission.READ_PHONE_NUMBERS)
     }
 
     private fun has(ctx: Context, p: String) = PhoneCalls.has(ctx, p)
@@ -59,8 +59,6 @@ object PhoneSetup {
         return candidates.map { (p, c) -> Intent().setComponent(ComponentName(p, c)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
             .firstOrNull { it.resolveActivity(ctx.packageManager) != null }
     }
-
-    private fun appSettings(ctx: Context) = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}"))
 
     fun items(ctx: Context): List<Item> {
         val store = LocalStore(ctx)
@@ -98,7 +96,7 @@ object PhoneSetup {
                 makerDialer(dialer) -> "Your phone's own Phone app is set as the default ✓"
                 else -> "Another app is set as your Phone app. Choose your phone's own Phone app so calls can be recorded."
             }, makerDialer(dialer) && !google, Kind.Special, required = false,
-            intent = if (Build.VERSION.SDK_INT >= 24) Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS) else appSettings(ctx),
+            intent = Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS),
             steps = "Open \"Phone app\" and choose your phone's own Phone app (not a third-party dialer).",
             warning = if (google) "Recordings can't be uploaded on this phone. Call history, talk time and WhatsApp calls still work." else null)
         if (!google) {
@@ -118,17 +116,18 @@ object PhoneSetup {
     }
 
     /** Saves the folder the rep picked and says how many recordings are in it. */
-    fun saveRecordingsFolder(ctx: Context, uri: Uri?): String {
+    suspend fun saveRecordingsFolder(ctx: Context, uri: Uri?): String {
         if (uri == null) return "No folder chosen"
         runCatching { ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
         LocalStore(ctx).recordingsFolder = uri.toString()
-        val n = runCatching {
+        // Counting can take a while in a folder with thousands of recordings, so it runs off the screen thread.
+        val n = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching {
             val root = androidx.documentfile.provider.DocumentFile.fromTreeUri(ctx, uri)
             fun count(d: androidx.documentfile.provider.DocumentFile?, depth: Int): Int = d?.listFiles()?.sumOf {
                 if (it.isDirectory && depth < 2) count(it, depth + 1) else if (it.isFile && Regex(".*\\.(mp3|m4a|amr|aac|wav|ogg|opus|3gp)$", RegexOption.IGNORE_CASE).matches(it.name.orEmpty())) 1 else 0
             } ?: 0
             count(root, 0)
-        }.getOrDefault(-1)
+        }.getOrDefault(-1) }
         CallSync.syncNow(ctx)
         val name = uri.lastPathSegment?.substringAfterLast('/')?.substringAfterLast(':') ?: "folder"
         return when {

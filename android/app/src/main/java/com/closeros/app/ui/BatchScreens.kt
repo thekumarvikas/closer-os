@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -51,7 +52,7 @@ fun BatchesScreen(vm: AppViewModel) {
         if (list == null) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }; return }
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (list.isEmpty()) item { Text("No webinars or events with leads for you in the last 4 months. They're created on the dashboard (Events & Batches).", color = Brand.muted) }
-            items(list, key = { it.id }) { b ->
+            items(list.distinctBy { it.id }, key = { it.id }) { b ->
                 val at = runCatching { Instant.parse(b.webinar_at).atZone(zone) }.getOrNull()
                 val upcoming = at?.toInstant()?.isAfter(Instant.now()) == true
                 val rem = if (vm.listEveryone) b.reminder_all else b.reminder_mine
@@ -188,7 +189,7 @@ fun BatchListScreen(vm: AppViewModel) {
                 }
             }
             if (shown.isEmpty()) item { Text("No leads match these filters.", color = Brand.muted, modifier = Modifier.padding(8.dp)) }
-            items(shown, key = { it.id }) { r -> BatchRowCard(vm, r, shown.indexOf(r) + 1) }
+            itemsIndexed(shown.distinctBy { it.id }, key = { _, r -> r.id }) { i, r -> BatchRowCard(vm, r, i + 1) }
         }
     }
 }

@@ -464,6 +464,8 @@ intelligence → Play Store launch.
   Store) and `direct` (no NotificationListenerService; BuildConfig.WA_TRACKING=false hides WhatsApp
   setup). Build with ./gradlew assembleDirectRelease / assembleFullRelease; outputs in
   app/build/outputs/apk/<flavor>/release/. Owner gets the direct APK for testing.
+- Owner (Nov 2026): testing WITHOUT WhatsApp calls for now → send only the `direct` APK
+  (CloserOS-<ver>.apk) unless he asks for the full one.
 - Company-specific APK downloads must use `direct` (or the rep turns off Play Protect scanning).
   WhatsApp-call tracking only via the Play Store build.
 

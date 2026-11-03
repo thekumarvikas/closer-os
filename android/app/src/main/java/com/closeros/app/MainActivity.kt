@@ -78,12 +78,14 @@ fun Root(vm: AppViewModel) {
         val sims = vm.sims()
         val preferred = sims.firstOrNull { it.slot == vm.store.preferredSim }
         // In a queue, keep using the SIM chosen for the first call instead of asking every time.
-        if (sims.size > 1 && !(vm.queueActive && preferred != null)) simChoice = lead to sims else vm.startCall(lead, preferred ?: sims.firstOrNull())
+        if (sims.size > 1 && !((vm.queueActive || vm.remoteCall) && preferred != null)) simChoice = lead to sims else vm.startCall(lead, preferred ?: sims.firstOrNull())
     }
 
     LaunchedEffect(vm.callRequest) {
         vm.callRequest?.let { lead -> vm.callRequest = null; if (vm.pending == null) call(lead) else vm.message = "Save the outcome of your last call first" }
     }
+    // Desk mode: while the app is on screen, check every 4 seconds if the laptop asked to call someone.
+    LaunchedEffect(vm.membership) { while (vm.membership != null) { kotlinx.coroutines.delay(4_000); if (vm.foreground && vm.pending == null) vm.checkCallRequests() } }
     // While the app is on screen, check for announcements every 2 minutes (background sync covers the rest).
     LaunchedEffect(vm.membership) { while (vm.membership != null) { kotlinx.coroutines.delay(120_000); if (vm.foreground) vm.checkAlerts() } }
     LaunchedEffect(vm.message) {

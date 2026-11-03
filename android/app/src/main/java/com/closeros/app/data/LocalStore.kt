@@ -17,6 +17,8 @@ class LocalStore(ctx: Context) {
         val profession: String? = null, val categoryId: String? = null,
         /** Set for calls found in the call log (incoming, or dialled outside Closer OS). */
         val logId: String? = null,
+        /** Set when the laptop asked this phone to dial (desk mode). */
+        val requestId: String? = null,
     )
 
     var pendingCall: PendingCall?

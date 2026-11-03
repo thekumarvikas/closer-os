@@ -1,12 +1,13 @@
 import { NavLink, Outlet, Link, useLocation } from 'react-router-dom'
 import { useState, type FormEvent } from 'react'
-import { LayoutDashboard, BarChart3, Video, Plug, BookOpen, Megaphone, ClipboardCheck, CreditCard, ShieldCheck, Users, PhoneCall, CalendarClock, UserCog, Settings, LogOut, Menu, X } from 'lucide-react'
+import { LayoutDashboard, Headphones, BarChart3, Video, Plug, BookOpen, Megaphone, ClipboardCheck, CreditCard, ShieldCheck, Users, PhoneCall, CalendarClock, UserCog, Settings, LogOut, Menu, X } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { Button, ErrorBox, Field, Modal } from './ui'
 import { useSession } from '../lib/session'
 import { roleLabel } from '../lib/format'
 
 const nav = [
+  { to: '/desk', label: 'My desk', icon: Headphones },
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
   { to: '/webinars', label: 'Events & Batches', icon: Video },

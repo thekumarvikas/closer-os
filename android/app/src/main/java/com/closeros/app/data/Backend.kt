@@ -159,6 +159,8 @@ data class LeadFilters(
 @Serializable data class BoardRow(val user_id: String, val name: String = "", val calls: Int = 0, val conversations: Int = 0, val talk_sec: Int = 0, val sales: Int = 0)
 @Serializable data class BestTime(val hour: Int, val source: String, val picked: Int? = null, val tries: Int? = null, val rate: Int? = null)
 
+@Serializable data class CallRequest(val id: String, val lead_id: String, val purpose: String = "sales", val batch_id: String? = null)
+
 @Serializable data class LeadMini(val name: String = "", val phone: String = "")
 @Serializable data class FollowUp(
     val id: String, val lead_id: String, val due_at: String, val status: String, val reason: String? = null,
@@ -347,6 +349,21 @@ object Repo {
         val d = db.rpc("best_time_to_call", buildJsonObject { put("p_lead", leadId) }).data
         if (d.isBlank() || d == "null") null else json.decodeFromString<BestTime>(d)
     }.getOrNull()
+
+    // ── Desk mode (laptop ↔ phone) ──
+    suspend fun claimCallRequest(): CallRequest? {
+        val d = db.rpc("claim_call_request").data
+        return if (d.isBlank() || d == "null") null else json.decodeFromString<CallRequest>(d)
+    }
+    suspend fun callRequestEnded(id: String, callId: String, startedMs: Long, durationSec: Int, phone: String) {
+        db.rpc("call_request_ended", buildJsonObject {
+            put("p_id", id); put("p_call", callId); put("p_started", Instant.ofEpochMilli(startedMs).toString()); put("p_duration", durationSec); put("p_phone", phone)
+        })
+    }
+    suspend fun callsWithOutcome(ids: List<String>): Set<String> = if (ids.isEmpty()) emptySet() else
+        json.decodeFromString<List<String>>(db.rpc("calls_with_outcome", buildJsonObject {
+            put("p_ids", buildJsonArray { ids.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } })
+        }).data).toSet()
 
     suspend fun teamBrief(orgId: String): List<IdName> =
         json.parseToJsonElement(db.rpc("team_brief", buildJsonObject { put("p_org", orgId) }).data).jsonArray.map {

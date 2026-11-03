@@ -57,6 +57,8 @@ fun OutcomeScreen(vm: AppViewModel) {
     var categoryId by remember { mutableStateOf(p.categoryId) }
     val askProfession = p.batchId != null || p.profession.isNullOrBlank()
     BackHandler { vm.message = "Save the outcome first" }
+    // Saved on the laptop instead? This screen closes by itself.
+    LaunchedEffect(p) { while (true) { kotlinx.coroutines.delay(4_000); vm.checkOutcomeSavedElsewhere() } }
 
     // Next call in two taps: a day, then a time (30-minute slots). "In 1 hour" is one tap.
     val now = ZonedDateTime.now(zone)

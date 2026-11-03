@@ -42,6 +42,8 @@ Everything from the original product prompt plus the owner's feedback, with stat
 
 - ✅ Announcements from management that each rep must acknowledge (pinned notification + blocking screen; dashboard shows who acknowledged)
 
+- ✅ Desk mode: reps work from the laptop (My desk), click-to-call rings their phone, outcome on either screen
+
 ## 3. Call recording
 - ✅ Phone's own recorder files found and uploaded automatically (where the phone allows it)
 - ✅ Play in the dashboard and in the app; private links; every play audited

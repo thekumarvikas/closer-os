@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.9.8
+## Android app (`android/`) — v0.9.9
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -455,6 +455,26 @@ intelligence → Play Store launch.
 - Home: SyncStatusLine ("✓ All synced · 2 min ago" / "⏳ N waiting to upload" / "⚠ last synced …")
   with Sync now. Refresh on resume only if > 60 s old; announcements polled every 2 min and only in
   the foreground (vm.foreground from onResume/onPause).
+
+## Desk mode — reps on the laptop (v0.9.9, Nov 2026)
+- Owner: reps should also work from the laptop (hands free, easier typing). Cost impact ≈ 0 (same
+  site + DB); note Vercel Hobby is non-commercial → Vercel Pro (~$20/mo) needed before selling anyway.
+- Migration 0035: call_requests (pending → dialing → ended → logged | cancelled; call_id = the
+  phone's stable call id). request_call(lead) (laptop; cancels older pending), claim_call_request()
+  (phone; expires after 2 min), call_request_ended(id, call_id, started, duration, phone),
+  cancel_call_request, trigger on calls.outcome_id → request 'logged', calls_with_outcome(ids),
+  my_calls_needing_outcome(org) (last 24 h).
+- Web: page "My desk" (/desk, first in the menu; index route for reps): tabs Needs outcome /
+  Follow-ups / My leads (search_leads), lead panel (key facts, notes + add note, Call on my phone,
+  WhatsApp Web with company templates, Full details = LeadDrawer), call status bar (polls the
+  request every 2 s; "open Closer OS on your phone" after 9 s), OutcomePanel = same rules as the
+  app (outcome, amount for sale, next call day + 30-min slot in company time zone or no follow-up,
+  notes + quick tags) → log_call with the phone's call id.
+- App: polls claim_call_request every 4 s while in the foreground and nothing pending → dials (SIM
+  picker skipped if a SIM was used before), PendingCall.requestId; reportCallEnded() when the
+  call-log entry is found; OutcomeScreen checks every 4 s whether the outcome was saved elsewhere
+  (calls_with_outcome) and closes itself; checkUnloggedCalls skips calls logged on the laptop.
+- Limits: background phone can't receive requests until Firebase push is added (planned before launch).
 
 ## Play Protect block (Nov 2026)
 - 0.5.0+ was blocked on the owner's Xiaomi: "App blocked to protect your device" (Google Play Protect

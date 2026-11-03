@@ -174,7 +174,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         callRequest = row.toLead(b.name, b.webinar_at)
     }
 
-    private var callContext: Pair<String, String>? = null
+    private var callContext: Pair<String, String?>? = null
     private var queuePurpose = "sales"
     private var queueBatchId: String? = null
 
@@ -435,7 +435,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             else openList?.takeIf { o -> listRows?.any { it.id == lead.id } == true }?.let { (b, purpose) -> purpose to b.id }
         callContext = null
         val p = LocalStore.PendingCall(lead.id, lead.name, lead.phone, System.currentTimeMillis(),
-            ctxPair?.first ?: "sales", ctxPair?.second, lead.profession, rowCategory[lead.id])
+            ctxPair?.first ?: "sales", ctxPair?.second, lead.profession, rowCategory[lead.id], requestId = remoteRequestId)
+        remoteRequestId = null; remoteCall = false
         store.pendingCall = p; pending = p; pendingLog = null
         sim?.let { store.preferredSim = it.slot }
         PhoneCalls.call(ctx, lead.phone, sim)
@@ -455,6 +456,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 if (p.logId != null) PhoneCalls.readLog(ctx, p.startedAtMs - 60_000).firstOrNull { it.id == p.logId }
                 else PhoneCalls.findCall(ctx, p.phone, p.startedAtMs)
             }
+            reportCallEnded()
             refreshHome()
         }
     }
@@ -477,21 +479,79 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 it.id !in logged && ((it.direction == "incoming" && it.durationSec > 0) || it.direction == "outgoing")
             }
             if (calls.isEmpty()) return@launch
-            val phones = calls.map { normalizePhone(it.phone, prefix) }
-            val leads = runCatching { Repo.leadsByPhones(m.org_id, phones) }.getOrNull() ?: return@launch
-            val first = calls.indices.firstOrNull { leads[phones[it]] != null } ?: run {
-                calls.forEach { store.markLogged(it.id) }   // not leads: nothing to ask
-                return@launch
-            }
-            calls.take(first).forEach { store.markLogged(it.id) }
-            val c = calls[first]; val lead = leads[phones[first]]!!
-            if (pending != null) return@launch
-            val pc = LocalStore.PendingCall(lead.id, lead.name, lead.phone, c.startedAtMs, "sales", null, lead.profession, null, logId = c.id)
-            store.pendingCall = pc; pending = pc; pendingLog = c
+            // Outcome already saved on the laptop? Don't ask again here.
+            runCatching { Repo.callsWithOutcome(calls.map { it.id }) }.getOrNull().also { done ->
+                done?.forEach { store.markLogged(it) }
+            }.let { done -> checkUnloggedCallsWith(if (done.isNullOrEmpty()) calls else calls.filter { it.id !in done }.ifEmpty { return@launch }) }
         } finally { checking = false }
     }
 
-    fun discardPending() { store.pendingCall = null; pending = null; pendingLog = null }
+    private suspend fun checkUnloggedCallsWith(calls: List<com.closeros.app.calls.LogCall>) {
+        val m = membership ?: return
+        val phones = calls.map { normalizePhone(it.phone, prefix) }
+        val leads = runCatching { Repo.leadsByPhones(m.org_id, phones) }.getOrNull() ?: return
+        val first = calls.indices.firstOrNull { leads[phones[it]] != null } ?: run {
+            calls.forEach { store.markLogged(it.id) }   // not leads: nothing to ask
+            return
+        }
+        calls.take(first).forEach { store.markLogged(it.id) }
+        val c = calls[first]; val lead = leads[phones[first]]!!
+        if (pending != null) return
+        val pc = LocalStore.PendingCall(lead.id, lead.name, lead.phone, c.startedAtMs, "sales", null, lead.profession, null, logId = c.id)
+        store.pendingCall = pc; pending = pc; pendingLog = c
+    }
+
+    fun discardPending() { store.pendingCall = null; pending = null; pendingLog = null; endedReported = null }
+
+    // ───────────── Desk mode: the laptop asks this phone to dial ─────────────
+    /** True while a call asked for by the laptop is being started (so no SIM question if one was used before). */
+    var remoteCall by mutableStateOf(false)
+    private var remoteRequestId: String? = null
+    private var endedReported: String? = null
+    private var checkingRequests = false
+
+    /** Called every few seconds while the app is on screen. */
+    fun checkCallRequests() = viewModelScope.launch {
+        if (pending != null || checkingRequests || callRequest != null) return@launch
+        checkingRequests = true
+        try {
+            val r = runCatching { Repo.claimCallRequest() }.getOrNull() ?: return@launch
+            val lead = runCatching { Repo.lead(r.lead_id) }.getOrNull() ?: return@launch
+            remoteRequestId = r.id; remoteCall = true
+            callContext = r.purpose to r.batch_id
+            message = "Calling ${lead.name.ifBlank { lead.phone }} (from your laptop)"
+            callRequest = lead
+        } finally { checkingRequests = false }
+    }
+
+    /** Tells the laptop the call is over, so it can show the outcome form too. */
+    fun reportCallEnded() = viewModelScope.launch {
+        val p = pending ?: return@launch; val log = pendingLog ?: return@launch
+        val rid = p.requestId ?: return@launch
+        if (endedReported == rid) return@launch
+        runCatching { Repo.callRequestEnded(rid, log.id, log.startedAtMs, log.durationSec, log.phone) }.onSuccess { endedReported = rid }
+    }
+
+    /** While the outcome screen is open: was it saved on the laptop? Then close it here. */
+    fun checkOutcomeSavedElsewhere() = viewModelScope.launch {
+        val p = pending ?: return@launch
+        if (pendingLog == null) {
+            pendingLog = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                if (p.logId != null) PhoneCalls.readLog(ctx, p.startedAtMs - 60_000).firstOrNull { it.id == p.logId } else PhoneCalls.findCall(ctx, p.phone, p.startedAtMs)
+            }
+        }
+        val log = pendingLog ?: return@launch
+        reportCallEnded()
+        val done = runCatching { Repo.callsWithOutcome(listOf(log.id)) }.getOrNull() ?: return@launch
+        if (log.id in done && pending == p) {
+            store.markLogged(log.id)
+            pending?.let { FollowUpAlarms.cancelForLead(ctx, it.leadId, followUps) }
+            discardPending()
+            message = "Outcome saved on your laptop ✓"
+            queueAfterOutcome()
+            refreshHome(); checkUnloggedCalls()
+        }
+    }
 
     /** "The call didn't happen" while in a queue: go on with the next lead. */
     fun discardAndContinue() { discardPending(); if (queueActive) { queuePos++; if (queuePos >= queue.size) queueActive = false else countdown = store.countdownSec } }

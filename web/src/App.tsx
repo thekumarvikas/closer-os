@@ -12,6 +12,7 @@ import LeadSources from './pages/LeadSources'
 import Playbook from './pages/Playbook'
 import Announcements from './pages/Announcements'
 import Reviews from './pages/Reviews'
+import Desk from './pages/Desk'
 import Billing from './pages/Billing'
 import SuperAdmin from './pages/SuperAdmin'
 import BatchDetail from './pages/BatchDetail'
@@ -21,14 +22,15 @@ import Team from './pages/Team'
 import Settings from './pages/Settings'
 
 export default function App() {
-  const { session, loading, org, isAdmin, isManager, profile } = useSession()
+  const { session, loading, org, isAdmin, isManager, profile, role } = useSession()
   if (loading) return <Spinner />
   if (!session) return <AuthPage />
   if (!org) return <Onboarding />
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route index element={<Overview />} />
+        <Route index element={role === 'rep' ? <Desk /> : <Overview />} />
+        <Route path="desk" element={<Desk />} />
         <Route path="reports" element={<Reports />} />
         <Route path="webinars" element={<Batches />} />
         <Route path="webinars/:id" element={<BatchDetail />} />

@@ -15,7 +15,7 @@ const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/billing/we
 
 /** Closer OS Super Admin: every company, plans & prices, payment setup, revenue. */
 export default function SuperAdmin() {
-  const [tab, setTab] = useState<'companies' | 'plans' | 'settings' | 'revenue'>('companies')
+  const [tab, setTab] = useState<'companies' | 'plans' | 'settings' | 'revenue' | 'errors'>('companies')
   const [companies, setCompanies] = useState<Company[] | null>(null)
   const [plans, setPlans] = useState<Plan[]>([])
   const [settings, setSettings] = useState<Settings | null>(null)
@@ -59,7 +59,7 @@ export default function SuperAdmin() {
           <Card key={l as string} className="p-4"><div className="text-sm text-slate-500">{l}</div><div className="text-2xl font-semibold">{v}</div></Card>))}
       </div>
       <div className="mb-4 flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1 text-sm sm:inline-flex">
-        {([['companies', 'Companies'], ['plans', 'Plans & prices'], ['settings', 'Payments setup'], ['revenue', 'Revenue']] as const).map(([k, l]) =>
+        {([['companies', 'Companies'], ['plans', 'Plans & prices'], ['settings', 'Payments setup'], ['revenue', 'Revenue'], ['errors', 'App errors']] as const).map(([k, l]) =>
           <button key={k} onClick={() => setTab(k)} className={`rounded-md px-3 py-1.5 font-medium ${tab === k ? 'bg-white shadow-sm' : 'text-slate-600'}`}>{l}</button>)}
       </div>
 
@@ -111,6 +111,8 @@ export default function SuperAdmin() {
           )}
         </Card>
       )}
+
+      {tab === 'errors' && <AppErrors />}
 
       {editCo && <EditCompany c={editCo} plans={plans} onClose={() => { setEditCo(null); reload() }} />}
       {editPlan && <EditPlan p={editPlan} onClose={() => { setEditPlan(null); reload() }} />}
@@ -213,6 +215,68 @@ function PaymentSetup({ settings, secrets, onSaved }: { settings: Settings; secr
         </div>
       </Card>
       <div className="lg:col-span-2"><ErrorBox error={error} /><Button onClick={save}>{saved ? 'Saved ✓' : 'Save settings'}</Button></div>
+    </div>
+  )
+}
+
+interface ErrGroup { kind: string; place: string | null; message: string | null; count: number; phones: number; last: string; versions: string[]; stack: string | null }
+interface ErrRow { at: string; kind: string; place: string | null; message: string | null; model: string | null; android: string | null; app_version: string | null; company: string | null; user: string | null }
+
+/** Crashes and errors sent by the app from reps' phones (last 7 / 30 days). */
+function AppErrors() {
+  const [days, setDays] = useState(7)
+  const [data, setData] = useState<{ groups: ErrGroup[]; recent: ErrRow[] } | null>(null)
+  const [open, setOpen] = useState<ErrGroup | null>(null)
+  useEffect(() => { setData(null); supabase.rpc('sa_app_errors', { p_days: days }).then(({ data }) => setData(data)) }, [days])
+  if (!data) return <Spinner />
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 text-sm">
+        {[7, 30].map(d => <button key={d} onClick={() => setDays(d)} className={`rounded-full border px-3 py-1 ${days === d ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-slate-200'}`}>Last {d} days</button>)}
+        <span className="text-slate-500">Reports arrive the next time a phone syncs (crashes: straight away when possible).</span>
+      </div>
+      <Card className="overflow-hidden">
+        {data.groups.length === 0 ? <p className="p-4 text-sm text-emerald-700">No app errors reported. 🎉</p> : (
+          <table className="w-full table-fixed text-sm">
+            <thead className="bg-slate-50"><tr><th className="th w-[9%]">Type</th><th className="th">Problem</th><th className="th w-[9%]">Times</th><th className="th w-[9%]">Phones</th><th className="th w-[14%]">App versions</th><th className="th w-[14%]">Last</th></tr></thead>
+            <tbody className="divide-y divide-slate-100">
+              {data.groups.map((g, i) => (
+                <tr key={i} className="cursor-pointer align-top hover:bg-slate-50" onClick={() => setOpen(g)}>
+                  <td className="px-3 py-2">{g.kind === 'crash' ? <Badge color="red">Crash</Badge> : <Badge color="amber">Error</Badge>}</td>
+                  <td className="px-3 py-2"><span className="block truncate font-medium">{g.place}</span><span className="block truncate text-xs text-slate-500">{g.message}</span></td>
+                  <td className="px-3 py-2">{g.count}</td><td className="px-3 py-2">{g.phones}</td>
+                  <td className="truncate px-3 py-2 text-xs">{g.versions.filter(Boolean).join(', ')}</td><td className="px-3 py-2 text-xs">{d(g.last)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+      {data.recent.length > 0 && (
+        <Card className="overflow-hidden">
+          <h3 className="px-4 pt-3 font-semibold">Latest reports</h3>
+          <table className="w-full table-fixed text-sm">
+            <thead className="bg-slate-50"><tr><th className="th w-[16%]">When</th><th className="th">Where / what</th><th className="th w-[20%]">Phone</th><th className="th w-[20%]">Company / user</th></tr></thead>
+            <tbody className="divide-y divide-slate-100">
+              {data.recent.map((e, i) => (
+                <tr key={i} className="align-top">
+                  <td className="px-3 py-2 text-xs">{new Date(e.at).toLocaleString('en-IN')}</td>
+                  <td className="px-3 py-2"><span className="block truncate">{e.kind === 'crash' ? '💥 ' : ''}{e.place}</span><span className="block truncate text-xs text-slate-500">{e.message}</span></td>
+                  <td className="px-3 py-2 text-xs">{e.model}<span className="block text-slate-500">Android {e.android} · app {e.app_version}</span></td>
+                  <td className="truncate px-3 py-2 text-xs">{e.company ?? '—'}<span className="block truncate text-slate-500">{e.user ?? 'not signed in'}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
+      {open && (
+        <Modal open onClose={() => setOpen(null)} title={open.place ?? 'Error'} wide footer={<Button onClick={() => { navigator.clipboard.writeText(`${open.message}\n\n${open.stack ?? ''}`); setOpen(null) }}><Copy className="h-4 w-4" /> Copy details</Button>}>
+          <p className="mb-2 text-sm font-medium">{open.message}</p>
+          <pre className="max-h-96 overflow-auto rounded bg-slate-900 p-3 text-xs text-slate-100">{open.stack || 'No details'}</pre>
+          <p className="mt-2 text-xs text-slate-500">Copy and send these details to Claude to get it fixed.</p>
+        </Modal>
+      )}
     </div>
   )
 }

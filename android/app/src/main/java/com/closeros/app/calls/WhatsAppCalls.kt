@@ -37,18 +37,15 @@ object WhatsAppCalls {
 
     fun allowedByCompany(ctx: Context) = ctx.getSharedPreferences("closeros", Context.MODE_PRIVATE).getBoolean("track_whatsapp", true)
 
-    private fun prefs(ctx: Context) = ctx.getSharedPreferences("wa_calls", Context.MODE_PRIVATE)
+    private fun db(ctx: Context) = com.closeros.app.data.LocalDb.get(ctx)
 
-    fun all(ctx: Context): List<WaCall> =
-        prefs(ctx).getString("calls", null)?.let { runCatching { json.decodeFromString<List<WaCall>>(it) }.getOrNull() } ?: emptyList()
+    fun count(ctx: Context) = db(ctx).waCount()
 
-    fun since(ctx: Context, ms: Long) = all(ctx).filter { it.startedAtMs > ms }
-
-    @Synchronized
-    fun add(ctx: Context, c: WaCall) {
-        val list = (all(ctx).filter { it.id != c.id } + c).sortedBy { it.startedAtMs }.takeLast(MAX)
-        prefs(ctx).edit().putString("calls", json.encodeToString(list)).apply()
+    fun since(ctx: Context, ms: Long): List<WaCall> = db(ctx).waSince(ms).map {
+        WaCall(it[0] as String, it[1] as String, it[2] as String?, it[3] as String, it[4] as Long, it[5] as Int)
     }
+
+    fun add(ctx: Context, c: WaCall) = db(ctx).addWa(c.id, c.phone, c.name, c.direction, c.startedAtMs, c.durationSec)
 
     /** As call-log entries, so the app can show WhatsApp and phone calls together. */
     fun asLog(ctx: Context, sinceMs: Long): List<LogCall> = since(ctx, sinceMs).map {

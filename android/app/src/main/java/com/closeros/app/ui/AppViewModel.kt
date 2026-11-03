@@ -89,6 +89,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var needsSetup by mutableStateOf(!store.setupDone)
     var callRequest by mutableStateOf<Lead?>(null)
     var showSetup by mutableStateOf(false)
+    /** True while the app is on screen. */
+    var foreground = false
     var leaderboard by mutableStateOf<List<com.closeros.app.data.BoardRow>>(emptyList())
     var showLeaderboard by mutableStateOf(false)
     var showDialer by mutableStateOf(false)
@@ -202,31 +204,53 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun isRep() = membership?.role == "rep"
 
+    // ── Saved copies on the phone: screens show these instantly, then refresh from the internet ──
+    private val cache = com.closeros.app.data.LocalDb.get(ctx)
+    private inline fun <reified T> cached(key: String): T? =
+        cache.get(key)?.let { runCatching { com.closeros.app.data.json.decodeFromString<T>(it) }.getOrNull() }
+    private inline fun <reified T> save(key: String, value: T) {
+        runCatching { cache.put(key, com.closeros.app.data.json.encodeToString(kotlinx.serialization.serializer<T>(), value)) }
+    }
+    /** When Home was last refreshed from the internet (to avoid reloading on every return to the app). */
+    private var lastRefreshMs = 0L
+
     fun loadOrg() = viewModelScope.launch {
-        loadingOrg = true
+        // Show what we saved last time straight away (works with no internet).
+        if (membership == null) cached<Membership>("membership")?.let { m ->
+            membership = m; profile = cached("profile"); outcomes = cached("outcomes") ?: emptyList()
+            categories = cached("categories") ?: emptyList(); templates = cached("templates") ?: emptyList()
+            followUps = cached("followUps") ?: emptyList(); stats = cached("stats") ?: TodayStats()
+            cached<List<Lead>>("leads0")?.let { if (leads.isEmpty()) leads.addAll(it) }
+        }
+        loadingOrg = membership == null
         runCatching {
-            membership = Repo.membership()
+            membership = Repo.membership().also { save("membership", it) }
             membership?.let { store.trackWhatsapp = it.organization.trackWhatsapp }
-            profile = Repo.profile()
+            profile = Repo.profile().also { save("profile", it) }
             membership?.let { m ->
                 store.orgId = m.org_id
-                outcomes = Repo.outcomes(m.org_id)
-                runCatching { categories = Repo.categories(m.org_id) }
-                runCatching { templates = Repo.templates(m.org_id) }
+                outcomes = Repo.outcomes(m.org_id).also { save("outcomes", it) }
+                runCatching { categories = Repo.categories(m.org_id).also { save("categories", it) } }
+                runCatching { templates = Repo.templates(m.org_id).also { save("templates", it) } }
                 refreshHome()
                 reloadLeads()
                 CallSync.schedule(ctx); CallSync.syncNow(ctx)
             }
-        }.onFailure { message = "Couldn't load your company: ${it.message}" }
+        }.onFailure {
+            if (membership == null) { message = "Couldn't load your company: ${it.message}"; com.closeros.app.data.AppLog.error(ctx, "load company", it) }
+            else message = "Offline — showing saved data"
+        }
+        launch { com.closeros.app.data.AppLog.flush(ctx) }
         loadingOrg = false
     }
 
     fun refreshHome() = viewModelScope.launch {
         val m = membership ?: return@launch
+        lastRefreshMs = System.currentTimeMillis()
         // Load everything Home needs at the same time (faster than one after another).
         kotlinx.coroutines.coroutineScope {
-            launch { runCatching { stats = Repo.todayStats(m.organization) } }
-            launch { runCatching { followUps = Repo.followUps(m.org_id); FollowUpAlarms.scheduleAll(ctx, followUps) } }
+            launch { runCatching { stats = Repo.todayStats(m.organization).also { save("stats", it) } } }
+            launch { runCatching { followUps = Repo.followUps(m.org_id).also { save("followUps", it) }; FollowUpAlarms.scheduleAll(ctx, followUps) } }
             launch { runCatching { pastFollowUps = Repo.pastFollowUps(m.org_id) } }
             launch { runCatching { progress = Repo.myProgressToday(m.organization) } }
             launch { runCatching { access = Repo.orgAccess(m.org_id) } }
@@ -240,7 +264,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun loadToday() = viewModelScope.launch {
         val m = membership ?: return@launch
         val start = java.time.LocalDate.now(java.time.ZoneId.of(m.organization.timezone)).atStartOfDay(java.time.ZoneId.of(m.organization.timezone)).toInstant().toEpochMilli()
-        val logs = PhoneCalls.readAll(ctx, start).reversed()
+        val logs = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { PhoneCalls.readAll(ctx, start).reversed() }
         val phones = logs.map { normalizePhone(it.phone, prefix) }
         val byPhone = runCatching { Repo.leadsByPhones(m.org_id, phones) }.getOrDefault(emptyMap())
         today = logs.mapIndexed { i, l -> HistoryItem(l, phones[i], byPhone[phones[i]]) }
@@ -331,7 +355,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Phone call history, with lead names where the number is a lead. */
     fun loadHistory() = viewModelScope.launch {
         val m = membership ?: return@launch
-        val all = PhoneCalls.history(ctx, historyLimit + 1)
+        val all = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { PhoneCalls.history(ctx, historyLimit + 1) }
         historyHasMore = all.size > historyLimit
         val logs = all.take(historyLimit)
         val phones = logs.map { normalizePhone(it.phone, prefix) }
@@ -361,17 +385,25 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         CallSync.syncNow(ctx)
     }
 
-    fun reloadLeads() { page = 0; leadsEnd = false; leads.clear(); loadMoreLeads() }
+    private var leadsGen = 0
+    fun reloadLeads() { leadsGen++; page = 0; leadsEnd = false; leadsLoading = false; loadMoreLeads() }
 
     fun loadMoreLeads() {
         val m = membership ?: return
         if (leadsLoading || leadsEnd) return
         leadsLoading = true
+        val gen = leadsGen
         viewModelScope.launch {
+            val first = page == 0
             runCatching { Repo.leads(m.org_id, leadsQuery, page, mineOnly = isRep(), f = leadFilters) }
-                .onSuccess { leads.addAll(it); if (it.size < 50) leadsEnd = true; page++ }
-                .onFailure { message = "Couldn't load leads. Check your internet." }
-            leadsLoading = false
+                .onSuccess {
+                    if (gen != leadsGen) return@onSuccess   // an older search finished late: ignore it
+                    if (first) leads.clear()   // replaces the saved copy shown meanwhile
+                    leads.addAll(it); if (it.size < 50) leadsEnd = true; page++
+                    if (first && leadsQuery.isBlank() && leadFilters.count == 0) save("leads0", it)
+                }
+                .onFailure { if (leads.isEmpty()) message = "Couldn't load leads. Check your internet." }
+            if (gen == leadsGen) leadsLoading = false
         }
     }
 
@@ -389,7 +421,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun signOut() = viewModelScope.launch { runCatching { Repo.signOut() }; FollowUpAlarms.scheduleAll(ctx, emptyList()); store.clear(); leads.clear(); pending = null; needsSetup = true }
+    fun signOut() = viewModelScope.launch { runCatching { Repo.signOut() }; FollowUpAlarms.scheduleAll(ctx, emptyList()); store.clear(); cache.clearCache(); leads.clear(); pending = null; needsSetup = true }
 
     // ───────────── Calling ─────────────
 
@@ -412,10 +444,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Called when the app comes back to the front: look up the finished call in the call log. */
     fun onResume() {
         val p = pending
-        if (p == null) { checkUnloggedCalls(); return }
-        pendingLog = if (p.logId != null) PhoneCalls.readLog(ctx, p.startedAtMs - 60_000).firstOrNull { it.id == p.logId }
-                     else PhoneCalls.findCall(ctx, p.phone, p.startedAtMs)
-        refreshHome()
+        if (p == null) {
+            checkUnloggedCalls()
+            // Coming back to the app: refresh Home only if it's older than a minute.
+            if (System.currentTimeMillis() - lastRefreshMs > 60_000) refreshHome()
+            return
+        }
+        viewModelScope.launch {
+            pendingLog = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                if (p.logId != null) PhoneCalls.readLog(ctx, p.startedAtMs - 60_000).firstOrNull { it.id == p.logId }
+                else PhoneCalls.findCall(ctx, p.phone, p.startedAtMs)
+            }
+            refreshHome()
+        }
     }
 
     private var checking = false
@@ -432,7 +473,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (store.outcomeCheckFromMs == 0L) { store.outcomeCheckFromMs = now; return@launch }   // start from now, never ask about old calls
             val since = maxOf(store.outcomeCheckFromMs, now - 2 * 86_400_000L)
             val logged = store.loggedCalls
-            val calls = PhoneCalls.readLog(ctx, since).filter {
+            val calls = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { PhoneCalls.readLog(ctx, since) }.filter {
                 it.id !in logged && ((it.direction == "incoming" && it.durationSec > 0) || it.direction == "outgoing")
             }
             if (calls.isEmpty()) return@launch
@@ -460,6 +501,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val sent = runCatching { Repo.logCall(payload) }
         if (sent.isFailure) {
             val err = sent.exceptionOrNull()?.message.orEmpty()
+            if (!err.contains("Unable to resolve host") && !err.contains("timeout", true)) com.closeros.app.data.AppLog.error(ctx, "save outcome", sent.exceptionOrNull())
             if (err.contains("next call time") || err.contains("Unknown outcome") || err.contains("Lead not found")) {
                 message = err.substringAfter("ERROR:").trim().ifEmpty { err }; return@launch
             }

@@ -171,7 +171,7 @@ data class LeadFilters(
     val recording_status: String? = null, val recording_path: String? = null, val sim_slot: Int? = null, val channel: String = "phone",
 )
 
-data class TodayStats(val calls: Int = 0, val connected: Int = 0, val talkSec: Int = 0, val notPicked: Int = 0, val missed: Int = 0)
+@Serializable data class TodayStats(val calls: Int = 0, val connected: Int = 0, val talkSec: Int = 0, val notPicked: Int = 0, val missed: Int = 0)
 
 private const val LEAD_COLUMNS = "*, batch_leads(watch_minutes, attended, batch:batches(name, webinar_at))"
 

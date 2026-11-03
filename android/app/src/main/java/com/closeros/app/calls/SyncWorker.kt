@@ -70,6 +70,9 @@ object CallSync {
         store.lastSyncMs = System.currentTimeMillis()
         // 3) Upload the phone's call recordings for these calls, and tell the dashboard how it went.
         checkRecordings(ctx, orgId)
+        // Send any saved crash/error reports, and tidy old "done" marks.
+        runCatching { com.closeros.app.data.AppLog.flush(ctx) }
+        runCatching { com.closeros.app.data.LocalDb.get(ctx).pruneMarks() }
         // 4) Announcements from management + new leads assigned to me.
         runCatching { TeamAlerts.check(ctx, orgId) }
         // 5) Refresh follow-up reminders.
@@ -80,7 +83,9 @@ object CallSync {
     /** Runs the recording upload and reports this phone's status to the dashboard. */
     suspend fun checkRecordings(ctx: Context, orgId: String): RecordingSync.Result {
         val store = LocalStore(ctx)
-        val r = runCatching { RecordingSync.run(ctx, orgId) }.getOrElse { RecordingSync.Result(error = it.message ?: "Recording check failed") }
+        val r = runCatching { RecordingSync.run(ctx, orgId) }.getOrElse {
+            com.closeros.app.data.AppLog.error(ctx, "recordings", it); RecordingSync.Result(error = it.message ?: "Recording check failed") }
+        r.error?.takeIf { it.startsWith("Upload refused") || it.contains("Exception") }?.let { com.closeros.app.data.AppLog.error(ctx, "recording upload", null, message = it) }
         store.lastRecordingCheck = "${java.time.LocalTime.now().withNano(0)} · ${r.filesFound} files · ${r.matched}/${r.callsChecked} calls matched · ${r.uploaded} uploaded" +
             (r.error?.let { " · $it" } ?: "")
         runCatching {
@@ -118,5 +123,8 @@ object CallSync {
 
 class SyncWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
     override suspend fun doWork(): Result =
-        if (CallSync.run(applicationContext).isSuccess) Result.success() else Result.retry()
+        CallSync.run(applicationContext).let { r ->
+            r.exceptionOrNull()?.let { com.closeros.app.data.AppLog.error(applicationContext, "sync", it) }
+            if (r.isSuccess) Result.success() else Result.retry()
+        }
 }

@@ -27,7 +27,19 @@ object PhoneCalls {
     fun has(ctx: Context, perm: String) = ContextCompat.checkSelfPermission(ctx, perm) == PackageManager.PERMISSION_GRANTED
 
     @SuppressLint("HardwareIds")
-    fun deviceId(ctx: Context): String = Settings.Secure.getString(ctx.contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown"
+    @Volatile private var cachedDeviceId: String? = null
+    fun deviceId(ctx: Context): String = cachedDeviceId ?: (Settings.Secure.getString(ctx.contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown").also { cachedDeviceId = it }
+
+    // SIM details change rarely: look them up at most every 30 seconds.
+    @Volatile private var simCache: Pair<Long, List<Sim>>? = null
+    @Volatile private var subCache: Pair<Long, List<android.telephony.SubscriptionInfo>>? = null
+    @SuppressLint("MissingPermission")
+    private fun subs(ctx: Context): List<android.telephony.SubscriptionInfo> {
+        subCache?.let { if (System.currentTimeMillis() - it.first < 30_000) return it.second }
+        val v = runCatching { ctx.getSystemService(SubscriptionManager::class.java).activeSubscriptionInfoList.orEmpty() }.getOrDefault(emptyList())
+        subCache = System.currentTimeMillis() to v
+        return v
+    }
 
     /** The same call-log entry always gets the same id, so uploads never duplicate. */
     fun stableId(ctx: Context, logId: Long, dateMs: Long): String =
@@ -37,15 +49,16 @@ object PhoneCalls {
     @SuppressLint("MissingPermission")
     fun sims(ctx: Context): List<Sim> {
         if (!has(ctx, android.Manifest.permission.READ_PHONE_STATE)) return emptyList()
+        simCache?.let { if (System.currentTimeMillis() - it.first < 30_000) return it.second }
         val telecom = ctx.getSystemService(TelecomManager::class.java)
-        val subs = runCatching { ctx.getSystemService(SubscriptionManager::class.java).activeSubscriptionInfoList.orEmpty() }.getOrDefault(emptyList())
+        val subs = subs(ctx)
         val handles = runCatching { telecom.callCapablePhoneAccounts }.getOrDefault(emptyList())
         return subs.sortedBy { it.simSlotIndex }.mapIndexed { i, s ->
             // Match the calling account to the SIM by subscription id where the phone exposes it.
             val handle = handles.firstOrNull { it.id == s.subscriptionId.toString() || it.id.startsWith(s.iccId ?: "\u0000") }
                 ?: handles.getOrNull(i)
             Sim(s.simSlotIndex + 1, "SIM ${s.simSlotIndex + 1} · ${s.carrierName ?: s.displayName ?: ""}".trim(), handle)
-        }
+        }.also { simCache = System.currentTimeMillis() to it }
     }
 
     /** The SIM's own number, if the phone reveals it (many phones don't — then the rep types it). */
@@ -59,7 +72,7 @@ object PhoneCalls {
 
     /** Reads the whole call log (newest first) for the Calls screen. */
     fun history(ctx: Context, limit: Int): List<LogCall> =
-        (readLog(ctx, 0, 100_000).takeLast(limit) + WhatsAppCalls.asLog(ctx, 0)).sortedByDescending { it.startedAtMs }.take(limit)
+        (query(ctx, 0, newestFirst = true, limit = limit) + WhatsAppCalls.asLog(ctx, 0)).sortedByDescending { it.startedAtMs }.take(limit)
 
     /** Phone + WhatsApp calls since a time, oldest first. */
     fun readAll(ctx: Context, sinceMs: Long): List<LogCall> = (readLog(ctx, sinceMs) + WhatsAppCalls.asLog(ctx, sinceMs)).sortedBy { it.startedAtMs }
@@ -101,14 +114,23 @@ object PhoneCalls {
 
     /** Call-log entries newer than [sinceMs], oldest first. */
     @SuppressLint("MissingPermission")
-    fun readLog(ctx: Context, sinceMs: Long, limit: Int = 2000): List<LogCall> {
+    fun readLog(ctx: Context, sinceMs: Long, limit: Int = 2000): List<LogCall> = query(ctx, sinceMs, newestFirst = false, limit = limit)
+
+    /** Reads only the rows needed (the phone's database does the limiting), oldest or newest first. */
+    @SuppressLint("MissingPermission")
+    private fun query(ctx: Context, sinceMs: Long, newestFirst: Boolean, limit: Int): List<LogCall> {
         if (!has(ctx, android.Manifest.permission.READ_CALL_LOG)) return emptyList()
         val sims = sims(ctx)
         val store = com.closeros.app.data.LocalStore(ctx)
-        val subs = runCatching { ctx.getSystemService(SubscriptionManager::class.java).activeSubscriptionInfoList.orEmpty() }.getOrDefault(emptyList())
+        val subs = subs(ctx)
         val out = mutableListOf<LogCall>()
         val cols = arrayOf(CallLog.Calls._ID, CallLog.Calls.NUMBER, CallLog.Calls.TYPE, CallLog.Calls.DATE, CallLog.Calls.DURATION, CallLog.Calls.PHONE_ACCOUNT_ID)
-        ctx.contentResolver.query(CallLog.Calls.CONTENT_URI, cols, "${CallLog.Calls.DATE} > ?", arrayOf(sinceMs.toString()), "${CallLog.Calls.DATE} ASC")?.use { c ->
+        // Ask for a few extra rows: some entries (voicemail etc.) are skipped below.
+        val uri = CallLog.Calls.CONTENT_URI.buildUpon().appendQueryParameter(CallLog.Calls.LIMIT_PARAM_KEY, (limit + 50).toString()).build()
+        val cursor = runCatching { ctx.contentResolver.query(uri, cols, "${CallLog.Calls.DATE} > ?", arrayOf(sinceMs.toString()), "${CallLog.Calls.DATE} ${if (newestFirst) "DESC" else "ASC"}") }
+            .getOrNull() ?: ctx.contentResolver.query(CallLog.Calls.CONTENT_URI, cols, "${CallLog.Calls.DATE} > ?", arrayOf(sinceMs.toString()), "${CallLog.Calls.DATE} ${if (newestFirst) "DESC" else "ASC"}")
+        val simNumbers = HashMap<Int?, String?>()
+        cursor?.use { c ->
             while (c.moveToNext() && out.size < limit) {
                 val number = c.getString(1) ?: continue
                 val type = c.getInt(2)
@@ -127,7 +149,7 @@ object PhoneCalls {
                     id = stableId(ctx, c.getLong(0), date), phone = number, direction = dir, startedAtMs = date,
                     // MIUI stores ring time as "duration" for missed calls: only answered calls have talk time.
                     durationSec = if (dir == "incoming" || dir == "outgoing") c.getInt(4) else 0,
-                    simSlot = sim?.slot, simLabel = sim?.label, simNumber = store.simNumber(sim?.slot),
+                    simSlot = sim?.slot, simLabel = sim?.label, simNumber = simNumbers.getOrPut(sim?.slot) { store.simNumber(sim?.slot) },
                 )
             }
         }

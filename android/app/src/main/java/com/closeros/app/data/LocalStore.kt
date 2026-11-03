@@ -8,6 +8,7 @@ import kotlinx.serialization.json.JsonObject
 /** Small things kept on the phone: the call waiting for its outcome, unsent outcomes, sync time. */
 class LocalStore(ctx: Context) {
     private val p = ctx.getSharedPreferences("closeros", Context.MODE_PRIVATE)
+    private val db = LocalDb.get(ctx)
 
     /** A call the rep started from Closer OS; its outcome form must be filled before the next call. */
     @Serializable data class PendingCall(
@@ -64,10 +65,8 @@ class LocalStore(ctx: Context) {
         get() = p.getString("rec_folder", null)
         set(v) { p.edit().putString("rec_folder", v).apply() }
 
-    val uploadedRecordings: Set<String> get() = p.getStringSet("rec_uploaded", emptySet()) ?: emptySet()
-    fun markRecordingUploaded(callId: String) {
-        p.edit().putStringSet("rec_uploaded", (uploadedRecordings + callId).toList().takeLast(3000).toSet()).apply()
-    }
+    val uploadedRecordings: Set<String> get() = db.marked("rec")
+    fun markRecordingUploaded(callId: String) = db.mark("rec", callId)
     var recordingsUploaded: Int
         get() = p.getInt("rec_count", 0)
         set(v) { p.edit().putInt("rec_count", v).apply() }
@@ -81,8 +80,9 @@ class LocalStore(ctx: Context) {
     fun setListPrefs(purpose: String, v: String) { p.edit().putString("list_prefs_$purpose", v).apply() }
 
     /** Calls (call-log ids) whose outcome was saved, so they're never asked again. */
-    val loggedCalls: Set<String> get() = p.getStringSet("logged_calls", emptySet()) ?: emptySet()
-    fun markLogged(id: String) { p.edit().putStringSet("logged_calls", (loggedCalls + id).toList().takeLast(3000).toSet()).apply() }
+    val loggedCalls: Set<String> get() = db.marked("logged")
+    fun isLogged(id: String) = db.isMarked("logged", id)
+    fun markLogged(id: String) = db.mark("logged", id)
     /** Only calls after this time need an outcome (set the first time this version runs). */
     var outcomeCheckFromMs: Long
         get() = p.getLong("outcome_from", 0)

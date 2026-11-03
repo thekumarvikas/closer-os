@@ -70,6 +70,8 @@ fun HomeScreen(vm: AppViewModel) {
         item {
             Text("Hi ${vm.profile?.full_name?.substringBefore(' ') ?: ""} 👋", fontSize = 24.sp, fontWeight = FontWeight.Bold)
             Text(m.organization.name, color = Brand.muted)
+            Spacer(Modifier.height(6.dp))
+            SyncStatusLine(vm)
         }
         if (vm.access?.state == "grace") item {
             Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFEE2E2))) {
@@ -172,12 +174,31 @@ fun HomeScreen(vm: AppViewModel) {
             Spacer(Modifier.height(8.dp))
             OutlinedButton(onClick = { vm.showReports = true }, modifier = Modifier.fillMaxWidth().height(50.dp)) { Text(if (vm.isManager) "📊 Reports — me & my team" else "📊 My reports") }
         }
-        item {
-            val last = vm.store.lastSyncMs
-            Text((if (last == 0L) "Calls not synced yet" else "Synced ${fmtWhen(Instant.ofEpochMilli(last).toString())}") +
-                    (if (vm.store.recordingsUploaded > 0) " · ${vm.store.recordingsUploaded} recordings uploaded" else "") +
-                    (if (vm.store.outbox.isNotEmpty()) " · ${vm.store.outbox.size} outcome(s) waiting for internet" else ""), fontSize = 12.sp, color = Brand.muted)
+    }
+}
+
+/** Top of Home: is everything uploaded? */
+@Composable
+fun SyncStatusLine(vm: AppViewModel) {
+    val ctx = LocalContext.current
+    var tick by remember { mutableStateOf(0) }
+    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(20_000); tick++ } }
+    val (text, warn) = remember(tick, vm.stats, vm.message) {
+        val last = vm.store.lastSyncMs
+        val waiting = vm.store.outbox.size
+        val waUnsent = runCatching { com.closeros.app.calls.WhatsAppCalls.since(ctx, vm.store.waCursorMs).size }.getOrDefault(0)
+        val ago = if (last == 0L) null else ((System.currentTimeMillis() - last) / 60_000).let { if (it < 1) "just now" else if (it < 60) "$it min ago" else "${it / 60} h ago" }
+        when {
+            waiting + waUnsent > 0 -> "⏳ ${waiting + waUnsent} waiting to upload" + (if (waiting > 0) " (${waiting} outcome${if (waiting > 1) "s" else ""})" else "") + " — will send when online" to true
+            last == 0L -> "⏳ Not synced yet" to true
+            System.currentTimeMillis() - last > 3 * 3_600_000 -> "⚠ Last synced $ago — check internet" to true
+            else -> "✓ All synced · $ago" to false
         }
+    }
+    Row(Modifier.fillMaxWidth().background(if (warn) Color(0xFFFEF3C7) else Color(0xFFECFDF5), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Text(text, fontSize = 12.sp, color = if (warn) Color(0xFF92400E) else Color(0xFF065F46), modifier = Modifier.weight(1f))
+        TextButton(onClick = { com.closeros.app.calls.CallSync.syncNow(ctx); vm.message = "Syncing…"; tick++ }, contentPadding = PaddingValues(horizontal = 6.dp)) { Text("Sync now", fontSize = 12.sp) }
     }
 }
 

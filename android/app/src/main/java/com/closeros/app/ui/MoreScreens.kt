@@ -160,7 +160,7 @@ fun WhatsAppSettings(vm: AppViewModel, compact: Boolean = false) {
     if (compact && granted && contacts) return
     val body = @Composable {
         Text("WhatsApp calls", fontWeight = FontWeight.SemiBold)
-        Text(if (granted) "On ✓ · ${com.closeros.app.calls.WhatsAppCalls.all(ctx).size} WhatsApp calls noted on this phone. They can't be recorded."
+        Text(if (granted) "On ✓ · ${com.closeros.app.calls.WhatsAppCalls.count(ctx)} WhatsApp calls noted on this phone. They can't be recorded."
              else "WhatsApp calls don't show in the phone's call history. Allow Closer OS to see WhatsApp's call notifications so your WhatsApp calls count too. Only call details (who, when, how long) are kept.",
             color = Brand.muted, fontSize = 14.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

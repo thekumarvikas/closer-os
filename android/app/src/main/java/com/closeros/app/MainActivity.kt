@@ -28,7 +28,12 @@ import com.closeros.app.data.Lead
 import com.closeros.app.ui.*
 import io.github.jan.supabase.auth.status.SessionStatus
 
-class CloserApp : Application()
+class CloserApp : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        com.closeros.app.data.AppLog.install(this)
+    }
+}
 
 class MainActivity : ComponentActivity() {
     private val vm: AppViewModel by viewModels()
@@ -53,7 +58,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        vm.foreground = true
         vm.onResume()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        vm.foreground = false
     }
 }
 
@@ -73,8 +84,8 @@ fun Root(vm: AppViewModel) {
     LaunchedEffect(vm.callRequest) {
         vm.callRequest?.let { lead -> vm.callRequest = null; if (vm.pending == null) call(lead) else vm.message = "Save the outcome of your last call first" }
     }
-    // While the app is open, check for announcements every minute.
-    LaunchedEffect(vm.membership) { while (vm.membership != null) { vm.checkAlerts(); kotlinx.coroutines.delay(60_000) } }
+    // While the app is on screen, check for announcements every 2 minutes (background sync covers the rest).
+    LaunchedEffect(vm.membership) { while (vm.membership != null) { kotlinx.coroutines.delay(120_000); if (vm.foreground) vm.checkAlerts() } }
     LaunchedEffect(vm.message) {
         vm.message?.let { Toast.makeText(ctx, it, Toast.LENGTH_SHORT).show(); vm.message = null }
     }

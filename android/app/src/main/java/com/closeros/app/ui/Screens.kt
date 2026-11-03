@@ -140,11 +140,11 @@ fun LeadsScreen(vm: AppViewModel, onCall: (Lead) -> Unit) = LeadsTab(vm, onCall)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
-    var lead by remember { mutableStateOf<Lead?>(null) }
+    var lead by remember { mutableStateOf<Lead?>(vm.leads.firstOrNull { it.id == leadId } ?: vm.queue.firstOrNull { it.id == leadId }) }
     var calls by remember { mutableStateOf<List<CallRow>>(emptyList()) }
     val ctx = LocalContext.current
     LaunchedEffect(leadId) {
-        lead = runCatching { Repo.lead(leadId) }.getOrNull()
+        runCatching { Repo.lead(leadId) }.getOrNull()?.let { lead = it }
         calls = runCatching { Repo.leadCalls(leadId) }.getOrDefault(emptyList())
     }
     val outcomes = vm.outcomes.associateBy { it.id }

@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.9.7
+## Android app (`android/`) — v0.9.8
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -433,6 +433,28 @@ intelligence → Play Store launch.
   'recording-cleanup' daily → edge function recording-cleanup (cron secret) deletes files via
   Storage API and marks calls 'expired'.
 - App Home refresh loads its RPCs in parallel.
+
+## Performance round (v0.9.8, Nov 2026)
+- R8 on for release (isMinifyEnabled + isShrinkResources, app/proguard-rules.pro: -dontobfuscate,
+  keep com.closeros.app.data.**, supabase, ktor, kotlinx.serialization, workers). APK 9.6 MB → 3.2 MB.
+  No emulator here: verify with dexdump that MainActivity/CloserApp/workers/serializers/OkHttp
+  engine and META-INF/services survive.
+- data/LocalDb.kt (SQLiteOpenHelper, no new library): cache (k,v) for instant screens/offline
+  (membership, profile, outcomes, categories, templates, followUps, stats, first leads page "leads0"),
+  marks (logged calls, uploaded recordings; pruned after 60 days), wa_calls. One-time migration from
+  SharedPreferences (db_migrated). Sign-out clears the cache.
+- PhoneCalls: query() with CallLog LIMIT_PARAM_KEY + DESC for history (no more reading 100k rows),
+  SIM/subscription lookups cached 30 s, deviceId cached. VM call-log reads on Dispatchers.IO.
+  reloadLeads keeps the old list until new results; leadsGen ignores late results. Lead detail opens
+  from the in-memory lead.
+- RecordingSync: folder listing via DocumentsContract child query (one query per folder); upload
+  streamed with HttpURLConnection (fixed-length/chunked) to /storage/v1/object/recordings/<path>.
+- Crash/error reports (migration 0034): app_errors + report_app_errors(jsonb array; anon allowed,
+  capped) + sa_app_errors(days); 60-day cleanup cron. data/AppLog.kt writes errors.jsonl, flushes on
+  sync/app open; uncaught handler sends crashes immediately (anon REST). Super Admin → App errors.
+- Home: SyncStatusLine ("✓ All synced · 2 min ago" / "⏳ N waiting to upload" / "⚠ last synced …")
+  with Sync now. Refresh on resume only if > 60 s old; announcements polled every 2 min and only in
+  the foreground (vm.foreground from onResume/onPause).
 
 ## Play Protect block (Nov 2026)
 - 0.5.0+ was blocked on the owner's Xiaomi: "App blocked to protect your device" (Google Play Protect

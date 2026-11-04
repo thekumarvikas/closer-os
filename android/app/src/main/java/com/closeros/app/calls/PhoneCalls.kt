@@ -70,6 +70,27 @@ object PhoneCalls {
         n?.takeIf { it.filter { c -> c.isDigit() }.length >= 10 }
     }.getOrNull()
 
+    @Volatile private var namesCache: Pair<Long, Map<String, String>>? = null
+
+    /** All names saved in the phone's contacts, by the number's last 10 digits (read once a minute at most). */
+    fun contactNames(ctx: Context): Map<String, String> {
+        namesCache?.let { (at, m) -> if (System.currentTimeMillis() - at < 60_000) return m }
+        if (!has(ctx, android.Manifest.permission.READ_CONTACTS)) return emptyMap()
+        val m = HashMap<String, String>()
+        runCatching {
+            ctx.contentResolver.query(android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                arrayOf(android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER, android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME), null, null, null)?.use { c ->
+                while (c.moveToNext()) {
+                    val d = c.getString(0)?.filter { it.isDigit() }?.takeLast(10) ?: continue
+                    val n = c.getString(1)?.takeIf { it.isNotBlank() } ?: continue
+                    if (d.length >= 7) m.putIfAbsent(d, n)
+                }
+            }
+        }
+        namesCache = System.currentTimeMillis() to m
+        return m
+    }
+
     /** The name saved in the phone's contacts for a number (needs contacts permission). */
     fun contactName(ctx: Context, phone: String): String? = runCatching {
         if (!has(ctx, android.Manifest.permission.READ_CONTACTS)) return null
@@ -134,7 +155,7 @@ object PhoneCalls {
         val store = com.closeros.app.data.LocalStore(ctx)
         val subs = subs(ctx)
         val out = mutableListOf<LogCall>()
-        val cols = arrayOf(CallLog.Calls._ID, CallLog.Calls.NUMBER, CallLog.Calls.TYPE, CallLog.Calls.DATE, CallLog.Calls.DURATION, CallLog.Calls.PHONE_ACCOUNT_ID)
+        val cols = arrayOf(CallLog.Calls._ID, CallLog.Calls.NUMBER, CallLog.Calls.TYPE, CallLog.Calls.DATE, CallLog.Calls.DURATION, CallLog.Calls.PHONE_ACCOUNT_ID, CallLog.Calls.CACHED_NAME)
         // Ask for a few extra rows: some entries (voicemail etc.) are skipped below.
         val uri = CallLog.Calls.CONTENT_URI.buildUpon().appendQueryParameter(CallLog.Calls.LIMIT_PARAM_KEY, (limit + 50).toString()).build()
         val cursor = runCatching { ctx.contentResolver.query(uri, cols, "${CallLog.Calls.DATE} > ?", arrayOf(sinceMs.toString()), "${CallLog.Calls.DATE} ${if (newestFirst) "DESC" else "ASC"}") }
@@ -160,6 +181,8 @@ object PhoneCalls {
                     // MIUI stores ring time as "duration" for missed calls: only answered calls have talk time.
                     durationSec = if (dir == "incoming" || dir == "outgoing") c.getInt(4) else 0,
                     simSlot = sim?.slot, simLabel = sim?.label, simNumber = simNumbers.getOrPut(sim?.slot) { store.simNumber(sim?.slot) },
+                    // The name saved in the phone's contacts (the call log keeps a copy; else look it up).
+                    name = c.getString(6)?.takeIf { it.isNotBlank() } ?: contactNames(ctx)[number.filter { it.isDigit() }.takeLast(10)],
                 )
             }
         }

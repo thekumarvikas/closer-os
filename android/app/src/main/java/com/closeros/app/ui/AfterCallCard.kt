@@ -210,6 +210,7 @@ private suspend fun saveQuick(ctx: Context, info: AfterCall.Info, lead: Lead?, o
         store.addToOutbox(payload)   // no internet: sent automatically later
     }
     store.markLogged(c.id)
+    if (sent.isSuccess) com.closeros.app.data.AppEvents.bumpLeads()   // Leads tab + call history refresh now
     if (info.appCall != null && store.pendingCall == info.appCall) store.pendingCall = null   // the app won't ask again
     AfterCall.cancelNotification(ctx)
     CallSync.syncNow(ctx)

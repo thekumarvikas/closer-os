@@ -237,13 +237,17 @@ fun HistoryRow(vm: AppViewModel, h: HistoryItem, onAdd: (() -> Unit)? = null) {
         .clickable(enabled = h.lead != null) { h.lead?.let { vm.openLeadId = it.id } }.padding(12.dp, 10.dp, 4.dp, 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(h.lead?.name?.ifBlank { null } ?: h.log.name ?: fmtPhone(h.phone), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-            if (h.lead == null && h.phone.isNotBlank()) Text("Not in lead list", fontSize = 11.sp, color = Color(0xFF64748B),
-                modifier = Modifier.padding(start = 8.dp).background(Color(0xFFF1F5F9), RoundedCornerShape(50)).padding(horizontal = 8.dp, vertical = 2.dp))
+            if (h.phone.isNotBlank()) {
+                val isLead = h.lead != null
+                Text(if (isLead) "Lead" else "Not in lead list", fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                    color = if (isLead) Color(0xFF166534) else Color(0xFF475569),
+                    modifier = Modifier.padding(start = 8.dp).background(if (isLead) Color(0xFFDCFCE7) else Color(0xFFE2E8F0), RoundedCornerShape(50)).padding(horizontal = 8.dp, vertical = 2.dp))
+            }
         }
         val dir = when (h.log.direction) { "outgoing" -> "Dialled"; "incoming" -> "Received"; "missed" -> "Missed"; else -> "Declined" }
         Text((if (h.log.channel == "whatsapp") "WhatsApp · " else h.log.simSlot?.let { "SIM $it · " } ?: "") + "$dir · ${if (h.log.durationSec > 0) fmtDur(h.log.durationSec) else "no talk"} · ${fmtWhen(Instant.ofEpochMilli(h.log.startedAtMs).toString())}",
             fontSize = 13.sp, color = if (h.log.direction == "missed" || h.log.direction == "rejected") Brand.red else Brand.muted)
-        if (h.lead != null || h.log.name != null) Text(fmtPhone(h.phone), fontSize = 12.sp, color = Brand.muted)
+        if (h.lead?.name?.isNotBlank() == true || h.log.name != null) Text(fmtPhone(h.phone) + (if (h.lead != null && h.log.name != null && h.log.name != h.lead.name) " · saved as ${h.log.name}" else ""), fontSize = 12.sp, color = Brand.muted)
         if (h.phone.isNotBlank()) Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = {
                 if (h.lead != null) vm.callRequest = h.lead
@@ -316,6 +320,7 @@ fun leadTags(vm: AppViewModel, l: Lead): List<Tag> {
     val b = l.latestBatch
     if (b != null && (b.watch_minutes ?: 0) >= 60) out += Tag("🔥 Hot · ${b.watch_minutes} min", Color(0xFFFFEDD5), Color(0xFF9A3412))
     if (l.do_not_call) out += Tag("Do not call", Color(0xFFFEE2E2), Color(0xFF991B1B))
+    if (l.source == "Phone call") out += Tag("Added from a call", Color(0xFFFEF3C7), Color(0xFF92400E))
     return out
 }
 

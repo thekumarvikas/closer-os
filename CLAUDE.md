@@ -600,3 +600,14 @@ intelligence → Play Store launch.
   (AfterCallActivity add mode). Outcome stays OPTIONAL for numbers not in the list (closing is fine);
   the app's mandatory check still applies to leads only.
 - Calls tab rows: grey "Not in lead list" tag; filter chip renamed "Not in lead list".
+
+## Contact names, lead tags, instant refresh (v0.9.17, Nov 2026)
+- Owner: lead added by the pop-up showed up in the Leads tab only much later → data/AppEvents
+  (leadsChanged StateFlow, bumpLeads() after a pop-up / full-form save) → main VM reloadLeads +
+  loadHistory + refreshHome at once.
+- Owner: Calls tab showed only Closer OS lead names, not phone contacts → PhoneCalls.query reads
+  CallLog.CACHED_NAME, else PhoneCalls.contactNames() (all contacts by last 10 digits, cached 60 s)
+  into LogCall.name for phone calls (not uploaded). Rows: lead name > contact name > number;
+  "saved as …" when they differ.
+- Tags: Calls rows show green "Lead" or grey "Not in lead list"; leadTags adds amber "Added from a
+  call" for source 'Phone call'. loadHistory marks leads from LeadIndex first, then the server.

@@ -338,8 +338,13 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         historyHasMore = all.size > historyLimit
         val logs = all.take(historyLimit)
         val phones = logs.map { normalizePhone(it.phone, prefix) }
-        val leadsByPhone = runCatching { Repo.leadsByPhones(m.org_id, phones) }.getOrDefault(emptyMap())
-        history = logs.mapIndexed { i, l -> HistoryItem(l, phones[i], leadsByPhone[phones[i]]) }
+        // Instantly from the phone's own copy of the leads, then confirmed by the server.
+        val local = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { phones.distinct().mapNotNull { p -> com.closeros.app.data.LeadIndex.find(ctx, p)?.let { p to it } }.toMap() }
+        history = logs.mapIndexed { i, l -> HistoryItem(l, phones[i], local[phones[i]]) }
+        runCatching { Repo.leadsByPhones(m.org_id, phones) }.onSuccess { server ->
+            com.closeros.app.data.LeadIndex.remember(ctx, server.values)
+            history = logs.mapIndexed { i, l -> HistoryItem(l, phones[i], server[phones[i]]) }
+        }
     }
 
     private var addingLead = false
@@ -585,7 +590,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         discardPending()
         onDone()
         CallSync.syncNow(ctx)
-        if (lite) return@launch
+        if (lite) { com.closeros.app.data.AppEvents.bumpLeads(); return@launch }
         checkUnloggedCalls()
         queueAfterOutcome()
         refreshHome(); reloadLeads()
@@ -599,6 +604,8 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // Runs last, after every property above exists (the after-call screen starts already signed in).
     init {
+        // A lead was added or a call saved in the after-call pop-up: refresh the lists straight away.
+        viewModelScope.launch { com.closeros.app.data.AppEvents.leadsChanged.collect { if (it > 0 && !lite) { reloadLeads(); loadHistory(); refreshHome() } } }
         viewModelScope.launch {
             Backend.auth.sessionStatus.collectLatest { s ->
                 status = s

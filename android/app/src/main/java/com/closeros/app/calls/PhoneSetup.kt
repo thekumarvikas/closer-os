@@ -81,7 +81,7 @@ object PhoneSetup {
             callPerms.all { has(ctx, it) }, Kind.Runtime, perms = callPerms)
         if (Build.VERSION.SDK_INT >= 33) list += Item("notify", "Notifications", "Follow-up reminders with a Call button.",
             has(ctx, Manifest.permission.POST_NOTIFICATIONS), Kind.Runtime, perms = listOf(Manifest.permission.POST_NOTIFICATIONS))
-        list += Item("contacts", "Contacts", "Know who a WhatsApp call was with when WhatsApp shows a saved name.",
+        list += Item("contacts", "Contacts", "Show the names saved in your contacts in call history and the after-call pop-up.",
             has(ctx, Manifest.permission.READ_CONTACTS), Kind.Runtime, perms = listOf(Manifest.permission.READ_CONTACTS))
         if (Build.VERSION.SDK_INT >= 31) list += Item("alarms", "On-time reminders", "Reminders ring exactly 5 minutes before and at the follow-up time.",
             FollowUpAlarms.canExact(ctx), Kind.Special,

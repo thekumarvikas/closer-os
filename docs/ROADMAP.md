@@ -98,3 +98,4 @@ Everything from the original product prompt plus the owner's feedback, with stat
 - ✅ After-call pop-up over any app with quick outcome + next call (v0.9.11)
 - ✅ WhatsApp step right after the outcome (pop-up and app) (v0.9.12)
 - ✅ Company file library for WhatsApp (dashboard upload, app send) (v0.9.12)
+- ✅ All calls treated alike, "Not in lead list" tag; outcome on a new number adds the lead (v0.9.16)

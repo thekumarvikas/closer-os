@@ -90,7 +90,7 @@ fun CallHistoryScreen(vm: AppViewModel) {
             IconButton(onClick = { vm.loadHistory() }) { Icon(Icons.Default.Refresh, "Refresh") }
         }
         Row(Modifier.padding(horizontal = 16.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("all" to "All", "phone" to "Phone", "whatsapp" to "WhatsApp", "leads" to "Leads", "unknown" to "Not leads", "missed" to "Missed").forEach { (k, l) ->
+            listOf("all" to "All", "phone" to "Phone", "whatsapp" to "WhatsApp", "leads" to "Leads", "unknown" to "Not in lead list", "missed" to "Missed").forEach { (k, l) ->
                 FilterChip(selected = filter == k, onClick = { filter = k }, label = { Text(l) })
             }
         }

@@ -586,3 +586,17 @@ intelligence → Play Store launch.
   vm.fillTemplate; attached file downloaded + shared), "Write / edit · files" (→ AfterCallActivity
   whatsapp mode) and Close (dial the next). Card's WhatsApp button opens step 2 too. Company now
   carries name, repName and templates from the cache.
+
+## Every call treated alike (v0.9.16, Nov 2026)
+- Owner: don't split calls into lead / not-lead sections; treat all calls the same and just tag
+  "Not in lead list" (category used later for filters/reports).
+- Migration 0037: log_call accepts create_lead = true (+ lead_name): finds the org's lead by
+  normalised phone or inserts one (source 'Phone call', assigned to the caller) before saving —
+  works from the offline outbox too.
+- Pop-up: same outcome + next-call + WhatsApp steps for every call; header shows the phone contact
+  name (PhoneCalls.contactName, PhoneLookup) and a "Not in lead list" pill; saving adds the lead.
+  Non-lead extras: "Personal call — skip" (close) and "Never ask for this number"
+  (store.personalNumbers, normalised, this phone only → run() skips them); "Add with name & details"
+  (AfterCallActivity add mode). Outcome stays OPTIONAL for numbers not in the list (closing is fine);
+  the app's mandatory check still applies to leads only.
+- Calls tab rows: grey "Not in lead list" tag; filter chip renamed "Not in lead list".

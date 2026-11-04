@@ -134,6 +134,10 @@ class LocalStore(ctx: Context) {
         get() = p.getString("after_call_trace", null)
         set(v) { p.edit().putString("after_call_trace", v).apply() }
 
+    /** Numbers the rep marked "never ask" in the pop-up (personal calls). Kept on this phone only. */
+    val personalNumbers: Set<String> get() = p.getStringSet("personal_numbers", emptySet()) ?: emptySet()
+    fun addPersonalNumber(phone: String) { p.edit().putStringSet("personal_numbers", personalNumbers + phone).apply() }
+
     fun clear() { p.edit().clear().apply() }
 
     companion object { private val outboxLock = Any() }

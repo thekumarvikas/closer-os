@@ -70,6 +70,13 @@ object PhoneCalls {
         n?.takeIf { it.filter { c -> c.isDigit() }.length >= 10 }
     }.getOrNull()
 
+    /** The name saved in the phone's contacts for a number (needs contacts permission). */
+    fun contactName(ctx: Context, phone: String): String? = runCatching {
+        if (!has(ctx, android.Manifest.permission.READ_CONTACTS)) return null
+        val uri = Uri.withAppendedPath(android.provider.ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(phone))
+        ctx.contentResolver.query(uri, arrayOf(android.provider.ContactsContract.PhoneLookup.DISPLAY_NAME), null, null, null)?.use { if (it.moveToFirst()) it.getString(0) else null }
+    }.getOrNull()?.takeIf { it.isNotBlank() }
+
     /** The newest few phone calls (quick: used right after a call ends). */
     fun latest(ctx: Context, limit: Int): List<LogCall> = query(ctx, 0, newestFirst = true, limit = limit)
 

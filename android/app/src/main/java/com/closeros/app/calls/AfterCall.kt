@@ -69,7 +69,7 @@ object AfterCall {
      * own lead list first, then confirmed by the server), [checking] while the server is asked.
      */
     data class Info(val call: LogCall?, val phone: String?, val lead: Lead?, val co: Company, val appCall: LocalStore.PendingCall?,
-                    val lookupFailed: Boolean = false, val checking: Boolean = false) {
+                    val lookupFailed: Boolean = false, val checking: Boolean = false, val contactName: String? = null) {
         val purpose get() = appCall?.purpose ?: "sales"
         val number get() = call?.phone?.takeIf { it.isNotBlank() } ?: phone
     }
@@ -136,11 +136,13 @@ object AfterCall {
         if (c.phone.isBlank()) { if (shown) withContext(Dispatchers.Main) { Overlay.hide(ctx) }; return trace(ctx, "no pop-up: private number") }
 
         phone = normalizePhone(c.phone, co.prefix)
+        if (phone in store.personalNumbers) { if (shown) withContext(Dispatchers.Main) { Overlay.hide(ctx) }; return trace(ctx, "no pop-up: number marked personal") }
+        val contact = PhoneCalls.contactName(ctx, c.phone)
         if (lead?.phone != phone) lead = com.closeros.app.data.LeadIndex.find(ctx, phone!!)
         // A call started from Closer OS (lead list, queue, webinar list): keep its purpose / webinar.
         val appCall = store.pendingCall?.takeIf { p -> p.logId == c.id || (p.logId == null && normalizePhone(p.phone, co.prefix) == phone) }
         val num = phone!!
-        if (mode == "all" || lead != null) showOrUpdate(Info(c, phone, lead, co, appCall, checking = true))
+        if (mode == "all" || lead != null) showOrUpdate(Info(c, phone, lead, co, appCall, checking = true, contactName = contact))
         val cardMs = if (shown) ms() else null
 
         // 3) Confirm with the server (fresh login first) — the card is already on screen meanwhile.
@@ -157,7 +159,7 @@ object AfterCall {
             if (shown) withContext(Dispatchers.Main) { Overlay.hide(ctx) }
             return trace(ctx, "no pop-up: not a lead (pop-up set to leads only)")
         }
-        showOrUpdate(Info(c, num, l, co, appCall, lookupFailed = lookupFailed && l == null, checking = false))
+        showOrUpdate(Info(c, num, l, co, appCall, lookupFailed = lookupFailed && l == null, checking = false, contactName = contact))
         trace(ctx, when {
             shown -> "pop-up shown after ${((firstShownMs ?: cardMs ?: ms()) / 100) / 10.0} s" +
                 (if (l != null) " (lead)" else if (lookupFailed) " (couldn't check: ${if (loggedIn) "no internet" else "login"})" else " (not a lead)")

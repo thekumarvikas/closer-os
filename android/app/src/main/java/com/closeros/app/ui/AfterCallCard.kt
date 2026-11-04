@@ -53,7 +53,9 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
     val scope = rememberCoroutineScope()
     val zone = runCatching { ZoneId.of(co.timezone) }.getOrDefault(ZoneId.systemDefault())
     // While the call-log entry is still being read (first second), assume an outcome is needed.
-    val needs = lead != null && (c == null || AfterCall.needsOutcome(c))
+    // Every call is treated alike: leads and numbers not in the lead list get the same outcome step.
+    val needs = (lead != null || !info.checking) && (c == null || AfterCall.needsOutcome(c))
+    val notInList = lead == null && !info.checking
     val number = info.number.orEmpty()
     val choices = co.outcomes.filter { it.is_active && (it.purpose == info.purpose || it.purpose == "both") }.sortedBy { it.position }
     var outcome by remember { mutableStateOf<Outcome?>(null) }
@@ -81,9 +83,12 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
                 Text("Closer OS · call ended", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp, modifier = Modifier.weight(1f))
                 IconButton(onClick = onClose) { Icon(Icons.Default.Close, "Close", tint = Color.White) }
             }
-            Text(lead?.name?.ifBlank { null } ?: number.ifBlank { null }?.let(::fmtPhone) ?: "Call ended", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(listOfNotNull(if (lead?.name.isNullOrBlank() || number.isBlank()) null else fmtPhone(number), c?.let(::callLine) ?: "Call ended", c?.simLabel).joinToString(" · "),
+            Text(lead?.name?.ifBlank { null } ?: info.contactName ?: number.ifBlank { null }?.let(::fmtPhone) ?: "Call ended", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(listOfNotNull(if ((lead?.name.isNullOrBlank() && info.contactName == null) || number.isBlank()) null else fmtPhone(number), c?.let(::callLine) ?: "Call ended", c?.simLabel).joinToString(" · "),
                 color = Color.White.copy(alpha = 0.9f), fontSize = 14.sp)
+            if (notInList) Text(if (info.lookupFailed) "Couldn't check the lead list (no internet)" else "Not in lead list",
+                color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)
+                    .background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 3.dp))
             lead?.let { l ->
                 val about = listOfNotNull(l.profession, l.company, l.city).filter { it.isNotBlank() }.joinToString(" · ")
                 if (about.isNotBlank()) Text(about, color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -104,16 +109,16 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         quickTimes(zone).forEach { (label, t) -> PopChip(label, !noFollow && next == t) { next = t; noFollow = false } }
                         PopChip("No follow-up", noFollow) { noFollow = true; next = null }
-                        PopChip("Other time…", false) { fullForm("outcome") }
+                        PopChip("Other time…", false) { fullForm(if (lead == null) "add" else "outcome") }
                     }
                     error?.let { Text(it, color = Brand.red, fontSize = 13.sp) }
                     val sale = outcome?.form == "sale"
                     Button(onClick = {
                         val o = outcome ?: return@Button
-                        if (sale) { fullForm("outcome"); return@Button }
+                        if (sale) { fullForm(if (lead == null) "add" else "outcome"); return@Button }
                         saving = true; error = null
                         scope.launch {
-                            val r = if (lead == null) "Lead not found" else saveQuick(ctx, info, lead, o, next, noFollow)
+                            val r = saveQuick(ctx, info, lead, o, next, noFollow)
                             saving = false
                             // Saved: step 2 on the same card — send a WhatsApp message, or close and dial the next.
                             if (r == null) {
@@ -124,7 +129,10 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
                     }, enabled = c != null && !saving && outcome != null && (noFollow || next != null), modifier = Modifier.fillMaxWidth().height(50.dp)) {
                         Text(when { saving -> "Saving…"; sale -> "Continue — add the amount"; else -> "Save" }, fontSize = 16.sp)
                     }
-                    TextButton(onClick = { fullForm("outcome") }, modifier = Modifier.fillMaxWidth()) { Text("More options (notes, other date, amount)") }
+                    TextButton(onClick = { fullForm(if (lead == null) "add" else "outcome") }, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (lead == null) "Add with name & details" else "More options (notes, other date, amount)") }
+                    if (notInList) PersonalButtons(number, co.prefix, onClose)
+                    if (notInList) Text("Saving adds this number to your leads, so the next call is reminded.", fontSize = 12.sp, color = Brand.muted)
                 }
                 lead == null && info.checking -> Row(verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp))
@@ -132,13 +140,10 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
                 }
                 lead != null -> Text(if (c?.direction == "missed" || c?.direction == "rejected") "Missed call from your lead — call back?" else "Call with your lead.",
                     color = Brand.muted, fontSize = 14.sp)
-                info.lookupFailed -> {
-                    Text("Couldn't reach Closer OS to check this number (no internet?). Open Closer OS to save the outcome.", color = Brand.muted, fontSize = 14.sp)
-                    OutlinedButton(onClick = { open(Intent(ctx, MainActivity::class.java)) }, modifier = Modifier.fillMaxWidth()) { Text("Open Closer OS") }
-                }
                 else -> {
-                    Text("Not in your leads", color = Brand.muted, fontSize = 14.sp)
+                    Text(if (c?.direction == "missed" || c?.direction == "rejected") "Missed call — call back?" else "Call ended.", color = Brand.muted, fontSize = 14.sp)
                     OutlinedButton(onClick = { fullForm("add") }, modifier = Modifier.fillMaxWidth()) { Text("+ Add as a lead") }
+                    PersonalButtons(number, co.prefix, onClose)
                 }
             }
         }
@@ -181,13 +186,15 @@ private fun quickTimes(zone: ZoneId): List<Pair<String, ZonedDateTime>> {
 }
 
 /** Saves from the card. Returns null when saved (or kept on the phone to send later), else the reason it can't be saved. */
-private suspend fun saveQuick(ctx: Context, info: AfterCall.Info, lead: Lead, o: Outcome, next: ZonedDateTime?, noFollow: Boolean): String? {
+private suspend fun saveQuick(ctx: Context, info: AfterCall.Info, lead: Lead?, o: Outcome, next: ZonedDateTime?, noFollow: Boolean): String? {
     val c = info.call ?: return "One moment — still reading the call"
     val co = info.co
     val store = LocalStore(ctx)
     val payload = buildJsonObject {
-        put("id", c.id); put("org_id", co.orgId); put("lead_id", lead.id)
-        put("phone", lead.phone); put("direction", c.direction); put("purpose", info.purpose)
+        put("id", c.id); put("org_id", co.orgId)
+        // Not in the lead list yet: the server adds it as a lead (named after the phone contact).
+        if (lead != null) put("lead_id", lead.id) else { put("create_lead", true); info.contactName?.let { put("lead_name", it) } }
+        put("phone", lead?.phone ?: com.closeros.app.ui.normalizePhone(c.phone, co.prefix)); put("direction", c.direction); put("purpose", info.purpose)
         info.appCall?.batchId?.let { put("batch_id", it) }
         put("started_at", Instant.ofEpochMilli(c.startedAtMs).toString()); put("duration_sec", c.durationSec)
         c.simSlot?.let { put("sim_slot", it) }; c.simLabel?.let { put("sim_label", it) }; c.simNumber?.let { put("sim_number", it) }
@@ -278,5 +285,18 @@ private fun WhatsAppStep(info: AfterCall.Info, savedLine: String?, sending: Bool
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton(onClick = onEdit, enabled = !sending, modifier = Modifier.weight(1f)) { Text("✏️ Write / edit · 📁 files", fontSize = 13.sp) }
         Button(onClick = onClose, enabled = !sending, modifier = Modifier.weight(1f)) { Text("Close") }
+    }
+}
+
+/** For numbers not in the lead list: close for a personal call, or never ask again for this number. */
+@Composable
+private fun PersonalButtons(number: String, prefix: String, onClose: () -> Unit) {
+    val ctx = LocalContext.current
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(onClick = onClose, modifier = Modifier.weight(1f)) { Text("Personal call — skip", fontSize = 13.sp) }
+        OutlinedButton(onClick = {
+            LocalStore(ctx).addPersonalNumber(com.closeros.app.ui.normalizePhone(number, prefix))
+            Toast.makeText(ctx, "Won't ask again for this number", Toast.LENGTH_SHORT).show(); onClose()
+        }, modifier = Modifier.weight(1f)) { Text("Never ask for this number", fontSize = 13.sp) }
     }
 }

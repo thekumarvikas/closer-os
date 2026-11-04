@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.9.11
+## Android app (`android/`) — v0.9.12
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -532,3 +532,20 @@ intelligence → Play Store launch.
   pages/SetPassword.tsx (useRecoveryMode: PASSWORD_RECOVERY event or #type=recovery, kept in
   sessionStorage) → supabase.auth.updateUser({password}). App.tsx shows it before everything else.
 - Owner's login = thesaleskumar@gmail.com (email + password). Never set passwords for him in chat.
+
+## After-call pop-up fixes + WhatsApp step + company files (v0.9.12, Nov 2026)
+- Owner (11T Pro, third-party dialer com.hb.dialer.free): no pop-up after calls. Causes: (1) calls
+  started from Closer OS were skipped; (2) background "JWT expired" (app_errors) → lead lookup and
+  sync_calls failed when the app hadn't been open for an hour. Fixes: Backend.ensureFreshSession()
+  (awaitInitialization + refreshCurrentSession if < 2 min left) at the start of CallSync.run and
+  AfterCall.handle; pop-up shows after EVERY call unless Closer OS is on screen; app-started calls
+  keep purpose/batch (AfterCall.Info.appCall) and saving in the pop-up clears store.pendingCall;
+  MainActivity vm.onResume drops its pending call (and advances the queue) when it was cleared
+  there. Lookup failure → card says "Couldn't reach Closer OS" + Open app. Default mode now "all".
+- Owner's flow: outcome + next call → then WhatsApp message. Pop-up Save → AfterCallActivity
+  mode "whatsapp" (WhatsAppPicker); full form saved → whatsapp step too; card's WhatsApp button
+  opens the picker. In the app: vm.whatsappNext after saveOutcome (not in the calling queue).
+- Company file library (migration 0036 company_files: org, name, path in bucket template-media at
+  <org>/files/…, mime, size; members read, managers write). Dashboard Settings → "Company files for
+  WhatsApp" (multi-upload ≤16 MB, rename, delete). App WhatsAppPicker → "📁 Company files"
+  (CompanyFilesDialog, Repo.companyFiles) → downloaded and shared to WhatsApp with the text.

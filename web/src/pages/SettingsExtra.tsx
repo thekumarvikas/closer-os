@@ -212,6 +212,69 @@ export function WhatsAppTemplates() {
   )
 }
 
+interface CompanyFile { id: string; name: string; path: string; mime_type: string | null; size_bytes: number | null }
+
+/** Company file library: reps send these on WhatsApp from the app, even if the file isn't on their phone. */
+export function CompanyFiles() {
+  const { org } = useOrg()
+  const [rows, setRows] = useState<CompanyFile[]>([])
+  const [version, setVersion] = useState(0)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    supabase.from('company_files').select('id,name,path,mime_type,size_bytes').eq('org_id', org.id).order('position').order('created_at')
+      .then(({ data }) => setRows((data ?? []) as CompanyFile[]))
+  }, [org.id, version])
+  const icon = (t: string | null) => t?.startsWith('image') ? '🖼️' : t?.startsWith('video') ? '🎬' : '📄'
+  const size = (b: number | null) => b == null ? '' : b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`
+  async function upload(files: FileList | null) {
+    if (!files?.length) return
+    setBusy(true); setError(null)
+    for (const file of Array.from(files)) {
+      if (file.size > 16 * 1024 * 1024) { setError(`"${file.name}" is bigger than 16 MB — WhatsApp won't send it.`); continue }
+      const path = `${org.id}/files/${Date.now()}-${file.name.replace(/[^A-Za-z0-9._-]/g, '_')}`
+      const up = await supabase.storage.from('template-media').upload(path, file, { contentType: file.type })
+      if (up.error) { setError(errorText(up.error)); continue }
+      const { error } = await supabase.from('company_files').insert({ org_id: org.id, name: file.name, path, mime_type: file.type || 'application/octet-stream', size_bytes: file.size, position: rows.length })
+      if (error) setError(errorText(error))
+    }
+    setBusy(false); setVersion(v => v + 1)
+  }
+  async function remove(f: CompanyFile) {
+    if (!confirm(`Delete "${f.name}"? Reps won't be able to send it any more.`)) return
+    await supabase.storage.from('template-media').remove([f.path])
+    const { error } = await supabase.from('company_files').delete().eq('id', f.id)
+    setError(error ? errorText(error) : null); setVersion(v => v + 1)
+  }
+  async function rename(f: CompanyFile, name: string) {
+    if (!name.trim() || name === f.name) return
+    const { error } = await supabase.from('company_files').update({ name: name.trim() }).eq('id', f.id)
+    setError(error ? errorText(error) : null); setVersion(v => v + 1)
+  }
+  return (
+    <Card className="p-5 lg:col-span-2">
+      <h2 className="font-semibold">Company files for WhatsApp</h2>
+      <p className="mb-3 mt-1 text-sm text-slate-500">Brochures, price lists, photos, videos. In the app, reps tap “📁 Company files” while writing a WhatsApp message and the file is sent with it — they don't need it on their phone.</p>
+      <ErrorBox error={error} />
+      <div className="space-y-2">
+        {rows.map(f => (
+          <div key={f.id} className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2">
+            <span className="text-lg">{icon(f.mime_type)}</span>
+            <input className="input !py-1.5 flex-1" defaultValue={f.name} onBlur={e => rename(f, e.target.value)} />
+            <span className="whitespace-nowrap text-xs text-slate-500">{size(f.size_bytes)}</span>
+            <button className="text-slate-400 hover:text-red-600" aria-label="Delete" onClick={() => remove(f)}><Trash2 className="h-4 w-4" /></button>
+          </div>
+        ))}
+        {rows.length === 0 && <p className="text-sm text-slate-500">No files yet.</p>}
+      </div>
+      <label className={`mt-3 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50 ${busy ? 'pointer-events-none opacity-60' : ''}`}>
+        <Plus className="h-4 w-4" /> {busy ? 'Uploading…' : 'Upload files (max 16 MB each)'}
+        <input type="file" multiple className="hidden" accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx" onChange={e => { upload(e.target.files); e.target.value = '' }} />
+      </label>
+    </Card>
+  )
+}
+
 /** A company list kept in organizations.settings (quick note tags, call review checklist). */
 function SettingList({ settingKey, title, text, placeholder, fallback = [] }: { settingKey: 'note_tags' | 'review_criteria'; title: string; text: string; placeholder: string; fallback?: string[] }) {
   const { org, refresh } = useOrg()

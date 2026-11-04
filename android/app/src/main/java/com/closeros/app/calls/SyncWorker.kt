@@ -26,6 +26,7 @@ object CallSync {
         val store = LocalStore(ctx)
         val orgId = store.orgId ?: return@runCatching 0
         if (Backend.uid == null) return@runCatching 0
+        Backend.ensureFreshSession()
 
         // 1) Outcomes saved while offline.
         val pending = store.outbox

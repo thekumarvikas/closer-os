@@ -61,9 +61,14 @@ class AfterCallActivity : ComponentActivity() {
         val logId = i.getStringExtra("log_id") ?: run { finish(); return }
         val started = i.getLongExtra("started", 0L)
         val phone = i.getStringExtra("phone").orEmpty()
+        val purpose = i.getStringExtra("purpose") ?: "sales"
         var mode by remember(i) { mutableStateOf(i.getStringExtra("mode") ?: "outcome") }
         var leadId by remember(i) { mutableStateOf(i.getStringExtra("lead_id")) }
+        var leadName by remember(i) { mutableStateOf(i.getStringExtra("lead_name").orEmpty()) }
+        var leadPhone by remember(i) { mutableStateOf(i.getStringExtra("lead_phone") ?: phone) }
         var opened by remember(i) { mutableStateOf(false) }
+        val scope = rememberCoroutineScope()
+        vm.popupOwnsAppCall = i.getBooleanExtra("app_call", false)
 
         // Open this call in the form (once the call-log entry is read).
         LaunchedEffect(i, leadId, mode) {
@@ -71,17 +76,18 @@ class AfterCallActivity : ComponentActivity() {
             if (mode != "outcome") return@LaunchedEffect
             val log = withContext(Dispatchers.IO) { runCatching { PhoneCalls.readLog(this@AfterCallActivity, started - 60_000).firstOrNull { it.id == logId } }.getOrNull() }
             val lead = if (i.getStringExtra("lead_id") == id) null else runCatching { Repo.lead(id) }.getOrNull()
-            vm.openAfterCall(LocalStore.PendingCall(id, lead?.name ?: i.getStringExtra("lead_name").orEmpty(), lead?.phone ?: i.getStringExtra("lead_phone") ?: phone,
-                log?.startedAtMs ?: started, "sales", null, lead?.profession ?: i.getStringExtra("profession"), null, logId = logId), log)
+            lead?.let { leadName = it.name; leadPhone = it.phone }
+            vm.openAfterCall(LocalStore.PendingCall(id, leadName, leadPhone, log?.startedAtMs ?: started, purpose, i.getStringExtra("batch_id"),
+                lead?.profession ?: i.getStringExtra("profession"), null, logId = logId), log)
             opened = true
         }
-        // Saved (here or on the laptop): close.
-        LaunchedEffect(vm.pending, opened) { if (opened && vm.pending == null) finish() }
+        // Outcome saved (here or on the laptop): next, the WhatsApp message.
+        LaunchedEffect(vm.pending, opened) { if (opened && vm.pending == null) { opened = false; mode = "whatsapp" } }
         LaunchedEffect(vm.message) { vm.message?.let { Toast.makeText(this@AfterCallActivity, it, Toast.LENGTH_SHORT).show(); vm.message = null } }
         BackHandler { finish() }
 
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { finish() }) {
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { if (mode != "whatsapp") finish() }) {
             if (mode == "outcome") Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.92f)
                 .background(Brand.bg, RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }) {
@@ -97,16 +103,24 @@ class AfterCallActivity : ComponentActivity() {
                 }
             }
         }
-        val scope = rememberCoroutineScope()
+        // Step 2: WhatsApp message with the company's templates and files.
+        if (mode == "whatsapp") {
+            val m = vm.membership
+            if (m == null) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            else WhatsAppPicker(vm, com.closeros.app.data.Lead(id = leadId.orEmpty(), org_id = m.org_id, name = leadName, phone = leadPhone,
+                profession = i.getStringExtra("profession"))) { finish() }
+        }
         if (mode == "add") AddLeadDialog(phone, onDismiss = { finish() }) { name, prof, notes ->
             val m = vm.membership ?: run { vm.message = "Still loading — try again"; return@AddLeadDialog }
             val p = normalizePhone(phone, m.organization.phone_prefix)
             vm.addLeadFromCall(p, name, prof, notes) {
-                // Added: if this call needs an outcome, ask for it now.
+                // Added: if this call needs an outcome, ask for it now; otherwise offer the WhatsApp message.
                 scope.launch {
                     val id = runCatching { Repo.leadsByPhones(m.org_id, listOf(p))[p]?.id }.getOrNull()
                     val log = withContext(Dispatchers.IO) { runCatching { PhoneCalls.readLog(this@AfterCallActivity, started - 60_000).firstOrNull { it.id == logId } }.getOrNull() }
-                    if (id != null && log != null && AfterCall.needsOutcome(log)) { leadId = id; mode = "outcome" } else finish()
+                    leadName = name; leadPhone = p
+                    if (id != null) leadId = id
+                    mode = if (id != null && log != null && AfterCall.needsOutcome(log)) "outcome" else "whatsapp"
                 }
             }
         }

@@ -60,6 +60,11 @@ object AfterCall {
         return Company(m.org_id, m.organization.phone_prefix, m.organization.timezone, outcomes)
     }
 
+    /** Everything the pop-up shows for one call. */
+    data class Info(val call: LogCall, val lead: Lead?, val co: Company, val appCall: LocalStore.PendingCall?, val lookupFailed: Boolean) {
+        val purpose get() = appCall?.purpose ?: "sales"
+    }
+
     /** Does this call need an outcome? (answered incoming, or any outgoing — same rule as the app) */
     fun needsOutcome(c: LogCall) = (c.direction == "incoming" && c.durationSec > 0) || c.direction == "outgoing"
 
@@ -67,6 +72,7 @@ object AfterCall {
         val store = LocalStore(ctx)
         if (store.orgId == null) return@withLock
         val co = company(ctx) ?: return@withLock
+        com.closeros.app.data.Backend.ensureFreshSession()
 
         // The phone writes the call log a moment after the call ends: look for it for up to ~10 s.
         var call: LogCall? = null
@@ -80,17 +86,18 @@ object AfterCall {
         if (c.id == store.lastAfterCallId || c.id in store.loggedCalls) return@withLock
         store.lastAfterCallId = c.id
 
-        val pc = store.pendingCall
-        if (pc != null && pc.logId == null && c.direction == "outgoing") return@withLock   // started from Closer OS: the app asks itself
         val phone = normalizePhone(c.phone, co.prefix)
-        val lead = runCatching { Repo.leadsByPhones(co.orgId, listOf(phone))[phone] }.getOrNull()
-        val outcome = lead != null && needsOutcome(c)
-        if (outcome && lead != null) notifySaveOutcome(ctx, lead, c)
+        // A call started from Closer OS (lead list, queue, webinar list): keep its purpose / webinar.
+        val appCall = store.pendingCall?.takeIf { p -> p.logId == c.id || (p.logId == null && normalizePhone(p.phone, co.prefix) == phone) }
+        var lookupFailed = false
+        val lead = runCatching { Repo.leadsByPhones(co.orgId, listOf(phone))[phone] }
+            .onFailure { lookupFailed = true; com.closeros.app.data.AppLog.error(ctx, "after-call lead lookup", it) }.getOrNull()
+        if (lead != null && needsOutcome(c)) notifySaveOutcome(ctx, lead, c)
 
         val mode = store.afterCallMode
-        val show = mode != "off" && allowed(ctx) && !MainActivity.visible && pc == null &&
-            c.phone.isNotBlank() && (lead != null || mode == "all")
-        if (show) withContext(Dispatchers.Main) { Overlay.show(ctx.applicationContext, c, lead, co) }
+        val show = mode != "off" && allowed(ctx) && !MainActivity.visible &&
+            c.phone.isNotBlank() && (lead != null || mode == "all" || lookupFailed)
+        if (show) withContext(Dispatchers.Main) { Overlay.show(ctx.applicationContext, Info(c, lead, co, appCall, lookupFailed)) }
     }
 
     private fun notifySaveOutcome(ctx: Context, lead: Lead, c: LogCall) {
@@ -112,13 +119,13 @@ object AfterCall {
         private var view: View? = null
         private var owner: Owner? = null
 
-        fun show(ctx: Context, c: LogCall, lead: Lead?, co: Company) {
+        fun show(ctx: Context, info: Info) {
             hide(ctx)
             val wm = ctx.getSystemService(WindowManager::class.java) ?: return
             val o = Owner().also { it.start() }
             val v = ComposeView(ctx).apply {
                 setViewTreeLifecycleOwner(o); setViewTreeSavedStateRegistryOwner(o); setViewTreeViewModelStoreOwner(o)
-                setContent { CloserTheme { AfterCallCard(c, lead, co, onClose = { hide(ctx) }) } }
+                setContent { CloserTheme { AfterCallCard(info, onClose = { hide(ctx) }) } }
             }
             val lp = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT,

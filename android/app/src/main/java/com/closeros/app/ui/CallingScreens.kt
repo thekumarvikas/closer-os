@@ -363,14 +363,18 @@ fun WhatsAppPicker(vm: AppViewModel, lead: Lead, onDismiss: () -> Unit) {
     var text by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     var saveName by remember { mutableStateOf("") }
-    var picked by remember { mutableStateOf<com.closeros.app.data.Template?>(null) }   // template with company media
+    var picked by remember { mutableStateOf<CompanyMedia?>(null) }   // company file: from a template or the file library
+    var showFiles by remember { mutableStateOf(false) }
     var ownMedia by remember { mutableStateOf<android.net.Uri?>(null) }               // photo/video chosen on the phone
     var sending by remember { mutableStateOf(false) }
     val chooseMedia = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.GetContent()) { u -> if (u != null) ownMedia = u }
     val first = lead.name.substringBefore(' ')
     val company = vm.templates.filter { it.owner_id == null }
     val mine = vm.templates.filter { it.owner_id != null }
-    fun pick(t: com.closeros.app.data.Template) { text = vm.fillTemplate(t.body, lead); picked = t.takeIf { it.media_path != null }; ownMedia = null }
+    fun pick(t: com.closeros.app.data.Template) {
+        text = vm.fillTemplate(t.body, lead); ownMedia = null
+        picked = t.media_path?.let { CompanyMedia(it, t.media_type, t.media_name) }
+    }
     AlertDialog(onDismissRequest = onDismiss,
         title = { Text(if (text == null) "Choose a message" else "WhatsApp to ${first.ifBlank { fmtPhone(lead.phone) }}") },
         text = {
@@ -384,14 +388,17 @@ fun WhatsAppPicker(vm: AppViewModel, lead: Lead, onDismiss: () -> Unit) {
                 OutlinedTextField(text!!, { text = it }, modifier = Modifier.fillMaxWidth(), minLines = 4)
                 when {
                     picked != null -> Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("${mediaIcon(picked!!.media_type)} ${picked!!.media_name ?: "Attachment"}", fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        Text("${mediaIcon(picked?.type)} ${picked?.name ?: "Attachment"}", fontSize = 13.sp, modifier = Modifier.weight(1f))
                         TextButton(onClick = { picked = null }) { Text("Remove") }
                     }
                     ownMedia != null -> Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("📎 Photo/video from your phone", fontSize = 13.sp, modifier = Modifier.weight(1f))
                         TextButton(onClick = { ownMedia = null }) { Text("Remove") }
                     }
-                    else -> TextButton(onClick = { chooseMedia.launch("*/*") }) { Text("📎 Add photo, video or PDF") }
+                    else -> Column {
+                        TextButton(onClick = { showFiles = true }) { Text("📁 Company files (brochure, photos…)") }
+                        TextButton(onClick = { chooseMedia.launch("*/*") }) { Text("📎 A file from my phone") }
+                    }
                 }
                 if (saving) {
                     OutlinedTextField(saveName, { saveName = it }, label = { Text("Name for this message") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -409,11 +416,11 @@ fun WhatsAppPicker(vm: AppViewModel, lead: Lead, onDismiss: () -> Unit) {
                 val t = picked; val own = ownMedia; val msg = text ?: return@Button
                 when {
                     own != null -> { PhoneCalls.whatsappMedia(ctx, lead.phone, own, ctx.contentResolver.getType(own) ?: "*/*", msg); onDismiss() }
-                    t?.media_path != null -> { sending = true; scope.launch {
+                    t != null -> { sending = true; scope.launch {
                         runCatching {
-                            val f = com.closeros.app.data.Repo.templateMediaFile(ctx, t.media_path, t.media_name)
+                            val f = com.closeros.app.data.Repo.templateMediaFile(ctx, t.path, t.name)
                             val uri = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
-                            PhoneCalls.whatsappMedia(ctx, lead.phone, uri, t.media_type ?: "*/*", msg)
+                            PhoneCalls.whatsappMedia(ctx, lead.phone, uri, t.type ?: "*/*", msg)
                         }.onFailure { vm.message = "Couldn't get the attachment — check internet"; PhoneCalls.whatsapp(ctx, lead.phone, msg) }
                         sending = false; onDismiss()
                     } }
@@ -422,6 +429,41 @@ fun WhatsAppPicker(vm: AppViewModel, lead: Lead, onDismiss: () -> Unit) {
             }) { Text(if (sending) "Preparing…" else "Open WhatsApp") }
         },
         dismissButton = { TextButton(onClick = { if (text != null) { text = null; saving = false; picked = null; ownMedia = null } else onDismiss() }) { Text(if (text != null) "Back" else "Cancel") } })
+    if (showFiles) CompanyFilesDialog(vm, onDismiss = { showFiles = false }) { f -> picked = CompanyMedia(f.path, f.mime_type, f.name); ownMedia = null; showFiles = false }
+}
+
+/** A company file to send on WhatsApp (stored on the server, downloaded when sending). */
+data class CompanyMedia(val path: String, val type: String?, val name: String?)
+
+/** The company's file library (uploaded by managers on the dashboard: Settings → Company files). */
+@Composable
+fun CompanyFilesDialog(vm: AppViewModel, onDismiss: () -> Unit, onPick: (com.closeros.app.data.CompanyFile) -> Unit) {
+    var files by remember { mutableStateOf<List<com.closeros.app.data.CompanyFile>?>(null) }
+    var failed by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        val org = vm.membership?.org_id ?: return@LaunchedEffect
+        runCatching { com.closeros.app.data.Repo.companyFiles(org) }.onSuccess { files = it }.onFailure { failed = true; files = emptyList() }
+    }
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("Company files") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                when {
+                    files == null -> Text("Loading…", color = Brand.muted)
+                    failed -> Text("Couldn't load the files — check internet.", color = Brand.red)
+                    files!!.isEmpty() -> Text("No company files yet. Your manager can add them on the dashboard: Settings → Company files for WhatsApp.", color = Brand.muted)
+                }
+                files.orEmpty().forEach { f ->
+                    Row(Modifier.fillMaxWidth().clickable { onPick(f) }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(mediaIcon(f.mime_type), fontSize = 20.sp); Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(f.name, fontWeight = FontWeight.SemiBold, maxLines = 2)
+                            f.size_bytes?.let { b -> Text(if (b > 1_048_576) "%.1f MB".format(java.util.Locale.US, b / 1_048_576.0) else "${(b / 1024).coerceAtLeast(1)} KB", fontSize = 12.sp, color = Brand.muted) }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {}, dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } })
 }
 
 private fun mediaIcon(type: String?) = when { type == null -> "📎"; type.startsWith("image") -> "🖼️"; type.startsWith("video") -> "🎬"; type.contains("pdf") -> "📄"; else -> "📎" }

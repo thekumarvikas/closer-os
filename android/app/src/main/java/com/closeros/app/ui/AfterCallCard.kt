@@ -47,12 +47,13 @@ import java.time.format.DateTimeFormatter
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun AfterCallCard(c: LogCall, lead: Lead?, co: AfterCall.Company, onClose: () -> Unit) {
+fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
+    val c = info.call; val lead = info.lead; val co = info.co
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val zone = runCatching { ZoneId.of(co.timezone) }.getOrDefault(ZoneId.systemDefault())
     val needs = lead != null && AfterCall.needsOutcome(c)
-    val choices = co.outcomes.filter { it.is_active && (it.purpose == "sales" || it.purpose == "both") }.sortedBy { it.position }
+    val choices = co.outcomes.filter { it.is_active && (it.purpose == info.purpose || it.purpose == "both") }.sortedBy { it.position }
     var outcome by remember { mutableStateOf<Outcome?>(null) }
     var next by remember { mutableStateOf<ZonedDateTime?>(null) }
     var noFollow by remember { mutableStateOf(false) }
@@ -61,7 +62,7 @@ fun AfterCallCard(c: LogCall, lead: Lead?, co: AfterCall.Company, onClose: () ->
     val maxH = (LocalConfiguration.current.screenHeightDp * 0.8f).dp
 
     fun open(i: Intent) { onClose(); com.closeros.app.calls.safeStart(ctx, i) }
-    fun fullForm(mode: String) = open(afterCallIntent(ctx, c, lead, mode))
+    fun fullForm(mode: String) = open(afterCallIntent(ctx, info, mode))
 
     Column(Modifier.padding(horizontal = 12.dp).fillMaxWidth().heightIn(max = maxH)
         .shadow(16.dp, RoundedCornerShape(20.dp)).background(Color.White, RoundedCornerShape(20.dp))) {
@@ -102,9 +103,10 @@ fun AfterCallCard(c: LogCall, lead: Lead?, co: AfterCall.Company, onClose: () ->
                         if (sale) { fullForm("outcome"); return@Button }
                         saving = true; error = null
                         scope.launch {
-                            val r = saveQuick(ctx, c, lead!!, co, o, next, noFollow)
+                            val r = lead?.let { saveQuick(ctx, info, it, o, next, noFollow) } ?: "Lead not found"
                             saving = false
-                            if (r == null) { Toast.makeText(ctx, "Outcome saved", Toast.LENGTH_SHORT).show(); onClose() } else error = r
+                            // Saved: next step is the WhatsApp message (templates + company files).
+                            if (r == null) { Toast.makeText(ctx, "Outcome saved", Toast.LENGTH_SHORT).show(); fullForm("whatsapp") } else error = r
                         }
                     }, enabled = !saving && outcome != null && (noFollow || next != null), modifier = Modifier.fillMaxWidth().height(50.dp)) {
                         Text(when { saving -> "Saving…"; sale -> "Continue — add the amount"; else -> "Save" }, fontSize = 16.sp)
@@ -113,6 +115,10 @@ fun AfterCallCard(c: LogCall, lead: Lead?, co: AfterCall.Company, onClose: () ->
                 }
                 lead != null -> Text(if (c.direction == "missed" || c.direction == "rejected") "Missed call from your lead — call back?" else "Call with your lead.",
                     color = Brand.muted, fontSize = 14.sp)
+                info.lookupFailed -> {
+                    Text("Couldn't reach Closer OS to check this number (no internet?). Open Closer OS to save the outcome.", color = Brand.muted, fontSize = 14.sp)
+                    OutlinedButton(onClick = { open(Intent(ctx, MainActivity::class.java)) }, modifier = Modifier.fillMaxWidth()) { Text("Open Closer OS") }
+                }
                 else -> {
                     Text("Not in your leads", color = Brand.muted, fontSize = 14.sp)
                     OutlinedButton(onClick = { fullForm("add") }, modifier = Modifier.fillMaxWidth()) { Text("+ Add as a lead") }
@@ -128,7 +134,7 @@ fun AfterCallCard(c: LogCall, lead: Lead?, co: AfterCall.Company, onClose: () ->
                 val sim = PhoneCalls.sims(ctx).firstOrNull { it.slot == c.simSlot }
                 PhoneCalls.call(ctx, c.phone, sim)
             }
-            Action("💬", "WhatsApp") { onClose(); PhoneCalls.whatsapp(ctx, c.phone) }
+            Action("💬", "WhatsApp") { fullForm("whatsapp") }
             Action("✉️", "SMS") { onClose(); PhoneCalls.sms(ctx, c.phone) }
             if (lead != null) Action("👤", "Open lead") { open(Intent(ctx, MainActivity::class.java).putExtra("open_lead", lead.id)) }
         }
@@ -158,11 +164,13 @@ private fun quickTimes(zone: ZoneId): List<Pair<String, ZonedDateTime>> {
 }
 
 /** Saves from the card. Returns null when saved (or kept on the phone to send later), else the reason it can't be saved. */
-private suspend fun saveQuick(ctx: Context, c: LogCall, lead: Lead, co: AfterCall.Company, o: Outcome, next: ZonedDateTime?, noFollow: Boolean): String? {
+private suspend fun saveQuick(ctx: Context, info: AfterCall.Info, lead: Lead, o: Outcome, next: ZonedDateTime?, noFollow: Boolean): String? {
+    val c = info.call; val co = info.co
     val store = LocalStore(ctx)
     val payload = buildJsonObject {
         put("id", c.id); put("org_id", co.orgId); put("lead_id", lead.id)
-        put("phone", lead.phone); put("direction", c.direction); put("purpose", "sales")
+        put("phone", lead.phone); put("direction", c.direction); put("purpose", info.purpose)
+        info.appCall?.batchId?.let { put("batch_id", it) }
         put("started_at", Instant.ofEpochMilli(c.startedAtMs).toString()); put("duration_sec", c.durationSec)
         c.simSlot?.let { put("sim_slot", it) }; c.simLabel?.let { put("sim_label", it) }; c.simNumber?.let { put("sim_number", it) }
         put("device_id", PhoneCalls.deviceId(ctx)); put("from_dialer_queue", false)
@@ -177,15 +185,19 @@ private suspend fun saveQuick(ctx: Context, c: LogCall, lead: Lead, co: AfterCal
         store.addToOutbox(payload)   // no internet: sent automatically later
     }
     store.markLogged(c.id)
+    if (info.appCall != null && store.pendingCall == info.appCall) store.pendingCall = null   // the app won't ask again
     AfterCall.cancelNotification(ctx)
     CallSync.syncNow(ctx)
     return null
 }
 
-fun afterCallIntent(ctx: Context, c: LogCall, lead: Lead?, mode: String): Intent =
-    Intent(ctx, AfterCallActivity::class.java)
+fun afterCallIntent(ctx: Context, info: AfterCall.Info, mode: String): Intent {
+    val c = info.call; val lead = info.lead
+    return Intent(ctx, AfterCallActivity::class.java)
         .putExtra("mode", mode).putExtra("log_id", c.id).putExtra("started", c.startedAtMs).putExtra("phone", c.phone)
         .putExtra("lead_id", lead?.id).putExtra("lead_name", lead?.name).putExtra("lead_phone", lead?.phone).putExtra("profession", lead?.profession)
+        .putExtra("purpose", info.purpose).putExtra("batch_id", info.appCall?.batchId).putExtra("app_call", info.appCall != null)
+}
 
 @Composable
 private fun PopChip(label: String, selected: Boolean, onClick: () -> Unit) {

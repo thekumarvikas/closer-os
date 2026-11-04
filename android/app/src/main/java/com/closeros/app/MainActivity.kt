@@ -156,6 +156,7 @@ fun Root(vm: AppViewModel) {
                 }
             } }
         }
+        vm.whatsappNext?.let { l -> if (vm.pending == null && vm.announcements.isEmpty()) WhatsAppPicker(vm, l) { vm.whatsappNext = null } }
         simChoice?.let { (lead, sims) ->
             SimPicker(sims, onPick = { simChoice = null; vm.startCall(lead, it) }, onDismiss = { simChoice = null })
         }

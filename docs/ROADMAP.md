@@ -96,3 +96,5 @@ Everything from the original product prompt plus the owner's feedback, with stat
 - ✅ Stability pass (v0.9.10): crash guards, no lost offline outcomes, no freezes on big recording folders
 - ✅ Swipe between the app's main tabs (v0.9.11)
 - ✅ After-call pop-up over any app with quick outcome + next call (v0.9.11)
+- ✅ WhatsApp step right after the outcome (pop-up and app) (v0.9.12)
+- ✅ Company file library for WhatsApp (dashboard upload, app send) (v0.9.12)

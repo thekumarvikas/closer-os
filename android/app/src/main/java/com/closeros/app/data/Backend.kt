@@ -43,7 +43,20 @@ object Backend {
     }
     val auth get() = client.auth
     val uid: String? get() = client.auth.currentUserOrNull()?.id
+
+    /**
+     * Background work (call sync, after-call pop-up) can run hours after the app was last open, when
+     * the saved login has expired. Refresh it first, otherwise the server answers "JWT expired".
+     */
+    suspend fun ensureFreshSession() {
+        runCatching { client.auth.awaitInitialization() }
+        val s = client.auth.currentSessionOrNull() ?: return
+        if (s.expiresAt < kotlinx.datetime.Clock.System.now() + kotlin.time.Duration.parse("2m"))
+            runCatching { client.auth.refreshCurrentSession() }
+    }
 }
+
+@Serializable data class CompanyFile(val id: String, val name: String, val path: String, val mime_type: String? = null, val size_bytes: Long? = null)
 
 @Serializable data class Org(
     val id: String, val name: String, val phone_prefix: String = "+91", val currency: String = "INR",
@@ -308,6 +321,11 @@ object Repo {
         json.decodeFromString(db.rpc("org_access", buildJsonObject { put("p_org", orgId) }).data)
 
     /** A company message's photo/video/PDF, saved in the app's cache so it can be shared to WhatsApp. */
+    suspend fun companyFiles(orgId: String): List<CompanyFile> =
+        db.from("company_files").select(Columns.raw("id,name,path,mime_type,size_bytes")) {
+            filter { eq("org_id", orgId) }; order("position", Order.ASCENDING); order("created_at", Order.ASCENDING)
+        }.decodeList()
+
     suspend fun templateMediaFile(ctx: android.content.Context, path: String, name: String?): java.io.File {
         val dir = java.io.File(ctx.cacheDir, "shared").apply { mkdirs() }
         val f = java.io.File(dir, (name ?: path.substringAfterLast('/')).replace(Regex("[^A-Za-z0-9._ -]"), "_"))

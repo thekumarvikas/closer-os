@@ -426,6 +426,9 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Lead to offer a WhatsApp message to, right after its outcome was saved. */
+    var whatsappNext by mutableStateOf<Lead?>(null)
+
     /** Outcomes still waiting for internet when the rep tried to sign out (asks before they are lost). */
     var signOutWaiting by mutableStateOf<Int?>(null)
 
@@ -460,6 +463,11 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Called when the app comes back to the front: look up the finished call in the call log. */
     fun onResume() {
+        // Saved in the after-call pop-up while the app was in the background: move on.
+        if (pending != null && store.pendingCall == null) {
+            pending = null; pendingLog = null; endedReported = null
+            queueAfterOutcome(); refreshHome()
+        }
         val p = pending
         if (p == null) {
             checkUnloggedCalls()
@@ -517,7 +525,13 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         store.pendingCall = pc; pending = pc; pendingLog = c
     }
 
-    fun discardPending() { store.pendingCall = null; pending = null; pendingLog = null; endedReported = null }
+    /** In the after-call pop-up: true when this call is the one the app itself started (then the app's copy is cleared too). */
+    var popupOwnsAppCall = false
+
+    fun discardPending() {
+        if (!lite || popupOwnsAppCall) store.pendingCall = null
+        pending = null; pendingLog = null; endedReported = null
+    }
 
     // ───────────── Desk mode: the laptop asks this phone to dial ─────────────
     /** True while a call asked for by the laptop is being started (so no SIM question if one was used before). */
@@ -562,6 +576,9 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (log.id in done && pending == p) {
             store.markLogged(log.id)
             pending?.let { FollowUpAlarms.cancelForLead(ctx, it.leadId, followUps) }
+        // Next step after the outcome: a WhatsApp message (not in the calling queue — it moves on by itself).
+        if (!lite && !queueActive) pending?.let { p -> membership?.let { m ->
+            whatsappNext = Lead(id = p.leadId, org_id = m.org_id, name = p.leadName, phone = p.phone, profession = p.profession) } }
             discardPending()
             message = "Outcome saved on your laptop ✓"
             queueAfterOutcome()

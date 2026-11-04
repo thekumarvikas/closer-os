@@ -119,9 +119,9 @@ class LocalStore(ctx: Context) {
         get() = p.getInt("countdown", 5)
         set(v) { p.edit().putInt("countdown", v).apply() }
 
-    /** After-call pop-up: "leads" (default), "all" calls, or "off". */
+    /** After-call pop-up: "all" calls (default), "leads" only, or "off". */
     var afterCallMode: String
-        get() = p.getString("after_call_mode", "leads") ?: "leads"
+        get() = p.getString("after_call_mode", "all") ?: "all"
         set(v) { p.edit().putString("after_call_mode", v).apply() }
 
     /** Last call the pop-up was shown for (Android sends the "call ended" signal twice). */

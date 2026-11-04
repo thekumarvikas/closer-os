@@ -61,6 +61,10 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
     var noFollow by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    // Step 2 after saving (or the WhatsApp button): pick a message right on the card.
+    var savedLine by remember { mutableStateOf<String?>(null) }
+    var waStep by remember { mutableStateOf(false) }
+    var sendingWa by remember { mutableStateOf(false) }
     val maxH = (LocalConfiguration.current.screenHeightDp * 0.8f).dp
 
     fun open(i: Intent) { onClose(); com.closeros.app.calls.safeStart(ctx, i) }
@@ -89,6 +93,7 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
 
         Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             when {
+                waStep -> WhatsAppStep(info, savedLine, sendingWa, onSending = { sendingWa = it }, onEdit = { fullForm("whatsapp") }, onClose = onClose)
                 needs -> {
                     Text("Outcome", fontWeight = FontWeight.SemiBold)
                     if (choices.isEmpty()) Text("Open the full form to save the outcome.", color = Brand.muted, fontSize = 14.sp)
@@ -108,10 +113,13 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
                         if (sale) { fullForm("outcome"); return@Button }
                         saving = true; error = null
                         scope.launch {
-                            val r = lead?.let { saveQuick(ctx, info, it, o, next, noFollow) } ?: "Lead not found"
+                            val r = if (lead == null) "Lead not found" else saveQuick(ctx, info, lead, o, next, noFollow)
                             saving = false
-                            // Saved: next step is the WhatsApp message (templates + company files).
-                            if (r == null) { Toast.makeText(ctx, "Outcome saved", Toast.LENGTH_SHORT).show(); fullForm("whatsapp") } else error = r
+                            // Saved: step 2 on the same card — send a WhatsApp message, or close and dial the next.
+                            if (r == null) {
+                                savedLine = "✓ Saved: ${o.label} · " + (if (noFollow) "no follow-up" else next?.format(DateTimeFormatter.ofPattern("EEE d MMM, h:mm a")) ?: "")
+                                waStep = true
+                            } else error = r
                         }
                     }, enabled = c != null && !saving && outcome != null && (noFollow || next != null), modifier = Modifier.fillMaxWidth().height(50.dp)) {
                         Text(when { saving -> "Saving…"; sale -> "Continue — add the amount"; else -> "Save" }, fontSize = 16.sp)
@@ -143,7 +151,7 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
                 val sim = PhoneCalls.sims(ctx).firstOrNull { it.slot == c?.simSlot }
                 PhoneCalls.call(ctx, number, sim)
             }
-            Action("💬", "WhatsApp") { fullForm("whatsapp") }
+            Action("💬", "WhatsApp") { waStep = true }
             Action("✉️", "SMS") { onClose(); PhoneCalls.sms(ctx, number) }
             if (lead != null) Action("👤", "Open lead") { open(Intent(ctx, MainActivity::class.java).putExtra("open_lead", lead.id)) }
         }
@@ -225,5 +233,50 @@ private fun Action(icon: String, label: String, onClick: () -> Unit) {
     Column(Modifier.clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(icon, fontSize = 22.sp)
         Text(label, fontSize = 12.sp, color = Color(0xFF334155))
+    }
+}
+
+/** Step 2: the company's and the rep's WhatsApp messages, one tap to send (with any attached file). */
+@Composable
+private fun WhatsAppStep(info: AfterCall.Info, savedLine: String?, sending: Boolean, onSending: (Boolean) -> Unit, onEdit: () -> Unit, onClose: () -> Unit) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val co = info.co
+    val number = info.number.orEmpty()
+    val lead = info.lead ?: Lead(id = "", org_id = co.orgId, phone = number)
+    val company = co.templates.filter { it.owner_id == null }
+    val mine = co.templates.filter { it.owner_id != null }
+    fun send(t: com.closeros.app.data.Template) {
+        val text = fillTemplateText(t.body, lead, co.name, co.timezone, co.repName)
+        val path = t.media_path
+        if (path == null) { onClose(); PhoneCalls.whatsapp(ctx, number, text); return }
+        onSending(true)
+        scope.launch {
+            runCatching {
+                val f = Repo.templateMediaFile(ctx, path, t.media_name)
+                val uri = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
+                PhoneCalls.whatsappMedia(ctx, number, uri, t.media_type ?: "*/*", text)
+            }.onFailure { Toast.makeText(ctx, "Couldn't get the attachment — sending the text only", Toast.LENGTH_SHORT).show(); PhoneCalls.whatsapp(ctx, number, text) }
+            onSending(false); onClose()
+        }
+    }
+    savedLine?.let { Text(it, color = Brand.green, fontWeight = FontWeight.SemiBold, fontSize = 14.sp) }
+    Text("Send a WhatsApp message?", fontWeight = FontWeight.SemiBold)
+    if (sending) Row(verticalAlignment = Alignment.CenterVertically) {
+        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)); Text("Getting the attachment…", fontSize = 14.sp, color = Brand.muted)
+    }
+    if (co.templates.isEmpty()) Text("No saved messages yet — tap \"Write a message\".", color = Brand.muted, fontSize = 14.sp)
+    listOf("Company messages" to company, "My messages" to mine).forEach { (title, list) ->
+        if (list.isNotEmpty()) Text(title, fontSize = 12.sp, color = Brand.muted, fontWeight = FontWeight.SemiBold)
+        list.forEach { t ->
+            Column(Modifier.fillMaxWidth().border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(12.dp)).clickable(enabled = !sending) { send(t) }.padding(12.dp)) {
+                Text((if (t.media_path != null) "📎 " else "") + t.name, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                Text(fillTemplateText(t.body, lead, co.name, co.timezone, co.repName), fontSize = 13.sp, color = Brand.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(onClick = onEdit, enabled = !sending, modifier = Modifier.weight(1f)) { Text("✏️ Write / edit · 📁 files", fontSize = 13.sp) }
+        Button(onClick = onClose, enabled = !sending, modifier = Modifier.weight(1f)) { Text("Close") }
     }
 }

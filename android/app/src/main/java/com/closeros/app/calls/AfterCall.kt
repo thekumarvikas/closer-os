@@ -51,13 +51,16 @@ object AfterCall {
     fun allowed(ctx: Context) = Settings.canDrawOverlays(ctx)
 
     /** Everything the card needs about the company, from the copy saved on the phone (works offline). */
-    data class Company(val orgId: String, val prefix: String, val timezone: String, val outcomes: List<Outcome>)
+    data class Company(val orgId: String, val prefix: String, val timezone: String, val outcomes: List<Outcome>,
+                       val name: String = "", val repName: String = "", val templates: List<com.closeros.app.data.Template> = emptyList())
 
     fun company(ctx: Context): Company? {
         val db = com.closeros.app.data.LocalDb.get(ctx)
         val m = db.get("membership")?.let { runCatching { com.closeros.app.data.json.decodeFromString<Membership>(it) }.getOrNull() } ?: return null
         val outcomes = db.get("outcomes")?.let { runCatching { com.closeros.app.data.json.decodeFromString<List<Outcome>>(it) }.getOrNull() }.orEmpty()
-        return Company(m.org_id, m.organization.phone_prefix, m.organization.timezone, outcomes)
+        val templates = db.get("templates")?.let { runCatching { com.closeros.app.data.json.decodeFromString<List<com.closeros.app.data.Template>>(it) }.getOrNull() }.orEmpty()
+        val rep = db.get("profile")?.let { runCatching { com.closeros.app.data.json.decodeFromString<com.closeros.app.data.Profile>(it) }.getOrNull() }?.full_name.orEmpty()
+        return Company(m.org_id, m.organization.phone_prefix, m.organization.timezone, outcomes, m.organization.name, rep, templates)
     }
 
     /**

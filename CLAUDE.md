@@ -574,3 +574,15 @@ intelligence → Play Store launch.
   ~0.3 s; call log polled every 0.15 s via PhoneCalls.latest(); server lookup confirms afterwards
   (Overlay.update keeps the rep's taps). Info.call / phone nullable, checking flag ("Checking if this
   number is a lead…"); Save waits for the call-log entry. Trace says "pop-up shown after X s".
+
+## Two-step pop-up (v0.9.15, Nov 2026)
+- Owner saw "Lead not found" on Save although the outcome WAS saved: `lead?.let { saveQuick() } ?:
+  "Lead not found"` turned saveQuick's null (= success) into that text. Fixed.
+- Crash opening AfterCallActivity (app_errors "LocalDb.get on a null object" in AppViewModel.loadOrg):
+  the init block ran before `cache` existed (Main.immediate + already signed in). init now sits at the
+  END of AppViewModel — keep it last.
+- Owner: two steps on the SAME card: 1) outcome + next call → Save; 2) "✓ Saved: … · next call …" +
+  "Send a WhatsApp message?" with company / my messages (filled via fillTemplateText(), shared with
+  vm.fillTemplate; attached file downloaded + shared), "Write / edit · files" (→ AfterCallActivity
+  whatsapp mode) and Close (dial the next). Card's WhatsApp button opens step 2 too. Company now
+  carries name, repName and templates from the cache.

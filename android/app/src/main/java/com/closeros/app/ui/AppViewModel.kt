@@ -195,15 +195,6 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var page = 0
     private var searchJob: Job? = null
 
-    init {
-        viewModelScope.launch {
-            Backend.auth.sessionStatus.collectLatest { s ->
-                status = s
-                if (s is SessionStatus.Authenticated) loadOrg()
-                if (s is SessionStatus.NotAuthenticated) { membership = null; loadingOrg = false }
-            }
-        }
-    }
 
     private fun isRep() = membership?.role == "rep"
 
@@ -334,22 +325,9 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Fills a WhatsApp template for one lead. */
-    fun fillTemplate(body: String, lead: Lead): String {
-        val b = lead.latestBatch?.batch
-        val tz = java.time.ZoneId.of(membership?.organization?.timezone ?: "Asia/Kolkata")
-        val df = java.time.format.DateTimeFormatter.ofPattern("d MMM, h:mm a").withZone(tz)
-        fun t(iso: String?) = iso?.let { runCatching { df.format(java.time.Instant.parse(it)) }.getOrNull() } ?: ""
-        return body
-            .replace("{{leadName}}", lead.name.substringBefore(' ').ifBlank { "there" })
-            .replace("{{leadFullName}}", lead.name.ifBlank { "there" })
-            .replace("{{repName}}", profile?.full_name?.substringBefore(' ') ?: "")
-            .replace("{{companyName}}", membership?.organization?.name ?: "")
-            .replace("{{batchName}}", b?.name ?: "the session")
-            .replace("{{batchDate}}", t(b?.webinar_at))
-            .replace("{{followUpTime}}", t(lead.next_follow_up_at).ifBlank { "a convenient time" })
-            .replace("{{city}}", lead.city ?: "")
-            .replace("{{profession}}", lead.profession ?: "")
-    }
+    fun fillTemplate(body: String, lead: Lead): String =
+        fillTemplateText(body, lead, membership?.organization?.name.orEmpty(), membership?.organization?.timezone ?: "Asia/Kolkata", profile?.full_name.orEmpty())
+
 
     private val prefix get() = membership?.organization?.phone_prefix ?: "+91"
 
@@ -618,4 +596,33 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun openAfterCall(p: LocalStore.PendingCall, log: LogCall?) { pending = p; pendingLog = log }
 
     fun newCallId(): String = pendingLog?.id ?: UUID.randomUUID().toString()
+
+    // Runs last, after every property above exists (the after-call screen starts already signed in).
+    init {
+        viewModelScope.launch {
+            Backend.auth.sessionStatus.collectLatest { s ->
+                status = s
+                if (s is SessionStatus.Authenticated) loadOrg()
+                if (s is SessionStatus.NotAuthenticated) { membership = null; loadingOrg = false }
+            }
+        }
+    }
+}
+
+/** Fills a WhatsApp message's {{variables}} for one lead (used in the app and in the after-call pop-up). */
+fun fillTemplateText(body: String, lead: Lead, companyName: String, timezone: String, repName: String): String {
+    val b = lead.latestBatch?.batch
+    val tz = runCatching { java.time.ZoneId.of(timezone) }.getOrDefault(java.time.ZoneId.systemDefault())
+    val df = java.time.format.DateTimeFormatter.ofPattern("d MMM, h:mm a").withZone(tz)
+    fun t(iso: String?) = iso?.let { runCatching { df.format(java.time.Instant.parse(it)) }.getOrNull() } ?: ""
+    return body
+        .replace("{{leadName}}", lead.name.substringBefore(' ').ifBlank { "there" })
+        .replace("{{leadFullName}}", lead.name.ifBlank { "there" })
+        .replace("{{repName}}", repName.substringBefore(' '))
+        .replace("{{companyName}}", companyName)
+        .replace("{{batchName}}", b?.name ?: "the session")
+        .replace("{{batchDate}}", t(b?.webinar_at))
+        .replace("{{followUpTime}}", t(lead.next_follow_up_at).ifBlank { "a convenient time" })
+        .replace("{{city}}", lead.city ?: "")
+        .replace("{{profession}}", lead.profession ?: "")
 }

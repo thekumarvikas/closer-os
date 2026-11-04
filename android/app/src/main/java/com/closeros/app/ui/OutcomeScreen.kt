@@ -36,7 +36,7 @@ import java.time.format.DateTimeFormatter
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun OutcomeScreen(vm: AppViewModel) {
+fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
     val p = vm.pending ?: return
     val log = vm.pendingLog
     val ctx = LocalContext.current
@@ -56,7 +56,7 @@ fun OutcomeScreen(vm: AppViewModel) {
     var profession by remember { mutableStateOf(p.profession.orEmpty()) }
     var categoryId by remember { mutableStateOf(p.categoryId) }
     val askProfession = p.batchId != null || p.profession.isNullOrBlank()
-    BackHandler { vm.message = "Save the outcome first" }
+    if (!popup) BackHandler { vm.message = "Save the outcome first" }
     // Saved on the laptop instead? This screen closes by itself.
     LaunchedEffect(p) { while (true) { kotlinx.coroutines.delay(4_000); vm.checkOutcomeSavedElsewhere() } }
 
@@ -80,7 +80,7 @@ fun OutcomeScreen(vm: AppViewModel) {
         (outcome?.form != "sale" || amount.isNotBlank())
 
     Column(Modifier.fillMaxSize().background(Brand.bg).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text("How did the call go?", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        if (!popup) Text("How did the call go?", fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
             Column(Modifier.padding(14.dp)) {
                 Text(p.leadName.ifBlank { fmtPhone(p.phone) }, fontWeight = FontWeight.SemiBold)

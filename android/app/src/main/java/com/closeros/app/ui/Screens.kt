@@ -245,6 +245,16 @@ fun ProfileScreen(vm: AppViewModel) {
             listOf(3, 5, 10).forEach { n -> FilterChip(selected = cd == n, onClick = { vm.store.countdownSec = n; cd = n }, label = { Text("$n sec") }) }
         }
         HorizontalDivider()
+        Text("After-call pop-up", fontWeight = FontWeight.SemiBold)
+        Text("A card over any app when a call ends, to save the outcome straight away", color = Brand.muted, fontSize = 14.sp)
+        var acm by remember { mutableStateOf(vm.store.afterCallMode) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("leads" to "Leads only", "all" to "All calls", "off" to "Off").forEach { (k, l) ->
+                FilterChip(selected = acm == k, onClick = { vm.store.afterCallMode = k; acm = k }, label = { Text(l) })
+            }
+        }
+        if (acm != "off" && !android.provider.Settings.canDrawOverlays(ctx)) TextButton(onClick = { vm.showSetup = true }) { Text("Allow the pop-up in Phone setup →") }
+        HorizontalDivider()
         Text("Sync", fontWeight = FontWeight.SemiBold)
         Text(if (vm.store.lastSyncMs == 0L) "Not synced yet" else "Last sync ${fmtWhen(Instant.ofEpochMilli(vm.store.lastSyncMs).toString())}", color = Brand.muted)
         OutlinedButton(onClick = { com.closeros.app.calls.CallSync.syncNow(ctx); vm.message = "Syncing calls…" }) { Icon(Icons.Default.Refresh, null); Spacer(Modifier.width(6.dp)); Text("Sync calls now") }

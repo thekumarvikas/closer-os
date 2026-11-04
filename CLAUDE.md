@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.9.10
+## Android app (`android/`) — v0.9.11
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -505,3 +505,24 @@ intelligence → Play Store launch.
   membership; WhatsApp picker "Back" during attachment download no longer crashes; recordings-folder
   count runs on IO (ANR on big folders); dial pad reads call history once; double-tap guards on
   note / key facts / add lead; CallEndReceiver checks the action; telephony uses-feature not required.
+
+## Swipe tabs + after-call pop-up (v0.9.11, Nov 2026)
+- Owner: swipe left/right between Home / Leads / Calls / Follow-ups / Profile → HorizontalPager in
+  MainActivity (mainTabs; synced with vm.tab both ways; swipe off in leads select mode).
+- Owner: Truecaller-style card after every call, even when the app is closed. calls/AfterCall.kt:
+  CallEndReceiver (PHONE_STATE → IDLE, goAsync, up to 45 s) → AfterCall.handle: polls the call log
+  (~10 s), dedupes (store.lastAfterCallId; Android sends IDLE twice), skips calls started in the app,
+  looks up the lead, posts the "Save the outcome" notification (backup), and shows an OVERLAY window
+  (TYPE_APPLICATION_OVERLAY + ComposeView with its own lifecycle owner; SYSTEM_ALERT_WINDOW) unless
+  Closer OS is on screen (MainActivity.visible). Overlay, not an activity, because Android 15 lets
+  apps start activities from the background only while their overlay is visible.
+- ui/AfterCallCard.kt: header (name, number, Received/Talked/Not answered/Missed, SIM, profession,
+  📌 key facts), quick outcome chips + quick next-call (In 1 hour, Today 6 PM, Tomorrow 11 AM/6 PM,
+  day-after 11 AM, No follow-up) + Save (log_call, outbox if offline, markLogged); "Other time…" /
+  "More options" / sale outcome → ui/AfterCallActivity (translucent sheet, AfterCallViewModel with
+  lite = true, same OutcomeScreen(popup = true)); unknown numbers → "+ Add as a lead" (then asks the
+  outcome if the call needs one). Actions: Call (same SIM), WhatsApp, SMS, Open lead.
+- Profile → "After-call pop-up": Leads only (default) / All calls / Off (store.afterCallMode).
+  Phone setup: "After-call pop-up" (ACTION_MANAGE_OVERLAY_PERMISSION) + on Xiaomi/Redmi/POCO
+  "Pop-ups in the background" (MIUI permission editor, rep taps Done).
+- Closing the card without saving is fine: the app's mandatory outcome check asks on next open.

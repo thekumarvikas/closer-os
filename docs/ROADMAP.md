@@ -94,3 +94,5 @@ Everything from the original product prompt plus the owner's feedback, with stat
 - ⬜ Play Store: developer account, privacy policy, call-log permission declaration, 12-tester closed test
 - ⬜ Company-specific APK download from the dashboard
 - ✅ Stability pass (v0.9.10): crash guards, no lost offline outcomes, no freezes on big recording folders
+- ✅ Swipe between the app's main tabs (v0.9.11)
+- ✅ After-call pop-up over any app with quick outcome + next call (v0.9.11)

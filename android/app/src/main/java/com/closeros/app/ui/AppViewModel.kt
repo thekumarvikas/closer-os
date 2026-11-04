@@ -50,7 +50,10 @@ fun normalizePhone(raw: String, prefix: String = "+91"): String {
     }
 }
 
-class AppViewModel(app: Application) : AndroidViewModel(app) {
+open class AppViewModel(app: Application) : AndroidViewModel(app) {
+    /** True in the after-call pop-up: only what the outcome form needs is loaded. */
+    open val lite: Boolean get() = false
+
     private val ctx get() = getApplication<Application>()
     val store = LocalStore(app)
 
@@ -232,9 +235,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 outcomes = Repo.outcomes(m.org_id).also { save("outcomes", it) }
                 runCatching { categories = Repo.categories(m.org_id).also { save("categories", it) } }
                 runCatching { templates = Repo.templates(m.org_id).also { save("templates", it) } }
-                refreshHome()
-                reloadLeads()
-                CallSync.schedule(ctx); CallSync.syncNow(ctx)
+                if (!lite) { refreshHome(); reloadLeads(); CallSync.schedule(ctx); CallSync.syncNow(ctx) }
             }
         }.onFailure {
             if (membership == null) { message = "Couldn't load your company: ${it.message}"; com.closeros.app.data.AppLog.error(ctx, "load company", it) }
@@ -586,12 +587,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         pending?.let { FollowUpAlarms.cancelForLead(ctx, it.leadId, followUps) }
         pendingLog?.id?.let { store.markLogged(it) }
         discardPending()
-        checkUnloggedCalls()
         onDone()
+        CallSync.syncNow(ctx)
+        if (lite) return@launch
+        checkUnloggedCalls()
         queueAfterOutcome()
-        refreshHome(); reloadLeads(); CallSync.syncNow(ctx)
+        refreshHome(); reloadLeads()
         if (openList != null) loadList()
     }
+
+    /** The after-call pop-up's full form: this call, without touching the app's own pending call. */
+    fun openAfterCall(p: LocalStore.PendingCall, log: LogCall?) { pending = p; pendingLog = log }
 
     fun newCallId(): String = pendingLog?.id ?: UUID.randomUUID().toString()
 }

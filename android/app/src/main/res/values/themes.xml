@@ -4,5 +4,11 @@
         <item name="android:statusBarColor">#0E5E57</item>
         <item name="android:windowBackground">#F8FAFC</item>
     </style>
+    <style name="Theme.CloserOS.Popup" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowAnimationStyle">@android:style/Animation.Translucent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+    </style>
     <color name="ic_bg">#0E5E57</color>
 </resources>

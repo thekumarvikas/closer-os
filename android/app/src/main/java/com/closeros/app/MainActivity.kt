@@ -58,13 +58,21 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        visible = true
+        com.closeros.app.calls.AfterCall.Overlay.hide(applicationContext)
         vm.foreground = true
         vm.onResume()
     }
 
     override fun onPause() {
         super.onPause()
+        visible = false
         vm.foreground = false
+    }
+
+    companion object {
+        /** True while Closer OS is on screen (then no after-call pop-up: the app asks itself). */
+        @Volatile var visible = false
     }
 }
 
@@ -133,8 +141,12 @@ fun Root(vm: AppViewModel) {
                     }
                 }
             }) { pad ->
-                Box(Modifier.padding(pad)) {
-                    when (vm.tab) {
+                // Swipe left / right to move between the tabs.
+                val pager = androidx.compose.foundation.pager.rememberPagerState(initialPage = mainTabs.indexOf(vm.tab).coerceAtLeast(0)) { mainTabs.size }
+                LaunchedEffect(vm.tab) { val i = mainTabs.indexOf(vm.tab); if (i >= 0 && pager.currentPage != i) pager.animateScrollToPage(i) }
+                LaunchedEffect(pager) { androidx.compose.runtime.snapshotFlow { pager.settledPage }.collect { vm.tab = mainTabs[it] } }
+                androidx.compose.foundation.pager.HorizontalPager(pager, Modifier.padding(pad), userScrollEnabled = !vm.selectMode, key = { it }) { page ->
+                    when (mainTabs[page]) {
                         Tab.Home -> HomeScreen(vm)
                         Tab.Leads -> LeadsScreen(vm) { call(it) }
                         Tab.Calls -> CallHistoryScreen(vm)
@@ -149,6 +161,8 @@ fun Root(vm: AppViewModel) {
         }
     }
 }
+
+private val mainTabs = listOf(Tab.Home, Tab.Leads, Tab.Calls, Tab.FollowUps, Tab.Profile)
 
 /** Back on the main tabs: go to Home first; on Home, press back 3 times quickly to leave the app. */
 @Composable

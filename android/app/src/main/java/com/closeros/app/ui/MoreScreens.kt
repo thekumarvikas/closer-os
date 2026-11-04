@@ -110,7 +110,7 @@ fun CallHistoryScreen(vm: AppViewModel) {
 }
 
 @Composable
-private fun AddLeadDialog(phone: String, onDismiss: () -> Unit, onSave: (String, String, String) -> Unit) {
+internal fun AddLeadDialog(phone: String, onDismiss: () -> Unit, onSave: (String, String, String) -> Unit) {
     var name by remember { mutableStateOf("") }
     var prof by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }

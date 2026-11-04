@@ -119,6 +119,16 @@ class LocalStore(ctx: Context) {
         get() = p.getInt("countdown", 5)
         set(v) { p.edit().putInt("countdown", v).apply() }
 
+    /** After-call pop-up: "leads" (default), "all" calls, or "off". */
+    var afterCallMode: String
+        get() = p.getString("after_call_mode", "leads") ?: "leads"
+        set(v) { p.edit().putString("after_call_mode", v).apply() }
+
+    /** Last call the pop-up was shown for (Android sends the "call ended" signal twice). */
+    var lastAfterCallId: String?
+        get() = p.getString("last_after_call", null)
+        set(v) { p.edit().putString("last_after_call", v).commit() }
+
     fun clear() { p.edit().clear().apply() }
 
     companion object { private val outboxLock = Any() }

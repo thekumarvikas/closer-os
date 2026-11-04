@@ -10,20 +10,40 @@ import android.database.sqlite.SQLiteOpenHelper
  *  - cache:    last copy of screens' data (leads, follow-ups, outcomes…) so screens open instantly / offline
  *  - marks:    "already done" lists (calls whose outcome was saved, recordings uploaded)
  *  - wa_calls: WhatsApp calls noticed on this phone
+ *  - lead_index: number → lead (name, profession, key facts…) so the after-call pop-up knows a lead instantly, offline
  */
-class LocalDb private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "closeros.db", null, 1) {
+class LocalDb private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "closeros.db", null, 2) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("create table cache (k text primary key, v text not null, at integer not null)")
         db.execSQL("create table marks (kind text not null, id text not null, at integer not null, primary key (kind, id))")
         db.execSQL("create table wa_calls (id text primary key, phone text not null, name text, direction text not null, started integer not null, duration integer not null)")
         db.execSQL("create index wa_calls_started on wa_calls (started)")
+        createLeadIndex(db)
     }
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) { if (oldVersion < 2) createLeadIndex(db) }
+    private fun createLeadIndex(db: SQLiteDatabase) {
+        db.execSQL("create table if not exists lead_index (phone text primary key, id text not null, v text not null)")
+    }
+
+    // ── lead_index ──
+    fun putLeads(rows: List<Triple<String, String, String?>>) {   // phone, id, lead json (null = removed)
+        val w = writableDatabase
+        w.beginTransaction()
+        try {
+            rows.forEach { (phone, id, v) ->
+                if (v == null) w.delete("lead_index", "id = ?", arrayOf(id))
+                else w.insertWithOnConflict("lead_index", null, ContentValues().apply { put("phone", phone); put("id", id); put("v", v) }, SQLiteDatabase.CONFLICT_REPLACE)
+            }
+            w.setTransactionSuccessful()
+        } finally { w.endTransaction() }
+    }
+    fun leadJsonByPhone(phone: String): String? = readableDatabase.rawQuery("select v from lead_index where phone = ?", arrayOf(phone)).use { if (it.moveToFirst()) it.getString(0) else null }
+    fun leadIndexCount(): Int = readableDatabase.rawQuery("select count(*) from lead_index", null).use { if (it.moveToFirst()) it.getInt(0) else 0 }
 
     // ── cache ──
     fun put(key: String, value: String) { writableDatabase.insertWithOnConflict("cache", null, ContentValues().apply { put("k", key); put("v", value); put("at", System.currentTimeMillis()) }, SQLiteDatabase.CONFLICT_REPLACE) }
     fun get(key: String): String? = readableDatabase.rawQuery("select v from cache where k = ?", arrayOf(key)).use { if (it.moveToFirst()) it.getString(0) else null }
-    fun clearCache() { writableDatabase.delete("cache", null, null) }
+    fun clearCache() { writableDatabase.delete("cache", null, null); writableDatabase.delete("lead_index", null, null) }
 
     // ── marks ──
     fun mark(kind: String, id: String) { writableDatabase.insertWithOnConflict("marks", null, ContentValues().apply { put("kind", kind); put("id", id); put("at", System.currentTimeMillis()) }, SQLiteDatabase.CONFLICT_IGNORE) }

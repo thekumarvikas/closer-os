@@ -563,3 +563,14 @@ intelligence → Play Store launch.
   Profile → After-call pop-up: "Test the pop-up" (AfterCall.test: card for the latest call now) +
   "Last call: …" line. When Closer OS itself is on screen after a call, the app's own outcome
   screen is used instead of the pop-up.
+
+## Instant after-call pop-up (v0.9.14, Nov 2026)
+- Owner: pop-up works but appears late (traces: 14–34 s after the call; Truecaller < 1 s). Old order
+  was login refresh (awaitInitialization up to 8 s + retries) → call-log poll (1 s steps) → server
+  lead lookup → show. Now AfterCall.run shows FIRST and fills in: number from the PHONE_STATE extra
+  (EXTRA_INCOMING_NUMBER; Android sends IDLE twice, the 2nd copy's number goes to lateNumber) +
+  data/LeadIndex (LocalDb v2 table lead_index phone→slim Lead json; synced incrementally by
+  updated_at in CallSync.run, max 30k/run; VM lead pages + server lookups are remembered) → card in
+  ~0.3 s; call log polled every 0.15 s via PhoneCalls.latest(); server lookup confirms afterwards
+  (Overlay.update keeps the rep's taps). Info.call / phone nullable, checking flag ("Checking if this
+  number is a lead…"); Save waits for the call-log entry. Trace says "pop-up shown after X s".

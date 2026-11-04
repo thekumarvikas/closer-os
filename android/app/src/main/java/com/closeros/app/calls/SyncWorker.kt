@@ -34,6 +34,8 @@ object CallSync {
             runCatching { Repo.logCall(o) }.onFailure { com.closeros.app.data.AppLog.error(ctx, "outbox", it) }.isSuccess
         }
         store.removeFromOutbox(sentOk)
+        // Keep the phone's copy of the leads fresh (instant after-call pop-up, works offline).
+        runCatching { com.closeros.app.data.LeadIndex.sync(ctx, orgId) }.onFailure { com.closeros.app.data.AppLog.error(ctx, "lead index", it) }
 
         // 2) New call-log entries (first run: the last 2 days).
         val since = store.callLogCursorMs.takeIf { it > 0 } ?: (System.currentTimeMillis() - 2 * 86_400_000L)

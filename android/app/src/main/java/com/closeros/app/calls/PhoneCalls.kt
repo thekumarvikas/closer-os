@@ -70,6 +70,9 @@ object PhoneCalls {
         n?.takeIf { it.filter { c -> c.isDigit() }.length >= 10 }
     }.getOrNull()
 
+    /** The newest few phone calls (quick: used right after a call ends). */
+    fun latest(ctx: Context, limit: Int): List<LogCall> = query(ctx, 0, newestFirst = true, limit = limit)
+
     /** Reads the whole call log (newest first) for the Calls screen. */
     fun history(ctx: Context, limit: Int): List<LogCall> =
         (query(ctx, 0, newestFirst = true, limit = limit) + WhatsAppCalls.asLog(ctx, 0)).sortedByDescending { it.startedAtMs }.take(limit)

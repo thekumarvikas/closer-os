@@ -52,7 +52,9 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val zone = runCatching { ZoneId.of(co.timezone) }.getOrDefault(ZoneId.systemDefault())
-    val needs = lead != null && AfterCall.needsOutcome(c)
+    // While the call-log entry is still being read (first second), assume an outcome is needed.
+    val needs = lead != null && (c == null || AfterCall.needsOutcome(c))
+    val number = info.number.orEmpty()
     val choices = co.outcomes.filter { it.is_active && (it.purpose == info.purpose || it.purpose == "both") }.sortedBy { it.position }
     var outcome by remember { mutableStateOf<Outcome?>(null) }
     var next by remember { mutableStateOf<ZonedDateTime?>(null) }
@@ -62,7 +64,10 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
     val maxH = (LocalConfiguration.current.screenHeightDp * 0.8f).dp
 
     fun open(i: Intent) { onClose(); com.closeros.app.calls.safeStart(ctx, i) }
-    fun fullForm(mode: String) = open(afterCallIntent(ctx, info, mode))
+    fun fullForm(mode: String) {
+        if (c == null) { Toast.makeText(ctx, "One moment…", Toast.LENGTH_SHORT).show(); return }
+        open(afterCallIntent(ctx, info, mode))
+    }
 
     Column(Modifier.padding(horizontal = 12.dp).fillMaxWidth().heightIn(max = maxH)
         .shadow(16.dp, RoundedCornerShape(20.dp)).background(Color.White, RoundedCornerShape(20.dp))) {
@@ -72,8 +77,8 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
                 Text("Closer OS · call ended", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp, modifier = Modifier.weight(1f))
                 IconButton(onClick = onClose) { Icon(Icons.Default.Close, "Close", tint = Color.White) }
             }
-            Text(lead?.name?.ifBlank { null } ?: fmtPhone(c.phone), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(listOfNotNull(if (lead?.name.isNullOrBlank()) null else fmtPhone(c.phone), callLine(c), c.simLabel).joinToString(" · "),
+            Text(lead?.name?.ifBlank { null } ?: number.ifBlank { null }?.let(::fmtPhone) ?: "Call ended", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(listOfNotNull(if (lead?.name.isNullOrBlank() || number.isBlank()) null else fmtPhone(number), c?.let(::callLine) ?: "Call ended", c?.simLabel).joinToString(" · "),
                 color = Color.White.copy(alpha = 0.9f), fontSize = 14.sp)
             lead?.let { l ->
                 val about = listOfNotNull(l.profession, l.company, l.city).filter { it.isNotBlank() }.joinToString(" · ")
@@ -108,12 +113,16 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
                             // Saved: next step is the WhatsApp message (templates + company files).
                             if (r == null) { Toast.makeText(ctx, "Outcome saved", Toast.LENGTH_SHORT).show(); fullForm("whatsapp") } else error = r
                         }
-                    }, enabled = !saving && outcome != null && (noFollow || next != null), modifier = Modifier.fillMaxWidth().height(50.dp)) {
+                    }, enabled = c != null && !saving && outcome != null && (noFollow || next != null), modifier = Modifier.fillMaxWidth().height(50.dp)) {
                         Text(when { saving -> "Saving…"; sale -> "Continue — add the amount"; else -> "Save" }, fontSize = 16.sp)
                     }
                     TextButton(onClick = { fullForm("outcome") }, modifier = Modifier.fillMaxWidth()) { Text("More options (notes, other date, amount)") }
                 }
-                lead != null -> Text(if (c.direction == "missed" || c.direction == "rejected") "Missed call from your lead — call back?" else "Call with your lead.",
+                lead == null && info.checking -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp))
+                    Text("Checking if this number is a lead…", color = Brand.muted, fontSize = 14.sp)
+                }
+                lead != null -> Text(if (c?.direction == "missed" || c?.direction == "rejected") "Missed call from your lead — call back?" else "Call with your lead.",
                     color = Brand.muted, fontSize = 14.sp)
                 info.lookupFailed -> {
                     Text("Couldn't reach Closer OS to check this number (no internet?). Open Closer OS to save the outcome.", color = Brand.muted, fontSize = 14.sp)
@@ -128,14 +137,14 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
 
         // Quick actions, like a caller-ID card.
         HorizontalDivider(color = Color(0xFFE2E8F0))
-        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+        if (number.isNotBlank()) Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
             Action("📞", "Call") {
                 onClose()
-                val sim = PhoneCalls.sims(ctx).firstOrNull { it.slot == c.simSlot }
-                PhoneCalls.call(ctx, c.phone, sim)
+                val sim = PhoneCalls.sims(ctx).firstOrNull { it.slot == c?.simSlot }
+                PhoneCalls.call(ctx, number, sim)
             }
             Action("💬", "WhatsApp") { fullForm("whatsapp") }
-            Action("✉️", "SMS") { onClose(); PhoneCalls.sms(ctx, c.phone) }
+            Action("✉️", "SMS") { onClose(); PhoneCalls.sms(ctx, number) }
             if (lead != null) Action("👤", "Open lead") { open(Intent(ctx, MainActivity::class.java).putExtra("open_lead", lead.id)) }
         }
     }
@@ -165,7 +174,8 @@ private fun quickTimes(zone: ZoneId): List<Pair<String, ZonedDateTime>> {
 
 /** Saves from the card. Returns null when saved (or kept on the phone to send later), else the reason it can't be saved. */
 private suspend fun saveQuick(ctx: Context, info: AfterCall.Info, lead: Lead, o: Outcome, next: ZonedDateTime?, noFollow: Boolean): String? {
-    val c = info.call; val co = info.co
+    val c = info.call ?: return "One moment — still reading the call"
+    val co = info.co
     val store = LocalStore(ctx)
     val payload = buildJsonObject {
         put("id", c.id); put("org_id", co.orgId); put("lead_id", lead.id)
@@ -192,7 +202,7 @@ private suspend fun saveQuick(ctx: Context, info: AfterCall.Info, lead: Lead, o:
 }
 
 fun afterCallIntent(ctx: Context, info: AfterCall.Info, mode: String): Intent {
-    val c = info.call; val lead = info.lead
+    val c = requireNotNull(info.call); val lead = info.lead
     return Intent(ctx, AfterCallActivity::class.java)
         .putExtra("mode", mode).putExtra("log_id", c.id).putExtra("started", c.startedAtMs).putExtra("phone", c.phone)
         .putExtra("lead_id", lead?.id).putExtra("lead_name", lead?.name).putExtra("lead_phone", lead?.phone).putExtra("profession", lead?.profession)

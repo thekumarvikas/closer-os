@@ -52,7 +52,7 @@ object Backend {
      */
     suspend fun ensureFreshSession(): Boolean {
         val a = client.auth
-        runCatching { kotlinx.coroutines.withTimeoutOrNull(8_000) { a.awaitInitialization() } }
+        runCatching { kotlinx.coroutines.withTimeoutOrNull(3_000) { a.awaitInitialization() } }
         val soon = kotlinx.datetime.Clock.System.now() + kotlin.time.Duration.parse("2m")
         for (attempt in 0 until 4) {
             val cur = a.currentSessionOrNull()

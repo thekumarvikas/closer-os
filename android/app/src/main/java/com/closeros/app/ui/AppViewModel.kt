@@ -404,6 +404,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
                 .onSuccess {
                     if (gen != leadsGen) return@onSuccess   // an older search finished late: ignore it
                     if (first) leads.clear()   // replaces the saved copy shown meanwhile
+                    com.closeros.app.data.LeadIndex.remember(ctx, it)
                     val have = leads.mapTo(HashSet()) { l -> l.id }; leads.addAll(it.filter { l -> l.id !in have }); if (it.size < 50) leadsEnd = true; page++
                     if (first && leadsQuery.isBlank() && leadFilters.count == 0) save("leads0", it)
                 }

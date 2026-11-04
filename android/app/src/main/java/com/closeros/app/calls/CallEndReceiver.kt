@@ -21,7 +21,8 @@ class CallEndReceiver : BroadcastReceiver() {
         val app = ctx.applicationContext
         val done = goAsync()   // keeps the app awake while the call log is read and the lead looked up
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
-            try { withTimeoutOrNull(45_000) { AfterCall.handle(app, endedAt) } }
+            @Suppress("DEPRECATION") val number = intent.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER)
+            try { withTimeoutOrNull(45_000) { AfterCall.handle(app, endedAt, number) } }
             catch (e: Exception) { com.closeros.app.data.AppLog.error(app, "after call", e) }
             finally { done.finish() }
         }

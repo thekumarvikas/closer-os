@@ -83,6 +83,7 @@ fun Root(vm: AppViewModel) {
     var simChoice by remember { mutableStateOf<Pair<Lead, List<Sim>>?>(null) }
 
     fun call(lead: Lead) {
+        if (lead.do_not_call) { vm.dncAsk = lead; return }   // ask first, then remove the mark and call
         val sims = vm.sims()
         val preferred = sims.firstOrNull { it.slot == vm.store.preferredSim }
         // In a queue, keep using the SIM chosen for the first call instead of asking every time.
@@ -155,6 +156,13 @@ fun Root(vm: AppViewModel) {
                     }
                 }
             } }
+        }
+        vm.dncAsk?.let { l ->
+            androidx.compose.material3.AlertDialog(onDismissRequest = { vm.dncAsk = null },
+                title = { Text("${l.name.ifBlank { "This lead" }} is marked Do not call") },
+                text = { Text("They may have asked not to be called. Remove \"Do not call\" and call now? Your manager can see this change.") },
+                confirmButton = { androidx.compose.material3.Button(onClick = { vm.dncAsk = null; vm.setDoNotCall(l, false) { u -> vm.callRequest = u } }) { Text("Remove and call") } },
+                dismissButton = { androidx.compose.material3.TextButton(onClick = { vm.dncAsk = null }) { Text("Cancel") } })
         }
         vm.whatsappNext?.let { l -> if (vm.pending == null && vm.announcements.isEmpty()) WhatsAppPicker(vm, l) { vm.whatsappNext = null } }
         simChoice?.let { (lead, sims) ->

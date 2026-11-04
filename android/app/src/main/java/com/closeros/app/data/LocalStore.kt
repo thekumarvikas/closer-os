@@ -138,6 +138,11 @@ class LocalStore(ctx: Context) {
     val personalNumbers: Set<String> get() = p.getStringSet("personal_numbers", emptySet()) ?: emptySet()
     fun addPersonalNumber(phone: String) { p.edit().putStringSet("personal_numbers", personalNumbers + phone).apply() }
 
+    /** Which tab the app opens on (rep's choice in Profile): Home, Leads, Calls or FollowUps. */
+    var startTab: String
+        get() = p.getString("start_tab", "Home") ?: "Home"
+        set(v) { p.edit().putString("start_tab", v).apply() }
+
     fun clear() { p.edit().clear().apply() }
 
     companion object { private val outboxLock = Any() }

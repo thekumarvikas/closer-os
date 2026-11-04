@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -172,14 +173,17 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
             }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(onClick = { onCall(l) }, enabled = !l.do_not_call, modifier = Modifier.weight(1f).height(52.dp)) {
+                    Button(onClick = { onCall(l) }, modifier = Modifier.weight(1f).height(52.dp)) {
                         Icon(Icons.Default.Call, null); Spacer(Modifier.width(6.dp)); Text("Call")
                     }
                     OutlinedButton(onClick = { waOpen = true }, modifier = Modifier.weight(1f).height(52.dp)) {
                         Icon(Icons.Default.Send, null); Spacer(Modifier.width(6.dp)); Text("WhatsApp")
                     }
                 }
-                if (l.do_not_call) Text("Marked Do Not Call", color = Brand.red, fontSize = 13.sp)
+                if (l.do_not_call) Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("⛔ Marked Do not call", color = Brand.red, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { vm.setDoNotCall(l, false) { u -> lead = u } }) { Text("Remove") }
+                }
                 TextButton(onClick = { vm.openPlaybook(l) }) { Text("📖 Script, objection answers & links") }
             }
             item { KeyFactsCard(l) { t -> lead = l.copy(key_facts = t) } }
@@ -238,6 +242,14 @@ fun ProfileScreen(vm: AppViewModel) {
         RecordingSettings(vm)
         HorizontalDivider()
         WhatsAppSettings(vm)
+        HorizontalDivider()
+        Text("Open the app on", fontWeight = FontWeight.SemiBold)
+        var st by remember { mutableStateOf(vm.store.startTab) }
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("Home" to "Home", "Leads" to "Leads", "Calls" to "Calls", "FollowUps" to "Follow-ups").forEach { (k, l) ->
+                FilterChip(selected = st == k, onClick = { vm.store.startTab = k; st = k }, label = { Text(l) })
+            }
+        }
         HorizontalDivider()
         Text("Calling queue", fontWeight = FontWeight.SemiBold)
         Text("Seconds before the next call", color = Brand.muted, fontSize = 14.sp)

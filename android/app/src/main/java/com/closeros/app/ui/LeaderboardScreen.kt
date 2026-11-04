@@ -84,8 +84,14 @@ fun BestTimeLine(leadId: String) {
     var bt by remember(leadId) { mutableStateOf<com.closeros.app.data.BestTime?>(null) }
     LaunchedEffect(leadId) { bt = Repo.bestTime(leadId) }
     val b = bt ?: return
+    // Pick-ups = dialled calls where the person really talked (not operator messages).
+    val total = b.total_tries?.takeIf { it > 0 }?.let { "Picked up ${b.total_picked ?: 0} of $it calls" }
     val h = b.hour
-    val label = "${if (h % 12 == 0) 12 else h % 12} ${if (h < 12) "AM" else "PM"}"
-    Text(if (b.source == "lead") "⏰ Best time to call: around $label (picked up ${b.picked} of ${b.tries} calls then)"
-         else "⏰ Best time to call: around $label (your team's best hour — ${b.rate}% pick up)", fontSize = 13.sp, color = Color(0xFF92400E))
+    val label = h?.let { "${if (it % 12 == 0) 12 else it % 12} ${if (it < 12) "AM" else "PM"}" }
+    val best = when {
+        label == null -> null
+        b.source == "lead" -> "⏰ Best time: around $label (picked up ${b.picked} of ${b.tries} then)"
+        else -> "⏰ Best time: around $label (team's best hour — ${b.rate}% pick up)"
+    }
+    Text(listOfNotNull(best, total).joinToString(" · "), fontSize = 13.sp, color = Color(0xFF92400E))
 }

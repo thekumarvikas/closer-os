@@ -84,26 +84,32 @@ fun CallHistoryScreen(vm: AppViewModel) {
     LaunchedEffect(Unit) { vm.loadHistory() }
     val items = vm.history
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(16.dp, 12.dp, 8.dp, 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Call history", fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            TextButton(onClick = { vm.showDialer = true }) { Text("☎ Dial pad") }
+        Row(Modifier.fillMaxWidth().padding(16.dp, 8.dp, 4.dp, 0.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Calls", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             IconButton(onClick = { vm.loadHistory() }) { Icon(Icons.Default.Refresh, "Refresh") }
         }
-        Row(Modifier.padding(horizontal = 16.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("all" to "All", "phone" to "Phone", "whatsapp" to "WhatsApp", "leads" to "Leads", "unknown" to "Not in lead list", "missed" to "Missed").forEach { (k, l) ->
-                FilterChip(selected = filter == k, onClick = { filter = k }, label = { Text(l) })
+        Row(Modifier.padding(horizontal = 12.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            (listOf("all" to "All", "missed" to "Missed", "unknown" to "Not in lead list") +
+                (if (com.closeros.app.BuildConfig.WA_TRACKING) listOf("whatsapp" to "WhatsApp") else emptyList())).forEach { (k, l) ->
+                FilterChip(selected = filter == k, onClick = { filter = k }, label = { Text(l, fontSize = 13.sp) })
             }
         }
         if (items == null) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }; return }
-        val shown = items.filter {
-            when (filter) { "phone" -> it.log.channel == "phone"; "whatsapp" -> it.log.channel == "whatsapp"; "leads" -> it.lead != null; "unknown" -> it.lead == null; "missed" -> it.log.direction == "missed" || it.log.direction == "rejected"; else -> true }
+        val shown = items.distinctBy { it.log.id }.filter {
+            when (filter) { "whatsapp" -> it.log.channel == "whatsapp"; "unknown" -> it.lead == null; "missed" -> it.log.direction == "missed" || it.log.direction == "rejected"; else -> true }
         }
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp, 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (shown.isEmpty()) item { Text("No calls here.", color = Brand.muted) }
-            items(shown.distinctBy { it.log.id }, key = { it.log.id }) { h -> HistoryRow(vm, h, onAdd = { adding = h }) }
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp, 0.dp, 8.dp, 88.dp)) {
+            if (shown.isEmpty()) item { Text("No calls here.", color = Brand.muted, modifier = Modifier.padding(8.dp)) }
+            groupCalls(shown).forEach { (day, rows) ->
+                item(key = "d$day") { Text(day.uppercase(), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Brand.muted, modifier = Modifier.padding(start = 4.dp, top = 12.dp, bottom = 2.dp)) }
+                items(rows, key = { it.first.log.id }) { (h, n) ->
+                    HistoryRow(vm, h, onAdd = { adding = h }, count = n)
+                    HorizontalDivider(color = Color(0xFFF1F5F9), modifier = Modifier.padding(start = 30.dp))
+                }
+            }
             if (vm.historyHasMore) item {
-                OutlinedButton(onClick = { vm.historyLimit += 500; vm.loadHistory() }, modifier = Modifier.fillMaxWidth()) { Text("Load older calls") }
-            } else if (items.isNotEmpty()) item { Text("That's every call saved on this phone (${items.size}).", fontSize = 12.sp, color = Brand.muted) }
+                OutlinedButton(onClick = { vm.historyLimit += 500; vm.loadHistory() }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("Load older calls") }
+            }
         }
     }
     adding?.let { h -> AddLeadDialog(h.phone, onDismiss = { adding = null }) { name, prof, notes -> vm.addLeadFromCall(h.phone, name, prof, notes) { adding = null } } }

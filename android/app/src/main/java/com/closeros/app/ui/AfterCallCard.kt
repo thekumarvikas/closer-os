@@ -57,8 +57,10 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
     val needs = (lead != null || !info.checking) && (c == null || AfterCall.needsOutcome(c))
     val notInList = lead == null && !info.checking
     val number = info.number.orEmpty()
-    val choices = co.outcomes.filter { it.is_active && (it.purpose == info.purpose || it.purpose == "both") }.sortedBy { it.position }
+    val choices = outcomesFor(co.outcomes, info.purpose, c?.direction, c?.durationSec)
     var outcome by remember { mutableStateOf<Outcome?>(null) }
+    // The call's details arrive a moment later: drop a choice that no longer fits this kind of call.
+    LaunchedEffect(choices) { if (outcome != null && choices.none { it.id == outcome?.id }) outcome = null }
     var next by remember { mutableStateOf<ZonedDateTime?>(null) }
     var noFollow by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }

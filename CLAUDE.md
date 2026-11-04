@@ -614,3 +614,27 @@ intelligence → Play Store launch.
 ## Tag rule (owner decision, Nov 2026 — v0.9.18)
 - The app is for calling leads, so leads are the normal case and get NO "Lead" tag anywhere.
   Only numbers not in the lead list get the grey "Not in lead list" tag (Calls tab, pop-up).
+
+## Round 8: DNC, pick-ups, call-type outcomes, Home + Calls redesign (v0.9.19, Nov 2026)
+- Owner priority: minimalist, best use of space, fewest scrolls/taps to the goal.
+- Do not call: every call path goes through Root.call() → if lead.do_not_call, dialog "Remove and
+  call" (vm.dncAsk / vm.setDoNotCall → RPC set_do_not_call, audit lead_dnc_removed/_set). Lead
+  detail shows "⛔ Marked Do not call · Remove". Call buttons are no longer disabled.
+- Real pick-up (migration 0038 is_real_pickup): DIALLED call where the person talked = outcome
+  category connected/positive/won/lost, or (no outcome) talk ≥ 20 s; not_connected/invalid never
+  (operator "switched off" messages connect for a few seconds). best_time_to_call uses it, needs ≥ 2
+  pick-ups in an hour for the lead's own best time (else team hour), returns total_picked/total_tries
+  ("Picked up 8 of 38 calls").
+- outcomesFor() (OutcomeScreen.kt; same rule in web Desk): incoming answered → no not_connected;
+  dialled 0 s → only not_connected + invalid; dialled < 20 s → all, not_connected first; ≥ 20 s →
+  conversation types first. Pop-up drops a picked outcome that no longer fits once the call arrives.
+- Home (CallingScreens.HomeScreen): greeting; alerts only when they apply (plan, setup, sync problem,
+  new feedback); green hero card with ONE big adaptive button (continue queue > overdue follow-ups
+  (red) > webinar reminder calls in next 18 h > due follow-ups > pick leads) + links Pick leads /
+  Follow-ups / Webinars; "Today" card with 4 tiles (Dialled, Talked, Talk time, Leads) + target bars,
+  "More ›" for all 10; one-line leaderboard; tools row (Playbook, Reports, Feedback); tiny sync line.
+- Calls tab: slim rows (↗/↙/✕, name > contact > number, "Not in lead list" pill, one detail line,
+  SIM only with 2 SIMs), WhatsApp + Call icons on the row, tap row → SMS / Open lead / + Add lead;
+  day headers; repeat calls folded "(2)" (groupCalls); chips All / Missed / Not in lead list
+  (+ WhatsApp in full build); no "Dial pad" button (FAB). HistoryRow is shared with Today lists.
+- Profile → "Open the app on": Home / Leads / Calls / Follow-ups (store.startTab).

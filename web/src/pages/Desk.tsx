@@ -224,7 +224,7 @@ function WhatsAppWeb({ lead, repName, onClose }: { lead: Lead; repName: string; 
 /** The same outcome form as the app: outcome, notes + tags, next call (day + time) or no follow-up. */
 function OutcomePanel({ call, dir, onClose, onSaved }: { call: NeedCall; dir: Directory; onClose: () => void; onSaved: () => void }) {
   const { org } = useOrg()
-  const choices = dir.outcomes.filter((o: Outcome) => o.is_active && (o.purpose === call.purpose || o.purpose === 'both'))
+  const choices = outcomesFor(dir.outcomes.filter((o: Outcome) => o.is_active && (o.purpose === call.purpose || o.purpose === 'both')), call.direction, call.duration_sec)
   const [outcome, setOutcome] = useState<Outcome | null>(null)
   const [notes, setNotes] = useState('')
   const [tags, setTags] = useState<string[]>([])
@@ -295,4 +295,13 @@ function OutcomePanel({ call, dir, onClose, onSaved }: { call: NeedCall; dir: Di
       <Button className="mt-4 w-full" onClick={save} loading={busy} disabled={!canSave}>Save outcome</Button>
     </Card>
   )
+}
+
+/** Same rule as the app: only outcomes that make sense for this kind of call. */
+function outcomesFor(list: Outcome[], direction: string, talk: number): Outcome[] {
+  const noContact = (o: Outcome) => o.category === 'not_connected'
+  const invalid = (o: Outcome) => o.category === 'invalid'
+  if (direction === 'incoming') return list.filter(o => !noContact(o))
+  if (!talk) { const l = list.filter(o => noContact(o) || invalid(o)); return l.length ? l : list }
+  return [...list].sort((a, b) => talk < 20 ? Number(!noContact(a)) - Number(!noContact(b)) : Number(noContact(a)) - Number(noContact(b)))
 }

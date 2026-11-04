@@ -41,7 +41,7 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
     val log = vm.pendingLog
     val ctx = LocalContext.current
     val zone = ZoneId.of(vm.membership?.organization?.timezone ?: "Asia/Kolkata")
-    val choices = vm.outcomes.filter { it.purpose == p.purpose || it.purpose == "both" }
+    val choices = outcomesFor(vm.outcomes, p.purpose, log?.direction, log?.durationSec)
     var outcome by remember { mutableStateOf<Outcome?>(null) }
     var followAt by remember { mutableStateOf<ZonedDateTime?>(null) }
     var noFollow by remember { mutableStateOf(false) }
@@ -194,4 +194,27 @@ private fun Chip(label: String, selected: Boolean, onClick: () -> Unit) {
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 9.dp),
         color = if (selected) Color.White else Color(0xFF1E293B), fontSize = 14.sp)
+}
+
+/**
+ * Outcomes that make sense for this kind of call:
+ *  - incoming, answered → no "no answer / busy / rejected" types (they called you)
+ *  - dialled, 0 s → only "not connected" types (+ wrong number / do not call)
+ *  - dialled, under 20 s → everything, "not connected" first (may have been an operator message)
+ *  - dialled, 20 s or more → conversation types first, "not connected" last
+ * [direction] null = not known yet (pop-up's first second): everything.
+ */
+fun outcomesFor(all: List<Outcome>, purpose: String, direction: String?, durationSec: Int?): List<Outcome> {
+    val list = all.filter { it.is_active && (it.purpose == purpose || it.purpose == "both") }.sortedBy { it.position }
+    val noContact = { o: Outcome -> o.category == "not_connected" }
+    val invalid = { o: Outcome -> o.category == "invalid" }
+    val talk = durationSec ?: 0
+    return when {
+        direction == null -> list
+        direction == "incoming" -> list.filterNot(noContact)
+        direction != "outgoing" -> list.filter { noContact(it) || invalid(it) }.ifEmpty { list }
+        talk == 0 -> list.filter { noContact(it) || invalid(it) }.ifEmpty { list }
+        talk < 20 -> list.sortedBy { if (noContact(it)) 0 else 1 }
+        else -> list.sortedBy { if (noContact(it)) 1 else 0 }
+    }
 }

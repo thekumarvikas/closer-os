@@ -99,3 +99,4 @@ Everything from the original product prompt plus the owner's feedback, with stat
 - ✅ WhatsApp step right after the outcome (pop-up and app) (v0.9.12)
 - ✅ Company file library for WhatsApp (dashboard upload, app send) (v0.9.12)
 - ✅ All calls treated alike, "Not in lead list" tag; outcome on a new number adds the lead (v0.9.16)
+- ✅ Round 8: DNC remove with warning, real pick-up counting, outcomes by call type, minimalist Home + Calls, start tab (v0.9.19)

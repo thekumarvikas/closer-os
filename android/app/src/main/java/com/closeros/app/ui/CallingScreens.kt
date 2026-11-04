@@ -34,19 +34,19 @@ import java.time.Instant
 
 // ───────────── Today's numbers (from the phone's own call log) ─────────────
 
-private data class TileDef(val key: String, val label: String, val value: (List<HistoryItem>) -> String, val bad: Boolean = false)
+private data class TileDef(val key: String, val label: String, val value: (List<HistoryItem>) -> String, val bad: Boolean = false, val short: String = label)
 
 private val tiles = listOf(
-    TileDef("all", "All calls", { it.size.toString() }),
     TileDef("dialled", "Dialled", { l -> l.count { it.log.direction == "outgoing" }.toString() }),
+    TileDef("all", "All calls", { it.size.toString() }),
     TileDef("received", "Received", { l -> l.count { it.log.direction == "incoming" }.toString() }),
-    TileDef("conversations", "Conversations", { l -> l.count { it.log.durationSec > 0 }.toString() }),
+    TileDef("conversations", "Conversations", { l -> l.count { it.log.durationSec > 0 }.toString() }, short = "Talked"),
     TileDef("noanswer", "No answer", { l -> l.count { it.log.direction == "outgoing" && it.log.durationSec == 0 }.toString() }, bad = true),
-    TileDef("missed", "Missed / declined", { l -> l.count { it.log.direction == "missed" || it.log.direction == "rejected" }.toString() }, bad = true),
+    TileDef("missed", "Missed / declined", { l -> l.count { it.log.direction == "missed" || it.log.direction == "rejected" }.toString() }, bad = true, short = "Missed"),
     TileDef("talk", "Talk time", { l -> fmtDur(l.sumOf { it.log.durationSec }) }),
-    TileDef("avg", "Avg. conversation", { l -> l.filter { it.log.durationSec > 0 }.let { c -> fmtDur(if (c.isEmpty()) 0 else c.sumOf { it.log.durationSec } / c.size) } }),
-    TileDef("contacts", "Unique contacts", { l -> l.map { it.phone }.distinct().size.toString() }),
-    TileDef("leads", "Leads called", { l -> l.mapNotNull { it.lead?.id }.distinct().size.toString() }),
+    TileDef("avg", "Avg. conversation", { l -> l.filter { it.log.durationSec > 0 }.let { c -> fmtDur(if (c.isEmpty()) 0 else c.sumOf { it.log.durationSec } / c.size) } }, short = "Avg talk"),
+    TileDef("contacts", "Unique contacts", { l -> l.map { it.phone }.distinct().size.toString() }, short = "People"),
+    TileDef("leads", "Leads called", { l -> l.mapNotNull { it.lead?.id }.distinct().size.toString() }, short = "Leads"),
 )
 
 fun todayMatches(key: String, h: HistoryItem): Boolean = when (key) {
@@ -63,123 +63,143 @@ fun todayMatches(key: String, h: HistoryItem): Boolean = when (key) {
 fun HomeScreen(vm: AppViewModel) {
     val m = vm.membership ?: return
     val now = System.currentTimeMillis()
-    val dueSoon = vm.followUps.filter { runCatching { Instant.parse(it.due_at).toEpochMilli() }.getOrDefault(0) < now + 86_400_000 }
-    val overdue = vm.followUps.count { runCatching { Instant.parse(it.due_at).toEpochMilli() }.getOrDefault(0) < now }
-    LaunchedEffect(Unit) { vm.loadToday() }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    fun ms(iso: String?) = iso?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
+    val dueToday = vm.followUps.filter { (ms(it.due_at) ?: 0) < now + 86_400_000 }
+    val overdue = vm.followUps.count { (ms(it.due_at) ?: 0) < now }
+    val newFeedback = vm.reviews.count { it.seen_at == null }
+    // A webinar in the next 18 h with reminder calls of mine still to make.
+    val upcoming = vm.batches.orEmpty().filter { b -> (ms(b.webinar_at) ?: 0) in (now - 3_600_000)..(now + 18 * 3_600_000) && b.reminder_mine > 0 }
+        .minByOrNull { ms(it.webinar_at) ?: 0 }
+    LaunchedEffect(Unit) { vm.loadToday(); if (vm.batches == null) vm.loadBatches(quiet = true) }
+    var moreTiles by remember { mutableStateOf(false) }
+
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp, 12.dp, 16.dp, 88.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        // Who + is everything uploaded (a dot; details only when something is wrong).
         item {
-            Text("Hi ${vm.profile?.full_name?.substringBefore(' ') ?: ""} 👋", fontSize = 24.sp, fontWeight = FontWeight.Bold)
-            Text(m.organization.name, color = Brand.muted)
-            Spacer(Modifier.height(6.dp))
-            SyncStatusLine(vm)
-        }
-        if (vm.access?.state == "grace") item {
-            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFEE2E2))) {
-                Text("Your company's Closer OS plan has ended. Please ask your company owner to renew it on the dashboard soon.",
-                    Modifier.padding(14.dp), color = Brand.red, fontSize = 14.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Hi ${vm.profile?.full_name?.substringBefore(' ') ?: ""} 👋", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(m.organization.name, color = Brand.muted, fontSize = 13.sp)
+                }
             }
+        }
+        // Alerts — only when they apply.
+        if (vm.access?.state == "grace") item {
+            Text("Your company's Closer OS plan has ended — ask the owner to renew it on the dashboard.",
+                Modifier.fillMaxWidth().background(Color(0xFFFEE2E2), RoundedCornerShape(10.dp)).padding(12.dp), color = Brand.red, fontSize = 13.sp)
         }
         item { SetupBanner(vm) }
-        if (vm.leaderboard.size >= 2) item { LeaderboardCard(vm) }
+        item { SyncStatusLine(vm, onlyProblems = true) }
+        if (newFeedback > 0) item {
+            Row(Modifier.fillMaxWidth().background(Color(0xFFEFF6FF), RoundedCornerShape(10.dp)).clickable { vm.showFeedback = true }.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Text("🎯 New feedback from your manager ($newFeedback)", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                Text("Open ›", color = Brand.primary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            }
+        }
+
+        // What to do now: one big button that changes with the situation.
         item {
-            vm.progress?.let { p -> TargetsCard(p) } ?: Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                Column(Modifier.padding(14.dp)) {
-                    Text("Today's targets", fontWeight = FontWeight.SemiBold)
-                    Text(if (vm.isManager) "No targets set yet. Set daily targets for your team on the dashboard: Reports → Targets → Set targets."
-                         else "No targets set yet. Your manager sets your daily targets on the dashboard.", fontSize = 13.sp, color = Brand.muted)
+            val fmt = java.time.format.DateTimeFormatter.ofPattern("h:mm a").withZone(java.time.ZoneId.of(m.organization.timezone))
+            data class Next(val title: String, val sub: String?, val urgent: Boolean, val go: () -> Unit)
+            val next = when {
+                vm.queueActive -> Next("Continue calling · ${vm.queuePos + 1} of ${vm.queue.size}", "Your calling queue is paused", false) { vm.queueResume() }
+                overdue > 0 -> Next("Call $overdue overdue follow-up${if (overdue > 1) "s" else ""}", "${dueToday.size} due in the next 24 hours", true) { vm.startFollowUpQueue() }
+                upcoming != null -> Next("Reminder calls · ${upcoming.name}", "Starts ${ms(upcoming.webinar_at)?.let { fmt.format(Instant.ofEpochMilli(it)) } ?: ""} · ${upcoming.reminder_mine} leads", false) { vm.openBatchList(upcoming, "reminder") }
+                dueToday.isNotEmpty() -> Next("Call ${dueToday.size} follow-up${if (dueToday.size > 1) "s" else ""} due", "In the next 24 hours", false) { vm.startFollowUpQueue() }
+                else -> Next("Pick leads to call", "No follow-ups due — choose who to call", false) { vm.selectMode = true; vm.tab = Tab.Leads }
+            }
+            Column(Modifier.fillMaxWidth().background(Brand.primary, RoundedCornerShape(16.dp)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(onClick = next.go, modifier = Modifier.fillMaxWidth().height(54.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = if (next.urgent) Color(0xFFDC2626) else Color.White, contentColor = if (next.urgent) Color.White else Brand.primaryDark)) {
+                    Icon(Icons.Default.Call, null); Spacer(Modifier.width(8.dp)); Text(next.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                }
+                next.sub?.let { Text(it, color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp, modifier = Modifier.clickable { vm.tab = Tab.FollowUps }) }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    HeroLink("📋 Pick leads", Modifier.weight(1f)) { vm.selectMode = true; vm.tab = Tab.Leads }
+                    HeroLink("📅 Follow-ups${if (dueToday.isNotEmpty()) " (${dueToday.size})" else ""}", Modifier.weight(1f)) { vm.tab = Tab.FollowUps }
+                    HeroLink("🎓 Webinars", Modifier.weight(1f)) { vm.showBatches = true }
                 }
             }
         }
-        val newFeedback = vm.reviews.count { it.seen_at == null }
-        val openTasks = vm.reviews.count { it.task != null && it.task_done_at == null }
-        if (vm.reviews.isNotEmpty()) item {
-            Card(Modifier.fillMaxWidth().clickable { vm.showFeedback = true },
-                colors = CardDefaults.cardColors(containerColor = if (newFeedback > 0) Color(0xFFEFF6FF) else Color.White)) {
-                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(if (newFeedback > 0) "🎯 New feedback from your manager ($newFeedback)" else "🎯 My call feedback", fontWeight = FontWeight.SemiBold)
-                        Text(listOfNotNull(vm.reviews.mapNotNull { it.score_pct }.takeIf { it.isNotEmpty() }?.let { "Average score ${it.average().toInt()}%" },
-                            if (openTasks > 0) "$openTasks coaching task${if (openTasks > 1) "s" else ""} to do" else null).joinToString(" · "), fontSize = 13.sp, color = Brand.muted)
+
+        // Today: 4 key numbers (with target bars when targets are set); the rest on "More".
+        item {
+            val p = vm.progress
+            fun target(k: String) = p?.target?.let { t -> when (k) { "dialled" -> t.calls; "conversations" -> t.conversations; "talk" -> t.talk_minutes; else -> null } }?.takeIf { it > 0 }
+            fun actual(k: String) = p?.actual?.let { a -> when (k) { "dialled" -> a.calls; "conversations" -> a.conversations; "talk" -> a.talk_minutes; else -> null } } ?: 0
+            Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Today", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        Text(if (moreTiles) "Less ‹" else "More ›", color = Brand.primary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable { moreTiles = !moreTiles })
                     }
-                    Text("Open ›", color = Brand.primary, fontWeight = FontWeight.SemiBold)
-                }
-            }
-        }
-        item {
-            Card(Modifier.fillMaxWidth().clickable { vm.openPlaybook(null) }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("📖 Playbook", fontWeight = FontWeight.SemiBold)
-                        Text("Scripts, objection answers, links", fontSize = 13.sp, color = Brand.muted)
-                    }
-                    Text("Open ›", color = Brand.primary, fontWeight = FontWeight.SemiBold)
-                }
-            }
-        }
-        item {
-            Card(Modifier.fillMaxWidth().clickable { vm.showBatches = true }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Webinars & events", fontWeight = FontWeight.SemiBold)
-                        Text("Reminder calls before, sales calls after — sort by watch time, profession and more", fontSize = 13.sp, color = Brand.muted)
-                    }
-                    Text("Open ›", color = Brand.primary, fontWeight = FontWeight.SemiBold)
-                }
-            }
-        }
-        if (vm.queueActive) item {
-            Card(Modifier.fillMaxWidth().clickable { vm.queueResume() }, colors = CardDefaults.cardColors(containerColor = Brand.light)) {
-                Text("Calling queue: ${vm.queuePos + 1} of ${vm.queue.size} — tap to continue", Modifier.padding(14.dp), color = Brand.primaryDark, fontWeight = FontWeight.SemiBold)
-            }
-        }
-        item {
-            Text("Today · tap a number to see the calls", fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(8.dp))
-            tiles.chunked(2).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(bottom = 10.dp)) {
-                    row.forEach { t ->
-                        val v = t.value(vm.today)
-                        Card(Modifier.weight(1f).clickable { vm.todayFilter = t.key }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                            Column(Modifier.padding(12.dp)) {
-                                Text(t.label, fontSize = 13.sp, color = Brand.muted)
-                                Text(v, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = if (t.bad && v != "0") Brand.red else Color(0xFF0F172A))
+                    val shown = if (moreTiles) tiles else tiles.filter { it.key in setOf("dialled", "conversations", "talk", "leads") }
+                    shown.chunked(4).forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            row.forEach { t ->
+                                val v = t.value(vm.today)
+                                val tg = target(t.key)
+                                Column(Modifier.weight(1f).background(Color(0xFFF8FAFC), RoundedCornerShape(10.dp)).clickable { vm.todayFilter = t.key }.padding(8.dp)) {
+                                    Text(v, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = if (t.bad && v != "0") Brand.red else Color(0xFF0F172A), maxLines = 1)
+                                    Text(t.short, fontSize = 11.sp, color = Brand.muted, maxLines = 1)
+                                    if (tg != null) {
+                                        val pct = (actual(t.key).toFloat() / tg).coerceIn(0f, 1f)
+                                        LinearProgressIndicator(progress = { pct }, Modifier.fillMaxWidth().padding(top = 4.dp).height(4.dp),
+                                            color = if (pct >= 1f) Color(0xFF10B981) else if (pct >= 0.7f) Color(0xFFF59E0B) else Brand.primary, trackColor = Color(0xFFE2E8F0))
+                                        Text("of $tg${if (t.key == "talk") " min" else ""}", fontSize = 10.sp, color = Brand.muted)
+                                    }
+                                }
                             }
+                            repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
                         }
                     }
+                    p?.target?.sales?.takeIf { it > 0 }?.let { st -> Text("Sales today: ${p.actual.sales ?: 0} of $st", fontSize = 12.sp, color = Brand.muted) }
                 }
             }
         }
-        item {
-            Card(Modifier.fillMaxWidth().clickable { vm.tab = Tab.FollowUps }, colors = CardDefaults.cardColors(containerColor = if (overdue > 0) Color(0xFFFEF2F2) else Color.White)) {
-                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.DateRange, null, tint = if (overdue > 0) Brand.red else Brand.primary)
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("Follow-ups", fontWeight = FontWeight.SemiBold)
-                        Text("${dueSoon.size} due within 24 hours" + if (overdue > 0) " · $overdue overdue" else "", color = if (overdue > 0) Brand.red else Brand.muted, fontSize = 14.sp)
-                    }
-                    Icon(Icons.Default.KeyboardArrowRight, null, tint = Brand.muted)
-                }
+
+        // Leaderboard in one line.
+        if (vm.leaderboard.size >= 2) item {
+            val rows = vm.leaderboard
+            val me = rows.indexOfFirst { it.user_id == com.closeros.app.data.Backend.uid }
+            Row(Modifier.fillMaxWidth().background(Color(0xFFFFFBEB), RoundedCornerShape(10.dp)).clickable { vm.showLeaderboard = true }.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Text("🏆 " + (if (me >= 0) "You're #${me + 1} of ${rows.size} · " else "") + "Leader: ${rows[0].name.substringBefore(' ')} (${fmtDur(rows[0].talk_sec)})",
+                    fontSize = 14.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("›", color = Brand.primary, fontWeight = FontWeight.Bold)
             }
         }
+
+        // Tools.
         item {
-            Button(onClick = { vm.startFollowUpQueue() }, enabled = dueSoon.isNotEmpty(), modifier = Modifier.fillMaxWidth().height(54.dp)) {
-                Icon(Icons.Default.Call, null); Spacer(Modifier.width(8.dp)); Text("Call due follow-ups (${dueSoon.size})", fontSize = 16.sp)
-            }
-            Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { vm.selectMode = true; vm.tab = Tab.Leads }, modifier = Modifier.weight(1f).height(50.dp)) { Text("Pick leads to call") }
-                OutlinedButton(onClick = { vm.showDialer = true }, modifier = Modifier.weight(1f).height(50.dp)) { Text("☎ Dial a number") }
+                ToolTile("📖", "Playbook", Modifier.weight(1f)) { vm.openPlaybook(null) }
+                ToolTile("📊", if (vm.isManager) "Reports" else "My reports", Modifier.weight(1f)) { vm.showReports = true }
+                if (vm.reviews.isNotEmpty()) ToolTile("🎯", "Feedback", Modifier.weight(1f)) { vm.showFeedback = true }
             }
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = { vm.showReports = true }, modifier = Modifier.fillMaxWidth().height(50.dp)) { Text(if (vm.isManager) "📊 Reports — me & my team" else "📊 My reports") }
         }
+        item { SyncStatusLine(vm, onlyProblems = false, small = true) }
+    }
+}
+
+@Composable
+private fun HeroLink(text: String, modifier: Modifier, onClick: () -> Unit) {
+    Text(text, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        modifier = modifier.background(Color.White.copy(alpha = 0.15f), RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(vertical = 9.dp, horizontal = 6.dp),
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+}
+
+@Composable
+private fun ToolTile(icon: String, label: String, modifier: Modifier, onClick: () -> Unit) {
+    Column(modifier.background(Color.White, RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(icon, fontSize = 20.sp); Text(label, fontSize = 12.sp, color = Color(0xFF334155))
     }
 }
 
 /** Top of Home: is everything uploaded? */
 @Composable
-fun SyncStatusLine(vm: AppViewModel) {
+fun SyncStatusLine(vm: AppViewModel, onlyProblems: Boolean = false, small: Boolean = false) {
     val ctx = LocalContext.current
     var tick by remember { mutableStateOf(0) }
     LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(20_000); tick++ } }
@@ -195,6 +215,9 @@ fun SyncStatusLine(vm: AppViewModel) {
             else -> "✓ All synced · $ago" to false
         }
     }
+    if (onlyProblems && !warn) return
+    if (small && warn) return   // already shown at the top
+    if (small) { Text(text, fontSize = 11.sp, color = Brand.muted, modifier = Modifier.fillMaxWidth().clickable { com.closeros.app.calls.CallSync.syncNow(ctx); vm.message = "Syncing…"; tick++ }, textAlign = androidx.compose.ui.text.style.TextAlign.Center); return }
     Row(Modifier.fillMaxWidth().background(if (warn) Color(0xFFFEF3C7) else Color(0xFFECFDF5), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Text(text, fontSize = 12.sp, color = if (warn) Color(0xFF92400E) else Color(0xFF065F46), modifier = Modifier.weight(1f))
@@ -229,34 +252,73 @@ fun TodayListScreen(vm: AppViewModel, key: String) {
     }
 }
 
+/** One slim call row: direction arrow · name · one detail line · WhatsApp + Call. Tap for SMS / lead actions. */
 @Composable
-fun HistoryRow(vm: AppViewModel, h: HistoryItem, onAdd: (() -> Unit)? = null) {
+fun HistoryRow(vm: AppViewModel, h: HistoryItem, onAdd: (() -> Unit)? = null, count: Int = 1) {
     val ctx = LocalContext.current
     var wa by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(10.dp))
-        .clickable(enabled = h.lead != null) { h.lead?.let { vm.openLeadId = it.id } }.padding(12.dp, 10.dp, 4.dp, 4.dp)) {
+    var open by remember { mutableStateOf(false) }
+    val missed = h.log.direction == "missed" || h.log.direction == "rejected"
+    val (arrow, arrowColor) = when (h.log.direction) {
+        "outgoing" -> "↗" to Color(0xFF0E7490); "incoming" -> "↙" to Color(0xFF16A34A); else -> "✕" to Brand.red
+    }
+    val name = h.lead?.name?.ifBlank { null } ?: h.log.name ?: fmtPhone(h.phone)
+    val twoSims = remember { vm.sims().size > 1 }
+    val time = java.time.format.DateTimeFormatter.ofPattern("h:mm a").format(Instant.ofEpochMilli(h.log.startedAtMs).atZone(java.time.ZoneId.systemDefault()))
+    val what = when (h.log.direction) {
+        "outgoing" -> if (h.log.durationSec > 0) fmtDur(h.log.durationSec) else "No answer"
+        "incoming" -> "Received · ${fmtDur(h.log.durationSec)}"
+        "missed" -> "Missed"; else -> "Declined"
+    }
+    Column(Modifier.fillMaxWidth().clickable { open = !open }.padding(start = 4.dp, top = 6.dp, bottom = 6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(h.lead?.name?.ifBlank { null } ?: h.log.name ?: fmtPhone(h.phone), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-            // Leads are the normal case: no tag. Only numbers not in the lead list are tagged.
-            if (h.lead == null && h.phone.isNotBlank()) Text("Not in lead list", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF475569),
-                modifier = Modifier.padding(start = 8.dp).background(Color(0xFFE2E8F0), RoundedCornerShape(50)).padding(horizontal = 8.dp, vertical = 2.dp))
+            Text(arrow, color = arrowColor, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(26.dp))
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(name + if (count > 1) "  ($count)" else "", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        color = if (missed) Brand.red else Color(0xFF0F172A), modifier = Modifier.weight(1f, fill = false))
+                    // Leads are the normal case: no tag. Only numbers not in the lead list are tagged.
+                    if (h.lead == null && h.phone.isNotBlank()) Text("Not in lead list", fontSize = 10.sp, color = Color(0xFF475569),
+                        modifier = Modifier.padding(start = 6.dp).background(Color(0xFFE2E8F0), RoundedCornerShape(50)).padding(horizontal = 6.dp, vertical = 1.dp))
+                }
+                Text(listOfNotNull(if (h.log.channel == "whatsapp") "WhatsApp" else null, what, time,
+                    h.log.simSlot?.takeIf { twoSims && h.log.channel == "phone" }?.let { "SIM $it" }).joinToString(" · "),
+                    fontSize = 12.sp, color = if (missed) Brand.red else Brand.muted, maxLines = 1)
+            }
+            if (h.phone.isNotBlank()) {
+                IconButton(onClick = { wa = true }, modifier = Modifier.size(40.dp)) { Icon(Icons.Default.Send, "WhatsApp", tint = Color(0xFF16A34A), modifier = Modifier.size(20.dp)) }
+                IconButton(onClick = {
+                    if (h.lead != null) vm.callRequest = h.lead
+                    else PhoneCalls.call(ctx, h.phone, vm.sims().firstOrNull { it.slot == vm.store.preferredSim } ?: vm.sims().firstOrNull())
+                }, modifier = Modifier.size(40.dp)) { Icon(Icons.Default.Call, "Call", tint = Brand.primary, modifier = Modifier.size(22.dp)) }
+            }
         }
-        val dir = when (h.log.direction) { "outgoing" -> "Dialled"; "incoming" -> "Received"; "missed" -> "Missed"; else -> "Declined" }
-        Text((if (h.log.channel == "whatsapp") "WhatsApp · " else h.log.simSlot?.let { "SIM $it · " } ?: "") + "$dir · ${if (h.log.durationSec > 0) fmtDur(h.log.durationSec) else "no talk"} · ${fmtWhen(Instant.ofEpochMilli(h.log.startedAtMs).toString())}",
-            fontSize = 13.sp, color = if (h.log.direction == "missed" || h.log.direction == "rejected") Brand.red else Brand.muted)
-        if (h.lead?.name?.isNotBlank() == true || h.log.name != null) Text(fmtPhone(h.phone) + (if (h.lead != null && h.log.name != null && h.log.name != h.lead.name) " · saved as ${h.log.name}" else ""), fontSize = 12.sp, color = Brand.muted)
-        if (h.phone.isNotBlank()) Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = {
-                if (h.lead != null) vm.callRequest = h.lead
-                else PhoneCalls.call(ctx, h.phone, vm.sims().firstOrNull { it.slot == vm.store.preferredSim } ?: vm.sims().firstOrNull())
-            }) { Icon(Icons.Default.Call, "Call", tint = Brand.primary) }
-            IconButton(onClick = { wa = true }) { Icon(Icons.Default.Send, "WhatsApp", tint = Color(0xFF16A34A)) }
-            IconButton(onClick = { PhoneCalls.sms(ctx, h.phone) }) { Icon(Icons.Default.Email, "SMS", tint = Color(0xFF475569)) }
-            Spacer(Modifier.weight(1f))
-            if (h.lead == null && onAdd != null) TextButton(onClick = onAdd) { Text("+ Add lead") }
+        if (open && h.phone.isNotBlank()) Row(Modifier.padding(start = 26.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            TextButton(onClick = { PhoneCalls.sms(ctx, h.phone) }) { Text("✉️ SMS") }
+            if (h.lead != null) TextButton(onClick = { vm.openLeadId = h.lead.id }) { Text("👤 Open lead") }
+            else if (onAdd != null) TextButton(onClick = onAdd) { Text("+ Add lead") }
+            Text(fmtPhone(h.phone), fontSize = 12.sp, color = Brand.muted, modifier = Modifier.align(Alignment.CenterVertically))
         }
     }
     if (wa) WhatsAppPicker(vm, h.lead ?: Lead(id = "", org_id = vm.membership?.org_id ?: "", name = h.log.name ?: "", phone = h.phone)) { wa = false }
+}
+
+/** Groups calls by day ("Today", "Yesterday", "Mon 3 Nov") and folds repeat calls to the same number in a row. */
+fun groupCalls(list: List<HistoryItem>): List<Pair<String, List<Pair<HistoryItem, Int>>>> {
+    val zone = java.time.ZoneId.systemDefault()
+    val today = java.time.LocalDate.now(zone)
+    val fmt = java.time.format.DateTimeFormatter.ofPattern("EEE d MMM")
+    return list.groupBy { Instant.ofEpochMilli(it.log.startedAtMs).atZone(zone).toLocalDate() }.map { (d, calls) ->
+        val title = when (d) { today -> "Today"; today.minusDays(1) -> "Yesterday"; else -> d.format(fmt) }
+        val folded = mutableListOf<Pair<HistoryItem, Int>>()
+        calls.forEach { c ->
+            val last = folded.lastOrNull()
+            if (last != null && last.first.phone == c.phone && last.first.log.direction == c.log.direction && last.first.log.channel == c.log.channel)
+                folded[folded.size - 1] = last.first to last.second + 1
+            else folded += c to 1
+        }
+        title to folded
+    }
 }
 
 // ───────────── Calling queue ─────────────
@@ -350,7 +412,7 @@ fun LeadCard(vm: AppViewModel, l: Lead, onCall: ((Lead) -> Unit)?) {
                 }
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                if (onCall != null) FilledIconButton(onClick = { onCall(l) }, enabled = !l.do_not_call) { Icon(Icons.Default.Call, "Call ${l.name}") }
+                if (onCall != null) FilledIconButton(onClick = { onCall(l) }) { Icon(Icons.Default.Call, "Call ${l.name}") }
                 IconButton(onClick = { wa = true }) { Icon(Icons.Default.Send, "WhatsApp", tint = Color(0xFF16A34A)) }
             }
         }

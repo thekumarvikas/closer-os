@@ -180,7 +180,8 @@ data class LeadFilters(
 }
 
 @Serializable data class BoardRow(val user_id: String, val name: String = "", val calls: Int = 0, val conversations: Int = 0, val talk_sec: Int = 0, val sales: Int = 0)
-@Serializable data class BestTime(val hour: Int, val source: String, val picked: Int? = null, val tries: Int? = null, val rate: Int? = null)
+@Serializable data class BestTime(val hour: Int? = null, val source: String, val picked: Int? = null, val tries: Int? = null, val rate: Int? = null,
+    val total_picked: Int? = null, val total_tries: Int? = null)
 
 @Serializable data class CallRequest(val id: String, val lead_id: String, val purpose: String = "sales", val batch_id: String? = null)
 
@@ -371,6 +372,10 @@ object Repo {
         return json.decodeFromString(db.rpc("leaderboard", buildJsonObject {
             put("p_org", org.id); put("p_from", from.atStartOfDay(zone).toInstant().toString()); put("p_to", today.plusDays(1).atStartOfDay(zone).toInstant().toString())
         }).data)
+    }
+
+    suspend fun setDoNotCall(leadId: String, value: Boolean) {
+        db.rpc("set_do_not_call", buildJsonObject { put("p_lead", leadId); put("p_value", value) })
     }
 
     suspend fun bestTime(leadId: String): BestTime? = runCatching {

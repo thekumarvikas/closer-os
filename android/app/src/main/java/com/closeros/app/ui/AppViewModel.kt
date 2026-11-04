@@ -84,7 +84,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         startQueue(list)
     }
     var leadsLoading by mutableStateOf(false)
-    var tab by mutableStateOf(Tab.Home)
+    var tab by mutableStateOf(runCatching { Tab.valueOf(LocalStore(app).startTab) }.getOrDefault(Tab.Home))
     var openLeadId by mutableStateOf<String?>(null)
     var message by mutableStateOf<String?>(null)
 
@@ -148,9 +148,9 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     val isManager get() = membership?.role in setOf("owner", "admin", "manager")
 
-    fun loadBatches() = viewModelScope.launch {
+    fun loadBatches(quiet: Boolean = false) = viewModelScope.launch {
         val m = membership ?: return@launch
-        batches = runCatching { Repo.myBatches(m.org_id) }.onFailure { message = "Couldn't load webinars: ${it.message}" }.getOrDefault(emptyList())
+        batches = runCatching { Repo.myBatches(m.org_id) }.onFailure { if (!quiet) message = "Couldn't load webinars: ${it.message}" }.getOrDefault(emptyList())
     }
 
     fun openBatchList(b: BatchSummary, purpose: String) { openList = b to purpose; loadList() }
@@ -251,6 +251,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         loadReviews()
         checkAlerts()
         loadToday()
+        loadBatches(quiet = true)
     }
 
     fun loadToday() = viewModelScope.launch {
@@ -408,6 +409,22 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
                     else if (it.message?.contains("not confirmed", true) == true) "Please confirm your email first (check your inbox)"
                     else "Couldn't sign in. Check your internet.")
         }
+    }
+
+    /** A lead marked Do not call that the rep tried to call: asks before removing the mark. */
+    var dncAsk by mutableStateOf<Lead?>(null)
+
+    /** Sets / removes "Do not call" (audit-logged on the server), updates the lists, then runs [then]. */
+    fun setDoNotCall(lead: Lead, value: Boolean, then: (Lead) -> Unit = {}) = viewModelScope.launch {
+        runCatching { Repo.setDoNotCall(lead.id, value) }
+            .onSuccess {
+                val updated = lead.copy(do_not_call = value)
+                val i = leads.indexOfFirst { it.id == lead.id }; if (i >= 0) leads[i] = updated
+                com.closeros.app.data.LeadIndex.remember(ctx, listOf(updated))
+                message = if (value) "Marked Do not call" else "Removed from Do not call"
+                then(updated)
+            }
+            .onFailure { message = "Couldn't change it — check internet" }
     }
 
     /** Lead to offer a WhatsApp message to, right after its outcome was saved. */

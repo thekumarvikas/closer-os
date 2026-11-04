@@ -526,3 +526,9 @@ intelligence → Play Store launch.
   Phone setup: "After-call pop-up" (ACTION_MANAGE_OVERLAY_PERMISSION) + on Xiaomi/Redmi/POCO
   "Pop-ups in the background" (MIUI permission editor, rep taps Done).
 - Closing the card without saving is fine: the app's mandatory outcome check asks on next open.
+
+## Password reset (Nov 2026)
+- Web "Forgot password?" sent the email but there was no page to choose a new password. Added
+  pages/SetPassword.tsx (useRecoveryMode: PASSWORD_RECOVERY event or #type=recovery, kept in
+  sessionStorage) → supabase.auth.updateUser({password}). App.tsx shows it before everything else.
+- Owner's login = thesaleskumar@gmail.com (email + password). Never set passwords for him in chat.

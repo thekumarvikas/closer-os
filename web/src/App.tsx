@@ -20,11 +20,14 @@ import Calls from './pages/Calls'
 import FollowUps from './pages/FollowUps'
 import Team from './pages/Team'
 import Settings from './pages/Settings'
+import SetPassword, { useRecoveryMode } from './pages/SetPassword'
 
 export default function App() {
   const { session, loading, org, isAdmin, isManager, profile, role } = useSession()
+  const [recovery, recoveryDone] = useRecoveryMode()
   if (loading) return <Spinner />
   if (!session) return <AuthPage />
+  if (recovery) return <SetPassword email={session.user.email} onDone={recoveryDone} />
   if (!org) return <Onboarding />
   return (
     <Routes>

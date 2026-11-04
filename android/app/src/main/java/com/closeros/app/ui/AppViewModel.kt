@@ -280,7 +280,13 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Starts calling the given leads one after another. */
     fun startQueue(leads: List<Lead>, purpose: String = "sales", batchId: String? = null) {
         queuePurpose = purpose; queueBatchId = batchId
-        val list = leads.filter { !it.do_not_call }.distinctBy { it.id }
+        var list = leads.filter { !it.do_not_call }.distinctBy { it.id }
+        // Settings → "Best time to call first": after due follow-ups, leads whose best pick-up hour is now go next.
+        if (store.queueBestTimeFirst) {
+            val now = java.time.Instant.now(); val hour = java.time.LocalTime.now().hour
+            fun due(l: Lead) = l.next_follow_up_at?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }?.isBefore(now.plusSeconds(7200)) == true
+            list = list.sortedBy { if (due(it)) 0 else if (it.best_hour == hour) 1 else 2 }
+        }
         if (list.isEmpty()) { message = "No leads to call"; return }
         queue = list; queuePos = 0; queueDone = 0; queueActive = true; queuePaused = false; countdown = null
         todayFilter = null; openLeadId = null

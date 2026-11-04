@@ -118,6 +118,12 @@ fun HomeScreen(vm: AppViewModel) {
                     Icon(Icons.Default.Call, null); Spacer(Modifier.width(8.dp)); Text(next.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                 }
                 next.sub?.let { Text(it, color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp, modifier = Modifier.clickable { if (vm.focusTotal > 0 && !vm.queueActive) vm.openFocusList() else vm.tab = Tab.FollowUps }) }
+                // Daily focus target set by the manager (e.g. 150 leads a day): progress only, never hides leads.
+                vm.progress?.daily?.focus?.takeIf { it > 0 }?.let { goal ->
+                    Text("Today's focus target: ${vm.focusDone} of $goal leads", color = Color.White, fontSize = 12.sp)
+                    LinearProgressIndicator(progress = { (vm.focusDone.toFloat() / goal).coerceIn(0f, 1f) }, Modifier.fillMaxWidth().height(4.dp),
+                        color = Color.White, trackColor = Color.White.copy(alpha = 0.25f))
+                }
                 upcoming?.takeIf { vm.focusTotal > 0 && !vm.queueActive }?.let { u ->
                     Text("🎓 Reminder calls · ${u.name} (${u.reminder_mine}) ›", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.clickable { vm.openBatchList(u, "reminder") })
@@ -411,6 +417,13 @@ fun leadTags(vm: AppViewModel, l: Lead): List<Tag> {
     if (l.do_not_call) out += Tag("Do not call", Color(0xFFFEE2E2), Color(0xFF991B1B))
     if (l.source == "Phone call") out += Tag("Added from a call", Color(0xFFFEF3C7), Color(0xFF92400E))
     if (l.score >= 40 && l.won_at == null) out += Tag("⚡ Close to converting", Color(0xFFFEF3C7), Color(0xFF92400E))
+    // Speed to first call: a fresh lead nobody has dialled yet shows how long it has been waiting.
+    if (l.dial_count == 0 && !l.do_not_call) l.created_at?.let { runCatching { Instant.parse(it) }.getOrNull() }?.let { at ->
+        val min = java.time.Duration.between(at, Instant.now()).toMinutes()
+        if (min in 0..(7 * 24 * 60)) out += Tag("🆕 New · ${if (min < 60) "$min min" else if (min < 1440) "${min / 60} h" else "${min / 1440} d"} waiting",
+            if (min <= 30) Color(0xFFDBEAFE) else Color(0xFFFEE2E2), if (min <= 30) Color(0xFF1E40AF) else Color(0xFF991B1B))
+    }
+    if (l.best_hour != null && l.best_hour == java.time.LocalTime.now().hour) out += Tag("⏰ Best time now", Color(0xFFE0F2FE), Color(0xFF075985))
     return out
 }
 
@@ -439,6 +452,11 @@ fun LeadCard(vm: AppViewModel, l: Lead, onCall: ((Lead) -> Unit)?) {
                     vm.outcomes.firstOrNull { it.id == l.last_outcome_id }?.label ?: l.last_call_at?.let { "Last called ${fmtWhen(it)}" },
                 ).joinToString(" · ")
                 if (last.isNotEmpty()) Text(last, fontSize = 12.sp, color = Brand.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // Neutral bar: talk so far vs my usual talk per sale (never a warning).
+                val usual = vm.recipe?.get("talk_min")?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull() }
+                if (usual != null && usual > 0 && l.won_at == null && l.total_talk_sec > 0)
+                    LinearProgressIndicator(progress = { ((l.total_talk_sec / 60.0) / usual).toFloat().coerceIn(0f, 1f) },
+                        Modifier.fillMaxWidth(0.6f).padding(top = 2.dp).height(3.dp), color = Brand.primary, trackColor = Color(0xFFE2E8F0))
                 l.next_follow_up_at?.let { Text("Next call: ${fmtWhen(it)}", fontSize = 12.sp, color = Brand.primary) }
                 if (tags.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
                     tags.forEach { Text(it.text, fontSize = 11.sp, color = it.fg, fontWeight = FontWeight.Medium, modifier = Modifier.background(it.bg, RoundedCornerShape(50)).padding(horizontal = 8.dp, vertical = 2.dp)) }

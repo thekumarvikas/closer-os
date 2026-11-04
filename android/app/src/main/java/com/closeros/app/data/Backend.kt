@@ -107,7 +107,7 @@ data class LeadFact(val key: String, val label: String, val options: List<String
     // Effort so far (kept up to date by the server): talk time, dials, real pick-ups, WhatsApp sent, score.
     val total_talk_sec: Int = 0, val dial_count: Int = 0, val pickup_count: Int = 0, val wa_count: Int = 0,
     val last_call_status: String? = null, val has_talked: Boolean = false, val score: Int = 0, val won_at: String? = null,
-    val tags: List<String>? = null, val custom: JsonObject? = null, val created_at: String? = null,
+    val tags: List<String>? = null, val custom: JsonObject? = null, val created_at: String? = null, val best_hour: Int? = null,
 ) {
     /** Latest webinar/event this lead registered for. */
     val latestBatch: BatchLink? get() = batch_leads.maxByOrNull { it.batch?.webinar_at ?: "" }
@@ -156,7 +156,7 @@ data class LeadFact(val key: String, val label: String, val options: List<String
     val direction: String? = null, val duration_sec: Int? = null, val purpose: String? = null, val by: String? = null,
 )
 
-@Serializable data class Nums(val calls: Int? = null, val conversations: Int? = null, val talk_minutes: Int? = null, val sales: Int? = null)
+@Serializable data class Nums(val calls: Int? = null, val conversations: Int? = null, val talk_minutes: Int? = null, val sales: Int? = null, val focus: Int? = null)
 @Serializable data class Progress(val user_id: String, val target: Nums = Nums(), val actual: Nums = Nums(), val daily: Nums = Nums(), val work_days: Int = 0)
 @Serializable data class ProgressReport(val work_days: Int = 0, val rows: List<Progress> = emptyList())
 
@@ -325,7 +325,7 @@ object Repo {
             put("p_org", org.id); put("p_from", today); put("p_to", today)
             put("p_users", buildJsonArray { add(kotlinx.serialization.json.JsonPrimitive(uid)) })
         }).data)
-        return r.rows.firstOrNull { it.user_id == uid }?.takeIf { p -> listOf(p.target.calls, p.target.conversations, p.target.talk_minutes, p.target.sales).any { (it ?: 0) > 0 } }
+        return r.rows.firstOrNull { it.user_id == uid }?.takeIf { p -> listOf(p.target.calls, p.target.conversations, p.target.talk_minutes, p.target.sales, p.daily.focus).any { (it ?: 0) > 0 } }
     }
 
     suspend fun playbook(orgId: String): List<PlaybookItem> = Backend.client.from("playbook_items").select {

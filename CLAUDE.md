@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.10.0
+## Android app (`android/`) — v0.10.1
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -681,5 +681,10 @@ intelligence → Play Store launch.
   Working calendar (days, holidays, leave) (pages/SettingsRound9.tsx); Reports tabs Lead work /
   What works / Insights with clickable numbers → lead list modal → LeadDrawer
   (components/Round9Reports.tsx); LeadDrawer EffortSummary.
-- Not yet: "New · 12 min waiting" timer on app lead cards, queue order "best time now first",
-  per-rep daily focus target, effort bar on lead cards (only on the lead page).
+- v0.10.1 (migration 0043): leads.best_hour (hour with ≥ 2 real pick-ups, company time zone, kept by
+  refresh_lead_stats); my_focus_list bucket "⏰ Best time to call now" (after new leads, before score);
+  rep_targets.focus_leads (dashboard Set targets "Focus leads / day"; target_progress daily.focus) →
+  Home hero "Today's focus target: x of y" bar. App lead tags "🆕 New · 12 min waiting" (dial_count 0,
+  < 7 days; blue ≤ 30 min, red after) and "⏰ Best time now"; neutral talk bar on lead cards vs my
+  usual talk per sale; Settings → Calling queue "Best time to call first" (store.queueBestTimeFirst,
+  default on: due follow-ups, then best-hour-now leads, then the rest).

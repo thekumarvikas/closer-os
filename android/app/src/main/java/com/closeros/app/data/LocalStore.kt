@@ -143,6 +143,11 @@ class LocalStore(ctx: Context) {
         get() = p.getString("start_tab", "Home") ?: "Home"
         set(v) { p.edit().putString("start_tab", v).apply() }
 
+    /** Calling queue: leads whose best pick-up hour is now go first (after due follow-ups). */
+    var queueBestTimeFirst: Boolean
+        get() = p.getBoolean("queue_best_time_first", true)
+        set(v) { p.edit().putBoolean("queue_best_time_first", v).apply() }
+
     fun clear() { p.edit().clear().apply() }
 
     companion object { private val outboxLock = Any() }

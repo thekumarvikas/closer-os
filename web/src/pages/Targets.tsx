@@ -6,12 +6,14 @@ import type { Directory } from '../lib/directory'
 import { downloadCsv } from '../lib/report'
 import { Button, Card, Empty, ErrorBox, Modal, Spinner } from '../components/ui'
 
-type Metric = 'calls' | 'conversations' | 'talk_minutes' | 'sales'
+type Metric = 'calls' | 'conversations' | 'talk_minutes' | 'sales' | 'focus_leads'
 type Nums = Partial<Record<Metric, number | null>>
 interface Row { user_id: string; own_target: boolean; target: Nums; daily: Nums; actual: Record<Metric, number> }
-interface TargetRow { user_id: string | null; calls: number | null; conversations: number | null; talk_minutes: number | null; sales: number | null }
+interface TargetRow { user_id: string | null; calls: number | null; conversations: number | null; talk_minutes: number | null; sales: number | null; focus_leads: number | null }
 
 const metrics: [Metric, string][] = [['calls', 'Calls dialled'], ['conversations', 'Conversations'], ['talk_minutes', 'Talk time (min)'], ['sales', 'Sales']]
+/** In the Set targets box: also the daily focus list goal (leads to work through each day — shown as progress in the app). */
+const editMetrics: [Metric, string][] = [...metrics, ['focus_leads', 'Focus leads / day']]
 
 const pctOf = (a: number, t?: number | null) => (t ? Math.round((a * 100) / t) : null)
 function barColor(p: number) { return p >= 100 ? 'bg-emerald-500' : p >= 70 ? 'bg-amber-400' : 'bg-red-400' }
@@ -97,25 +99,25 @@ function EditTargets({ dir, onClose }: { dir: Directory; onClose: () => void }) 
   useEffect(() => {
     supabase.from('rep_targets').select('*').eq('org_id', org.id).then(({ data }) => {
       const out: Record<string, Record<Metric, string>> = {}
-      ;((data ?? []) as TargetRow[]).forEach(t => { out[key(t.user_id)] = { calls: t.calls?.toString() ?? '', conversations: t.conversations?.toString() ?? '', talk_minutes: t.talk_minutes?.toString() ?? '', sales: t.sales?.toString() ?? '' } })
+      ;((data ?? []) as TargetRow[]).forEach(t => { out[key(t.user_id)] = { calls: t.calls?.toString() ?? '', conversations: t.conversations?.toString() ?? '', talk_minutes: t.talk_minutes?.toString() ?? '', sales: t.sales?.toString() ?? '', focus_leads: t.focus_leads?.toString() ?? '' } })
       setRows(out)
     })
   }, [org.id])
 
   const val = (u: string, k: Metric) => rows[u]?.[k] ?? ''
-  const setVal = (u: string, k: Metric, v: string) => setRows(r => ({ ...r, [u]: { ...{ calls: '', conversations: '', talk_minutes: '', sales: '' }, ...r[u], [k]: v.replace(/\D/g, '') } }))
+  const setVal = (u: string, k: Metric, v: string) => setRows(r => ({ ...r, [u]: { ...{ calls: '', conversations: '', talk_minutes: '', sales: '', focus_leads: '' }, ...r[u], [k]: v.replace(/\D/g, '') } }))
 
   async function save() {
     setSaving(true)
     for (const u of [null, ...people.map(p => p.user_id)]) {
-      const r = rows[key(u)] ?? { calls: '', conversations: '', talk_minutes: '', sales: '' }
+      const r = rows[key(u)] ?? { calls: '', conversations: '', talk_minutes: '', sales: '', focus_leads: '' }
       const { error } = await supabase.rpc('set_rep_target', { p_org: org.id, p_user: u, p: r })
       if (error) { setSaving(false); return setError(errorText(error)) }
     }
     setSaving(false); onClose()
   }
 
-  const inputs = (u: string, placeholder?: Record<Metric, string>) => metrics.map(([k]) => (
+  const inputs = (u: string, placeholder?: Record<Metric, string>) => editMetrics.map(([k]) => (
     <td key={k} className="px-2 py-1.5"><input className="input !py-1" inputMode="numeric" value={val(u, k)} placeholder={placeholder?.[k] || '—'} onChange={e => setVal(u, k, e.target.value)} /></td>
   ))
 
@@ -124,7 +126,7 @@ function EditTargets({ dir, onClose }: { dir: Directory; onClose: () => void }) 
       <p className="mb-3 text-sm text-slate-500">Targets are <b>per working day</b>. The first row applies to everyone; fill a person's row only to give them a different target (empty boxes use the company target).</p>
       <ErrorBox error={error} />
       <table className="w-full table-fixed text-sm">
-        <thead><tr><th className="th w-[28%]"></th>{metrics.map(([, l]) => <th key={l} className="th">{l}</th>)}</tr></thead>
+        <thead><tr><th className="th w-[24%]"></th>{editMetrics.map(([, l]) => <th key={l} className="th">{l}</th>)}</tr></thead>
         <tbody>
           <tr className="bg-brand-50"><td className="px-2 py-1.5 font-semibold">Everyone (company)</td>{inputs('default')}</tr>
           {people.map(p => <tr key={p.user_id}><td className="truncate px-2 py-1.5">{dir.nameOf(p.user_id)}</td>{inputs(p.user_id, rows.default)}</tr>)}

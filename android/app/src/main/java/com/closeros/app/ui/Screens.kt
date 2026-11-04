@@ -256,6 +256,14 @@ fun ProfileScreen(vm: AppViewModel) {
         }
         HorizontalDivider()
         Text("Calling queue", fontWeight = FontWeight.SemiBold)
+        var btf by remember { mutableStateOf(vm.store.queueBestTimeFirst) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Best time to call first", fontSize = 14.sp)
+                Text("After due follow-ups, leads who usually pick up at this hour come next", color = Brand.muted, fontSize = 12.sp)
+            }
+            Switch(btf, { btf = it; vm.store.queueBestTimeFirst = it })
+        }
         Text("Seconds before the next call", color = Brand.muted, fontSize = 14.sp)
         var cd by remember { mutableStateOf(vm.store.countdownSec) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

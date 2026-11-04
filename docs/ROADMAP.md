@@ -104,4 +104,4 @@ Everything from the original product prompt plus the owner's feedback, with stat
   what works (me/team/company), insights (what converts, speed to first call), lead work / dial-attempts
   report, today's focus (unlimited), outcomes v2 with next steps, quick picks 30 min–3 h, tag groups +
   facts, working calendar + monthly talk-time pace, recordings on call rows, Settings tab, Back fix
-- ⬜ "New · waiting" timer on lead cards, best-time-now queue order, per-rep daily focus target
+- ✅ "New · waiting" timer on lead cards, best-time-now queue order, per-rep daily focus target, effort bar on cards (v0.10.1)

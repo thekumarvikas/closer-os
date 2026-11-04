@@ -45,14 +45,24 @@ object Backend {
     val uid: String? get() = client.auth.currentUserOrNull()?.id
 
     /**
-     * Background work (call sync, after-call pop-up) can run hours after the app was last open, when
-     * the saved login has expired. Refresh it first, otherwise the server answers "JWT expired".
+     * Background work (call sync, after-call pop-up) can run hours after the app was last open. Then the
+     * saved login has expired and, if the internet wasn't ready at that moment, the library drops it and
+     * would call the server WITHOUT the login ("JWT expired" / "permission denied"). So: load the saved
+     * login ourselves and refresh it, retrying a few times. Returns true when a valid login is ready.
      */
-    suspend fun ensureFreshSession() {
-        runCatching { client.auth.awaitInitialization() }
-        val s = client.auth.currentSessionOrNull() ?: return
-        if (s.expiresAt < kotlinx.datetime.Clock.System.now() + kotlin.time.Duration.parse("2m"))
-            runCatching { client.auth.refreshCurrentSession() }
+    suspend fun ensureFreshSession(): Boolean {
+        val a = client.auth
+        runCatching { kotlinx.coroutines.withTimeoutOrNull(8_000) { a.awaitInitialization() } }
+        val soon = kotlinx.datetime.Clock.System.now() + kotlin.time.Duration.parse("2m")
+        for (attempt in 0 until 4) {
+            val cur = a.currentSessionOrNull()
+            if (cur != null && cur.expiresAt > soon) return true
+            val saved = cur ?: runCatching { a.sessionManager.loadSession() }.getOrNull() ?: return false   // really signed out
+            val ok = runCatching { a.importSession(a.refreshSession(saved.refreshToken)) }.isSuccess
+            if (ok) return true
+            kotlinx.coroutines.delay(1_500L * (attempt + 1))   // internet may still be waking up
+        }
+        return false
     }
 }
 

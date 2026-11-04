@@ -68,36 +68,71 @@ object AfterCall {
     /** Does this call need an outcome? (answered incoming, or any outgoing — same rule as the app) */
     fun needsOutcome(c: LogCall) = (c.direction == "incoming" && c.durationSec > 0) || c.direction == "outgoing"
 
-    suspend fun handle(ctx: Context, endedAtMs: Long) = lock.withLock {
+    /** What happened the last time a call ended (shown in Phone setup, and sent to the error log). */
+    private fun trace(ctx: Context, text: String) {
+        LocalStore(ctx).lastAfterCallTrace = "${java.time.LocalTime.now().withNano(0)} · $text"
+        com.closeros.app.data.AppLog.error(ctx, "after-call", null, kind = "info", message = text)
+    }
+
+    suspend fun handle(ctx: Context, endedAtMs: Long) {
+        lock.withLock { run(ctx, endedAtMs) }
+        runCatching { com.closeros.app.data.AppLog.flush(ctx) }
+    }
+
+    private suspend fun run(ctx: Context, endedAtMs: Long) {
         val store = LocalStore(ctx)
-        if (store.orgId == null) return@withLock
-        val co = company(ctx) ?: return@withLock
-        com.closeros.app.data.Backend.ensureFreshSession()
+        if (store.orgId == null) return trace(ctx, "not signed in")
+        val co = company(ctx) ?: return trace(ctx, "company not loaded yet — open Closer OS once")
+        val loggedIn = com.closeros.app.data.Backend.ensureFreshSession()
 
         // The phone writes the call log a moment after the call ends: look for it for up to ~10 s.
         var call: LogCall? = null
         for (i in 0 until 10) {
             delay(if (i == 0) 800 else 1000)
             call = runCatching { PhoneCalls.readLog(ctx, endedAtMs - 3 * 3_600_000L).lastOrNull() }.getOrNull()
-                ?.takeIf { it.startedAtMs + it.durationSec * 1000L >= endedAtMs - 150_000 && it.channel == "phone" }
+                ?.takeIf { it.startedAtMs + it.durationSec * 1000L >= endedAtMs - 180_000 && it.channel == "phone" }
             if (call != null) break
         }
-        val c = call ?: return@withLock
-        if (c.id == store.lastAfterCallId || c.id in store.loggedCalls) return@withLock
+        val c = call ?: return trace(ctx, "call not found in the call log")
+        if (c.id == store.lastAfterCallId) return   // Android sends "call ended" twice
         store.lastAfterCallId = c.id
+        if (c.id in store.loggedCalls) return trace(ctx, "outcome already saved")
 
         val phone = normalizePhone(c.phone, co.prefix)
         // A call started from Closer OS (lead list, queue, webinar list): keep its purpose / webinar.
         val appCall = store.pendingCall?.takeIf { p -> p.logId == c.id || (p.logId == null && normalizePhone(p.phone, co.prefix) == phone) }
-        var lookupFailed = false
-        val lead = runCatching { Repo.leadsByPhones(co.orgId, listOf(phone))[phone] }
+        var lookupFailed = !loggedIn
+        val lead = if (!loggedIn) null else runCatching { Repo.leadsByPhones(co.orgId, listOf(phone))[phone] }
             .onFailure { lookupFailed = true; com.closeros.app.data.AppLog.error(ctx, "after-call lead lookup", it) }.getOrNull()
         if (lead != null && needsOutcome(c)) notifySaveOutcome(ctx, lead, c)
 
         val mode = store.afterCallMode
-        val show = mode != "off" && allowed(ctx) && !MainActivity.visible &&
-            c.phone.isNotBlank() && (lead != null || mode == "all" || lookupFailed)
-        if (show) withContext(Dispatchers.Main) { Overlay.show(ctx.applicationContext, Info(c, lead, co, appCall, lookupFailed)) }
+        val why = when {
+            mode == "off" -> "pop-up turned off in Profile"
+            !allowed(ctx) -> "\"Display over other apps\" is off"
+            MainActivity.visible -> "Closer OS was on screen (it asks itself)"
+            c.phone.isBlank() -> "private number"
+            lead == null && mode == "leads" && !lookupFailed -> "not a lead (pop-up set to leads only)"
+            else -> null
+        }
+        if (why != null) return trace(ctx, "no pop-up: $why")
+        val shown = withContext(Dispatchers.Main) { Overlay.show(ctx.applicationContext, Info(c, lead, co, appCall, lookupFailed)) }
+        trace(ctx, if (shown) "pop-up shown" + (if (lead != null) " (lead)" else if (lookupFailed) " (couldn't check: ${if (loggedIn) "no internet" else "login"})" else " (not a lead)")
+                   else "pop-up blocked by the phone")
+    }
+
+    /** Profile → "Test the pop-up": shows the card for the most recent call right now. */
+    suspend fun test(ctx: Context): String {
+        if (!allowed(ctx)) return "Turn on \"Display over other apps\" first (Phone setup)."
+        val co = company(ctx) ?: return "Company not loaded yet — wait a moment and try again."
+        val c = withContext(Dispatchers.IO) { runCatching { PhoneCalls.history(ctx, 5).firstOrNull { it.channel == "phone" && it.phone.isNotBlank() } }.getOrNull() }
+            ?: return "Make one call first, then test."
+        val loggedIn = com.closeros.app.data.Backend.ensureFreshSession()
+        val phone = normalizePhone(c.phone, co.prefix)
+        var failed = !loggedIn
+        val lead = if (!loggedIn) null else runCatching { Repo.leadsByPhones(co.orgId, listOf(phone))[phone] }.onFailure { failed = true }.getOrNull()
+        val ok = withContext(Dispatchers.Main) { Overlay.show(ctx.applicationContext, Info(c, lead, co, null, failed)) }
+        return if (ok) "Pop-up works ✓ (shown for your last call)" else "The phone blocked the pop-up — check \"Display over other apps\"."
     }
 
     private fun notifySaveOutcome(ctx: Context, lead: Lead, c: LogCall) {
@@ -119,9 +154,9 @@ object AfterCall {
         private var view: View? = null
         private var owner: Owner? = null
 
-        fun show(ctx: Context, info: Info) {
+        fun show(ctx: Context, info: Info): Boolean {
             hide(ctx)
-            val wm = ctx.getSystemService(WindowManager::class.java) ?: return
+            val wm = ctx.getSystemService(WindowManager::class.java) ?: return false
             val o = Owner().also { it.start() }
             val v = ComposeView(ctx).apply {
                 setViewTreeLifecycleOwner(o); setViewTreeSavedStateRegistryOwner(o); setViewTreeViewModelStoreOwner(o)
@@ -133,8 +168,8 @@ object AfterCall {
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 PixelFormat.TRANSLUCENT,
             ).apply { gravity = Gravity.CENTER }
-            runCatching { wm.addView(v, lp); view = v; owner = o }
-                .onFailure { o.stop(); com.closeros.app.data.AppLog.error(ctx, "after-call pop-up", it) }
+            return runCatching { wm.addView(v, lp); view = v; owner = o }
+                .onFailure { o.stop(); com.closeros.app.data.AppLog.error(ctx, "after-call pop-up", it) }.isSuccess
         }
 
         fun hide(ctx: Context) {

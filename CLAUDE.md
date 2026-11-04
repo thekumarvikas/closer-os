@@ -549,3 +549,17 @@ intelligence → Play Store launch.
   <org>/files/…, mime, size; members read, managers write). Dashboard Settings → "Company files for
   WhatsApp" (multi-upload ≤16 MB, rename, delete). App WhatsAppPicker → "📁 Company files"
   (CompanyFilesDialog, Repo.companyFiles) → downloaded and shared to WhatsApp with the text.
+
+## Pop-up login fix + trace (v0.9.13, Nov 2026)
+- Owner: pop-up still not working on 0.9.12. app_errors showed the after-call lead lookup sent with
+  the publishable key only (no user JWT → "permission denied for table leads"): in a background
+  wake-up the library had dropped the expired session (refresh failed while the network was waking),
+  and ensureFreshSession returned early when currentSessionOrNull() was null. Now it loads the saved
+  session from sessionManager, refreshSession(refreshToken) + importSession, 4 tries with backoff;
+  no lookup is sent without a login (card shows "couldn't check").
+- AfterCall trace: every call end writes store.lastAfterCallTrace + AppLog kind "info" place
+  "after-call" ("pop-up shown (lead)", "no pop-up: Closer OS was on screen", "call not found…",
+  "\"Display over other apps\" is off", …) and flushes right away → read app_errors to debug.
+  Profile → After-call pop-up: "Test the pop-up" (AfterCall.test: card for the latest call now) +
+  "Last call: …" line. When Closer OS itself is on screen after a call, the app's own outcome
+  screen is used instead of the pop-up.

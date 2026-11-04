@@ -1,5 +1,6 @@
 package com.closeros.app.ui
 
+import kotlinx.coroutines.launch
 import com.closeros.app.calls.safeStart
 import android.Manifest
 import android.content.Intent
@@ -254,6 +255,11 @@ fun ProfileScreen(vm: AppViewModel) {
             }
         }
         if (acm != "off" && !android.provider.Settings.canDrawOverlays(ctx)) TextButton(onClick = { vm.showSetup = true }) { Text("Allow the pop-up in Phone setup →") }
+        if (acm != "off") {
+            val scope = rememberCoroutineScope()
+            OutlinedButton(onClick = { scope.launch { vm.message = com.closeros.app.calls.AfterCall.test(ctx) } }) { Text("Test the pop-up") }
+            vm.store.lastAfterCallTrace?.let { Text("Last call: $it", fontSize = 12.sp, color = Brand.muted) }
+        }
         HorizontalDivider()
         Text("Sync", fontWeight = FontWeight.SemiBold)
         Text(if (vm.store.lastSyncMs == 0L) "Not synced yet" else "Last sync ${fmtWhen(Instant.ofEpochMilli(vm.store.lastSyncMs).toString())}", color = Brand.muted)

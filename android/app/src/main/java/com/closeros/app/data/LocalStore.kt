@@ -129,6 +129,11 @@ class LocalStore(ctx: Context) {
         get() = p.getString("last_after_call", null)
         set(v) { p.edit().putString("last_after_call", v).commit() }
 
+    /** What the after-call pop-up did last time (for Phone setup / support). */
+    var lastAfterCallTrace: String?
+        get() = p.getString("after_call_trace", null)
+        set(v) { p.edit().putString("after_call_trace", v).apply() }
+
     fun clear() { p.edit().clear().apply() }
 
     companion object { private val outboxLock = Any() }

@@ -609,5 +609,8 @@ intelligence → Play Store launch.
   CallLog.CACHED_NAME, else PhoneCalls.contactNames() (all contacts by last 10 digits, cached 60 s)
   into LogCall.name for phone calls (not uploaded). Rows: lead name > contact name > number;
   "saved as …" when they differ.
-- Tags: Calls rows show green "Lead" or grey "Not in lead list"; leadTags adds amber "Added from a
-  call" for source 'Phone call'. loadHistory marks leads from LeadIndex first, then the server.
+- Tags: leadTags adds amber "Added from a call" for source 'Phone call'. loadHistory marks leads from LeadIndex first, then the server.
+
+## Tag rule (owner decision, Nov 2026 — v0.9.18)
+- The app is for calling leads, so leads are the normal case and get NO "Lead" tag anywhere.
+  Only numbers not in the lead list get the grey "Not in lead list" tag (Calls tab, pop-up).

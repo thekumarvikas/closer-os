@@ -237,12 +237,9 @@ fun HistoryRow(vm: AppViewModel, h: HistoryItem, onAdd: (() -> Unit)? = null) {
         .clickable(enabled = h.lead != null) { h.lead?.let { vm.openLeadId = it.id } }.padding(12.dp, 10.dp, 4.dp, 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(h.lead?.name?.ifBlank { null } ?: h.log.name ?: fmtPhone(h.phone), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-            if (h.phone.isNotBlank()) {
-                val isLead = h.lead != null
-                Text(if (isLead) "Lead" else "Not in lead list", fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
-                    color = if (isLead) Color(0xFF166534) else Color(0xFF475569),
-                    modifier = Modifier.padding(start = 8.dp).background(if (isLead) Color(0xFFDCFCE7) else Color(0xFFE2E8F0), RoundedCornerShape(50)).padding(horizontal = 8.dp, vertical = 2.dp))
-            }
+            // Leads are the normal case: no tag. Only numbers not in the lead list are tagged.
+            if (h.lead == null && h.phone.isNotBlank()) Text("Not in lead list", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF475569),
+                modifier = Modifier.padding(start = 8.dp).background(Color(0xFFE2E8F0), RoundedCornerShape(50)).padding(horizontal = 8.dp, vertical = 2.dp))
         }
         val dir = when (h.log.direction) { "outgoing" -> "Dialled"; "incoming" -> "Received"; "missed" -> "Missed"; else -> "Declined" }
         Text((if (h.log.channel == "whatsapp") "WhatsApp · " else h.log.simSlot?.let { "SIM $it · " } ?: "") + "$dir · ${if (h.log.durationSec > 0) fmtDur(h.log.durationSec) else "no talk"} · ${fmtWhen(Instant.ofEpochMilli(h.log.startedAtMs).toString())}",

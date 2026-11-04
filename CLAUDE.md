@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.9.12
+## Android app (`android/`) — v0.10.0
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -638,3 +638,48 @@ intelligence → Play Store launch.
   day headers; repeat calls folded "(2)" (groupCalls); chips All / Missed / Not in lead list
   (+ WhatsApp in full build); no "Dial pad" button (FAB). HistoryRow is shared with Today lists.
 - Profile → "Open the app on": Home / Leads / Calls / Follow-ups (store.startTab).
+
+## Round 9: effort, WhatsApp queue, outcomes v2, calendar, sales insights (v0.10.0, Nov 2026)
+- Owner rules: no "stop-loss"/give-up warnings (people convert after 4× effort) — effort bars stay
+  neutral; focus list has NO limit; WhatsApp automation = option A only (assisted queue, 1 tap per
+  lead; no Accessibility auto-send: Play Protect/Play Store block + WhatsApp bans numbers; Business
+  API = future paid add-on).
+- Migration 0039: wa_messages (sent from the app; source single|queue|popup; undone_at for Undo;
+  my_wa_today, wa_sent_today), lead stats on leads kept by triggers on calls/wa_messages
+  (refresh_lead_stats: total_talk_sec, dial_count, pickup_count, wa_count, first_dialled_at,
+  first_talk_dial, last_call_status talked|not_picked|missed, won_at, score 0–100 "close to
+  converting" = pick-ups, talk vs 30 min, last outcome, webinar watch, recency; 0 for won/lost/invalid/DNC),
+  call_outcomes.next_default (30m 1h 2h 3h today tomorrow 2d 30d pick none) + apply_outcome_set_v2()
+  (new sales + reminder list, old outcomes hidden not deleted; applied to every org; create_organization
+  calls it — migration 0040), org_holidays + member_leave (managers write) + working_days(org,user,from,to);
+  target_progress now per-person working days (rows carry work_days).
+- Migration 0040: log_call stores p.lead_custom (facts → leads.custom) and p.lead_tags (→ leads.tags).
+- Migration 0041: leads.has_talked (trigger), work_leads/lead_work_report/lead_work_list (assigned →
+  dialled → conversation/not reached/junk, attempts 0–5/6+, per person; junk = invalid outcome or DNC),
+  lead_effort/lead_path (path to sale: talk, calls, picked, received, WA, follow-ups made + on time,
+  days, first talk dial, category, source, watch), sales_recipe (avg per sale mine vs team, converted
+  list, per person), conversion_insights (by source/category/watch band/city/speed-to-first-call + speed
+  per rep; managers), my_focus_list (overdue → due in 2 h → never dialled → score ≥ 40 → rest; skips
+  DNC/won/lost/invalid and leads planned for a later day). Migration 0042: call_recording_paths(ids).
+- A "follow-up" in reports = a planned next call (follow_ups row) that was actually dialled.
+- App: Settings tab (was Profile, gear icon); Back always closes the top screen (vm.closeTop +
+  root BackHandler); teal dot-keypad FAB; bold arrows; Calls chips All/Dialled/Received/Missed/Not
+  picked up (< 20 s)/Not in lead list + ▶ on rows with recordings (vm.recordingPaths);
+  LeadFilters lastCall/messaged/hot/tags (+ webinar list "Tried 3+, no talk"); lead card one-line
+  effort "Talked 12m · 5 calls (3 picked) · 9 WA" + "⚡ Close to converting" tag; lead page
+  Call · WhatsApp · SMS + EffortCard (interactions, path to sale when won, neutral bar vs my usual sale);
+  OutcomeScreen + pop-up + web Desk: quick picks In 30 min/1/2/3 hours · Today▸ · Tomorrow▸ · Day after▸
+  · Other · No follow-up, outcome.next_default preselected; tag groups (settings.tag_groups) + facts
+  (settings.lead_facts) on the outcome screen. Home: Interactions tile (calls + WA, tap → WaTodayScreen),
+  month talk-time line "x of y · day d of n · on pace ✓ / behind", hero "Start today's focus · N"
+  (vm.startFocusQueue, sub-line opens the list), tools Lead work / What works. WhatsApp queue:
+  vm.waChooseFor → WaChooseDialog → startWaQueue (skips leads that got it today) → WaQueueScreen
+  (open WhatsApp, back = logged + 3 s countdown → next; Pause/Skip/Undo/Stop); entry points Leads
+  select bar "WA N", webinar list "WhatsApp N", any LeadListScreen "WhatsApp all". All WhatsApp
+  sends (picker, pop-up, queue) are logged. Screens: ui/Round9Screens.kt.
+- Dashboard: Settings → Next step after each outcome, Note tags in groups, Facts to capture,
+  Working calendar (days, holidays, leave) (pages/SettingsRound9.tsx); Reports tabs Lead work /
+  What works / Insights with clickable numbers → lead list modal → LeadDrawer
+  (components/Round9Reports.tsx); LeadDrawer EffortSummary.
+- Not yet: "New · 12 min waiting" timer on app lead cards, queue order "best time now first",
+  per-rep daily focus target, effort bar on lead cards (only on the lead page).

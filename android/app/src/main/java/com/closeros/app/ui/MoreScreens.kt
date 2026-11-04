@@ -89,14 +89,20 @@ fun CallHistoryScreen(vm: AppViewModel) {
             IconButton(onClick = { vm.loadHistory() }) { Icon(Icons.Default.Refresh, "Refresh") }
         }
         Row(Modifier.padding(horizontal = 12.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            (listOf("all" to "All", "missed" to "Missed", "unknown" to "Not in lead list") +
+            (listOf("all" to "All", "dialled" to "Dialled", "received" to "Received", "missed" to "Missed", "notpicked" to "Not picked up", "unknown" to "Not in lead list") +
                 (if (com.closeros.app.BuildConfig.WA_TRACKING) listOf("whatsapp" to "WhatsApp") else emptyList())).forEach { (k, l) ->
                 FilterChip(selected = filter == k, onClick = { filter = k }, label = { Text(l, fontSize = 13.sp) })
             }
         }
         if (items == null) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }; return }
         val shown = items.distinctBy { it.log.id }.filter {
-            when (filter) { "whatsapp" -> it.log.channel == "whatsapp"; "unknown" -> it.lead == null; "missed" -> it.log.direction == "missed" || it.log.direction == "rejected"; else -> true }
+            when (filter) {
+                "whatsapp" -> it.log.channel == "whatsapp"; "unknown" -> it.lead == null
+                "dialled" -> it.log.direction == "outgoing"; "received" -> it.log.direction == "incoming"
+                "missed" -> it.log.direction == "missed" || it.log.direction == "rejected"
+                // Dialled and they didn't really talk (no answer, or an operator message of a few seconds).
+                "notpicked" -> it.log.direction == "outgoing" && it.log.durationSec < 20
+                else -> true }
         }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp, 0.dp, 8.dp, 88.dp)) {
             if (shown.isEmpty()) item { Text("No calls here.", color = Brand.muted, modifier = Modifier.padding(8.dp)) }

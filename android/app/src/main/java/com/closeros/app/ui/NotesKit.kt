@@ -46,10 +46,24 @@ fun VoiceButton(onText: (String) -> Unit) {
 /** Note box with voice typing and one-tap tags. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun NoteEditor(text: String, onText: (String) -> Unit, tags: List<String>, onTags: (List<String>) -> Unit, allTags: List<String>, label: String = "Notes") {
+fun NoteEditor(text: String, onText: (String) -> Unit, tags: List<String>, onTags: (List<String>) -> Unit, allTags: List<String>, label: String = "Notes",
+               groups: List<com.closeros.app.data.TagGroup> = emptyList()) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(text, onText, label = { Text(label) }, modifier = Modifier.fillMaxWidth(), minLines = 2,
             trailingIcon = { VoiceButton { spoken -> onText(if (text.isBlank()) spoken else "$text $spoken") } })
+        // Company tag groups (e.g. Objection · Interest · Status), each in its own colour.
+        groups.forEach { g ->
+            val c = runCatching { Color(android.graphics.Color.parseColor(g.color)) }.getOrDefault(Brand.primaryDark)
+            Text(g.name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Brand.muted)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                g.tags.forEach { t ->
+                    val on = t in tags
+                    Text((if (on) "✓ " else "") + t, fontSize = 13.sp, color = if (on) Color.White else c,
+                        modifier = Modifier.background(if (on) c else c.copy(alpha = 0.1f), RoundedCornerShape(50))
+                            .clickable { onTags(if (on) tags - t else tags + t) }.padding(horizontal = 10.dp, vertical = 6.dp))
+                }
+            }
+        }
         if (allTags.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             allTags.forEach { t ->
                 val on = t in tags
@@ -130,7 +144,7 @@ fun NotesTimeline(vm: AppViewModel, leadId: String) {
         var saving by remember { mutableStateOf(false) }
         val scope = rememberCoroutineScope()
         AlertDialog(onDismissRequest = { adding = false }, title = { Text("Add note") },
-            text = { NoteEditor(text, { text = it }, tags, { tags = it }, vm.membership?.organization?.noteTags.orEmpty(), "Note") },
+            text = { NoteEditor(text, { text = it }, tags, { tags = it }, emptyList(), "Note", groups = vm.membership?.organization?.tagGroups.orEmpty()) },
             confirmButton = {
                 Button(onClick = {
                     saving = true

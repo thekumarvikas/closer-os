@@ -231,6 +231,7 @@ function OutcomePanel({ call, dir, onClose, onSaved }: { call: NeedCall; dir: Di
   const [day, setDay] = useState<string | null>(null)
   const [time, setTime] = useState<string | null>(null)
   const [noFollow, setNoFollow] = useState(false)
+  const [quickAt, setQuickAt] = useState<{ key: string; at: Date } | null>(null)
   const [amount, setAmount] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -252,7 +253,19 @@ function OutcomePanel({ call, dir, onClose, onSaved }: { call: NeedCall; dir: Di
     const offset = new Date(guess.toLocaleString('en-US', { timeZone: org.timezone })).getTime() - new Date(guess.toLocaleString('en-US', { timeZone: 'UTC' })).getTime()
     return new Date(guess.getTime() - offset)
   }, [day, time, org.timezone])
-  const fa = followAt()
+  const fa = quickAt?.at ?? followAt()
+  const quickIns: [string, number, string][] = [['30m', 30, 'In 30 min'], ['1h', 60, '1 hour'], ['2h', 120, '2 hours'], ['3h', 180, '3 hours']]
+  // Each outcome suggests its next step (set per outcome in Settings), e.g. Busy → in 1 hour.
+  function choose(o: Outcome) {
+    setOutcome(o); setQuickAt(null); setNoFollow(false); setDay(null); setTime(null)
+    const q = quickIns.find(x => x[0] === o.next_default)
+    if (q) setQuickAt({ key: q[0], at: new Date(Date.now() + q[1] * 60_000) })
+    else if (o.next_default === 'none') setNoFollow(true)
+    else if (o.next_default === 'today') setDay(dayOpts[0][0])
+    else if (o.next_default === 'tomorrow') { setDay(dayOpts[1][0]); setTime('11:00') }
+    else if (o.next_default === '2d') { setDay(dayOpts[2][0]); setTime('11:00') }
+    else if (o.next_default === '30d') setQuickAt({ key: '30d', at: new Date(Date.now() + 30 * 86_400_000) })
+  }
   const canSave = !!outcome && (noFollow || (fa && fa.getTime() > Date.now())) && (outcome.form !== 'sale' || amount.trim())
 
   async function save() {
@@ -278,14 +291,17 @@ function OutcomePanel({ call, dir, onClose, onSaved }: { call: NeedCall; dir: Di
         <button onClick={onClose} className="text-slate-400 hover:text-slate-700"><X className="h-5 w-5" /></button>
       </div>
       <ErrorBox error={error} />
-      <div className="mb-3 flex flex-wrap gap-2">{choices.map(o => <button key={o.id} onClick={() => setOutcome(o)} className={`rounded-full border px-3 py-1.5 text-sm ${outcome?.id === o.id ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-200 hover:bg-slate-50'}`}>{o.label}</button>)}</div>
+      <div className="mb-3 flex flex-wrap gap-2">{choices.map(o => <button key={o.id} onClick={() => choose(o)} className={`rounded-full border px-3 py-1.5 text-sm ${outcome?.id === o.id ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-200 hover:bg-slate-50'}`}>{o.label}</button>)}</div>
       {(outcome?.form === 'sale' || outcome?.form === 'interest') && <input className="input mb-3 !w-60" inputMode="numeric" placeholder={outcome.form === 'sale' ? 'Amount paid (₹) *' : 'Potential deal value (₹)'} value={amount} onChange={e => setAmount(e.target.value.replace(/\D/g, ''))} />}
       <p className="label">Next call</p>
       <div className="mb-2 flex flex-wrap gap-2">
-        {dayOpts.map(([v, l]) => <button key={v} onClick={() => { setDay(v); setNoFollow(false) }} className={`rounded-full border px-3 py-1 text-sm ${day === v && !noFollow ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-slate-200'}`}>{l}</button>)}
-        <button onClick={() => { setNoFollow(true); setDay(null) }} className={`rounded-full border px-3 py-1 text-sm ${noFollow ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-slate-200'}`}>No follow-up needed</button>
+        {quickIns.map(([k, m, l]) => <button key={k} onClick={() => { setQuickAt({ key: k, at: new Date(Date.now() + m * 60_000) }); setDay(null); setNoFollow(false) }} className={`rounded-full border px-3 py-1 text-sm ${quickAt?.key === k && !noFollow ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-slate-200'}`}>{l}</button>)}
+        {dayOpts.slice(0, 3).map(([v, l], i) => <button key={v} onClick={() => { setDay(v); setQuickAt(null); setNoFollow(false) }} className={`rounded-full border px-3 py-1 text-sm ${day === v && !noFollow && !quickAt ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-slate-200'}`}>{i === 2 ? 'Day after' : l}</button>)}
+        <select className="rounded-full border border-slate-200 px-2 py-1 text-sm" value={dayOpts.slice(3).some(d => d[0] === day) ? day! : ''} onChange={e => { if (e.target.value) { setDay(e.target.value); setQuickAt(null); setNoFollow(false) } }}>
+          <option value="">Other date…</option>{dayOpts.slice(3).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+        <button onClick={() => { setNoFollow(true); setDay(null); setQuickAt(null) }} className={`rounded-full border px-3 py-1 text-sm ${noFollow ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-slate-200'}`}>No follow-up</button>
       </div>
-      {day && !noFollow && <div className="mb-2 flex flex-wrap gap-1.5">{slots.map(s => {
+      {day && !noFollow && !quickAt && <div className="mb-2 flex flex-wrap gap-1.5">{slots.map(s => {
         const [h, m] = s.split(':').map(Number); const label = `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`
         return <button key={s} onClick={() => setTime(s)} className={`rounded-md border px-2 py-1 text-xs ${time === s ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-200 hover:bg-slate-50'}`}>{label}</button>
       })}</div>}

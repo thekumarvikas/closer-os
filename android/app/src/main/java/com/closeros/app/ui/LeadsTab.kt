@@ -18,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -51,7 +52,10 @@ fun LeadsTab(vm: AppViewModel, onCall: (Lead) -> Unit) {
         if (vm.selectMode) Row(Modifier.fillMaxWidth().background(Brand.light).padding(12.dp, 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(if (vm.selected.isEmpty()) "Tap leads to pick them" else "${vm.selected.size} selected", modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
             TextButton(onClick = { vm.leads.forEach { if (!it.do_not_call) vm.selected[it.id] = it } }) { Text("All") }
-            Button(onClick = { vm.callSelected() }, enabled = vm.selected.isNotEmpty()) { Icon(Icons.Default.Call, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Call ${vm.selected.size}") }
+            OutlinedButton(onClick = { vm.waChooseFor = vm.selected.values.toList() }, enabled = vm.selected.isNotEmpty(), contentPadding = PaddingValues(horizontal = 10.dp)) {
+                Icon(Icons.Default.Send, null, Modifier.size(16.dp), tint = Color(0xFF16A34A)); Spacer(Modifier.width(4.dp)); Text("WA ${vm.selected.size}") }
+            Spacer(Modifier.width(6.dp))
+            Button(onClick = { vm.callSelected() }, enabled = vm.selected.isNotEmpty(), contentPadding = PaddingValues(horizontal = 12.dp)) { Icon(Icons.Default.Call, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Call ${vm.selected.size}") }
         } else if (vm.leads.isNotEmpty()) TextButton(onClick = { vm.startQueue(vm.leads.toList()) }, modifier = Modifier.padding(horizontal = 4.dp)) {
             Icon(Icons.Default.Call, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Call all ${vm.leads.size}${if (vm.leadsEnd) "" else "+"} in a queue")
         }
@@ -95,6 +99,18 @@ private fun FilterSheet(vm: AppViewModel, onClose: () -> Unit) {
             @Composable fun Section(title: String, content: @Composable () -> Unit) {
                 Text(title, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { content() }
+            }
+            // Call type / effort filters — always available.
+            Section("Last call") {
+                listOf("any" to "Any", "talked" to "Talked", "not_picked" to "Not picked up", "missed" to "Missed their call", "never" to "Never called",
+                    "tried3" to "Tried 3+, never talked").forEach { (k, l) -> FilterChip(f.lastCall == k, { f = f.copy(lastCall = k) }, { Text(l) }) }
+            }
+            Section("WhatsApp") {
+                listOf("any" to "Any", "yes" to "Messaged", "no" to "Not messaged").forEach { (k, l) -> FilterChip(f.messaged == k, { f = f.copy(messaged = k) }, { Text(l) }) }
+                FilterChip(f.hot, { f = f.copy(hot = !f.hot) }, { Text("⚡ Close to converting") })
+            }
+            vm.membership?.organization?.tagGroups?.forEach { g ->
+                Section(g.name) { g.tags.forEach { t -> FilterChip(t in f.tags, { f = f.copy(tags = f.tags.flip(t)) }, { Text(t) }) } }
             }
             enabled.forEach { key ->
                 when {

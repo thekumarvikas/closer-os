@@ -106,6 +106,12 @@ fun ReportsScreen(vm: AppViewModel) {
         val calls = total.i("calls"); val conn = total.i("conn"); val out = total.i("out")
         LazyColumn(contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { vm.showLeadWork = true }, modifier = Modifier.weight(1f)) { Text("📈 Lead work") }
+                    OutlinedButton(onClick = { vm.showRecipe = true }, modifier = Modifier.weight(1f)) { Text("💡 What works") }
+                }
+            }
+            item {
                 val tiles = listOf(
                     "All calls" to "$calls", "Dialled" to "$out", "Received" to "${total.i("inc")}", "Conversations" to "$conn",
                     "Conversation rate" to (if (calls > 0) "${conn * 100 / calls}%" else "—"), "No answer" to "${total.i("not_picked")}",

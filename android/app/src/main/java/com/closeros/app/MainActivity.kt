@@ -1,5 +1,13 @@
 package com.closeros.app
 
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.background
+import androidx.compose.ui.unit.dp
 import android.app.Application
 import android.content.Intent
 import android.os.Bundle
@@ -108,6 +116,11 @@ fun Root(vm: AppViewModel) {
         vm.message?.let { Toast.makeText(ctx, it, Toast.LENGTH_SHORT).show(); vm.message = null }
     }
 
+    // Back always closes the screen on top (inner screens with their own Back handling still go first).
+    val secondary = vm.showWaToday || vm.showLeadWork || vm.showRecipe || vm.showPlaybook || vm.showFeedback || vm.showDialer || vm.showReports ||
+        vm.showLeaderboard || vm.openLeadId != null || vm.genericList != null || vm.openList != null || vm.showBatches || vm.todayFilter != null
+    androidx.activity.compose.BackHandler(enabled = secondary && vm.pending == null) { vm.closeTop() }
+    WaChooseDialog(vm)
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         when {
             vm.status is SessionStatus.Initializing -> Loading()
@@ -120,24 +133,28 @@ fun Root(vm: AppViewModel) {
             vm.showSetup -> SetupChecklistScreen(vm) { vm.showSetup = false }
             vm.pending != null -> OutcomeScreen(vm)
             vm.announcements.isNotEmpty() -> AnnouncementScreen(vm, vm.announcements.first())
+            vm.waActive -> WaQueueScreen(vm)
             vm.showPlaybook -> PlaybookScreen(vm)
             vm.showFeedback -> FeedbackScreen(vm)
             vm.showDialer -> DialerScreen(vm)
+            vm.openLeadId != null -> vm.openLeadId?.let { id -> LeadDetailScreen(vm, id) { call(it) } }
+            vm.genericList != null -> LeadListScreen(vm) { call(it) }
+            vm.showLeadWork -> LeadWorkScreen(vm)
+            vm.showRecipe -> RecipeScreen(vm)
+            vm.showWaToday -> WaTodayScreen(vm)
             vm.showReports -> ReportsScreen(vm)
             vm.showLeaderboard -> LeaderboardScreen(vm)
-            vm.openLeadId != null -> vm.openLeadId?.let { id -> LeadDetailScreen(vm, id) { call(it) } }
             vm.queueActive -> QueueScreen(vm)
             vm.openList != null -> BatchListScreen(vm)
             vm.showBatches -> BatchesScreen(vm)
             vm.todayFilter != null -> vm.todayFilter?.let { f -> TodayListScreen(vm, f) }
             else -> { TripleBackToExit(vm); Scaffold(floatingActionButton = {
                 // Dial pad is always one tap away, on every tab.
-                if (vm.tab != Tab.Profile && !vm.selectMode) FloatingActionButton(onClick = { vm.showDialer = true }, containerColor = androidx.compose.ui.graphics.Color(0xFF16A34A),
-                    contentColor = androidx.compose.ui.graphics.Color.White) { Text("☎", fontSize = 26.sp) }
+                if (vm.tab != Tab.Profile && !vm.selectMode) SmallDialFab { vm.showDialer = true }
             }, bottomBar = {
                 NavigationBar {
                     listOf(Triple(Tab.Home, "Home", Icons.Default.Home), Triple(Tab.Leads, "Leads", Icons.Default.Phone), Triple(Tab.Calls, "Calls", Icons.Default.List),
-                        Triple(Tab.FollowUps, "Follow-ups", Icons.Default.DateRange), Triple(Tab.Profile, "Profile", Icons.Default.Person)).forEach { (t, label, icon) ->
+                        Triple(Tab.FollowUps, "Follow-ups", Icons.Default.DateRange), Triple(Tab.Profile, "Settings", Icons.Default.Settings)).forEach { (t, label, icon) ->
                         NavigationBarItem(selected = vm.tab == t, onClick = { vm.tab = t }, icon = { Icon(icon, null) }, label = { Text(label) })
                     }
                 }
@@ -194,3 +211,15 @@ private fun TripleBackToExit(vm: AppViewModel) {
 
 @Composable
 private fun Loading() = Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+
+/** Dial pad button: the app's own teal, a clean white keypad (3×3 dots). */
+@Composable
+private fun SmallDialFab(onClick: () -> Unit) {
+    FloatingActionButton(onClick = onClick, containerColor = com.closeros.app.ui.Brand.primary, contentColor = androidx.compose.ui.graphics.Color.White,
+        shape = androidx.compose.foundation.shape.CircleShape, modifier = Modifier.size(52.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            repeat(3) { Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) { repeat(3) {
+                Box(Modifier.size(4.5.dp).background(androidx.compose.ui.graphics.Color.White, androidx.compose.foundation.shape.CircleShape)) } } }
+        }
+    }
+}

@@ -63,6 +63,17 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
     LaunchedEffect(choices) { if (outcome != null && choices.none { it.id == outcome?.id }) outcome = null }
     var next by remember { mutableStateOf<ZonedDateTime?>(null) }
     var noFollow by remember { mutableStateOf(false) }
+    // Each outcome suggests its next step (e.g. Busy → in 1 hour, Not interested → no follow-up).
+    LaunchedEffect(outcome) {
+        val o = outcome ?: return@LaunchedEffect
+        val opts = quickTimes(zone)
+        when (o.next_default) {
+            "none" -> { noFollow = true; next = null }
+            "30d" -> { noFollow = false; next = ZonedDateTime.now(zone).toLocalDate().plusDays(30).atTime(11, 0).atZone(zone) }
+            null, "pick" -> { noFollow = false; next = null }
+            else -> opts.firstOrNull { it.first == o.next_default }?.let { noFollow = false; next = it.third }
+        }
+    }
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     // Step 2 after saving (or the WhatsApp button): pick a message right on the card.
@@ -109,7 +120,7 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
                     }
                     Text("Next call", fontWeight = FontWeight.SemiBold)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        quickTimes(zone).forEach { (label, t) -> PopChip(label, !noFollow && next == t) { next = t; noFollow = false } }
+                        quickTimes(zone).forEach { (_, label, t) -> PopChip(label, !noFollow && next == t) { next = t; noFollow = false } }
                         PopChip("No follow-up", noFollow) { noFollow = true; next = null }
                         PopChip("Other time…", false) { fullForm(if (lead == null) "add" else "outcome") }
                     }
@@ -173,17 +184,17 @@ private fun callLine(c: LogCall) = when {
     else -> "Not answered"
 }
 
-/** A handful of one-tap next-call times (the full form has every 30-minute slot). */
-private fun quickTimes(zone: ZoneId): List<Pair<String, ZonedDateTime>> {
+/** One-tap next-call times on the card (same order as the app): in 30 min / 1 / 2 / 3 h, today 6 PM, tomorrow, day after. */
+private fun quickTimes(zone: ZoneId): List<Triple<String, String, ZonedDateTime>> {
     val now = ZonedDateTime.now(zone).withSecond(0).withNano(0)
     val today = now.toLocalDate()
-    val out = mutableListOf("In 1 hour" to now.plusHours(1))
+    val out = mutableListOf(Triple("30m", "In 30 min", now.plusMinutes(30)), Triple("1h", "1 hour", now.plusHours(1)),
+        Triple("2h", "2 hours", now.plusHours(2)), Triple("3h", "3 hours", now.plusHours(3)))
     val evening = today.atTime(18, 0).atZone(zone)
-    if (evening.isAfter(now.plusMinutes(90))) out += "Today 6 PM" to evening
-    out += "Tomorrow 11 AM" to today.plusDays(1).atTime(11, 0).atZone(zone)
-    out += "Tomorrow 6 PM" to today.plusDays(1).atTime(18, 0).atZone(zone)
+    if (evening.isAfter(now.plusMinutes(90))) out += Triple("today", "Today 6 PM", evening)
+    out += Triple("tomorrow", "Tomorrow 11 AM", today.plusDays(1).atTime(11, 0).atZone(zone))
     val d2 = today.plusDays(2)
-    out += "${d2.format(DateTimeFormatter.ofPattern("EEE"))} 11 AM" to d2.atTime(11, 0).atZone(zone)
+    out += Triple("2d", "${d2.format(DateTimeFormatter.ofPattern("EEE"))} 11 AM", d2.atTime(11, 0).atZone(zone))
     return out
 }
 
@@ -258,6 +269,7 @@ private fun WhatsAppStep(info: AfterCall.Info, savedLine: String?, sending: Bool
     val mine = co.templates.filter { it.owner_id != null }
     fun send(t: com.closeros.app.data.Template) {
         val text = fillTemplateText(t.body, lead, co.name, co.timezone, co.repName)
+        scope.launch { Repo.logWa(co.orgId, lead.id.ifBlank { null }, number, t.id, t.name, "popup"); com.closeros.app.data.AppEvents.bumpLeads() }
         val path = t.media_path
         if (path == null) { onClose(); PhoneCalls.whatsapp(ctx, number, text); return }
         onSending(true)

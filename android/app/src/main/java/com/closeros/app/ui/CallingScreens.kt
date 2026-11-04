@@ -104,6 +104,9 @@ fun HomeScreen(vm: AppViewModel) {
             data class Next(val title: String, val sub: String?, val urgent: Boolean, val go: () -> Unit)
             val next = when {
                 vm.queueActive -> Next("Continue calling · ${vm.queuePos + 1} of ${vm.queue.size}", "Your calling queue is paused", false) { vm.queueResume() }
+                vm.focusTotal > 0 -> Next("Start today's focus · ${vm.focusTotal}",
+                    (if (overdue > 0) "Incl. $overdue overdue follow-up${if (overdue > 1) "s" else ""} · " else "") + "${vm.focusDone} done today · tap here to see the list",
+                    overdue > 0) { vm.startFocusQueue() }
                 overdue > 0 -> Next("Call $overdue overdue follow-up${if (overdue > 1) "s" else ""}", "${dueToday.size} due in the next 24 hours", true) { vm.startFollowUpQueue() }
                 upcoming != null -> Next("Reminder calls · ${upcoming.name}", "Starts ${ms(upcoming.webinar_at)?.let { fmt.format(Instant.ofEpochMilli(it)) } ?: ""} · ${upcoming.reminder_mine} leads", false) { vm.openBatchList(upcoming, "reminder") }
                 dueToday.isNotEmpty() -> Next("Call ${dueToday.size} follow-up${if (dueToday.size > 1) "s" else ""} due", "In the next 24 hours", false) { vm.startFollowUpQueue() }
@@ -114,7 +117,11 @@ fun HomeScreen(vm: AppViewModel) {
                     colors = ButtonDefaults.buttonColors(containerColor = if (next.urgent) Color(0xFFDC2626) else Color.White, contentColor = if (next.urgent) Color.White else Brand.primaryDark)) {
                     Icon(Icons.Default.Call, null); Spacer(Modifier.width(8.dp)); Text(next.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                 }
-                next.sub?.let { Text(it, color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp, modifier = Modifier.clickable { vm.tab = Tab.FollowUps }) }
+                next.sub?.let { Text(it, color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp, modifier = Modifier.clickable { if (vm.focusTotal > 0 && !vm.queueActive) vm.openFocusList() else vm.tab = Tab.FollowUps }) }
+                upcoming?.takeIf { vm.focusTotal > 0 && !vm.queueActive }?.let { u ->
+                    Text("🎓 Reminder calls · ${u.name} (${u.reminder_mine}) ›", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clickable { vm.openBatchList(u, "reminder") })
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     HeroLink("📋 Pick leads", Modifier.weight(1f)) { vm.selectMode = true; vm.tab = Tab.Leads }
                     HeroLink("📅 Follow-ups${if (dueToday.isNotEmpty()) " (${dueToday.size})" else ""}", Modifier.weight(1f)) { vm.tab = Tab.FollowUps }
@@ -134,16 +141,22 @@ fun HomeScreen(vm: AppViewModel) {
                         Text("Today", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                         Text(if (moreTiles) "Less ‹" else "More ›", color = Brand.primary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable { moreTiles = !moreTiles })
                     }
-                    val shown = if (moreTiles) tiles else tiles.filter { it.key in setOf("dialled", "conversations", "talk", "leads") }
-                    shown.chunked(4).forEach { row ->
+                    // Interactions = calls dialled + received + WhatsApp sent from Closer OS (tap: today's messages).
+                    val interactions = vm.today.count { it.log.direction == "outgoing" || it.log.direction == "incoming" } + vm.waToday.size
+                    val keyTiles = listOf("talk", "dialled", "conversations")
+                    val shown = (if (moreTiles) tiles.filter { it.key !in keyTiles } else emptyList())
+                    (listOf<Any>("interactions") + tiles.filter { it.key in keyTiles }.sortedBy { keyTiles.indexOf(it.key) } + shown).chunked(4).forEach { row ->
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            row.forEach { t ->
-                                val v = t.value(vm.today)
-                                val tg = target(t.key)
-                                Column(Modifier.weight(1f).background(Color(0xFFF8FAFC), RoundedCornerShape(10.dp)).clickable { vm.todayFilter = t.key }.padding(8.dp)) {
-                                    Text(v, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = if (t.bad && v != "0") Brand.red else Color(0xFF0F172A), maxLines = 1)
-                                    Text(t.short, fontSize = 11.sp, color = Brand.muted, maxLines = 1)
-                                    if (tg != null) {
+                            row.forEach { any ->
+                                val t = any as? TileDef
+                                val v = t?.value?.invoke(vm.today) ?: interactions.toString()
+                                val tg = t?.let { target(it.key) }
+                                Column(Modifier.weight(1f).background(Color(0xFFF8FAFC), RoundedCornerShape(10.dp))
+                                    .clickable { if (t == null) vm.showWaToday = true else vm.todayFilter = t.key }.padding(8.dp)) {
+                                    Text(v, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = if (t?.bad == true && v != "0") Brand.red else Color(0xFF0F172A), maxLines = 1)
+                                    Text(t?.short ?: "Interactions", fontSize = 11.sp, color = Brand.muted, maxLines = 1)
+                                    if (t == null && vm.waToday.isNotEmpty()) Text("${vm.waToday.size} WhatsApp", fontSize = 10.sp, color = Color(0xFF16A34A))
+                                    if (t != null && tg != null) {
                                         val pct = (actual(t.key).toFloat() / tg).coerceIn(0f, 1f)
                                         LinearProgressIndicator(progress = { pct }, Modifier.fillMaxWidth().padding(top = 4.dp).height(4.dp),
                                             color = if (pct >= 1f) Color(0xFF10B981) else if (pct >= 0.7f) Color(0xFFF59E0B) else Brand.primary, trackColor = Color(0xFFE2E8F0))
@@ -155,6 +168,18 @@ fun HomeScreen(vm: AppViewModel) {
                         }
                     }
                     p?.target?.sales?.takeIf { it > 0 }?.let { st -> Text("Sales today: ${p.actual.sales ?: 0} of $st", fontSize = 12.sp, color = Brand.muted) }
+                    // This month's talk time against the month target (working days set by management) — "on pace" vs where you should be by today.
+                    val mf = vm.monthFull; val md = vm.monthToDate
+                    val fullT = mf?.target?.talk_minutes ?: 0
+                    if (fullT > 0 && md != null) {
+                        val done = md.actual.talk_minutes ?: 0; val due = md.target.talk_minutes ?: 0
+                        val pace = done - due
+                        Text("This month: ${done / 60}h ${done % 60}m of ${fullT / 60}h · day ${md.work_days} of ${mf?.work_days ?: 0} · " +
+                            (if (pace >= 0) "on pace ✓" else "${(-pace) / 60}h ${(-pace) % 60}m behind"),
+                            fontSize = 12.sp, color = if (pace >= 0) Color(0xFF059669) else Color(0xFF92400E))
+                        LinearProgressIndicator(progress = { (done.toFloat() / fullT).coerceIn(0f, 1f) }, Modifier.fillMaxWidth().height(4.dp),
+                            color = Brand.primary, trackColor = Color(0xFFE2E8F0))
+                    }
                 }
             }
         }
@@ -176,6 +201,8 @@ fun HomeScreen(vm: AppViewModel) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ToolTile("📖", "Playbook", Modifier.weight(1f)) { vm.openPlaybook(null) }
                 ToolTile("📊", if (vm.isManager) "Reports" else "My reports", Modifier.weight(1f)) { vm.showReports = true }
+                ToolTile("📈", "Lead work", Modifier.weight(1f)) { vm.showLeadWork = true }
+                ToolTile("💡", "What works", Modifier.weight(1f)) { vm.showRecipe = true }
                 if (vm.reviews.isNotEmpty()) ToolTile("🎯", "Feedback", Modifier.weight(1f)) { vm.showFeedback = true }
             }
         }
@@ -272,7 +299,7 @@ fun HistoryRow(vm: AppViewModel, h: HistoryItem, onAdd: (() -> Unit)? = null, co
     }
     Column(Modifier.fillMaxWidth().clickable { open = !open }.padding(start = 4.dp, top = 6.dp, bottom = 6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(arrow, color = arrowColor, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(26.dp))
+            Text(arrow, color = arrowColor, fontSize = 21.sp, fontWeight = FontWeight.Black, modifier = Modifier.width(28.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(name + if (count > 1) "  ($count)" else "", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -285,6 +312,8 @@ fun HistoryRow(vm: AppViewModel, h: HistoryItem, onAdd: (() -> Unit)? = null, co
                     h.log.simSlot?.takeIf { twoSims && h.log.channel == "phone" }?.let { "SIM $it" }).joinToString(" · "),
                     fontSize = 12.sp, color = if (missed) Brand.red else Brand.muted, maxLines = 1)
             }
+            val rec = vm.recordingPaths[h.log.id]
+            if (rec != null) IconButton(onClick = { open = true }, modifier = Modifier.size(36.dp)) { Text("▶", color = Brand.primary, fontSize = 16.sp, fontWeight = FontWeight.Bold) }
             if (h.phone.isNotBlank()) {
                 IconButton(onClick = { wa = true }, modifier = Modifier.size(40.dp)) { Icon(Icons.Default.Send, "WhatsApp", tint = Color(0xFF16A34A), modifier = Modifier.size(20.dp)) }
                 IconButton(onClick = {
@@ -293,6 +322,7 @@ fun HistoryRow(vm: AppViewModel, h: HistoryItem, onAdd: (() -> Unit)? = null, co
                 }, modifier = Modifier.size(40.dp)) { Icon(Icons.Default.Call, "Call", tint = Brand.primary, modifier = Modifier.size(22.dp)) }
             }
         }
+        if (open) vm.recordingPaths[h.log.id]?.let { p -> Box(Modifier.padding(start = 28.dp)) { RecordingPlayer(h.log.id, p) } }
         if (open && h.phone.isNotBlank()) Row(Modifier.padding(start = 26.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             TextButton(onClick = { PhoneCalls.sms(ctx, h.phone) }) { Text("✉️ SMS") }
             if (h.lead != null) TextButton(onClick = { vm.openLeadId = h.lead.id }) { Text("👤 Open lead") }
@@ -380,6 +410,7 @@ fun leadTags(vm: AppViewModel, l: Lead): List<Tag> {
     if (b != null && (b.watch_minutes ?: 0) >= 60) out += Tag("🔥 Hot · ${b.watch_minutes} min", Color(0xFFFFEDD5), Color(0xFF9A3412))
     if (l.do_not_call) out += Tag("Do not call", Color(0xFFFEE2E2), Color(0xFF991B1B))
     if (l.source == "Phone call") out += Tag("Added from a call", Color(0xFFFEF3C7), Color(0xFF92400E))
+    if (l.score >= 40 && l.won_at == null) out += Tag("⚡ Close to converting", Color(0xFFFEF3C7), Color(0xFF92400E))
     return out
 }
 
@@ -394,16 +425,18 @@ fun LeadCard(vm: AppViewModel, l: Lead, onCall: ((Lead) -> Unit)?) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(l.name.ifBlank { "No name" }, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(fmtPhone(l.phone), fontSize = 13.sp, color = Brand.muted)
-                listOfNotNull(l.company?.takeIf { it.isNotBlank() }, l.profession?.takeIf { it.isNotBlank() }, l.city?.takeIf { it.isNotBlank() })
-                    .joinToString(" · ").takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                Text(listOfNotNull(fmtPhone(l.phone), l.company?.takeIf { it.isNotBlank() }, l.profession?.takeIf { it.isNotBlank() }, l.city?.takeIf { it.isNotBlank() })
+                    .joinToString(" · "), fontSize = 13.sp, color = Brand.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 l.latestBatch?.let { b ->
                     Text("${b.batch?.name ?: "Webinar"} · " + when { b.watch_minutes == null -> "attendance not uploaded"; b.watch_minutes > 0 -> "watched ${b.watch_minutes} min"; else -> "didn't join" },
                         fontSize = 12.sp, color = Brand.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
+                // Effort so far in one line: talk time, calls (real pick-ups), WhatsApp sent, last outcome.
                 val last = listOfNotNull(
-                    l.last_connected_at?.let { "Last talked ${fmtWhen(it)}" } ?: l.last_call_at?.let { "Last called ${fmtWhen(it)}" },
-                    vm.outcomes.firstOrNull { it.id == l.last_outcome_id }?.label,
+                    l.total_talk_sec.takeIf { it > 0 }?.let { "Talked ${fmtDur(it)}" },
+                    l.dial_count.takeIf { it > 0 }?.let { "$it call${if (it > 1) "s" else ""} (${l.pickup_count} picked)" },
+                    l.wa_count.takeIf { it > 0 }?.let { "$it WA" },
+                    vm.outcomes.firstOrNull { it.id == l.last_outcome_id }?.label ?: l.last_call_at?.let { "Last called ${fmtWhen(it)}" },
                 ).joinToString(" · ")
                 if (last.isNotEmpty()) Text(last, fontSize = 12.sp, color = Brand.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 l.next_follow_up_at?.let { Text("Next call: ${fmtWhen(it)}", fontSize = 12.sp, color = Brand.primary) }
@@ -433,6 +466,7 @@ fun WhatsAppPicker(vm: AppViewModel, lead: Lead, onDismiss: () -> Unit) {
     var saveName by remember { mutableStateOf("") }
     var picked by remember { mutableStateOf<CompanyMedia?>(null) }   // company file: from a template or the file library
     var showFiles by remember { mutableStateOf(false) }
+    var chosen by remember { mutableStateOf<com.closeros.app.data.Template?>(null) }   // which saved message (for the record)
     var ownMedia by remember { mutableStateOf<android.net.Uri?>(null) }               // photo/video chosen on the phone
     var sending by remember { mutableStateOf(false) }
     val chooseMedia = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.GetContent()) { u -> if (u != null) ownMedia = u }
@@ -440,7 +474,7 @@ fun WhatsAppPicker(vm: AppViewModel, lead: Lead, onDismiss: () -> Unit) {
     val company = vm.templates.filter { it.owner_id == null }
     val mine = vm.templates.filter { it.owner_id != null }
     fun pick(t: com.closeros.app.data.Template) {
-        text = vm.fillTemplate(t.body, lead); ownMedia = null
+        text = vm.fillTemplate(t.body, lead); ownMedia = null; chosen = t
         picked = t.media_path?.let { CompanyMedia(it, t.media_type, t.media_name) }
     }
     AlertDialog(onDismissRequest = onDismiss,
@@ -482,6 +516,7 @@ fun WhatsAppPicker(vm: AppViewModel, lead: Lead, onDismiss: () -> Unit) {
         confirmButton = {
             if (text != null) Button(enabled = !sending, onClick = {
                 val t = picked; val own = ownMedia; val msg = text ?: return@Button
+                vm.logWaSend(lead, chosen)   // counted as an interaction on this lead
                 when {
                     own != null -> { PhoneCalls.whatsappMedia(ctx, lead.phone, own, ctx.contentResolver.getType(own) ?: "*/*", msg); onDismiss() }
                     t != null -> { sending = true; scope.launch {

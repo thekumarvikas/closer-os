@@ -176,8 +176,11 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
                     Button(onClick = { onCall(l) }, modifier = Modifier.weight(1f).height(52.dp)) {
                         Icon(Icons.Default.Call, null); Spacer(Modifier.width(6.dp)); Text("Call")
                     }
-                    OutlinedButton(onClick = { waOpen = true }, modifier = Modifier.weight(1f).height(52.dp)) {
-                        Icon(Icons.Default.Send, null); Spacer(Modifier.width(6.dp)); Text("WhatsApp")
+                    OutlinedButton(onClick = { waOpen = true }, modifier = Modifier.weight(1f).height(52.dp), contentPadding = PaddingValues(horizontal = 8.dp)) {
+                        Icon(Icons.Default.Send, null, tint = Color(0xFF16A34A)); Spacer(Modifier.width(4.dp)); Text("WhatsApp")
+                    }
+                    OutlinedButton(onClick = { PhoneCalls.sms(ctx, l.phone) }, modifier = Modifier.weight(0.7f).height(52.dp), contentPadding = PaddingValues(horizontal = 8.dp)) {
+                        Text("✉️ SMS")
                     }
                 }
                 if (l.do_not_call) Row(verticalAlignment = Alignment.CenterVertically) {
@@ -186,6 +189,7 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
                 }
                 TextButton(onClick = { vm.openPlaybook(l) }) { Text("📖 Script, objection answers & links") }
             }
+            item { EffortCard(vm, l) }
             item { KeyFactsCard(l) { t -> lead = l.copy(key_facts = t) } }
             if (!l.notes.isNullOrBlank()) item {
                 Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {

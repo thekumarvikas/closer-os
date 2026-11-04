@@ -164,6 +164,11 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Call the filtered, sorted list one after another; every call is tagged with this webinar. */
+    fun waList(rows: List<BatchRow>) {
+        val (b, _) = openList ?: return
+        waChooseFor = rows.map { it.toLead(b.name, b.webinar_at) }
+    }
+
     fun callList(rows: List<BatchRow>) {
         val (b, purpose) = openList ?: return
         startQueue(rows.map { it.toLead(b.name, b.webinar_at) }, purpose, b.id)
@@ -252,6 +257,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         checkAlerts()
         loadToday()
         loadBatches(quiet = true)
+        loadRound9()
     }
 
     fun loadToday() = viewModelScope.launch {
@@ -342,6 +348,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         // Instantly from the phone's own copy of the leads, then confirmed by the server.
         val local = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { phones.distinct().mapNotNull { p -> com.closeros.app.data.LeadIndex.find(ctx, p)?.let { p to it } }.toMap() }
         history = logs.mapIndexed { i, l -> HistoryItem(l, phones[i], local[phones[i]]) }
+        loadRecordings(logs.filter { it.durationSec > 0 }.map { it.id })
         runCatching { Repo.leadsByPhones(m.org_id, phones) }.onSuccess { server ->
             com.closeros.app.data.LeadIndex.remember(ctx, server.values)
             history = logs.mapIndexed { i, l -> HistoryItem(l, phones[i], server[phones[i]]) }
@@ -411,6 +418,156 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ───────────── Round 9: lists, WhatsApp queue, focus, month targets, recordings ─────────────
+    /** A list of leads opened from a report number or "Today's focus" (title + leads). */
+    var genericList by mutableStateOf<Pair<String, List<Lead>>?>(null)
+    var showWaToday by mutableStateOf(false)
+    var showLeadWork by mutableStateOf(false)
+    var showRecipe by mutableStateOf(false)
+    /** WhatsApp messages I sent from the app today. */
+    var waToday by mutableStateOf<List<kotlinx.serialization.json.JsonObject>>(emptyList())
+    var focusTotal by mutableStateOf(0)
+    var focusDone by mutableStateOf(0)
+    /** This month: whole-month target and target/actual up to today (talk time "on pace"). */
+    var monthFull by mutableStateOf<com.closeros.app.data.Progress?>(null)
+    var monthToDate by mutableStateOf<com.closeros.app.data.Progress?>(null)
+    /** My usual effort per sale (for the effort bar on leads). */
+    var recipe by mutableStateOf<kotlinx.serialization.json.JsonObject?>(null)
+    /** call id → recording path for the calls shown in the Calls tab. */
+    var recordingPaths by mutableStateOf<Map<String, String>>(emptyMap())
+
+    fun loadRound9() = viewModelScope.launch {
+        val m = membership ?: return@launch
+        val zone = runCatching { java.time.ZoneId.of(m.organization.timezone) }.getOrDefault(java.time.ZoneId.systemDefault())
+        val today = java.time.LocalDate.now(zone)
+        kotlinx.coroutines.coroutineScope {
+            launch { runCatching { waToday = Repo.myWaToday(m.org_id).let { it as kotlinx.serialization.json.JsonArray }.map { it as kotlinx.serialization.json.JsonObject } } }
+            launch { runCatching { val f = Repo.focusList(m.org_id, 1, 0) as kotlinx.serialization.json.JsonObject
+                focusTotal = f["total"]?.toString()?.toIntOrNull() ?: 0; focusDone = f["done_today"]?.toString()?.toIntOrNull() ?: 0 } }
+            launch { runCatching { monthFull = Repo.myProgress(m.organization, today.withDayOfMonth(1), today.withDayOfMonth(today.lengthOfMonth())) } }
+            launch { runCatching { monthToDate = Repo.myProgress(m.organization, today.withDayOfMonth(1), today) } }
+            launch { runCatching { recipe = (Repo.salesRecipe(m.org_id, listOfNotNull(Backend.uid), null, null) as kotlinx.serialization.json.JsonObject).let { r ->
+                (r["mine"] as? kotlinx.serialization.json.JsonObject) ?: (r["team"] as? kotlinx.serialization.json.JsonObject) } } }
+        }
+    }
+
+    fun loadRecordings(ids: List<String>) = viewModelScope.launch {
+        runCatching { recordingPaths = Repo.recordingPaths(ids.take(500)) }
+    }
+
+    /** Today's focus: every lead needing attention today, most important first, as a calling queue. */
+    fun startFocusQueue() = viewModelScope.launch {
+        val m = membership ?: return@launch
+        runCatching { Repo.focusList(m.org_id, 1000, 0) as kotlinx.serialization.json.JsonObject }
+            .onSuccess { f -> val rows = (f["rows"] as? kotlinx.serialization.json.JsonArray).orEmpty().mapNotNull { runCatching { com.closeros.app.data.json.decodeFromJsonElement(Lead.serializer(), it) }.getOrNull() }
+                if (rows.isEmpty()) message = "Nothing left in today's focus 👍" else startQueue(rows) }
+            .onFailure { message = "Couldn't load today's focus — check internet" }
+    }
+
+    fun openFocusList() = viewModelScope.launch {
+        val m = membership ?: return@launch
+        runCatching { Repo.focusList(m.org_id, 1000, 0) as kotlinx.serialization.json.JsonObject }
+            .onSuccess { f -> genericList = "Today's focus" to (f["rows"] as? kotlinx.serialization.json.JsonArray).orEmpty().mapNotNull { runCatching { com.closeros.app.data.json.decodeFromJsonElement(Lead.serializer(), it) }.getOrNull() } }
+            .onFailure { message = "Couldn't load — check internet" }
+    }
+
+    // WhatsApp queue: one message to many leads. The rep taps Send in WhatsApp; Closer OS marks it and opens the next.
+    var waQueue by mutableStateOf<List<Lead>>(emptyList())
+    var waPos by mutableStateOf(0)
+    var waTemplate by mutableStateOf<Template?>(null)
+    var waActive by mutableStateOf(false)
+    var waPaused by mutableStateOf(false)
+    var waCountdown by mutableStateOf<Int?>(null)
+    var waSent by mutableStateOf(0)
+    var waChooseFor by mutableStateOf<List<Lead>?>(null)   // leads waiting for the message choice
+    private var waAwaiting = false
+    private var waLastId: String? = null
+    var waCanUndo by mutableStateOf(false)
+
+    fun startWaQueue(leads: List<Lead>, t: Template) = viewModelScope.launch {
+        val m = membership ?: return@launch
+        var list = leads.filter { it.phone.isNotBlank() }.distinctBy { it.id }
+        val already = runCatching { Repo.waSentToday(m.org_id, t.id, list.map { it.id }) }.getOrDefault(emptySet())
+        if (already.isNotEmpty()) { list = list.filter { it.id !in already }; message = "${already.size} already got this message today — skipped" }
+        if (list.isEmpty()) { message = "Everyone in this list already got this message today"; return@launch }
+        waQueue = list; waPos = 0; waTemplate = t; waSent = 0; waPaused = false; waCountdown = null; waCanUndo = false; waActive = true
+        genericList = null; selectMode = false
+    }
+
+    /** Opens WhatsApp for the current lead with the message (and the message's file) ready. */
+    fun waOpenCurrent() = viewModelScope.launch {
+        val l = waQueue.getOrNull(waPos) ?: return@launch
+        val t = waTemplate ?: return@launch
+        val text = fillTemplate(t.body, l)
+        waCountdown = null; waAwaiting = true
+        val path = t.media_path
+        if (path == null) PhoneCalls.whatsapp(ctx, l.phone, text)
+        else runCatching {
+            val f = Repo.templateMediaFile(ctx, path, t.media_name)
+            PhoneCalls.whatsappMedia(ctx, l.phone, androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f), t.media_type ?: "*/*", text)
+        }.onFailure { message = "Couldn't get the attachment — sending the text only"; PhoneCalls.whatsapp(ctx, l.phone, text) }
+    }
+
+    /** Back from WhatsApp: mark it sent, then count down to the next lead. */
+    private fun waBackFromWhatsApp() = viewModelScope.launch {
+        if (!waAwaiting) return@launch
+        waAwaiting = false
+        val m = membership ?: return@launch
+        val l = waQueue.getOrNull(waPos) ?: return@launch
+        waLastId = Repo.logWa(m.org_id, l.id, l.phone, waTemplate?.id, waTemplate?.name, "queue")
+        waCanUndo = true; waSent++
+        waPos++
+        if (waPos >= waQueue.size) { waActive = false; message = "WhatsApp queue finished — $waSent sent"; com.closeros.app.data.AppEvents.bumpLeads(); return@launch }
+        if (!waPaused) waCountdown = 3
+    }
+
+    fun waUndo() = viewModelScope.launch {
+        val id = waLastId ?: return@launch
+        runCatching { Repo.undoWa(id) }.onSuccess { waLastId = null; waCanUndo = false; waSent = (waSent - 1).coerceAtLeast(0); waPos = (waPos - 1).coerceAtLeast(0); waCountdown = null; message = "Undone — not counted as sent" }
+    }
+    fun waSkip() { waCountdown = null; waCanUndo = false; waPos++; if (waPos >= waQueue.size) { waActive = false; message = "WhatsApp queue finished — $waSent sent" } }
+    fun waStop() { waActive = false; waCountdown = null; waAwaiting = false; message = "Stopped — $waSent sent"; com.closeros.app.data.AppEvents.bumpLeads() }
+
+    /** A single WhatsApp sent from a lead / call row / pop-up: counted as an interaction. */
+    fun logWaSend(lead: Lead, t: Template?, source: String = "single") = viewModelScope.launch {
+        val m = membership ?: return@launch
+        Repo.logWa(m.org_id, lead.id.ifBlank { null }, lead.phone, t?.id, t?.name ?: "Own message", source)
+        loadRound9()
+    }
+
+    fun openLeadsById(title: String, ids: List<String>) = viewModelScope.launch {
+        runCatching { Repo.leadsByIds(ids) }.onSuccess { genericList = title to it }.onFailure { message = "Couldn't load — check internet" }
+    }
+    fun openHotList() = viewModelScope.launch {
+        val m = membership ?: return@launch
+        runCatching { Repo.leads(m.org_id, "", 0, isRep(), com.closeros.app.data.LeadFilters(hot = true)) }
+            .onSuccess { genericList = "🔥 Close to converting" to it.sortedByDescending { l -> l.score } }
+    }
+
+    /** Back closes the screen on top (so Back never leaves the app from an inner screen). Returns false on the main tabs. */
+    fun closeTop(): Boolean {
+        when {
+            showWaToday -> showWaToday = false
+            showLeadWork && genericList == null && openLeadId == null -> showLeadWork = false
+            showRecipe && genericList == null && openLeadId == null -> showRecipe = false
+            showPlaybook -> showPlaybook = false
+            showFeedback -> showFeedback = false
+            showDialer -> showDialer = false
+            showReports && openLeadId == null && genericList == null && !showLeadWork && !showRecipe -> showReports = false
+            showLeaderboard -> showLeaderboard = false
+            openLeadId != null -> openLeadId = null
+            genericList != null -> genericList = null
+            showLeadWork -> showLeadWork = false
+            showRecipe -> showRecipe = false
+            showReports -> showReports = false
+            openList != null -> openList = null
+            showBatches -> showBatches = false
+            todayFilter != null -> todayFilter = null
+            else -> return false
+        }
+        return true
+    }
+
     /** A lead marked Do not call that the rep tried to call: asks before removing the mark. */
     var dncAsk by mutableStateOf<Lead?>(null)
 
@@ -464,6 +621,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Called when the app comes back to the front: look up the finished call in the call log. */
     fun onResume() {
+        if (waActive && waAwaiting) waBackFromWhatsApp()
         // Saved in the after-call pop-up while the app was in the background: move on.
         if (pending != null && store.pendingCall == null) {
             pending = null; pendingLog = null; endedReported = null

@@ -24,6 +24,8 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.intOrNull
@@ -74,11 +76,23 @@ object Backend {
     val settings: JsonObject? = null,
 ) {
     val trackWhatsapp get() = settings?.get("track_whatsapp")?.jsonPrimitive?.booleanOrNull ?: true
+    /** Tag groups (dashboard Settings → Note tags), e.g. Objection: Price · Time. Falls back to the flat tag list. */
+    val tagGroups: List<TagGroup> get() = runCatching {
+        settings?.get("tag_groups")?.jsonArray?.map { g -> val o = g.jsonObject
+            TagGroup(o["name"]?.jsonPrimitive?.content ?: "", o["color"]?.jsonPrimitive?.contentOrNull ?: "#0E5E57", o["tags"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty()) }
+    }.getOrNull()?.filter { it.tags.isNotEmpty() }?.ifEmpty { null } ?: listOf(TagGroup("Tags", "#0E5E57", noteTags))
+    /** Facts the company wants captured on each lead (short pick-lists), saved in leads.custom. */
+    val leadFacts: List<LeadFact> get() = runCatching {
+        settings?.get("lead_facts")?.jsonArray?.map { f -> val o = f.jsonObject
+            LeadFact(o["key"]!!.jsonPrimitive.content, o["label"]?.jsonPrimitive?.content ?: "", o["options"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty()) }
+    }.getOrNull().orEmpty().filter { it.key.isNotBlank() && it.options.isNotEmpty() }
     /** Quick note tags set by the company (Settings on the dashboard). */
     val noteTags: List<String> get() = runCatching { settings?.get("note_tags")?.jsonArray?.map { it.jsonPrimitive.content } }.getOrNull()
         ?: listOf("Price objection", "Wants EMI", "Needs to ask family", "Decision maker: spouse", "Busy — call in evening",
             "Asked for details on WhatsApp", "Comparing with others", "Very interested", "Already bought elsewhere")
 }
+data class TagGroup(val name: String, val color: String, val tags: List<String>)
+data class LeadFact(val key: String, val label: String, val options: List<String>)
 @Serializable data class Membership(val org_id: String, val role: String, val organization: Org)
 @Serializable data class Profile(val id: String, val email: String? = null, val full_name: String? = null, val phone: String? = null)
 
@@ -90,6 +104,10 @@ object Backend {
     val last_call_at: String? = null, val last_outcome_id: String? = null, val next_follow_up_at: String? = null,
     val do_not_call: Boolean = false, val last_connected_at: String? = null, val key_facts: String? = null,
     val batch_leads: List<BatchLink> = emptyList(),
+    // Effort so far (kept up to date by the server): talk time, dials, real pick-ups, WhatsApp sent, score.
+    val total_talk_sec: Int = 0, val dial_count: Int = 0, val pickup_count: Int = 0, val wa_count: Int = 0,
+    val last_call_status: String? = null, val has_talked: Boolean = false, val score: Int = 0, val won_at: String? = null,
+    val tags: List<String>? = null, val custom: JsonObject? = null, val created_at: String? = null,
 ) {
     /** Latest webinar/event this lead registered for. */
     val latestBatch: BatchLink? get() = batch_leads.maxByOrNull { it.batch?.webinar_at ?: "" }
@@ -102,7 +120,7 @@ object Backend {
 
 @Serializable data class Outcome(
     val id: String, val code: String, val label: String, val category: String, val form: String? = null,
-    val purpose: String = "sales", val position: Int = 0, val is_active: Boolean = true,
+    val purpose: String = "sales", val position: Int = 0, val is_active: Boolean = true, val next_default: String? = null,
 )
 
 /** A webinar / event with how many leads I (or my team) have to call. */
@@ -139,7 +157,7 @@ object Backend {
 )
 
 @Serializable data class Nums(val calls: Int? = null, val conversations: Int? = null, val talk_minutes: Int? = null, val sales: Int? = null)
-@Serializable data class Progress(val user_id: String, val target: Nums = Nums(), val actual: Nums = Nums())
+@Serializable data class Progress(val user_id: String, val target: Nums = Nums(), val actual: Nums = Nums(), val daily: Nums = Nums(), val work_days: Int = 0)
 @Serializable data class ProgressReport(val work_days: Int = 0, val rows: List<Progress> = emptyList())
 
 @Serializable data class PlaybookItem(
@@ -174,9 +192,14 @@ data class LeadFilters(
     val followup: String = "all", val stages: Set<String> = emptySet(), val outcomes: Set<String> = emptySet(), val sources: Set<String> = emptySet(),
     val campaigns: Set<String> = emptySet(), val cities: Set<String> = emptySet(), val categories: Set<String> = emptySet(),
     val neverCalled: Boolean = false, val custom: Map<String, Set<String>> = emptyMap(),
+    /** any | talked | not_picked | missed | never | tried3 (3+ dials, never talked) */
+    val lastCall: String = "any",
+    /** any | yes | no — WhatsApp sent from Closer OS */
+    val messaged: String = "any",
+    val hot: Boolean = false, val tags: Set<String> = emptySet(),
 ) {
-    val count get() = (if (followup != "all") 1 else 0) + listOf(stages, outcomes, sources, campaigns, cities, categories).count { it.isNotEmpty() } +
-        (if (neverCalled) 1 else 0) + custom.count { it.value.isNotEmpty() }
+    val count get() = (if (followup != "all") 1 else 0) + listOf(stages, outcomes, sources, campaigns, cities, categories, tags).count { it.isNotEmpty() } +
+        (if (neverCalled) 1 else 0) + custom.count { it.value.isNotEmpty() } + (if (lastCall != "any") 1 else 0) + (if (messaged != "any") 1 else 0) + (if (hot) 1 else 0)
 }
 
 @Serializable data class BoardRow(val user_id: String, val name: String = "", val calls: Int = 0, val conversations: Int = 0, val talk_sec: Int = 0, val sales: Int = 0)
@@ -263,6 +286,16 @@ object Repo {
                 if (f.cities.isNotEmpty()) or { f.cities.forEach { ilike("city", it.replace(",", "").trim()) } }
                 if (f.neverCalled) filter("last_call_at", FilterOperator.IS, "null")
                 f.custom.filterValues { it.isNotEmpty() }.forEach { (k, v) -> filter("custom->>$k", FilterOperator.IN, inList(v)) }
+                when (f.lastCall) {
+                    "talked" -> eq("has_talked", true)
+                    "not_picked" -> eq("last_call_status", "not_picked")
+                    "missed" -> eq("last_call_status", "missed")
+                    "never" -> eq("dial_count", 0)
+                    "tried3" -> { gte("dial_count", 3); eq("has_talked", false) }
+                }
+                when (f.messaged) { "yes" -> gt("wa_count", 0); "no" -> eq("wa_count", 0) }
+                if (f.hot) gte("score", 40)
+                if (f.tags.isNotEmpty()) filter("tags", FilterOperator.OV, "{" + f.tags.joinToString(",") { "\"" + it.replace("\"", "") + "\"" } + "}")
             }
             order("next_follow_up_at", Order.ASCENDING, nullsFirst = false)
             order("created_at", Order.DESCENDING)
@@ -443,6 +476,59 @@ object Repo {
             order("started_at", Order.DESCENDING)
             limit(20)
         }.decodeList()
+
+    // ── Round 9: WhatsApp sends, effort reports, focus list ──
+    private fun rpcJson(name: String, body: JsonObject): suspend () -> JsonElement = { json.parseToJsonElement(db.rpc(name, body).data) }
+    private fun uuids(v: Collection<String>) = buildJsonArray { v.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } }
+
+    /** Records a WhatsApp message sent from Closer OS (counts as an interaction). Returns its id (for Undo). */
+    suspend fun logWa(orgId: String, leadId: String?, phone: String, templateId: String?, templateName: String?, source: String): String? = runCatching {
+        Backend.client.from("wa_messages").insert(buildJsonObject {
+            put("org_id", orgId); leadId?.takeIf { it.isNotBlank() }?.let { put("lead_id", it) }; put("phone", phone)
+            templateId?.let { put("template_id", it) }; templateName?.let { put("template_name", it) }; put("source", source)
+        }) { select(Columns.raw("id")) }.decodeSingle<JsonObject>()["id"]?.jsonPrimitive?.content
+    }.getOrNull()
+
+    suspend fun undoWa(id: String) {
+        Backend.client.from("wa_messages").update(buildJsonObject { put("undone_at", Instant.now().toString()) }) { filter { eq("id", id) } }
+    }
+
+    suspend fun waSentToday(orgId: String, templateId: String, leadIds: List<String>): Set<String> =
+        json.decodeFromString<List<String>>(db.rpc("wa_sent_today", buildJsonObject { put("p_org", orgId); put("p_template", templateId); put("p_leads", uuids(leadIds)) }).data).toSet()
+
+    suspend fun myWaToday(orgId: String): JsonElement = rpcJson("my_wa_today", buildJsonObject { put("p_org", orgId) })()
+
+    /** call id → recording path, for the calls among [ids] that have a playable recording. */
+    suspend fun recordingPaths(ids: List<String>): Map<String, String> = if (ids.isEmpty()) emptyMap() else
+        json.decodeFromString<Map<String, String>>(db.rpc("call_recording_paths", buildJsonObject { put("p_ids", uuids(ids)) }).data)
+
+    suspend fun myProgress(org: Org, from: LocalDate, to: LocalDate): Progress? {
+        val uid = Backend.uid ?: return null
+        return targetsFor(org.id, from, to, listOf(uid)).rows.firstOrNull()
+    }
+
+    private fun period(orgId: String, users: List<String>?, from: LocalDate?, to: LocalDate?) = buildJsonObject {
+        put("p_org", orgId); put("p_users", users?.let { uuids(it) } ?: kotlinx.serialization.json.JsonNull)
+        put("p_from", from?.toString()?.let { kotlinx.serialization.json.JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull)
+        put("p_to", to?.toString()?.let { kotlinx.serialization.json.JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull)
+    }
+
+    suspend fun leadWorkReport(orgId: String, users: List<String>?, from: LocalDate?, to: LocalDate?): JsonElement =
+        json.parseToJsonElement(db.rpc("lead_work_report", period(orgId, users, from, to)).data)
+
+    suspend fun leadWorkList(orgId: String, users: List<String>?, from: LocalDate?, to: LocalDate?, kind: String, attempts: Int?, user: String?): List<Lead> =
+        json.decodeFromString(db.rpc("lead_work_list", JsonObject(period(orgId, users, from, to) + mapOf(
+            "p_kind" to kotlinx.serialization.json.JsonPrimitive(kind),
+            "p_attempts" to (attempts?.let { kotlinx.serialization.json.JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull),
+            "p_user" to (user?.let { kotlinx.serialization.json.JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull)))).data)
+
+    suspend fun salesRecipe(orgId: String, users: List<String>?, from: LocalDate?, to: LocalDate?): JsonElement =
+        json.parseToJsonElement(db.rpc("sales_recipe", period(orgId, users, from, to)).data)
+
+    suspend fun leadPath(leadId: String): JsonElement = json.parseToJsonElement(db.rpc("lead_path", buildJsonObject { put("p_lead", leadId) }).data)
+
+    suspend fun focusList(orgId: String, limit: Int, offset: Int): JsonElement =
+        json.parseToJsonElement(db.rpc("my_focus_list", buildJsonObject { put("p_org", orgId); put("p_limit", limit); put("p_offset", offset) }).data)
 
     suspend fun outcomes(orgId: String): List<Outcome> = Backend.client.from("call_outcomes").select {
         filter { eq("org_id", orgId); eq("is_active", true) }

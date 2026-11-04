@@ -47,6 +47,7 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
     var noFollow by remember { mutableStateOf(false) }
     var notes by remember { mutableStateOf("") }
     var noteTags by remember { mutableStateOf(emptyList<String>()) }
+    var factValues by remember { mutableStateOf(emptyMap<String, String>()) }
     var lead by remember { mutableStateOf<com.closeros.app.data.Lead?>(null) }
     LaunchedEffect(p.leadId) { lead = runCatching { com.closeros.app.data.Repo.lead(p.leadId) }.getOrNull() }
     var amount by remember { mutableStateOf("") }
@@ -64,6 +65,23 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
     val now = ZonedDateTime.now(zone)
     val today = now.toLocalDate()
     var day by remember { mutableStateOf<java.time.LocalDate?>(null) }
+    /** Which "in X" chip is chosen (times are counted from when this screen opened). */
+    var quick by remember { mutableStateOf<String?>(null) }
+    val base = remember { ZonedDateTime.now(zone).withSecond(0).withNano(0) }
+    // The outcome's suggested next step (set per outcome on the dashboard), e.g. Busy → in 1 hour.
+    LaunchedEffect(outcome) {
+        val o = outcome ?: return@LaunchedEffect
+        val t = ZonedDateTime.now(zone).toLocalDate()
+        quick = null; day = null; noFollow = false; followAt = null
+        when (o.next_default) {
+            "30m", "1h", "2h", "3h" -> quickIns.firstOrNull { it.first == o.next_default }?.let { (k, m, _) -> quick = k; followAt = base.plusMinutes(m) }
+            "today" -> day = t
+            "tomorrow" -> { day = t.plusDays(1); followAt = t.plusDays(1).atTime(11, 0).atZone(zone) }
+            "2d" -> { day = t.plusDays(2); followAt = t.plusDays(2).atTime(11, 0).atZone(zone) }
+            "30d" -> { day = t.plusDays(30); followAt = t.plusDays(30).atTime(11, 0).atZone(zone) }
+            "none" -> noFollow = true
+        }
+    }
     fun slotsFor(d: java.time.LocalDate): List<ZonedDateTime> = (0 until 26).map { i -> d.atTime(9, 0).plusMinutes(30L * i).atZone(zone) }
         .filter { it.isAfter(now.plusMinutes(10)) }
     fun pickOtherDate() {
@@ -125,14 +143,16 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
 
         Text("Next call", fontWeight = FontWeight.SemiBold)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            val inHour = now.plusHours(1).withSecond(0).withNano(0)
-            Chip("In 1 hour", !noFollow && followAt == inHour) { followAt = inHour; day = null; noFollow = false }
-            if (slotsFor(today).isNotEmpty()) Chip("Today", day == today && !noFollow) { day = today; followAt = null; noFollow = false }
-            Chip("Tomorrow", day == today.plusDays(1) && !noFollow) { day = today.plusDays(1); followAt = null; noFollow = false }
-            Chip(today.plusDays(2).format(DateTimeFormatter.ofPattern("EEE d MMM")), day == today.plusDays(2) && !noFollow) { day = today.plusDays(2); followAt = null; noFollow = false }
+            // One tap: in 30 min / 1 / 2 / 3 hours. Two taps: a day, then a 30-minute slot.
+            quickIns.forEach { (key, mins, label) ->
+                Chip(label, !noFollow && quick == key) { quick = key; followAt = base.plusMinutes(mins); day = null; noFollow = false }
+            }
+            if (slotsFor(today).isNotEmpty()) Chip("Today", day == today && !noFollow) { day = today; followAt = null; noFollow = false; quick = null }
+            Chip("Tomorrow", day == today.plusDays(1) && !noFollow) { day = today.plusDays(1); followAt = null; noFollow = false; quick = null }
+            Chip(today.plusDays(2).format(DateTimeFormatter.ofPattern("EEE d MMM")), day == today.plusDays(2) && !noFollow) { day = today.plusDays(2); followAt = null; noFollow = false; quick = null }
             val other = day?.takeIf { it.isAfter(today.plusDays(2)) }
             Chip(other?.format(DateTimeFormatter.ofPattern("EEE d MMM")) ?: "Other date", other != null && !noFollow) { pickOtherDate() }
-            Chip("No follow-up needed", noFollow) { noFollow = true; followAt = null; day = null }
+            Chip("No follow-up", noFollow) { noFollow = true; followAt = null; day = null; quick = null }
         }
         day?.let { d ->
             Text("Time on ${d.format(DateTimeFormatter.ofPattern("EEE d MMM"))}", fontSize = 13.sp, color = Brand.muted)
@@ -146,7 +166,17 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
         followAt?.let { Text("Next call: " + it.format(DateTimeFormatter.ofPattern("EEE d MMM, h:mm a")), color = Brand.primaryDark, fontWeight = FontWeight.SemiBold) }
 
         lead?.let { l -> KeyFactsCard(l) { t -> lead = l.copy(key_facts = t) } }
-        NoteEditor(notes, { notes = it }, noteTags, { noteTags = it }, vm.membership?.organization?.noteTags.orEmpty(), "Notes from this call")
+        // Facts the company wants on every lead (e.g. Budget, Decision maker): one tap each, saved on the lead.
+        val facts = vm.membership?.organization?.leadFacts.orEmpty()
+        facts.forEach { f ->
+            val cur = factValues[f.key] ?: lead?.custom?.get(f.key)?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
+            Text(f.label, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                f.options.forEach { o -> Chip(o, cur == o) { factValues = factValues + (f.key to o) } }
+            }
+        }
+        NoteEditor(notes, { notes = it }, noteTags, { noteTags = it }, emptyList(), "Notes from this call",
+            groups = vm.membership?.organization?.tagGroups.orEmpty())
 
         Button(onClick = {
             val o = outcome ?: return@Button
@@ -171,6 +201,8 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
                     if (noteTags.isNotEmpty()) put("note_tags", kotlinx.serialization.json.JsonArray(noteTags.map { kotlinx.serialization.json.JsonPrimitive(it) }))
                 })
                 if (notes.isNotBlank()) put("notes", notes.trim())
+                if (factValues.isNotEmpty()) put("lead_custom", buildJsonObject { factValues.forEach { (k, v) -> put(k, v) } })
+                if (noteTags.isNotEmpty()) put("lead_tags", kotlinx.serialization.json.JsonArray(noteTags.map { kotlinx.serialization.json.JsonPrimitive(it) }))
                 if (profession.isNotBlank() && profession.trim() != p.profession) put("profession", profession.trim())
                 if (categoryId != null && categoryId != p.categoryId) put("profession_category_id", categoryId)
                 if (noFollow) put("no_follow_up", true) else at?.let { put("follow_up_at", it.toInstant().toString()) }
@@ -218,3 +250,6 @@ fun outcomesFor(all: List<Outcome>, purpose: String, direction: String?, duratio
         else -> list.sortedBy { if (noContact(it)) 1 else 0 }
     }
 }
+
+/** One-tap next-call options: key, minutes from now, label. */
+val quickIns = listOf(Triple("30m", 30L, "In 30 min"), Triple("1h", 60L, "1 hour"), Triple("2h", 120L, "2 hours"), Triple("3h", 180L, "3 hours"))

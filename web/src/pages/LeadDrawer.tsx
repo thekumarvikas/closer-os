@@ -145,6 +145,7 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
                 </section>
               )}
 
+              <EffortSummary leadId={leadId} />
               <section className="rounded-lg border border-amber-200 bg-amber-50 p-3">
                 <h3 className="mb-1 text-sm font-semibold">📌 Key facts</h3>
                 {facts === null ? (
@@ -222,6 +223,24 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
           </>
         )}
       </div>
+    </div>
+  )
+}
+
+/** Effort so far — interactions, talk time, calls (real pick-ups), WhatsApp — and, once won, the path to the sale. */
+function EffortSummary({ leadId }: { leadId: string }) {
+  const [p, setP] = useState<Record<string, any> | null>(null)
+  useEffect(() => { supabase.rpc('lead_path', { p_lead: leadId }).then(({ data }) => setP(data as Record<string, any>)) }, [leadId])
+  const e = p?.effort as Record<string, any> | undefined
+  if (!e) return null
+  const n = (v: unknown) => v == null ? '–' : Number(v) % 1 === 0 ? String(Number(v)) : Number(v).toFixed(1)
+  return (
+    <div className={`rounded-lg p-3 text-sm ${e.won ? 'bg-emerald-50' : 'bg-slate-50'}`}>
+      <h3 className="mb-1 font-semibold">{e.won ? '💰 Path to sale' : 'Effort so far'}</h3>
+      <p>{e.calls + e.received + e.wa} interactions · {n(e.talk_min)} min talk · {e.calls} calls ({e.picked} picked up) · {e.received} received · {e.wa} WhatsApp</p>
+      <p className="text-xs text-slate-500">{[e.won && e.days != null && `Won in ${n(e.days)} days`, e.follow_ups ? `${e.follow_ups} follow-ups (${e.follow_ups_on_time} on time)` : null,
+        e.first_talk_dial && `first talk on dial ${e.first_talk_dial}`, e.category, e.source, e.watch_minutes != null && `webinar ${e.watch_minutes} min`].filter(Boolean).join(' · ')}</p>
+      {(p?.messages as any[])?.length > 0 && <p className="mt-1 text-xs text-slate-500">WhatsApp: {(p!.messages as any[]).slice(0, 3).map(m => m.template_name ?? 'message').join(' · ')}{(p!.messages as any[]).length > 3 ? ` · +${(p!.messages as any[]).length - 3} more` : ''}</p>}
     </div>
   )
 }

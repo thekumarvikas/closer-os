@@ -100,3 +100,8 @@ Everything from the original product prompt plus the owner's feedback, with stat
 - ✅ Company file library for WhatsApp (dashboard upload, app send) (v0.9.12)
 - ✅ All calls treated alike, "Not in lead list" tag; outcome on a new number adds the lead (v0.9.16)
 - ✅ Round 8: DNC remove with warning, real pick-up counting, outcomes by call type, minimalist Home + Calls, start tab (v0.9.19)
+- ✅ Round 9 (v0.10.0): WhatsApp assisted queue + send log, interactions, talk time per lead, path to sale,
+  what works (me/team/company), insights (what converts, speed to first call), lead work / dial-attempts
+  report, today's focus (unlimited), outcomes v2 with next steps, quick picks 30 min–3 h, tag groups +
+  facts, working calendar + monthly talk-time pace, recordings on call rows, Settings tab, Back fix
+- ⬜ "New · waiting" timer on lead cards, best-time-now queue order, per-rep daily focus target

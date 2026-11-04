@@ -18,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -130,7 +131,7 @@ fun applyPrefs(rows: List<BatchRow>, p: ListPrefs, hot: Int): List<BatchRow> {
     val filtered = rows.filter { r ->
         val w = r.watch_minutes ?: 0
         (when (p.attendance) { "hot" -> r.is_hot; "attended" -> w > 0; "low" -> w in 1 until hot; "absent" -> w == 0; else -> true }) &&
-        (when (p.status) { "new" -> r.attempts == 0; "not_talked" -> r.attempts > 0 && !r.talked; "talked" -> r.talked
+        (when (p.status) { "new" -> r.attempts == 0; "not_talked" -> r.attempts > 0 && !r.talked; "tried3" -> r.attempts >= 3 && !r.talked; "talked" -> r.talked
             "due" -> r.next_follow_up_at != null && r.next_follow_up_at <= now; else -> true }) &&
         (p.cats.isEmpty() || (r.category_id ?: "none") in p.cats) &&
         (p.outcomes.isEmpty() || (r.last_outcome_id ?: "none") in p.outcomes) &&
@@ -182,8 +183,13 @@ fun BatchListScreen(vm: AppViewModel) {
                             TextButton(onClick = { showFilters = !showFilters }) { Text(if (showFilters) "Done" else "Sort & filter") }
                         }
                         if (showFilters) FilterPanel(vm, rows, prefs, purpose, batch, ::update)
-                        Button(onClick = { vm.callList(shown) }, enabled = shown.isNotEmpty(), modifier = Modifier.fillMaxWidth().height(48.dp)) {
-                            Icon(Icons.Default.Call, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Call these ${shown.size} in order")
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { vm.callList(shown) }, enabled = shown.isNotEmpty(), modifier = Modifier.weight(1f).height(48.dp)) {
+                                Icon(Icons.Default.Call, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Call ${shown.size}")
+                            }
+                            OutlinedButton(onClick = { vm.waList(shown) }, enabled = shown.isNotEmpty(), modifier = Modifier.weight(1f).height(48.dp)) {
+                                Icon(Icons.Default.Send, null, Modifier.size(18.dp), tint = Color(0xFF16A34A)); Spacer(Modifier.width(6.dp)); Text("WhatsApp ${shown.size}")
+                            }
                         }
                     }
                 }
@@ -217,7 +223,7 @@ private fun FilterPanel(vm: AppViewModel, rows: List<BatchRow>, p: ListPrefs, pu
 
         Label("Calling status")
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("all" to "All", "new" to "Not called yet", "not_talked" to "Called, no talk", "talked" to "Talked", "due" to "Follow-up due")
+            listOf("all" to "All", "new" to "Not called yet", "not_talked" to "Not picked up", "tried3" to "Tried 3+, no talk", "talked" to "Talked", "due" to "Follow-up due")
                 .forEach { (k, l) -> Pill("$l (${count(rows, p.copy(status = k), batch.hot_minutes)})", p.status == k) { update(p.copy(status = k)) } }
         }
 

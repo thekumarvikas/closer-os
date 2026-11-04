@@ -13,7 +13,7 @@ export interface Member { org_id: string; user_id: string; role: Role; status: '
 export interface Team { id: string; org_id: string; name: string }
 export interface TeamMember { team_id: string; user_id: string; org_id: string; is_manager: boolean }
 export interface Stage { id: string; name: string; position: number; is_won: boolean; is_lost: boolean; is_active: boolean }
-export interface Outcome { id: string; code: string; label: string; category: string; form: string | null; position: number; is_active: boolean; purpose: 'sales' | 'reminder' | 'both' }
+export interface Outcome { id: string; code: string; label: string; category: string; form: string | null; position: number; is_active: boolean; purpose: 'sales' | 'reminder' | 'both'; next_default?: string | null }
 export interface Lead {
   id: string; org_id: string; name: string; phone: string; email: string | null
   city: string | null; state: string | null; country: string | null; company: string | null; profession: string | null; profession_category_id: string | null

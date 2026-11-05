@@ -115,7 +115,7 @@ class FollowUpReceiver : BroadcastReceiver() {
         val kind = if (purpose == "reminder") "Reminder call" else "Follow-up"
         // One glance: who, how late, what happened last time.
         val title = "$name · $status"
-        val line = listOfNotNull(outcome, countLine).joinToString(" · ")
+        val line = "⏰ $dueText · " + listOfNotNull(outcome, countLine).joinToString(" · ")
         val about = i.getStringExtra("about").orEmpty()
         val facts = i.getStringExtra("facts").orEmpty()
         val why = listOf(i.getStringExtra("reason").orEmpty(), i.getStringExtra("notes").orEmpty()).filter { it.isNotBlank() }.joinToString(" · ")
@@ -126,7 +126,7 @@ class FollowUpReceiver : BroadcastReceiver() {
             why.takeIf { it.isNotBlank() },
             if (offset >= 10) "Call within 5 minutes or it counts as late." else null,
         ).joinToString("\n")
-        val timeLine = "$kind · due $dueText" + (if (phone.isNotEmpty()) " · $phone" else "")
+        val timeLine = "⏰ Scheduled for $dueText · $kind" + (if (phone.isNotEmpty()) " · $phone" else "")
 
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         val open = PendingIntent.getActivity(ctx, fu.hashCode(),

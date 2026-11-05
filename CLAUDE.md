@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.10.9
+## Android app (`android/`) — v0.10.10
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -778,3 +778,4 @@ intelligence → Play Store launch.
   FollowUp.lead (LeadMini) now also carries last_outcome_id, key_facts, profession, city, total_talk_sec
   (alarm extras; outcome label from the cached outcomes). Call → MainActivity call_lead + fu_id
   (cancels that reminder) + purpose (reminder follow-ups call with purpose "reminder").
+- v0.10.10: scheduled time shown in both views ("⏰ 3:49 PM · …" closed; "⏰ Scheduled for 3:49 PM · Follow-up · number" opened).

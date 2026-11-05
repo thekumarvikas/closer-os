@@ -81,6 +81,8 @@ object CallSync {
         runCatching { TeamAlerts.check(ctx, orgId) }
         // 5) Refresh follow-up reminders.
         runCatching { FollowUpAlarms.scheduleAll(ctx, Repo.followUps(orgId)) }
+        // 6) Save copies of reports, lead work, playbook, focus and recent recordings for use with no internet.
+        runCatching { Prefetch.run(ctx) }
         sent
     }
 

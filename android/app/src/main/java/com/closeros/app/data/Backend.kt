@@ -45,7 +45,10 @@ object Backend {
         install(io.github.jan.supabase.storage.Storage)   // recordings + WhatsApp attachments / company files
     }
     val auth get() = client.auth
-    val uid: String? get() = client.auth.currentUserOrNull()?.id
+    val uid: String? get() = client.auth.currentUserOrNull()?.id?.also { id ->
+            if (lastUidMem != id) { lastUidMem = id; runCatching { LocalStore(AppCtx.ctx).lastUid = id } }
+        } ?: lastUidMem ?: runCatching { LocalStore(AppCtx.ctx).lastUid }.getOrNull()?.also { lastUidMem = it }
+    @Volatile private var lastUidMem: String? = null
 
     /**
      * Background work (call sync, after-call pop-up) can run hours after the app was last open. Then the
@@ -230,6 +233,26 @@ private const val LEAD_COLUMNS = "*, batch_leads(watch_minutes, attended, batch:
 object Repo {
     private val db get() = Backend.client.postgrest
 
+    // ── Saved copies: every screen keeps the last answer it got, and shows it when there is no internet ──
+    class Saved(val data: String)
+    /** Times inside a request are cut to the day, so "today's report" made at 10:00 and 10:05 share one saved copy. */
+    private fun copyKey(name: String, params: String) = "srv:$name:" + params.replace(Regex("T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:?\\d{2})?"), "")
+    private fun offline() = IllegalStateException("No internet — and no saved copy of this yet. Open it once with internet and it will be kept on the phone.")
+
+    /** Answer from the server, saved on the phone; with no internet, the saved answer. */
+    suspend fun savedText(key: String, fetch: suspend () -> String): String {
+        val dbl = LocalDb.get(AppCtx.ctx)
+        if (!Net.isOnline) return dbl.get(key) ?: throw offline()
+        return runCatching { fetch().also { dbl.put(key, it) } }.getOrElse { e ->
+            if (Net.isNetworkError(e)) dbl.get(key) ?: throw offline() else throw e
+        }
+    }
+    suspend inline fun <reified T> saved(key: String, crossinline fetch: suspend () -> T): T =
+        json.decodeFromString(savedText("srv:$key") { json.encodeToString(kotlinx.serialization.serializer<T>(), fetch()) })
+
+    private suspend fun rpcR(name: String, params: JsonObject): Saved =
+        Saved(savedText(copyKey(name, params.toString())) { db.rpc(name, params).data })
+
     suspend fun signIn(email: String, password: String) {
         Backend.auth.signInWith(Email) { this.email = email.trim(); this.password = password }
     }
@@ -252,7 +275,7 @@ object Repo {
     }
 
     suspend fun filterOptions(orgId: String): FilterOptions =
-        json.decodeFromString(db.rpc("lead_filter_options", buildJsonObject { put("p_org", orgId) }).data)
+        json.decodeFromString(rpcR("lead_filter_options", buildJsonObject { put("p_org", orgId) }).data)
 
     /** Leads for the Leads tab — from the phone's own copy when there is no internet. */
     suspend fun leads(orgId: String, query: String, page: Int, mineOnly: Boolean, f: LeadFilters = LeadFilters()): List<Lead> {
@@ -265,7 +288,7 @@ object Repo {
     private suspend fun leadsOnline(orgId: String, query: String, page: Int, mineOnly: Boolean, f: LeadFilters): List<Lead> {
         // Text search covers name, phone, email, company, profession, city, own fields, key facts and all notes.
         val ids: List<String>? = if (query.trim().length >= 2) runCatching {
-            json.decodeFromString<List<String>>(db.rpc("search_leads", buildJsonObject { put("p_org", orgId); put("p_q", query.trim()) }).data)
+            json.decodeFromString<List<String>>(rpcR("search_leads", buildJsonObject { put("p_org", orgId); put("p_q", query.trim()) }).data)
         }.getOrNull() else null
         if (ids != null && ids.isEmpty()) return emptyList()
         fun inList(v: Collection<String>) = "(" + v.joinToString(",") { "\"" + it.replace("\"", "") + "\"" } + ")"
@@ -321,7 +344,7 @@ object Repo {
     }
 
     suspend fun leadNotes(id: String): List<NoteEntry> =
-        json.decodeFromString(db.rpc("lead_notes", buildJsonObject { put("p_lead", id) }).data)
+        json.decodeFromString(rpcR("lead_notes", buildJsonObject { put("p_lead", id) }).data)
 
     /** Adds a note; with no internet it is kept on the phone and sent later. */
     suspend fun addNote(leadId: String, text: String, tags: List<String>) {
@@ -347,17 +370,17 @@ object Repo {
         val uid = Backend.uid ?: return null
         val zone = runCatching { ZoneId.of(org.timezone) }.getOrDefault(ZoneId.of("Asia/Kolkata"))
         val today = LocalDate.now(zone).toString()
-        val r: ProgressReport = json.decodeFromString(db.rpc("target_progress", buildJsonObject {
+        val r: ProgressReport = json.decodeFromString(rpcR("target_progress", buildJsonObject {
             put("p_org", org.id); put("p_from", today); put("p_to", today)
             put("p_users", buildJsonArray { add(kotlinx.serialization.json.JsonPrimitive(uid)) })
         }).data)
         return r.rows.firstOrNull { it.user_id == uid }?.takeIf { p -> listOf(p.target.calls, p.target.conversations, p.target.talk_minutes, p.target.sales, p.daily.focus).any { (it ?: 0) > 0 } }
     }
 
-    suspend fun playbook(orgId: String): List<PlaybookItem> = Backend.client.from("playbook_items").select {
+    suspend fun playbook(orgId: String): List<PlaybookItem> = saved("playbook:$orgId") { Backend.client.from("playbook_items").select {
         filter { eq("org_id", orgId); neq("status", "archived") }
         order("position", Order.ASCENDING)
-    }.decodeList()
+    }.decodeList<PlaybookItem>() }
 
     /** A rep's suggestion: waits for a manager's approval. */
     suspend fun suggestPlaybook(orgId: String, kind: String, title: String, body: String, url: String?) {
@@ -379,7 +402,7 @@ object Repo {
 
     suspend fun myReviews(orgId: String): List<CallReview> {
         val uid = Backend.uid ?: return emptyList()
-        val all: List<CallReview> = json.decodeFromString(db.rpc("review_list", buildJsonObject { put("p_org", orgId); put("p_limit", 100) }).data)
+        val all: List<CallReview> = json.decodeFromString(rpcR("review_list", buildJsonObject { put("p_org", orgId); put("p_limit", 100) }).data)
         return all.filter { it.rep_id == uid }
     }
 
@@ -388,13 +411,13 @@ object Repo {
     }
 
     suspend fun orgAccess(orgId: String): OrgAccess =
-        json.decodeFromString(db.rpc("org_access", buildJsonObject { put("p_org", orgId) }).data)
+        json.decodeFromString(rpcR("org_access", buildJsonObject { put("p_org", orgId) }).data)
 
     /** A company message's photo/video/PDF, saved in the app's cache so it can be shared to WhatsApp. */
-    suspend fun companyFiles(orgId: String): List<CompanyFile> =
+    suspend fun companyFiles(orgId: String): List<CompanyFile> = saved("files:$orgId") {
         db.from("company_files").select(Columns.raw("id,name,path,mime_type,size_bytes")) {
             filter { eq("org_id", orgId) }; order("position", Order.ASCENDING); order("created_at", Order.ASCENDING)
-        }.decodeList()
+        }.decodeList<CompanyFile>() }
 
     suspend fun templateMediaFile(ctx: android.content.Context, path: String, name: String?): java.io.File {
         val dir = java.io.File(ctx.cacheDir, "shared").apply { mkdirs() }
@@ -405,19 +428,19 @@ object Repo {
 
     // ── Reports in the app (same functions as the dashboard) ──
     suspend fun report(name: String, orgId: String, from: Instant, to: Instant, users: List<String>?): JsonElement =
-        json.parseToJsonElement(db.rpc(name, buildJsonObject {
+        json.parseToJsonElement(rpcR(name, buildJsonObject {
             put("p_org", orgId); put("p_from", from.toString()); put("p_to", to.toString())
             put("p_users", users?.let { u -> buildJsonArray { u.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } } } ?: kotlinx.serialization.json.JsonNull)
         }).data)
 
     suspend fun targetsFor(orgId: String, from: LocalDate, to: LocalDate, users: List<String>?): ProgressReport =
-        json.decodeFromString(db.rpc("target_progress", buildJsonObject {
+        json.decodeFromString(rpcR("target_progress", buildJsonObject {
             put("p_org", orgId); put("p_from", from.toString()); put("p_to", to.toString())
             put("p_users", users?.let { u -> buildJsonArray { u.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } } } ?: kotlinx.serialization.json.JsonNull)
         }).data)
 
     suspend fun leadStatus(orgId: String, users: List<String>?, from: Instant?, to: Instant?): JsonObject =
-        json.parseToJsonElement(db.rpc("lead_status_report", buildJsonObject {
+        json.parseToJsonElement(rpcR("lead_status_report", buildJsonObject {
             put("p_org", orgId)
             put("p_users", users?.let { u -> buildJsonArray { u.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } } } ?: kotlinx.serialization.json.JsonNull)
             put("p_from", from?.let { kotlinx.serialization.json.JsonPrimitive(it.toString()) } ?: kotlinx.serialization.json.JsonNull)
@@ -428,7 +451,7 @@ object Repo {
         val zone = runCatching { ZoneId.of(org.timezone) }.getOrDefault(ZoneId.of("Asia/Kolkata"))
         val today = LocalDate.now(zone)
         val from = when (period) { "week" -> today.minusDays((today.dayOfWeek.value - 1).toLong()); "month" -> today.withDayOfMonth(1); else -> today }
-        return json.decodeFromString(db.rpc("leaderboard", buildJsonObject {
+        return json.decodeFromString(rpcR("leaderboard", buildJsonObject {
             put("p_org", org.id); put("p_from", from.atStartOfDay(zone).toInstant().toString()); put("p_to", today.plusDays(1).atStartOfDay(zone).toInstant().toString())
         }).data)
     }
@@ -438,7 +461,7 @@ object Repo {
     }
 
     suspend fun bestTime(leadId: String): BestTime? = runCatching {
-        val d = db.rpc("best_time_to_call", buildJsonObject { put("p_lead", leadId) }).data
+        val d = rpcR("best_time_to_call", buildJsonObject { put("p_lead", leadId) }).data
         if (d.isBlank() || d == "null") null else json.decodeFromString<BestTime>(d)
     }.getOrNull()
 
@@ -458,35 +481,36 @@ object Repo {
         }).data).toSet()
 
     suspend fun teamBrief(orgId: String): List<IdName> =
-        json.parseToJsonElement(db.rpc("team_brief", buildJsonObject { put("p_org", orgId) }).data).jsonArray.map {
+        json.parseToJsonElement(rpcR("team_brief", buildJsonObject { put("p_org", orgId) }).data).jsonArray.map {
             IdName(it.jsonObject["user_id"]!!.jsonPrimitive.content, it.jsonObject["name"]?.jsonPrimitive?.content ?: "")
         }
 
     suspend fun myBatches(orgId: String): List<BatchSummary> =
-        json.decodeFromString(db.rpc("my_batches", buildJsonObject { put("p_org", orgId) }).data)
+        json.decodeFromString(rpcR("my_batches", buildJsonObject { put("p_org", orgId) }).data)
 
     suspend fun batchCallList(batchId: String, purpose: String, everyone: Boolean): BatchList =
-        json.decodeFromString(db.rpc("batch_call_list", buildJsonObject { put("p_batch", batchId); put("p_purpose", purpose); put("p_everyone", everyone) }).data)
+        json.decodeFromString(rpcR("batch_call_list", buildJsonObject { put("p_batch", batchId); put("p_purpose", purpose); put("p_everyone", everyone) }).data)
 
-    suspend fun categories(orgId: String): List<Category> = Backend.client.from("profession_categories").select {
+    suspend fun categories(orgId: String): List<Category> = saved("cats:$orgId") { Backend.client.from("profession_categories").select {
         filter { eq("org_id", orgId) }; order("position", Order.ASCENDING)
-    }.decodeList()
+    }.decodeList<Category>() }
 
     suspend fun leadsByIds(ids: List<String>): List<Lead> = if (ids.isEmpty()) emptyList() else
         Backend.client.from("leads").select(Columns.raw(LEAD_COLUMNS)) { filter { isIn("id", ids.distinct()) } }.decodeList()
 
     /** Short-lived private link to play a recording; each play is written to the audit log. */
     /** Downloads a call recording to the phone's cache (once) and returns the file — playing a local file works on every phone. */
-    suspend fun recordingFile(cacheDir: java.io.File, callId: String, path: String): java.io.File {
-        runCatching { db.rpc("log_recording_access", buildJsonObject { put("p_call", callId); put("p_action", "play") }) }
+    suspend fun recordingFile(cacheDir: java.io.File, callId: String, path: String, audit: Boolean = true): java.io.File {
+        if (audit && Net.isOnline) runCatching { db.rpc("log_recording_access", buildJsonObject { put("p_call", callId); put("p_action", "play") }) }
         val dir = java.io.File(cacheDir, "recordings").apply { mkdirs() }
         val f = java.io.File(dir, path.substringAfterLast('/'))
         if (f.exists() && f.length() > 0) return f
+        if (!Net.isOnline) throw IllegalStateException("No internet — this recording isn't saved on the phone yet")
         val bytes = Backend.client.storage.from("recordings").downloadAuthenticated(path)
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             val tmp = java.io.File(dir, f.name + ".part"); tmp.writeBytes(bytes); tmp.renameTo(f)
             // Keep the cache small: newest 30 recordings.
-            dir.listFiles()?.sortedByDescending { it.lastModified() }?.drop(30)?.forEach { it.delete() }
+            dir.listFiles()?.sortedByDescending { it.lastModified() }?.drop(60)?.forEach { it.delete() }
         }
         return f
     }
@@ -506,20 +530,20 @@ object Repo {
 
     suspend fun deleteTemplate(id: String) { Backend.client.from("message_templates").delete { filter { eq("id", id) } } }
 
-    suspend fun templates(orgId: String): List<Template> = Backend.client.from("message_templates").select {
+    suspend fun templates(orgId: String): List<Template> = saved("tpl:$orgId") { Backend.client.from("message_templates").select {
         filter { eq("org_id", orgId); eq("is_active", true) }
         order("position", Order.ASCENDING)
-    }.decodeList()
+    }.decodeList<Template>() }
 
-    suspend fun leadCalls(id: String): List<CallRow> = Backend.client.from("calls")
+    suspend fun leadCalls(id: String): List<CallRow> = saved("calls:$id") { Backend.client.from("calls")
         .select(Columns.raw("id, direction, started_at, duration_sec, outcome_id, notes, recording_status, recording_path, sim_slot, channel")) {
             filter { eq("lead_id", id) }
             order("started_at", Order.DESCENDING)
             limit(20)
-        }.decodeList()
+        }.decodeList<CallRow>() }
 
     // ── Round 9: WhatsApp sends, effort reports, focus list ──
-    private fun rpcJson(name: String, body: JsonObject): suspend () -> JsonElement = { json.parseToJsonElement(db.rpc(name, body).data) }
+    private fun rpcJson(name: String, body: JsonObject): suspend () -> JsonElement = { json.parseToJsonElement(rpcR(name, body).data) }
     private fun uuids(v: Collection<String>) = buildJsonArray { v.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } }
 
     /** Records a WhatsApp message sent from Closer OS (counts as an interaction). Returns its id (for Undo). */
@@ -541,13 +565,13 @@ object Repo {
     }
 
     suspend fun waSentToday(orgId: String, templateId: String, leadIds: List<String>): Set<String> =
-        json.decodeFromString<List<String>>(db.rpc("wa_sent_today", buildJsonObject { put("p_org", orgId); put("p_template", templateId); put("p_leads", uuids(leadIds)) }).data).toSet()
+        json.decodeFromString<List<String>>(rpcR("wa_sent_today", buildJsonObject { put("p_org", orgId); put("p_template", templateId); put("p_leads", uuids(leadIds)) }).data).toSet()
 
     suspend fun myWaToday(orgId: String): JsonElement = rpcJson("my_wa_today", buildJsonObject { put("p_org", orgId) })()
 
     /** call id → recording path, for the calls among [ids] that have a playable recording. */
     suspend fun recordingPaths(ids: List<String>): Map<String, String> = if (ids.isEmpty()) emptyMap() else
-        json.decodeFromString<Map<String, String>>(db.rpc("call_recording_paths", buildJsonObject { put("p_ids", uuids(ids)) }).data)
+        json.decodeFromString<Map<String, String>>(rpcR("call_recording_paths", buildJsonObject { put("p_ids", uuids(ids)) }).data)
 
     suspend fun myProgress(org: Org, from: LocalDate, to: LocalDate): Progress? {
         val uid = Backend.uid ?: return null
@@ -561,29 +585,30 @@ object Repo {
     }
 
     suspend fun leadWorkReport(orgId: String, users: List<String>?, from: LocalDate?, to: LocalDate?): JsonElement =
-        json.parseToJsonElement(db.rpc("lead_work_report", period(orgId, users, from, to)).data)
+        json.parseToJsonElement(rpcR("lead_work_report", period(orgId, users, from, to)).data)
 
     suspend fun leadWorkList(orgId: String, users: List<String>?, from: LocalDate?, to: LocalDate?, kind: String, attempts: Int?, user: String?): List<Lead> =
-        json.decodeFromString(db.rpc("lead_work_list", JsonObject(period(orgId, users, from, to) + mapOf(
+        json.decodeFromString(rpcR("lead_work_list", JsonObject(period(orgId, users, from, to) + mapOf(
             "p_kind" to kotlinx.serialization.json.JsonPrimitive(kind),
             "p_attempts" to (attempts?.let { kotlinx.serialization.json.JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull),
             "p_user" to (user?.let { kotlinx.serialization.json.JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull)))).data)
 
     suspend fun salesRecipe(orgId: String, users: List<String>?, from: LocalDate?, to: LocalDate?): JsonElement =
-        json.parseToJsonElement(db.rpc("sales_recipe", period(orgId, users, from, to)).data)
+        json.parseToJsonElement(rpcR("sales_recipe", period(orgId, users, from, to)).data)
 
-    suspend fun leadPath(leadId: String): JsonElement = json.parseToJsonElement(db.rpc("lead_path", buildJsonObject { put("p_lead", leadId) }).data)
+    suspend fun leadPath(leadId: String): JsonElement = json.parseToJsonElement(rpcR("lead_path", buildJsonObject { put("p_lead", leadId) }).data)
 
     suspend fun focusList(orgId: String, limit: Int, offset: Int): JsonElement =
-        json.parseToJsonElement(db.rpc("my_focus_list", buildJsonObject { put("p_org", orgId); put("p_limit", limit); put("p_offset", offset) }).data)
+        json.parseToJsonElement(rpcR("my_focus_list", buildJsonObject { put("p_org", orgId); put("p_limit", limit); put("p_offset", offset) }).data)
 
-    suspend fun outcomes(orgId: String): List<Outcome> = Backend.client.from("call_outcomes").select {
+    suspend fun outcomes(orgId: String): List<Outcome> = saved("outcomes:$orgId") { Backend.client.from("call_outcomes").select {
         filter { eq("org_id", orgId); eq("is_active", true) }
         order("position", Order.ASCENDING)
-    }.decodeList()
+    }.decodeList<Outcome>() }
 
     suspend fun followUps(orgId: String): List<FollowUp> {
-        val uid = Backend.uid ?: return emptyList()
+        val uid = Backend.uid ?: throw IllegalStateException("Not signed in")   // never replace the saved list with "nothing"
+        if (!Net.isOnline) throw IllegalStateException("No internet")
         return Backend.client.from("follow_ups").select(Columns.raw("*, lead:leads(name, phone, dial_count, conversation_count, call_count, last_outcome_id, key_facts, profession, city, total_talk_sec)")) {
             filter { eq("org_id", orgId); eq("assigned_to", uid); eq("status", "pending") }
             order("due_at", Order.ASCENDING)
@@ -593,12 +618,12 @@ object Repo {
 
     /** Follow-ups of the last 7 days that are finished, to show on time / late / not called. */
     suspend fun pastFollowUps(orgId: String): List<FollowUp> {
-        val uid = Backend.uid ?: return emptyList()
-        return Backend.client.from("follow_ups").select(Columns.raw("*, lead:leads(name, phone, dial_count, conversation_count, call_count, last_outcome_id, key_facts, profession, city, total_talk_sec)")) {
+        val uid = Backend.uid ?: throw IllegalStateException("Not signed in")
+        return saved("pastfu:$orgId") { Backend.client.from("follow_ups").select(Columns.raw("*, lead:leads(name, phone, dial_count, conversation_count, call_count, last_outcome_id, key_facts, profession, city, total_talk_sec)")) {
             filter { eq("org_id", orgId); eq("assigned_to", uid); eq("status", "done"); gte("due_at", Instant.now().minusSeconds(7 * 86400).toString()) }
             order("due_at", Order.DESCENDING)
             limit(300)
-        }.decodeList()
+        }.decodeList<FollowUp>() }
     }
 
     suspend fun setMyPhone(orgId: String, phone: String) {
@@ -639,7 +664,7 @@ object Repo {
         val uid = Backend.uid ?: return TodayStats()
         val zone = runCatching { ZoneId.of(org.timezone) }.getOrDefault(ZoneId.of("Asia/Kolkata"))
         val start = LocalDate.now(zone).atStartOfDay(zone).toInstant()
-        val res = db.rpc("call_report", buildJsonObject {
+        val res = rpcR("call_report", buildJsonObject {
             put("p_org", org.id); put("p_from", start.toString()); put("p_to", start.plusSeconds(86400).toString())
             put("p_users", buildJsonArray { add(kotlinx.serialization.json.JsonPrimitive(uid)) })
         })

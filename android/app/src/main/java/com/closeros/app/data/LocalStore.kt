@@ -162,6 +162,10 @@ class LocalStore(ctx: Context) {
     fun removeWaPending(id: String) = synchronized(outboxLock) { waPending = waPending.filter { it.id != id } }
 
     fun clear() { p.edit().clear().apply() }
+    /** The signed-in person's id, kept so the app still knows who you are with no internet. */
+    var lastUid: String?
+        get() = p.getString("last_uid", null)
+        set(v) { p.edit().putString("last_uid", v).apply() }
 
     companion object { private val outboxLock = Any() }
 }

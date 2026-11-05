@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.11.0
+## Android app (`android/`) — v0.11.1
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -799,3 +799,16 @@ intelligence → Play Store launch.
   (bl_<batch>_<purpose>_<everyone>, "batches"); addLeadFromCall → Ops.lead offline; lead page shows
   the number's calls from the phone call log offline; pop-up skips the server lookup offline.
   MainActivity OfflineBar: "📴 No internet — keep working. N saved on this phone…".
+- v0.11.1 (owner: "nothing is available offline"): Reports / Lead work / Playbook had no copy;
+  Follow-ups showed 0 because Backend.uid was null offline and Repo.followUps returned [] → cache
+  overwritten. Now Backend.uid falls back to LocalStore.lastUid; followUps/pastFollowUps throw instead
+  of returning []. Repo saved-copy layer: savedText(key){fetch} / saved<T>(key){…} (LocalDb cache
+  "srv:…"; offline or network error → saved copy, else friendly "No internet — and no saved copy…");
+  rpcR() for all read RPCs (key = name + params with times cut to the day) incl. Repo.report;
+  playbook, templates, companyFiles, categories, outcomes, leadCalls, pastFollowUps wrapped.
+  calls/Prefetch.kt (end of CallSync, online, every 30 min): playbook, templates, files, categories,
+  outcomes, past follow-ups, batches, focus, leaderboard, reports (today/yesterday/7d/month × me
+  [+ everyone for managers]: call/outcome/follow-up reports, targets, lead status, lead work
+  today/week/month/all) and my newest 30 recordings (Repo.recordingFile audit=false; cache keeps 60).
+  Net.isNetworkError treats CancellationException as retry-later (Ops never dropped). LeadIndex pages
+  of 250 (weak-internet timeouts seen in app_errors).

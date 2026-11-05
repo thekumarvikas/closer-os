@@ -199,7 +199,7 @@ fun WaTodayScreen(vm: AppViewModel) {
 
 private data class Period(val key: String, val label: String)
 private val periods = listOf(Period("all", "All leads"), Period("today", "Assigned today"), Period("week", "This week"), Period("month", "This month"))
-private fun range(key: String): Pair<LocalDate?, LocalDate?> {
+internal fun range(key: String): Pair<LocalDate?, LocalDate?> {
     val t = LocalDate.now()
     return when (key) { "today" -> t to t; "week" -> t.minusDays((t.dayOfWeek.value - 1).toLong()) to t; "month" -> t.withDayOfMonth(1) to t; else -> null to null }
 }
@@ -229,7 +229,7 @@ fun LeadWorkScreen(vm: AppViewModel) {
     val (from, to) = range(period)
     LaunchedEffect(period, who) {
         data = null; error = null
-        runCatching { Repo.leadWorkReport(m.org_id, users, from, to) as JsonObject }.onSuccess { data = it }.onFailure { error = "Couldn't load — check internet" }
+        runCatching { Repo.leadWorkReport(m.org_id, users, from, to) as JsonObject }.onSuccess { data = it }.onFailure { error = it.message?.takeIf { m -> m.startsWith("No internet") } ?: "Couldn't load — check internet" }
     }
     val scope = rememberCoroutineScope()
     fun open(title: String, kind: String, attempts: Int? = null, user: String? = null) = scope.launch {

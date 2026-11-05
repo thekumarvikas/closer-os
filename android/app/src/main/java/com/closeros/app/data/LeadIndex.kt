@@ -15,7 +15,7 @@ object LeadIndex {
     @Serializable private data class Meta(val id: String, val phone: String, val updated_at: String, val deleted_at: String? = null)
 
     private const val CURSOR = "lead_index_cursor4"   // v4: full lead rows (the app works with no internet)
-    private const val MAX_PAGES = 30   // up to 30,000 leads per sync run
+    private const val MAX_PAGES = 120   // up to 30,000 leads per sync run (pages of 250: small enough for weak internet)
 
     fun find(ctx: Context, phone: String): Lead? =
         runCatching { LocalDb.get(ctx).leadJsonByPhone(phone)?.let { json.decodeFromString<Lead>(it) } }.getOrNull()
@@ -34,7 +34,7 @@ object LeadIndex {
         repeat(MAX_PAGES) {
             val raw = Backend.client.from("leads").select(Columns.raw("*, batch_leads(watch_minutes, attended, batch:batches(name, webinar_at))")) {
                 filter { eq("org_id", orgId); gt("updated_at", since) }
-                order("updated_at", Order.ASCENDING); limit(1000)
+                order("updated_at", Order.ASCENDING); limit(250)
             }.decodeList<kotlinx.serialization.json.JsonObject>()
             if (raw.isEmpty()) return added
             val rows = raw.mapNotNull { o -> runCatching { json.decodeFromJsonElement(Meta.serializer(), o) to o }.getOrNull() }
@@ -42,7 +42,7 @@ object LeadIndex {
             db.putLeads(rows.map { (m, o) -> Triple(m.phone, m.id, if (m.deleted_at != null) null else o.toString()) })
             since = rows.last().first.updated_at
             db.put(CURSOR, since)
-            if (raw.size < 1000) return added
+            if (raw.size < 250) return added
         }
         return added
     }

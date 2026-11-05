@@ -57,7 +57,8 @@ object Net {
         var e = t
         repeat(6) {
             if (e == null) return false
-            if (e is java.io.IOException || e is java.net.UnknownHostException) return true
+            // A stopped background job counts as "try again later" too (never as the server saying no).
+            if (e is java.io.IOException || e is java.net.UnknownHostException || e is kotlinx.coroutines.CancellationException) return true
             val n = e!!::class.java.name
             if ("HttpRequestException" in n || "Timeout" in n || "ConnectException" in n) return true
             val m = e!!.message.orEmpty()

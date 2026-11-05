@@ -201,6 +201,8 @@ object AfterCall {
         private var view: View? = null
         private var owner: Owner? = null
         private var state: androidx.compose.runtime.MutableState<Info>? = null
+        /** True while the card is on screen (the calling queue waits). */
+        val isShowing: Boolean get() = view != null
 
         /** New details for the card already on screen (keeps what the rep has tapped). */
         fun update(info: Info) { state?.value = info }

@@ -47,7 +47,7 @@ fun LeadsTab(vm: AppViewModel, onCall: (Lead) -> Unit) {
             if (vm.leadFilters.count > 0) TextButton(onClick = { vm.applyFilters(LeadFilters()) }) { Text("Clear") }
             Spacer(Modifier.weight(1f))
             FilterChip(selected = vm.selectMode, onClick = { vm.selectMode = !vm.selectMode; if (!vm.selectMode) vm.selected.clear() },
-                label = { Text(if (vm.selectMode) "Selecting" else "Select to call") })
+                label = { Text(if (vm.selectMode) "Selecting" else "Select to call / WhatsApp") })
         }
         if (vm.selectMode) Row(Modifier.fillMaxWidth().background(Brand.light).padding(12.dp, 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(if (vm.selected.isEmpty()) "Tap leads to pick them" else "${vm.selected.size} selected", modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)

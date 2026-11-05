@@ -105,8 +105,8 @@ fun HomeScreen(vm: AppViewModel) {
             val next = when {
                 vm.queueActive -> Next("Continue calling · ${vm.queuePos + 1} of ${vm.queue.size}", "Your calling queue is paused", false) { vm.queueResume() }
                 vm.focusTotal > 0 -> Next("Start today's focus · ${vm.focusTotal}",
-                    (if (overdue > 0) "Incl. $overdue overdue follow-up${if (overdue > 1) "s" else ""} · " else "") + "${vm.focusDone} done today · tap here to see the list",
-                    overdue > 0) { vm.startFocusQueue() }
+                    (if (overdue > 0) "Incl. $overdue overdue follow-up${if (overdue > 1) "s" else ""} · " else "") + "${vm.focusDone} done today · see the list, then call or WhatsApp",
+                    overdue > 0) { vm.openFocusList() }
                 overdue > 0 -> Next("Call $overdue overdue follow-up${if (overdue > 1) "s" else ""}", "${dueToday.size} due in the next 24 hours", true) { vm.startFollowUpQueue() }
                 upcoming != null -> Next("Reminder calls · ${upcoming.name}", "Starts ${ms(upcoming.webinar_at)?.let { fmt.format(Instant.ofEpochMilli(it)) } ?: ""} · ${upcoming.reminder_mine} leads", false) { vm.openBatchList(upcoming, "reminder") }
                 dueToday.isNotEmpty() -> Next("Call ${dueToday.size} follow-up${if (dueToday.size > 1) "s" else ""} due", "In the next 24 hours", false) { vm.startFollowUpQueue() }
@@ -315,6 +315,7 @@ fun HistoryRow(vm: AppViewModel, h: HistoryItem, onAdd: (() -> Unit)? = null, co
                         modifier = Modifier.padding(start = 6.dp).background(Color(0xFFE2E8F0), RoundedCornerShape(50)).padding(horizontal = 6.dp, vertical = 1.dp))
                 }
                 Text(listOfNotNull(if (h.log.channel == "whatsapp") "WhatsApp" else null, what, time,
+                    h.lead?.let { "${it.dial_count} calls · ${it.conversation_count} conv." },
                     h.log.simSlot?.takeIf { twoSims && h.log.channel == "phone" }?.let { "SIM $it" }).joinToString(" · "),
                     fontSize = 12.sp, color = if (missed) Brand.red else Brand.muted, maxLines = 1)
             }
@@ -447,7 +448,7 @@ fun LeadCard(vm: AppViewModel, l: Lead, onCall: ((Lead) -> Unit)?) {
                 // Effort so far in one line: talk time, calls (real pick-ups), WhatsApp sent, last outcome.
                 val last = listOfNotNull(
                     l.total_talk_sec.takeIf { it > 0 }?.let { "Talked ${fmtDur(it)}" },
-                    l.dial_count.takeIf { it > 0 }?.let { "$it call${if (it > 1) "s" else ""} (${l.pickup_count} picked)" },
+                    callsLine(l.dial_count, l.conversation_count),
                     l.wa_count.takeIf { it > 0 }?.let { "$it WA" },
                     vm.outcomes.firstOrNull { it.id == l.last_outcome_id }?.label ?: l.last_call_at?.let { "Last called ${fmtWhen(it)}" },
                 ).joinToString(" · ")
@@ -637,3 +638,7 @@ fun RecordingPlayer(callId: String, path: String) {
         }
     }
 }
+
+/** "5 calls · 3 conversations" — shown wherever a lead appears. Conversations = they really talked. */
+fun callsLine(dials: Int, conversations: Int): String =
+    if (dials == 0 && conversations == 0) "Not called yet" else "$dials call${if (dials == 1) "" else "s"} · $conversations conversation${if (conversations == 1) "" else "s"}"

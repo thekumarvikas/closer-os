@@ -148,6 +148,15 @@ class LocalStore(ctx: Context) {
         get() = p.getBoolean("queue_best_time_first", true)
         set(v) { p.edit().putBoolean("queue_best_time_first", v).apply() }
 
+    /** WhatsApp messages opened from Closer OS but not yet confirmed as sent (counted only once confirmed). */
+    @Serializable data class WaPending(val id: String, val leadId: String?, val phone: String, val name: String, val templateId: String?,
+                                       val templateName: String?, val source: String, val atMs: Long)
+    var waPending: List<WaPending>
+        get() = p.getString("wa_pending", null)?.let { runCatching { json.decodeFromString<List<WaPending>>(it) }.getOrNull() } ?: emptyList()
+        set(v) { p.edit().putString("wa_pending", json.encodeToString(v.takeLast(50))).commit() }
+    fun addWaPending(w: WaPending) = synchronized(outboxLock) { waPending = waPending.filter { it.phone != w.phone || it.templateId != w.templateId } + w }
+    fun removeWaPending(id: String) = synchronized(outboxLock) { waPending = waPending.filter { it.id != id } }
+
     fun clear() { p.edit().clear().apply() }
 
     companion object { private val outboxLock = Any() }

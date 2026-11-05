@@ -144,14 +144,29 @@ export default function Leads() {
             text={isManager ? 'Import a CSV/Excel file or add a lead by hand.' : 'Leads assigned to you will appear here.'}
             action={isManager && !q ? <Button onClick={() => setShowImport(true)}><Upload className="h-4 w-4" /> Import leads</Button> : undefined} />
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Phones: one card per lead (no sideways scrolling). */}
+          <div className="divide-y divide-slate-100 md:hidden">
+            {leads.map(l => (
+              <div key={l.id} className="flex items-start gap-3 px-3 py-2.5" onClick={() => setOpenLead(l.id)}>
+                {isManager && <input type="checkbox" className="mt-1" checked={selected.has(l.id)} onClick={e => e.stopPropagation()} onChange={() => {
+                  const s = new Set(selected); if (s.has(l.id)) s.delete(l.id); else s.add(l.id); setSelected(s) }} />}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5"><span className="truncate font-medium text-slate-900">{l.name || 'No name'}</span>{l.do_not_call && <Badge color="red">DNC</Badge>}</div>
+                  <div className="text-xs text-slate-500">{[fmtPhone(l.phone), l.city, l.assigned_to ? dir.nameOf(l.assigned_to) : 'Unassigned'].filter(Boolean).join(' · ')}</div>
+                  <div className="text-xs text-brand-700">{(l.dial_count ?? 0) === 0 ? 'Not called yet' : `${l.dial_count} calls · ${l.conversation_count ?? 0} conversations`}{dir.outcomeOf(l.last_outcome_id) ? ` · ${dir.outcomeOf(l.last_outcome_id)!.label}` : ''}</div>
+                  {l.next_follow_up_at && <div className={`text-xs ${new Date(l.next_follow_up_at) < new Date() ? 'font-medium text-red-600' : 'text-slate-500'}`}>Next call {fmtDate(l.next_follow_up_at, org)}</div>}
+                </div>
+              </div>))}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
             <table className="min-w-full divide-y divide-slate-100">
               <thead className="bg-slate-50">
                 <tr>
                   {isManager && <th className="th w-8"><input type="checkbox" checked={allOnPage}
                     onChange={() => setSelected(allOnPage ? new Set() : new Set(leads.map(l => l.id)))} /></th>}
                   <th className="th">Name</th><th className="th">Phone</th><th className="th">Stage</th>
-                  <th className="th">Assigned to</th><th className="th">Source</th><th className="th">Last outcome</th>
+                  <th className="th">Assigned to</th><th className="th">Calls</th><th className="th">Source</th><th className="th">Last outcome</th>
                   <th className="th">Next follow-up</th><th className="th">Deal</th><th className="th">Added</th>
                 </tr>
               </thead>
@@ -170,6 +185,7 @@ export default function Leads() {
                       <td className="td tabular-nums">{fmtPhone(l.phone)}</td>
                       <td className="td">{st ? <Badge color={st.is_won ? 'green' : st.is_lost ? 'red' : 'brand'}>{st.name}</Badge> : <Badge>New</Badge>}</td>
                       <td className="td">{l.assigned_to ? dir.nameOf(l.assigned_to) : <span className="text-amber-700">Unassigned</span>}</td>
+                      <td className="td text-slate-600 whitespace-nowrap">{(l.dial_count ?? 0) === 0 ? '—' : <>{l.dial_count} <span className="text-xs text-slate-400">({l.conversation_count ?? 0} talked)</span></>}</td>
                       <td className="td text-slate-600">{l.source || '—'}</td>
                       <td className="td text-slate-600">{dir.outcomeOf(l.last_outcome_id)?.label ?? '—'}</td>
                       <td className={`td ${overdue ? 'font-medium text-red-600' : 'text-slate-600'}`}>{fmtDate(l.next_follow_up_at, org)}</td>
@@ -181,6 +197,7 @@ export default function Leads() {
               </tbody>
             </table>
           </div>
+          </>
         )}
         {count > PAGE && (
           <div className="flex items-center justify-between border-t border-slate-200 px-4 py-2 text-sm text-slate-600">

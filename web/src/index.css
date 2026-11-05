@@ -11,3 +11,12 @@
 .th { @apply whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500; }
 .td { @apply whitespace-nowrap px-3 py-2.5 text-sm; }
 }
+
+/* Phones: wide tables scroll sideways inside their card instead of being cut off;
+   long pages stay readable (smaller paddings, modals use the full screen). */
+@media (max-width: 767px) {
+  main table { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; }
+  main table th, main table td { white-space: nowrap; }
+  main .table-fixed { table-layout: auto; }
+  main { padding-left: 0.75rem !important; padding-right: 0.75rem !important; }
+}

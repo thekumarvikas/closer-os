@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.10.1
+## Android app (`android/`) — v0.10.2
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -696,3 +696,24 @@ intelligence → Play Store launch.
   Team, Asked to call later, Busy on another call, Invalid number, Not interested (+ Will try / maybe,
   Can't attend — wants next batch, Asked to send the link). "Confirmed — will join" hidden (= Guided).
   Sales also gained Incoming calls not available, Invalid number, Disconnected after intro.
+
+## Owner feedback round 10 (v0.10.2, Nov 2026)
+- Outcomes (migration 0045): busy ≠ cut → Busy, asked to call later (call_back / r_call_later) ·
+  Busy on another call (busy / r_busy) · Cut the call without picking (cut_call / r_cut_call) ·
+  Disconnected after introduction (disconnected / r_disconnected), sales + reminder.
+- "Start today's focus" opens the list first (vm.openFocusList → LeadListScreen with Call all /
+  WhatsApp all), never dials straight away.
+- No surprise dialling: queueTick pauses the queue when the app isn't in front or the after-call card
+  (AfterCall.Overlay.isShowing) / full form (AfterCallActivity.open) is up; after a pop-up save the
+  queue waits for "Continue".
+- Conversations per lead (migration 0046 leads.conversation_count = real dialled pick-ups + incoming
+  talks); callsLine() "5 calls · 3 conversations" on lead cards, lead page, queue glance card,
+  follow-up cards (LeadMini carries counts), dialer matches, pop-up header, call rows of leads;
+  dashboard Leads "Calls" column + report lists. LeadIndex cursor bumped (lead_index_cursor2) so
+  phones re-download leads with counts.
+- WhatsApp counted only when confirmed: queue asks "Did the message go? ✓ Sent — next / ✗ Not sent";
+  single sends (picker, pop-up, full form) go to LocalStore.waPending and WaConfirmDialog asks
+  "Did these WhatsApp messages go?" when the rep is back in Closer OS (✓ Sent / ✗ No / All sent).
+- Leads tab chip "Select to call / WhatsApp".
+- Dashboard on phones (checked with a temporary test user at 390 px, then deleted): index.css makes
+  tables scroll sideways inside their card on < 768 px; Leads page has a card list on phones.

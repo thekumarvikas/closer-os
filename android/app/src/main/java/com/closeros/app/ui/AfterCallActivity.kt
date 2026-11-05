@@ -41,6 +41,12 @@ class AfterCallViewModel(app: Application) : AppViewModel(app) {
  * shown as a sheet over whatever the rep was doing. Also "Add as a lead" for unknown numbers.
  */
 class AfterCallActivity : ComponentActivity() {
+    companion object {
+        /** True while the full after-call form is open (the calling queue waits). */
+        @Volatile var open = false
+    }
+    override fun onStart() { super.onStart(); open = true }
+    override fun onStop() { super.onStop(); open = false }
     private val vm: AfterCallViewModel by viewModels()
     private var req by mutableStateOf<Intent?>(null)
 

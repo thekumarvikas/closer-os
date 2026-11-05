@@ -305,6 +305,10 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun queueTick() {
         val c = countdown ?: return
         if (queuePaused) { countdown = null; return }
+        // Never dial the next lead while the rep isn't looking at Closer OS or is still filling the after-call card.
+        if (!foreground || com.closeros.app.calls.AfterCall.Overlay.isShowing || AfterCallActivity.open) {
+            countdown = null; queuePaused = true; return
+        }
         if (c <= 1) { countdown = null; queue.getOrNull(queuePos)?.let { callRequest = it } } else countdown = c - 1
     }
 
@@ -515,9 +519,13 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Back from WhatsApp: mark it sent, then count down to the next lead. */
-    private fun waBackFromWhatsApp() = viewModelScope.launch {
-        if (!waAwaiting) return@launch
-        waAwaiting = false
+    /** Back from WhatsApp in the queue: ask "Did it go?" — only a confirmed message is counted. */
+    var waAskSent by mutableStateOf(false)
+    private fun waBackFromWhatsApp() { if (waAwaiting) { waAwaiting = false; waAskSent = true } }
+
+    fun waConfirmSent(sent: Boolean) = viewModelScope.launch {
+        waAskSent = false
+        if (!sent) { message = "Not counted — tap Send on WhatsApp to try again, or Skip"; return@launch }
         val m = membership ?: return@launch
         val l = waQueue.getOrNull(waPos) ?: return@launch
         waLastId = Repo.logWa(m.org_id, l.id, l.phone, waTemplate?.id, waTemplate?.name, "queue")
@@ -535,10 +543,21 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun waStop() { waActive = false; waCountdown = null; waAwaiting = false; message = "Stopped — $waSent sent"; com.closeros.app.data.AppEvents.bumpLeads() }
 
     /** A single WhatsApp sent from a lead / call row / pop-up: counted as an interaction. */
-    fun logWaSend(lead: Lead, t: Template?, source: String = "single") = viewModelScope.launch {
+    /** A single WhatsApp opened from Closer OS: counted only after the rep confirms it went (back in the app). */
+    fun logWaSend(lead: Lead, t: Template?, source: String = "single") {
+        store.addWaPending(LocalStore.WaPending(java.util.UUID.randomUUID().toString(), lead.id.ifBlank { null }, lead.phone,
+            lead.name, t?.id, t?.name ?: "Own message", source, System.currentTimeMillis()))
+    }
+
+    /** Messages waiting for "Did it go?" (shown when the rep is back in Closer OS). */
+    var waToConfirm by mutableStateOf<List<LocalStore.WaPending>>(emptyList())
+    fun loadWaToConfirm() { waToConfirm = store.waPending }
+    fun confirmWa(w: LocalStore.WaPending, sent: Boolean) = viewModelScope.launch {
+        store.removeWaPending(w.id); waToConfirm = store.waPending
+        if (!sent) return@launch
         val m = membership ?: return@launch
-        Repo.logWa(m.org_id, lead.id.ifBlank { null }, lead.phone, t?.id, t?.name ?: "Own message", source)
-        loadRound9()
+        Repo.logWa(m.org_id, w.leadId, w.phone, w.templateId, w.templateName, w.source)
+        com.closeros.app.data.AppEvents.bumpLeads(); loadRound9()
     }
 
     fun openLeadsById(title: String, ids: List<String>) = viewModelScope.launch {
@@ -627,11 +646,14 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Called when the app comes back to the front: look up the finished call in the call log. */
     fun onResume() {
+        loadWaToConfirm()
         if (waActive && waAwaiting) waBackFromWhatsApp()
         // Saved in the after-call pop-up while the app was in the background: move on.
         if (pending != null && store.pendingCall == null) {
             pending = null; pendingLog = null; endedReported = null
             queueAfterOutcome(); refreshHome()
+            // Saved in the pop-up: the queue waits for the rep to tap Continue (no surprise dialling).
+            if (queueActive) { countdown = null; queuePaused = true }
         }
         val p = pending
         if (p == null) {

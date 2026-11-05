@@ -162,6 +162,7 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
         LazyColumn(Modifier.fillMaxSize().padding(pad), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
                 Text(fmtPhone(l.phone), fontSize = 18.sp)
+                Text("📞 " + callsLine(l.dial_count, l.conversation_count) + if (l.total_talk_sec > 0) " · talked ${fmtDur(l.total_talk_sec)}" else "", fontSize = 14.sp, color = Brand.primaryDark)
                 listOfNotNull(l.profession, l.company, l.city).joinToString(" · ").takeIf { it.isNotEmpty() }?.let { Text(it, color = Brand.muted) }
                 listOfNotNull(l.source, l.campaign).joinToString(" · ").takeIf { it.isNotEmpty() }?.let { Text("Source: $it", color = Brand.muted, fontSize = 14.sp) }
                 l.next_follow_up_at?.let { Text("Next follow-up: ${fmtWhen(it)}", color = Brand.primary, fontSize = 14.sp) }

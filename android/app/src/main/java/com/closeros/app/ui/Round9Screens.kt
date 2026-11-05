@@ -112,13 +112,21 @@ fun WaQueueScreen(vm: AppViewModel) {
                 if (t.media_path != null) Text("📎 ${t.media_name ?: "Attachment"} is sent with it", fontSize = 12.sp, color = Brand.muted)
             }
         }
+        if (vm.waAskSent) {
+            Text("Did the message to ${l.name.ifBlank { fmtPhone(l.phone) }} go?", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { vm.waConfirmSent(true) }, modifier = Modifier.weight(1f).height(52.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A))) { Text("✓ Sent — next") }
+                OutlinedButton(onClick = { vm.waConfirmSent(false) }, modifier = Modifier.weight(1f).height(52.dp)) { Text("✗ Not sent") }
+            }
+            return@Column
+        }
         val cd = vm.waCountdown
         Button(onClick = { vm.waPaused = false; vm.waOpenCurrent() }, modifier = Modifier.fillMaxWidth().height(56.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A))) {
             Icon(Icons.Default.Send, null); Spacer(Modifier.width(8.dp))
             Text(if (cd != null) "Opening WhatsApp in $cd…" else "Send on WhatsApp", fontSize = 17.sp)
         }
-        Text("In WhatsApp tap Send, then come back — the next lead opens by itself.", fontSize = 12.sp, color = Brand.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+        Text("In WhatsApp tap Send, then come back and confirm — only messages you confirm are counted.", fontSize = 12.sp, color = Brand.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { if (vm.waPaused) { vm.waPaused = false; vm.waCountdown = 3 } else { vm.waPaused = true; vm.waCountdown = null } }, modifier = Modifier.weight(1f)) {
                 Text(if (vm.waPaused) "Resume" else "Pause") }
@@ -385,4 +393,29 @@ fun EffortCard(vm: AppViewModel, lead: Lead) {
         if (msgs.isNotEmpty()) Text("WhatsApp: " + msgs.take(3).joinToString(" · ") { "${it.s("template_name") ?: "message"} (${fmtWhen(it.s("sent_at") ?: "")})" } +
             if (msgs.size > 3) " · +${msgs.size - 3} more" else "", fontSize = 12.sp, color = Brand.muted)
     }
+}
+
+/** "Did these WhatsApp messages go?" — a message opened from Closer OS is counted only when the rep confirms it. */
+@Composable
+fun WaConfirmDialog(vm: AppViewModel) {
+    val list = vm.waToConfirm
+    if (list.isEmpty() || vm.waActive) return
+    AlertDialog(onDismissRequest = {}, title = { Text("Did ${if (list.size == 1) "this WhatsApp message" else "these WhatsApp messages"} go?") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Only messages you confirm are counted.", fontSize = 12.sp, color = Brand.muted)
+                list.forEach { w ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(w.name.ifBlank { fmtPhone(w.phone) }, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(w.templateName ?: "Message", fontSize = 12.sp, color = Brand.muted, maxLines = 1)
+                        }
+                        TextButton(onClick = { vm.confirmWa(w, true) }) { Text("✓ Sent", color = Color(0xFF16A34A), fontWeight = FontWeight.Bold) }
+                        TextButton(onClick = { vm.confirmWa(w, false) }) { Text("✗ No", color = Brand.red) }
+                    }
+                }
+            }
+        },
+        confirmButton = { if (list.size > 1) Button(onClick = { list.forEach { vm.confirmWa(it, true) } }) { Text("All sent") } },
+        dismissButton = {})
 }

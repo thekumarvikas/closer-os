@@ -55,6 +55,7 @@ fun GlanceCard(vm: AppViewModel, base: Lead) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(l.name.ifBlank { fmtPhone(l.phone) }, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(listOfNotNull(fmtPhone(l.phone), l.profession, l.company, l.city).filter { it.isNotBlank() }.joinToString(" · "), color = Brand.muted, fontSize = 14.sp)
+            Text("📞 " + callsLine(l.dial_count, l.conversation_count) + if (l.total_talk_sec > 0) " · talked ${fmtDur(l.total_talk_sec)}" else "", fontSize = 14.sp, color = Brand.primaryDark)
             if (tags.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 tags.forEach { t -> Text(t.text, fontSize = 12.sp, color = t.fg, modifier = Modifier.background(t.bg, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp)) }
             }

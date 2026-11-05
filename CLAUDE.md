@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.11.3
+## Android app (`android/`) — v0.12.0
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -724,10 +724,6 @@ intelligence → Play Store launch.
   returned at lastAfterCallId without filling it. Now run() adopts a card already showing for the same
   number (Overlay.current), and continues when shown; the card self-repairs (AfterCall.findRecentCall
   every 1 s, 2 min) and Save is never disabled for a missing call (looks it up on tap).
-- Rep-day simulation findings (awaiting owner's go): calls from focus / follow-ups / notifications /
-  pop-up / desk are always purpose 'sales' (reminder follow-ups stay pending forever); reminder
-  next-call can land after webinar start; dashboard follow-up done doesn't refresh
-  leads.next_follow_up_at; focus ignores tonight's webinar + hot watchers.
 
 ## Complete call counts (v0.10.4, migration 0047, Nov 2026)
 - Owner: "N calls" on lead cards was lower than the phone's history. Causes: server only had calls since
@@ -838,3 +834,24 @@ intelligence → Play Store launch.
   signs out ONLY locally (SignOutScope.LOCAL), clears local data, LocalStore.kickedReason shown on the
   sign-in screen. Stays signed in while anything is still waiting to upload. Dashboard unaffected.
   Later: Super Admin "allow 2 phones" per user (paid add-on).
+
+## Reminder vs sales everywhere + smarter focus (v0.12.0, migration 0051, Nov 2026)
+- lead_call_context(lead) → {purpose, batch_id}: reminder if a pending reminder follow-up is due within
+  24 h or the lead is registered (not holdout) for a batch starting within 24 h; else sales + batch of the
+  last 30 days. App mirror data/CallPurpose.kt (guess(lead, followUps), webinarOf()); Lead.batch_leads
+  now carries batch_id + is_holdout (LEAD_COLUMNS, LeadIndex cursor v5); Lead.call_purpose/call_batch_id
+  come with focus rows. Used by: startQueue default "auto", single calls, notification Call, unlogged
+  calls (checkUnloggedCalls), pop-up (Info.purpose/batchId; Company carries cached followUps), desk
+  (request_call(p_lead) with null purpose → lead_call_context).
+- Outcome form + pop-up: "Call type: Sales | Reminder" switch (shown when the lead is in a batch);
+  reminder call-backs only before the webinar start (quick picks filtered, "30 min before start",
+  later days hidden; next_default after start → 30 min before start); dialled 0 s → "Didn't pick"
+  (no_answer / r_didnt_pick) preselected.
+- Trigger t_fu_sync_lead keeps leads.next_follow_up_at = min(pending follow_ups) on any change
+  (dashboard "done" now clears focus). close_stale_reminders() (pg_cron 'close-stale-reminders' every
+  15 min) cancels pending reminder follow-ups once a batch created after them has started and none is
+  upcoming ("Closed: the webinar started").
+- my_focus_list buckets: 1 overdue · 2 webinar within 18 h ("🎓 Reminder · <batch> at <time>"; also
+  leads where I'm reminder_by) · 3 due in 2 h · 4 hot watchers (≥ hot_minutes in last 14 days, "🔥 Watched
+  N min") · 5 new never dialled (NEWEST first) · 6 best hour · 7 score ≥ 40 · 8 rest; rows include
+  call_purpose / call_batch_id. LocalLeads.focus mirrors it offline. Tested on a temporary org (deleted).

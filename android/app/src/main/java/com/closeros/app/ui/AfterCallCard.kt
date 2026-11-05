@@ -58,22 +58,32 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
     val needs = (lead != null || !info.checking) && (c == null || AfterCall.needsOutcome(c))
     val notInList = lead == null && !info.checking
     val number = info.number.orEmpty()
-    val choices = outcomesFor(co.outcomes, info.purpose, c?.direction, c?.durationSec)
+    // Reminder or sales (worked out for the lead; the rep can switch it).
+    var purpose by remember(info.purpose) { mutableStateOf(info.purpose) }
+    val choices = outcomesFor(co.outcomes, purpose, c?.direction, c?.durationSec)
+    // A reminder call-back must be before the webinar starts.
+    val webinarAt = if (purpose == "reminder") com.closeros.app.data.CallPurpose.webinarOf(lead, info.batchId)?.takeIf { it.isAfter(Instant.now()) } else null
     var outcome by remember { mutableStateOf<Outcome?>(null) }
     // The call's details arrive a moment later: drop a choice that no longer fits this kind of call.
-    LaunchedEffect(choices) { if (outcome != null && choices.none { it.id == outcome?.id }) outcome = null }
+    LaunchedEffect(choices) {
+        if (outcome != null && choices.none { it.id == outcome?.id }) outcome = null
+        // Dialled and nobody picked up (0 s): "Didn't pick" is already chosen — one tap on Save.
+        if (outcome == null && c != null && c.direction == "outgoing" && c.durationSec == 0)
+            outcome = choices.firstOrNull { it.code == "no_answer" || it.code == "r_didnt_pick" } ?: choices.firstOrNull { it.category == "not_connected" }
+    }
     var next by remember { mutableStateOf<ZonedDateTime?>(null) }
     var nextKey by remember { mutableStateOf<String?>(null) }   // keeps "In 30 min" highlighted when the clock ticks over
     var noFollow by remember { mutableStateOf(false) }
     // Each outcome suggests its next step (e.g. Busy → in 1 hour, Not interested → no follow-up).
     LaunchedEffect(outcome) {
         val o = outcome ?: return@LaunchedEffect
-        val opts = quickTimes(zone)
+        val opts = quickTimes(zone, webinarAt)
         when (o.next_default) {
             "none" -> { noFollow = true; next = null }
-            "30d" -> { noFollow = false; next = ZonedDateTime.now(zone).toLocalDate().plusDays(30).atTime(11, 0).atZone(zone) }
+            "30d" -> if (webinarAt == null) { noFollow = false; next = ZonedDateTime.now(zone).toLocalDate().plusDays(30).atTime(11, 0).atZone(zone) }
             null, "pick" -> { noFollow = false; next = null }
-            else -> opts.firstOrNull { it.first == o.next_default }?.let { noFollow = false; next = it.third; nextKey = it.first }
+            else -> (opts.firstOrNull { it.first == o.next_default } ?: opts.firstOrNull { it.first == "prestart" }.takeIf { webinarAt != null })
+                ?.let { noFollow = false; next = it.third; nextKey = it.first } ?: run { next = null; nextKey = null }
         }
     }
     var saving by remember { mutableStateOf(false) }
@@ -125,6 +135,12 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
             when {
                 waStep -> WhatsAppStep(info, savedLine, sendingWa, onSending = { sendingWa = it }, onEdit = { fullForm("whatsapp") }, onClose = onClose)
                 needs -> {
+                    // Reminder or sales call — worked out for this lead, one tap to switch.
+                    if (lead?.batch_leads?.isNotEmpty() == true || purpose == "reminder") Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Call type", fontSize = 13.sp, color = Brand.muted)
+                        PopChip("Sales", purpose == "sales") { if (purpose != "sales") { purpose = "sales"; outcome = null } }
+                        PopChip("Reminder", purpose == "reminder") { if (purpose != "reminder") { purpose = "reminder"; outcome = null } }
+                    }
                     Text("Outcome", fontWeight = FontWeight.SemiBold)
                     if (choices.isEmpty()) Text("Open the full form to save the outcome.", color = Brand.muted, fontSize = 14.sp)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -132,7 +148,8 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
                     }
                     Text("Next call", fontWeight = FontWeight.SemiBold)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        quickTimes(zone).forEach { (key, label, t) -> PopChip(label, !noFollow && next != null && (next == t || nextKey == key)) { next = t; nextKey = key; noFollow = false } }
+                        webinarAt?.let { Text("Webinar starts at ${it.atZone(zone).format(DateTimeFormatter.ofPattern("h:mm a"))} — call back before that", fontSize = 12.sp, color = Brand.muted) }
+                        quickTimes(zone, webinarAt).forEach { (key, label, t) -> PopChip(label, !noFollow && next != null && (next == t || nextKey == key)) { next = t; nextKey = key; noFollow = false } }
                         PopChip("No follow-up", noFollow) { noFollow = true; next = null }
                         PopChip("Other time…", false) { fullForm(if (lead == null) "add" else "outcome") }
                     }
@@ -147,7 +164,7 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
                             val withCall = if (info.call != null) info else info.phone?.let { ph ->
                                 withContext(kotlinx.coroutines.Dispatchers.IO) { AfterCall.findRecentCall(ctx, ph, co.prefix) }
                             }?.let { info.copy(call = it) } ?: info
-                            val r = saveQuick(ctx, withCall, lead, o, next, noFollow)
+                            val r = saveQuick(ctx, withCall, lead, o, next, noFollow, purpose)
                             saving = false
                             // Saved: step 2 on the same card — send a WhatsApp message, or close and dial the next.
                             if (r == null) {
@@ -201,7 +218,17 @@ private fun callLine(c: LogCall) = when {
 }
 
 /** One-tap next-call times on the card (same order as the app): in 30 min / 1 / 2 / 3 h, today 6 PM, tomorrow, day after. */
-private fun quickTimes(zone: ZoneId): List<Triple<String, String, ZonedDateTime>> {
+/** Quick next-call picks. For a reminder call, only times before the webinar starts (+ "30 min before start"). */
+private fun quickTimes(zone: ZoneId, before: Instant? = null): List<Triple<String, String, ZonedDateTime>> {
+    val all = quickTimesAll(zone)
+    if (before == null) return all
+    val now = ZonedDateTime.now(zone)
+    val pre = before.minusSeconds(30 * 60).atZone(zone).withSecond(0).withNano(0)
+    return all.filter { it.third.toInstant().isBefore(before) } +
+        (if (pre.isAfter(now.plusMinutes(5))) listOf(Triple("prestart", "30 min before start (${pre.format(DateTimeFormatter.ofPattern("h:mm a"))})", pre)) else emptyList())
+}
+
+private fun quickTimesAll(zone: ZoneId): List<Triple<String, String, ZonedDateTime>> {
     val now = ZonedDateTime.now(zone).withSecond(0).withNano(0)
     val today = now.toLocalDate()
     val out = mutableListOf(Triple("30m", "In 30 min", now.plusMinutes(30)), Triple("1h", "1 hour", now.plusHours(1)),
@@ -215,7 +242,7 @@ private fun quickTimes(zone: ZoneId): List<Triple<String, String, ZonedDateTime>
 }
 
 /** Saves from the card. Returns null when saved (or kept on the phone to send later), else the reason it can't be saved. */
-private suspend fun saveQuick(ctx: Context, info: AfterCall.Info, lead: Lead?, o: Outcome, next: ZonedDateTime?, noFollow: Boolean): String? {
+private suspend fun saveQuick(ctx: Context, info: AfterCall.Info, lead: Lead?, o: Outcome, next: ZonedDateTime?, noFollow: Boolean, purpose: String = info.purpose): String? {
     val c = info.call ?: return "Couldn't find this call in the phone's call history yet — wait 2 seconds and tap Save again"
     val co = info.co
     val store = LocalStore(ctx)
@@ -223,8 +250,8 @@ private suspend fun saveQuick(ctx: Context, info: AfterCall.Info, lead: Lead?, o
         put("id", c.id); put("org_id", co.orgId)
         // Not in the lead list yet: the server adds it as a lead (named after the phone contact).
         if (lead != null) put("lead_id", lead.id) else { put("create_lead", true); info.contactName?.let { put("lead_name", it) } }
-        put("phone", lead?.phone ?: com.closeros.app.ui.normalizePhone(c.phone, co.prefix)); put("direction", c.direction); put("purpose", info.purpose)
-        info.appCall?.batchId?.let { put("batch_id", it) }
+        put("phone", lead?.phone ?: com.closeros.app.ui.normalizePhone(c.phone, co.prefix)); put("direction", c.direction); put("purpose", purpose)
+        info.batchId?.let { put("batch_id", it) }
         put("started_at", Instant.ofEpochMilli(c.startedAtMs).toString()); put("duration_sec", c.durationSec)
         c.simSlot?.let { put("sim_slot", it) }; c.simLabel?.let { put("sim_label", it) }; c.simNumber?.let { put("sim_number", it) }
         put("device_id", PhoneCalls.deviceId(ctx)); put("from_dialer_queue", false)
@@ -253,7 +280,7 @@ fun afterCallIntent(ctx: Context, info: AfterCall.Info, mode: String): Intent {
     return Intent(ctx, AfterCallActivity::class.java)
         .putExtra("mode", mode).putExtra("log_id", c.id).putExtra("started", c.startedAtMs).putExtra("phone", c.phone)
         .putExtra("lead_id", lead?.id).putExtra("lead_name", lead?.name).putExtra("lead_phone", lead?.phone).putExtra("profession", lead?.profession)
-        .putExtra("purpose", info.purpose).putExtra("batch_id", info.appCall?.batchId).putExtra("app_call", info.appCall != null)
+        .putExtra("purpose", info.purpose).putExtra("batch_id", info.batchId).putExtra("app_call", info.appCall != null)
 }
 
 @Composable

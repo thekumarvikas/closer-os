@@ -291,7 +291,8 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Starts calling the given leads one after another. */
-    fun startQueue(leads: List<Lead>, purpose: String = "sales", batchId: String? = null) {
+    /** purpose "auto" = each lead's own (reminder before its webinar, else sales) — see CallPurpose. */
+    fun startQueue(leads: List<Lead>, purpose: String = "auto", batchId: String? = null) {
         queuePurpose = purpose; queueBatchId = batchId
         var list = leads.filter { !it.do_not_call }.distinctBy { it.id }
         // Settings → "Best time to call first": after due follow-ups, leads whose best pick-up hour is now go next.
@@ -395,7 +396,9 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** From a notification's Call button. */
     fun callLeadById(id: String, purpose: String? = null) = viewModelScope.launch {
-        runCatching { Repo.lead(id) }.getOrNull()?.let { if (purpose == "reminder") callContext = "reminder" to null; callRequest = it } ?: run { message = "Lead not found" }
+        runCatching { Repo.lead(id) }.getOrNull()?.let { l ->
+            if (purpose == "reminder") callContext = "reminder" to com.closeros.app.data.CallPurpose.guess(l, followUps).let { g -> if (g.purpose == "reminder") g.batchId else null }
+            callRequest = l } ?: run { message = "Lead not found" }
     }
 
     fun saveSetup(myPhone: String, sims: Map<Int, String>, onError: (String) -> Unit) = viewModelScope.launch {
@@ -666,11 +669,13 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun startCall(lead: Lead, sim: Sim?) {
         if (pending != null) { message = "Save the outcome of your last call first"; return }
         // Tag the call with its webinar when it comes from a webinar list or queue.
-        val ctxPair = callContext ?: if (queueActive && queue.any { it.id == lead.id }) queuePurpose to queueBatchId
+        val ctxPair = callContext ?: if (queueActive && queuePurpose != "auto" && queue.any { it.id == lead.id }) queuePurpose to queueBatchId
             else openList?.takeIf { o -> listRows?.any { it.id == lead.id } == true }?.let { (b, purpose) -> purpose to b.id }
         callContext = null
+        // Not from a webinar list: reminder if their webinar is within 24 h (or a reminder follow-up is due), else sales.
+        val auto = if (ctxPair == null) com.closeros.app.data.CallPurpose.guess(lead, followUps) else null
         val p = LocalStore.PendingCall(lead.id, lead.name, lead.phone, System.currentTimeMillis(),
-            ctxPair?.first ?: "sales", ctxPair?.second, lead.profession, rowCategory[lead.id], requestId = remoteRequestId)
+            ctxPair?.first ?: auto?.purpose ?: "sales", ctxPair?.second ?: auto?.batchId, lead.profession, rowCategory[lead.id], requestId = remoteRequestId)
         remoteRequestId = null; remoteCall = false
         store.pendingCall = p; pending = p; pendingLog = null
         sim?.let { store.preferredSim = it.slot }
@@ -742,7 +747,8 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         calls.take(first).forEach { store.markLogged(it.id) }
         val c = calls[first]; val lead = leads[phones[first]]!!
         if (pending != null) return
-        val pc = LocalStore.PendingCall(lead.id, lead.name, lead.phone, c.startedAtMs, "sales", null, lead.profession, null, logId = c.id)
+        val g = com.closeros.app.data.CallPurpose.guess(lead, followUps)
+        val pc = LocalStore.PendingCall(lead.id, lead.name, lead.phone, c.startedAtMs, g.purpose, g.batchId, lead.profession, null, logId = c.id)
         store.pendingCall = pc; pending = pc; pendingLog = c
     }
 

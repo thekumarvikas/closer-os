@@ -113,13 +113,16 @@ data class LeadFact(val key: String, val label: String, val options: List<String
     val last_call_status: String? = null, val has_talked: Boolean = false, val score: Int = 0, val won_at: String? = null,
     val tags: List<String>? = null, val custom: JsonObject? = null, val created_at: String? = null, val best_hour: Int? = null,
     val conversation_count: Int = 0, val profession_category_id: String? = null,
+    /** From today's focus list: what kind of call this is (reminder / sales) and for which webinar. */
+    val call_purpose: String? = null, val call_batch_id: String? = null,
 ) {
     /** Latest webinar/event this lead registered for. */
     val latestBatch: BatchLink? get() = batch_leads.maxByOrNull { it.batch?.webinar_at ?: "" }
 }
 
 @Serializable data class BatchMini(val name: String = "", val webinar_at: String? = null)
-@Serializable data class BatchLink(val watch_minutes: Int? = null, val attended: Boolean = false, val batch: BatchMini? = null)
+@Serializable data class BatchLink(val watch_minutes: Int? = null, val attended: Boolean = false, val batch: BatchMini? = null,
+    val batch_id: String? = null, val is_holdout: Boolean = false)
 @Serializable data class Template(val id: String, val name: String, val body: String, val position: Int = 0, val owner_id: String? = null,
     val media_path: String? = null, val media_type: String? = null, val media_name: String? = null)
 
@@ -230,7 +233,7 @@ data class LeadFilters(
 
 @Serializable data class TodayStats(val calls: Int = 0, val connected: Int = 0, val talkSec: Int = 0, val notPicked: Int = 0, val missed: Int = 0)
 
-private const val LEAD_COLUMNS = "*, batch_leads(watch_minutes, attended, batch:batches(name, webinar_at))"
+private const val LEAD_COLUMNS = "*, batch_leads(batch_id, is_holdout, watch_minutes, attended, batch:batches(name, webinar_at))"
 
 object Repo {
     private val db get() = Backend.client.postgrest

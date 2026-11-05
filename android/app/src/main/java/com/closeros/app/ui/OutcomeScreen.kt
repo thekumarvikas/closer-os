@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -41,8 +42,16 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
     val log = vm.pendingLog
     val ctx = LocalContext.current
     val zone = ZoneId.of(vm.membership?.organization?.timezone ?: "Asia/Kolkata")
-    val choices = outcomesFor(vm.outcomes, p.purpose, log?.direction, log?.durationSec)
+    // Reminder or sales: set by where the call came from or worked out for the lead; the rep can switch it.
+    var purpose by remember(p) { mutableStateOf(p.purpose) }
+    val choices = outcomesFor(vm.outcomes, purpose, log?.direction, log?.durationSec)
     var outcome by remember { mutableStateOf<Outcome?>(null) }
+    // Dialled and nobody picked up (0 s): "Didn't pick" is already chosen — one tap on Save.
+    LaunchedEffect(choices, log?.id) {
+        if (outcome != null && choices.none { it.id == outcome?.id }) outcome = null
+        if (outcome == null && log != null && log.direction == "outgoing" && log.durationSec == 0)
+            outcome = choices.firstOrNull { it.code == "no_answer" || it.code == "r_didnt_pick" } ?: choices.firstOrNull { it.category == "not_connected" }
+    }
     var followAt by remember { mutableStateOf<ZonedDateTime?>(null) }
     var noFollow by remember { mutableStateOf(false) }
     var notes by remember { mutableStateOf("") }
@@ -50,6 +59,9 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
     var factValues by remember { mutableStateOf(emptyMap<String, String>()) }
     var lead by remember { mutableStateOf<com.closeros.app.data.Lead?>(null) }
     LaunchedEffect(p.leadId) { lead = runCatching { com.closeros.app.data.Repo.lead(p.leadId) }.getOrNull() }
+    // A reminder call-back must be before the webinar starts.
+    val webinarAt = if (purpose == "reminder") com.closeros.app.data.CallPurpose.webinarOf(lead, p.batchId)?.takeIf { it.isAfter(Instant.now()) } else null
+    fun beforeStart(t: ZonedDateTime) = webinarAt == null || t.toInstant().isBefore(webinarAt)
     var amount by remember { mutableStateOf("") }
     var product by remember { mutableStateOf("") }
     var interest by remember { mutableStateOf("") }
@@ -81,9 +93,14 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
             "30d" -> { day = t.plusDays(30); followAt = t.plusDays(30).atTime(11, 0).atZone(zone) }
             "none" -> noFollow = true
         }
+        // Reminder: a suggested time after the webinar starts becomes "30 min before start".
+        if (webinarAt != null && followAt?.let { !beforeStart(it) } == true) {
+            val pre = webinarAt.minusSeconds(1800).atZone(zone).withSecond(0).withNano(0)
+            if (pre.isAfter(ZonedDateTime.now(zone).plusMinutes(5))) { followAt = pre; quick = "prestart"; day = null } else { followAt = null; quick = null; day = null }
+        }
     }
     fun slotsFor(d: java.time.LocalDate): List<ZonedDateTime> = (0 until 26).map { i -> d.atTime(9, 0).plusMinutes(30L * i).atZone(zone) }
-        .filter { it.isAfter(now.plusMinutes(10)) }
+        .filter { it.isAfter(now.plusMinutes(10)) && beforeStart(it) }
     fun pickOtherDate() {
         val start = day ?: today.plusDays(3)
         DatePickerDialog(ctx, { _, y, m, d -> day = java.time.LocalDate.of(y, m + 1, d); followAt = null; noFollow = false },
@@ -113,6 +130,12 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
             }
         }
 
+        // Reminder or sales call — one tap to switch (shown when the lead is in a webinar / event).
+        if (lead?.batch_leads?.isNotEmpty() == true || purpose == "reminder") Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Call type", color = Brand.muted, fontSize = 14.sp)
+            Chip("Sales", purpose == "sales") { if (purpose != "sales") { purpose = "sales"; outcome = null } }
+            Chip("Reminder", purpose == "reminder") { if (purpose != "reminder") { purpose = "reminder"; outcome = null } }
+        }
         Text("Outcome", fontWeight = FontWeight.SemiBold)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             choices.forEach { o -> Chip(o.label, outcome?.id == o.id) { outcome = o } }
@@ -142,16 +165,20 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
         }
 
         Text("Next call", fontWeight = FontWeight.SemiBold)
+        webinarAt?.let { Text("Webinar starts at ${it.atZone(zone).format(DateTimeFormatter.ofPattern("h:mm a"))} — call back before that", fontSize = 13.sp, color = Brand.muted) }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             // One tap: in 30 min / 1 / 2 / 3 hours. Two taps: a day, then a 30-minute slot.
-            quickIns.forEach { (key, mins, label) ->
+            quickIns.filter { (_, mins, _) -> beforeStart(base.plusMinutes(mins)) }.forEach { (key, mins, label) ->
                 Chip(label, !noFollow && quick == key) { quick = key; followAt = base.plusMinutes(mins); day = null; noFollow = false }
             }
+            webinarAt?.let { w -> val pre = w.minusSeconds(1800).atZone(zone).withSecond(0).withNano(0)
+                if (pre.isAfter(now.plusMinutes(5))) Chip("30 min before start (${pre.format(DateTimeFormatter.ofPattern("h:mm a"))})", !noFollow && quick == "prestart") {
+                    quick = "prestart"; followAt = pre; day = null; noFollow = false } }
             if (slotsFor(today).isNotEmpty()) Chip("Today", day == today && !noFollow) { day = today; followAt = null; noFollow = false; quick = null }
-            Chip("Tomorrow", day == today.plusDays(1) && !noFollow) { day = today.plusDays(1); followAt = null; noFollow = false; quick = null }
-            Chip(today.plusDays(2).format(DateTimeFormatter.ofPattern("EEE d MMM")), day == today.plusDays(2) && !noFollow) { day = today.plusDays(2); followAt = null; noFollow = false; quick = null }
+            if (slotsFor(today.plusDays(1)).isNotEmpty()) Chip("Tomorrow", day == today.plusDays(1) && !noFollow) { day = today.plusDays(1); followAt = null; noFollow = false; quick = null }
+            if (slotsFor(today.plusDays(2)).isNotEmpty()) Chip(today.plusDays(2).format(DateTimeFormatter.ofPattern("EEE d MMM")), day == today.plusDays(2) && !noFollow) { day = today.plusDays(2); followAt = null; noFollow = false; quick = null }
             val other = day?.takeIf { it.isAfter(today.plusDays(2)) }
-            Chip(other?.format(DateTimeFormatter.ofPattern("EEE d MMM")) ?: "Other date", other != null && !noFollow) { pickOtherDate() }
+            if (webinarAt == null) Chip(other?.format(DateTimeFormatter.ofPattern("EEE d MMM")) ?: "Other date", other != null && !noFollow) { pickOtherDate() }
             Chip("No follow-up", noFollow) { noFollow = true; followAt = null; day = null; quick = null }
         }
         day?.let { d ->
@@ -186,7 +213,7 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
             busy = true
             val payload = buildJsonObject {
                 put("id", vm.newCallId()); put("org_id", m.org_id); put("lead_id", p.leadId)
-                put("phone", p.phone); put("direction", log?.direction ?: "outgoing"); put("purpose", p.purpose)
+                put("phone", p.phone); put("direction", log?.direction ?: "outgoing"); put("purpose", purpose)
                 p.batchId?.let { put("batch_id", it) }
                 put("started_at", Instant.ofEpochMilli(log?.startedAtMs ?: p.startedAtMs).toString())
                 put("duration_sec", log?.durationSec ?: 0)

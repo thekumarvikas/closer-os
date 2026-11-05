@@ -142,17 +142,25 @@ object LocalLeads {
             (uid == null || l.assigned_to == uid) && !l.do_not_call && l.last_outcome_id !in closed &&
                 (t(l.next_follow_up_at)?.isBefore(dayEnd) ?: true) &&
                 ((t(l.last_call_at)?.isBefore(dayStart) ?: true) || t(l.next_follow_up_at)?.isBefore(now.plusSeconds(7200)) == true)
-        }.sortedWith(compareBy<Lead>({ l ->
+        }.map { l ->
+            // Same order as the server: late → tonight's webinar (reminder) → due in 2 h → hot watchers → new (newest first) → best time → close → rest.
             val fu = t(l.next_follow_up_at)
-            when {
+            val up = l.batch_leads.filter { !it.is_holdout }.mapNotNull { b -> t(b.batch?.webinar_at)?.takeIf { it.isAfter(now) && it.isBefore(now.plusSeconds(18 * 3600)) } }.minOrNull()
+            val hot = l.batch_leads.any { b -> (b.watch_minutes ?: 0) >= 60 && t(b.batch?.webinar_at)?.let { it.isAfter(now.minusSeconds(14L * 86_400)) && !it.isAfter(now) } == true }
+            val bucket = when {
                 fu != null && fu.isBefore(now) -> 1
-                fu != null && fu.isBefore(now.plusSeconds(7200)) -> 2
-                l.dial_count == 0 -> 3
-                l.best_hour == hour -> 4
-                l.score >= 40 -> 5
-                else -> 6
+                up != null -> 2
+                fu != null && fu.isBefore(now.plusSeconds(7200)) -> 3
+                hot -> 4
+                l.dial_count == 0 -> 5
+                l.best_hour == hour -> 6
+                l.score >= 40 -> 7
+                else -> 8
             }
-        }, { t(it.next_follow_up_at) ?: Instant.MAX }, { -it.score }))
+            Triple(l, bucket, up)
+        }.sortedWith(compareBy<Triple<Lead, Int, Instant?>>({ it.second }, { it.third ?: Instant.MAX }, { t(it.first.next_follow_up_at) ?: Instant.MAX },
+            { if (it.second == 5) -(t(it.first.created_at)?.toEpochMilli() ?: 0L) else 0L }, { -it.first.score }))
+            .map { it.first }   // reminder vs sales is worked out per lead when calling (CallPurpose)
     }
 }
 

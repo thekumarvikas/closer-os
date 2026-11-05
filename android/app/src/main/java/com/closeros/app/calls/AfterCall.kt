@@ -52,7 +52,8 @@ object AfterCall {
 
     /** Everything the card needs about the company, from the copy saved on the phone (works offline). */
     data class Company(val orgId: String, val prefix: String, val timezone: String, val outcomes: List<Outcome>,
-                       val name: String = "", val repName: String = "", val templates: List<com.closeros.app.data.Template> = emptyList())
+                       val name: String = "", val repName: String = "", val templates: List<com.closeros.app.data.Template> = emptyList(),
+                       val followUps: List<com.closeros.app.data.FollowUp> = emptyList())
 
     fun company(ctx: Context): Company? {
         val db = com.closeros.app.data.LocalDb.get(ctx)
@@ -60,7 +61,8 @@ object AfterCall {
         val outcomes = db.get("outcomes")?.let { runCatching { com.closeros.app.data.json.decodeFromString<List<Outcome>>(it) }.getOrNull() }.orEmpty()
         val templates = db.get("templates")?.let { runCatching { com.closeros.app.data.json.decodeFromString<List<com.closeros.app.data.Template>>(it) }.getOrNull() }.orEmpty()
         val rep = db.get("profile")?.let { runCatching { com.closeros.app.data.json.decodeFromString<com.closeros.app.data.Profile>(it) }.getOrNull() }?.full_name.orEmpty()
-        return Company(m.org_id, m.organization.phone_prefix, m.organization.timezone, outcomes, m.organization.name, rep, templates)
+        val fus = db.get("followUps")?.let { runCatching { com.closeros.app.data.json.decodeFromString<List<com.closeros.app.data.FollowUp>>(it) }.getOrNull() }.orEmpty()
+        return Company(m.org_id, m.organization.phone_prefix, m.organization.timezone, outcomes, m.organization.name, rep, templates, fus)
     }
 
     /**
@@ -70,7 +72,10 @@ object AfterCall {
      */
     data class Info(val call: LogCall?, val phone: String?, val lead: Lead?, val co: Company, val appCall: LocalStore.PendingCall?,
                     val lookupFailed: Boolean = false, val checking: Boolean = false, val contactName: String? = null) {
-        val purpose get() = appCall?.purpose ?: "sales"
+        /** Reminder or sales: from the app's own call, else worked out for the lead (webinar within 24 h → reminder). */
+        private val auto get() = com.closeros.app.data.CallPurpose.guess(lead, co.followUps)
+        val purpose get() = appCall?.purpose ?: auto.purpose
+        val batchId get() = appCall?.batchId ?: auto.batchId
         val number get() = call?.phone?.takeIf { it.isNotBlank() } ?: phone
     }
 

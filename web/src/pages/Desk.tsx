@@ -319,7 +319,8 @@ function outcomesFor(list: Outcome[], direction: string, talk: number): Outcome[
   const invalid = (o: Outcome) => o.category === 'invalid'
   // Received call: hide "couldn't reach / dead number" kinds; wrong-number kinds go last.
   const dialledOnly = ['not_in_service', 'invalid_number', 'r_invalid', 'r_out_of_service', 'someone_else', 'r_someone_else']
-  if (direction === 'incoming') return list.filter(o => !noContact(o) && !dialledOnly.includes(o.code)).sort((a, b) => Number(invalid(a)) - Number(invalid(b)))
+  if (direction === 'incoming') return list.filter(o => !noContact(o) && !dialledOnly.includes(o.code) && o.shown_on !== 'outgoing').sort((a, b) => Number(invalid(a)) - Number(invalid(b)))
+  list = list.filter(o => o.shown_on !== 'incoming')
   if (!talk) { const l = list.filter(o => noContact(o) || invalid(o)); return l.length ? l : list }
   return [...list].sort((a, b) => talk < 20 ? Number(!noContact(a)) - Number(!noContact(b)) : Number(noContact(a)) - Number(noContact(b)))
 }

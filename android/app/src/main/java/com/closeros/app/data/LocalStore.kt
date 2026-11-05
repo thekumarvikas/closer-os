@@ -162,6 +162,10 @@ class LocalStore(ctx: Context) {
     fun removeWaPending(id: String) = synchronized(outboxLock) { waPending = waPending.filter { it.id != id } }
 
     fun clear() { p.edit().clear().apply() }
+    /** Why this phone was signed out automatically (shown on the sign-in screen). */
+    var kickedReason: String?
+        get() = p.getString("kicked_reason", null)
+        set(v) { p.edit().putString("kicked_reason", v).apply() }
     /** The signed-in person's id, kept so the app still knows who you are with no internet. */
     var lastUid: String?
         get() = p.getString("last_uid", null)

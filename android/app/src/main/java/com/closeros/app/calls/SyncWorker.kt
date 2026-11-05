@@ -37,6 +37,8 @@ object CallSync {
         store.removeFromOutbox(sentOk)
         // Notes, key facts, WhatsApp "sent" marks and leads added with no internet.
         runCatching { com.closeros.app.data.Ops.flush(ctx) }
+        // One login = one phone: if this login is now used on another phone, sign out here (all uploaded above).
+        if (DeviceGuard.check(ctx, force = true)) return@runCatching 0
         // Keep the phone's copy of the leads fresh (instant after-call pop-up, works offline).
         val newLeadPhones = runCatching { com.closeros.app.data.LeadIndex.sync(ctx, orgId) }
             .onFailure { com.closeros.app.data.AppLog.error(ctx, "lead index", it) }.getOrDefault(emptySet())

@@ -126,6 +126,8 @@ data class LeadFact(val key: String, val label: String, val options: List<String
 @Serializable data class Outcome(
     val id: String, val code: String, val label: String, val category: String, val form: String? = null,
     val purpose: String = "sales", val position: Int = 0, val is_active: Boolean = true, val next_default: String? = null,
+    /** both | outgoing (only on dialled calls) | incoming (only on received calls) — set on the dashboard */
+    val shown_on: String = "both",
 )
 
 /** A webinar / event with how many leads I (or my team) have to call. */
@@ -258,6 +260,13 @@ object Repo {
     }
 
     suspend fun signOut() = Backend.auth.signOut()
+
+    // One login = one phone (see calls/DeviceGuard.kt)
+    suspend fun claimDevice(device: String, name: String) {
+        db.rpc("claim_device", buildJsonObject { put("p_device", device); put("p_name", name) })
+    }
+    suspend fun deviceCheck(device: String, name: String): JsonObject =
+        json.parseToJsonElement(db.rpc("device_check", buildJsonObject { put("p_device", device); put("p_name", name) }).data).jsonObject
 
     /** Joins companies that invited this email, then returns the first active membership. */
     suspend fun membership(): Membership? {

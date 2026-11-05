@@ -78,6 +78,9 @@ fun LoginScreen(vm: AppViewModel) {
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
                 OutlinedTextField(password, { password = it }, label = { Text("Password") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                     visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
+                remember { com.closeros.app.data.LocalStore(ctx).kickedReason }?.let {
+                    Text("🔒 $it", fontSize = 14.sp, color = Color(0xFF92400E), modifier = Modifier.background(Color(0xFFFEF3C7), RoundedCornerShape(8.dp)).padding(10.dp))
+                }
                 error?.let { Text(it, color = Brand.red, fontSize = 14.sp) }
                 Button(onClick = { busy = true; error = null; vm.signIn(email, password) { error = it; busy = false } },
                     enabled = !busy && email.isNotBlank() && password.isNotBlank(), modifier = Modifier.fillMaxWidth().height(50.dp)) {

@@ -438,7 +438,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun signIn(email: String, password: String, onError: (String) -> Unit) = viewModelScope.launch {
-        runCatching { Repo.signIn(email, password) }.onFailure {
+        runCatching { Repo.signIn(email, password) }.onSuccess { com.closeros.app.calls.DeviceGuard.claim(ctx) }.onFailure {
             onError(if (it.message?.contains("Invalid login", true) == true) "Wrong email or password"
                     else if (it.message?.contains("not confirmed", true) == true) "Please confirm your email first (check your inbox)"
                     else "Couldn't sign in. Check your internet.")
@@ -679,6 +679,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Called when the app comes back to the front: look up the finished call in the call log. */
     fun onResume() {
+        viewModelScope.launch { com.closeros.app.calls.DeviceGuard.check(ctx) }   // signed in on another phone? (one login, one phone)
         loadWaToConfirm()
         if (waActive && waAwaiting) waBackFromWhatsApp()
         // Saved in the after-call pop-up while the app was in the background: move on.

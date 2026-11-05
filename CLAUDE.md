@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.11.2
+## Android app (`android/`) — v0.11.3
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -826,7 +826,15 @@ intelligence → Play Store launch.
   server (saved copy offline, "📴 … as last saved"). Home today/month target bars: manager's targets +
   phone actuals (vm.mine()). Lead work / What works stay server-side (saved copies).
 - Caveat: phone numbers only include THIS phone's calls (one login on two phones → each shows its own).
-- Owner's next rule (not built yet): one login = one phone at a time; signing in on a second phone
-  signs the first out (subscription seats). Proposed: device registered at login (server
-  active_device per user), others sign out on next online check AFTER uploading their outbox;
-  dashboard/laptop not affected; Super Admin can allow 2 phones per user later.
+
+## Outcomes per call type + one login = one phone (v0.11.3, migrations 0049–0050, Nov 2026)
+- call_outcomes.shown_on both|outgoing|incoming (default via outcome_default_shown_on(code, category):
+  not_connected + dialled-only codes incl. call_back / r_call_later / disconnected / busy → outgoing;
+  insert trigger t_outcome_shown_on for new orgs/outcomes). App outcomesFor + web Desk honour it;
+  dashboard Settings "Each outcome: which calls it shows on, and the next step" has a Shows-on select.
+- profiles.active_device / _name / _at; claim_device(device, name) on app sign-in; device_check →
+  {active, other}; first phone to check claims when null. calls/DeviceGuard.kt: check() in CallSync
+  (after outbox + Ops flush) and on app resume (30 s throttle); if not active → uploads everything,
+  signs out ONLY locally (SignOutScope.LOCAL), clears local data, LocalStore.kickedReason shown on the
+  sign-in screen. Stays signed in while anything is still waiting to upload. Dashboard unaffected.
+  Later: Super Admin "allow 2 phones" per user (paid add-on).

@@ -240,7 +240,9 @@ private fun Chip(label: String, selected: Boolean, onClick: () -> Unit) {
 val DIALLED_ONLY = setOf("not_in_service", "invalid_number", "r_invalid", "r_out_of_service", "someone_else", "r_someone_else")
 
 fun outcomesFor(all: List<Outcome>, purpose: String, direction: String?, durationSec: Int?): List<Outcome> {
-    val list = all.filter { it.is_active && (it.purpose == purpose || it.purpose == "both") }.sortedBy { it.position }
+    val list = all.filter { it.is_active && (it.purpose == purpose || it.purpose == "both") }
+        .filter { direction == null || direction == "incoming" || it.shown_on != "incoming" }   // received-only outcomes never on a dialled call
+        .sortedBy { it.position }
     val noContact = { o: Outcome -> o.category == "not_connected" }
     val invalid = { o: Outcome -> o.category == "invalid" }
     val talk = durationSec ?: 0
@@ -248,7 +250,7 @@ fun outcomesFor(all: List<Outcome>, purpose: String, direction: String?, duratio
         direction == null -> list
         // They called us: nothing about failing to reach them or a dead number; conversation outcomes first,
         // "wrong number / not the right person" kinds last.
-        direction == "incoming" -> list.filterNot { noContact(it) || it.code in DIALLED_ONLY }.sortedBy { if (invalid(it)) 1 else 0 }
+        direction == "incoming" -> list.filterNot { noContact(it) || it.code in DIALLED_ONLY || it.shown_on == "outgoing" }.sortedBy { if (invalid(it)) 1 else 0 }
         direction != "outgoing" -> list.filter { noContact(it) || invalid(it) }.ifEmpty { list }
         talk == 0 -> list.filter { noContact(it) || invalid(it) }.ifEmpty { list }
         talk < 20 -> list.sortedBy { if (noContact(it)) 0 else 1 }

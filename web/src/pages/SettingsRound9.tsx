@@ -29,17 +29,23 @@ export function OutcomeNextSteps() {
   const list = (dir?.outcomes ?? []).filter(o => o.is_active).sort((a, b) => a.position - b.position)
   return (
     <Card className="p-5 lg:col-span-2">
-      <h2 className="font-semibold">Next step after each outcome</h2>
-      <p className="mb-3 mt-1 text-sm text-slate-500">Chosen automatically when a rep picks the outcome (they can still change it). Fewer taps after every call.</p>
+      <h2 className="font-semibold">Each outcome: which calls it shows on, and the next step</h2>
+      <p className="mb-3 mt-1 text-sm text-slate-500">"Shows on" keeps the list short: e.g. "Switched off" only after a call you dialled, never after one you received. The next step is chosen automatically when a rep picks the outcome (they can still change it).</p>
       <ErrorBox error={error} />
       <div className="grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
         {list.map(o => (
           <label key={o.id} className="flex items-center justify-between gap-2 border-b border-slate-100 py-1 text-sm">
             <span className="truncate">{o.label} <span className="text-xs text-slate-400">{o.purpose === 'reminder' ? '· reminder' : ''}</span></span>
+            <span className="flex shrink-0 gap-1">
+            <select title="Shows on" className="rounded border border-slate-200 px-1.5 py-1 text-sm" value={o.shown_on ?? 'both'} onChange={async e => {
+              const { error } = await supabase.from('call_outcomes').update({ shown_on: e.target.value }).eq('id', o.id)
+              setError(error ? errorText(error) : null); setVersion(v => v + 1)
+            }}><option value="both">All calls</option><option value="outgoing">Dialled only</option><option value="incoming">Received only</option></select>
             <select className="rounded border border-slate-200 px-1.5 py-1 text-sm" value={o.next_default ?? ''} onChange={async e => {
               const { error } = await supabase.from('call_outcomes').update({ next_default: e.target.value || null }).eq('id', o.id)
               setError(error ? errorText(error) : null); setVersion(v => v + 1)
             }}>{NEXT.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+            </span>
           </label>
         ))}
       </div>

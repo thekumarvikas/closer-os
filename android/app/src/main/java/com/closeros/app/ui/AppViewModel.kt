@@ -102,6 +102,8 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     var showSetup by mutableStateOf(false)
     /** True while the app is on screen. */
     var foreground = false
+    /** False while the phone has no internet (the app keeps working from its own copy). */
+    var online by mutableStateOf(com.closeros.app.data.Net.isOnline)
     var leaderboard by mutableStateOf<List<com.closeros.app.data.BoardRow>>(emptyList())
     var showLeaderboard by mutableStateOf(false)
     var showDialer by mutableStateOf(false)
@@ -158,7 +160,8 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun loadBatches(quiet: Boolean = false) = viewModelScope.launch {
         val m = membership ?: return@launch
-        batches = runCatching { Repo.myBatches(m.org_id) }.onFailure { if (!quiet) message = "Couldn't load webinars: ${it.message}" }.getOrDefault(emptyList())
+        batches = runCatching { Repo.myBatches(m.org_id).also { save("batches", it) } }
+            .getOrElse { e -> cached<List<BatchSummary>>("batches") ?: run { if (!quiet) message = "Couldn't load webinars: ${e.message}"; emptyList() } }
     }
 
     fun openBatchList(b: BatchSummary, purpose: String) { openList = b to purpose; loadList() }
@@ -166,7 +169,9 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun loadList() = viewModelScope.launch {
         val (b, purpose) = openList ?: return@launch
         listRows = null
-        runCatching { Repo.batchCallList(b.id, purpose, listEveryone && isManager) }
+        val key = "bl_${b.id}_${purpose}_${listEveryone && isManager}"
+        runCatching { Repo.batchCallList(b.id, purpose, listEveryone && isManager).also { save(key, it) } }
+            .recoverCatching { e -> cached<com.closeros.app.data.BatchList>(key)?.also { message = "No internet — showing the list saved on this phone" } ?: throw e }
             .onSuccess { r -> listRows = r.leads; rowCategory = r.leads.associate { it.id to it.category_id } }
             .onFailure { message = "Couldn't load the list: ${it.message}"; listRows = emptyList() }
     }
@@ -243,7 +248,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
         }.onFailure {
             if (membership == null) { message = "Couldn't load your company: ${it.message}"; com.closeros.app.data.AppLog.error(ctx, "load company", it) }
-            else message = "Offline — showing saved data"
+            else if (com.closeros.app.data.Net.isOnline) message = "Couldn't refresh — showing saved data"
         }
         launch { com.closeros.app.data.AppLog.flush(ctx) }
         loadingOrg = false
@@ -378,6 +383,10 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         val m = membership ?: return@launch
         if (addingLead) return@launch   // ignore a quick second tap
         addingLead = true
+        if (!com.closeros.app.data.Net.isOnline) {
+            com.closeros.app.data.Ops.lead(ctx, m.org_id, name, normalizePhone(phone, prefix), profession.ifBlank { null }, notes.ifBlank { null })
+            addingLead = false; message = "No internet — the lead will be added when you're back online"; onDone(); return@launch
+        }
         runCatching { Repo.createLead(m.org_id, name, phone, profession, notes) }
             .also { addingLead = false }
             .onSuccess { message = "Lead added"; onDone(); loadHistory(); reloadLeads(); CallSync.syncNow(ctx) }
@@ -479,14 +488,22 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         runCatching { Repo.focusList(m.org_id, 1000, 0) as kotlinx.serialization.json.JsonObject }
             .onSuccess { f -> val rows = (f["rows"] as? kotlinx.serialization.json.JsonArray).orEmpty().mapNotNull { runCatching { com.closeros.app.data.json.decodeFromJsonElement(Lead.serializer(), it) }.getOrNull() }
                 if (rows.isEmpty()) message = "Nothing left in today's focus 👍" else startQueue(rows) }
-            .onFailure { message = "Couldn't load today's focus — check internet" }
+            .onFailure { offlineFocus()?.let { rows -> if (rows.isEmpty()) message = "Nothing left in today's focus 👍" else startQueue(rows) } ?: run { message = "Couldn't load today's focus" } }
+    }
+
+    /** Today's focus from the phone's copy of the leads (no internet). */
+    private suspend fun offlineFocus(): List<Lead>? {
+        val m = membership ?: return null
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { com.closeros.app.data.LocalLeads.focus(ctx, outcomes, m.organization.timezone) }.getOrNull()
+        }
     }
 
     fun openFocusList() = viewModelScope.launch {
         val m = membership ?: return@launch
         runCatching { Repo.focusList(m.org_id, 1000, 0) as kotlinx.serialization.json.JsonObject }
             .onSuccess { f -> genericList = "Today's focus" to (f["rows"] as? kotlinx.serialization.json.JsonArray).orEmpty().mapNotNull { runCatching { com.closeros.app.data.json.decodeFromJsonElement(Lead.serializer(), it) }.getOrNull() } }
-            .onFailure { message = "Couldn't load — check internet" }
+            .onFailure { offlineFocus()?.let { genericList = "Today's focus (saved on phone)" to it } ?: run { message = "Couldn't load the list" } }
     }
 
     // WhatsApp queue: one message to many leads. The rep taps Send in WhatsApp; Closer OS marks it and opens the next.
@@ -794,6 +811,8 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
                 message = err.substringAfter("ERROR:").trim().ifEmpty { err }; onDone(); return@launch
             }
             store.addToOutbox(payload)
+            com.closeros.app.data.LocalFollowUps.apply(ctx, payload)   // next call shows in Follow-ups + reminder alarm set now
+            followUps = cached("followUps") ?: followUps
             message = "No internet — saved on the phone, will send automatically"
         } else message = "Saved"
         pending?.let { FollowUpAlarms.cancelForLead(ctx, it.leadId, followUps) }
@@ -816,11 +835,19 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     // Runs last, after every property above exists (the after-call screen starts already signed in).
     init {
         // A lead was added or a call saved in the after-call pop-up: refresh the lists straight away.
+        // Internet back: refresh everything from the server.
+        viewModelScope.launch {
+            com.closeros.app.data.Net.online.collect { on ->
+                val was = online; online = on
+                if (on && !was && membership != null && !lite) { loadOrg() }
+            }
+        }
         viewModelScope.launch { com.closeros.app.data.AppEvents.leadsChanged.collect { if (it > 0 && !lite) { reloadLeads(); loadHistory(); refreshHome() } } }
         viewModelScope.launch {
             Backend.auth.sessionStatus.collectLatest { s ->
                 status = s
-                if (s is SessionStatus.Authenticated) loadOrg()
+                // No internet when the login needed renewing: stay signed in and work from the phone's copy.
+                if (s is SessionStatus.Authenticated || (s is SessionStatus.RefreshFailure && membership == null)) loadOrg()
                 if (s is SessionStatus.NotAuthenticated) { membership = null; loadingOrg = false }
             }
         }

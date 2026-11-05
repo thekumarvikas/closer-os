@@ -17,6 +17,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
@@ -40,6 +41,8 @@ class CloserApp : Application() {
     override fun onCreate() {
         super.onCreate()
         com.closeros.app.data.AppLog.install(this)
+        com.closeros.app.data.AppCtx.ctx = this
+        com.closeros.app.data.Net.init(this)   // knows when there's no internet (app keeps working from the phone's copy)
     }
 }
 
@@ -133,7 +136,7 @@ fun Root(vm: AppViewModel) {
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         when {
             vm.status is SessionStatus.Initializing -> Loading()
-            vm.status !is SessionStatus.Authenticated -> LoginScreen(vm)
+            vm.status !is SessionStatus.Authenticated && !(vm.status is SessionStatus.RefreshFailure && vm.membership != null) -> LoginScreen(vm)
             vm.loadingOrg && vm.membership == null -> Loading()
             vm.membership == null -> NoCompanyScreen(vm)
             !permsAsked -> PermissionScreen { permsAsked = true; com.closeros.app.calls.CallSync.syncNow(ctx) }
@@ -157,7 +160,7 @@ fun Root(vm: AppViewModel) {
             vm.openList != null -> BatchListScreen(vm)
             vm.showBatches -> BatchesScreen(vm)
             vm.todayFilter != null -> vm.todayFilter?.let { f -> TodayListScreen(vm, f) }
-            else -> { TripleBackToExit(vm); Scaffold(floatingActionButton = {
+            else -> { TripleBackToExit(vm); Scaffold(topBar = { OfflineBar(vm) }, floatingActionButton = {
                 // Dial pad is always one tap away, on every tab.
                 if (vm.tab != Tab.Profile && !vm.selectMode) SmallDialFab { vm.showDialer = true }
             }, bottomBar = {
@@ -231,4 +234,16 @@ private fun SmallDialFab(onClick: () -> Unit) {
                 Box(Modifier.size(4.5.dp).background(androidx.compose.ui.graphics.Color.White, androidx.compose.foundation.shape.CircleShape)) } } }
         }
     }
+}
+
+
+/** Shown while the phone has no internet: the app keeps working and sends everything later. */
+@Composable
+fun OfflineBar(vm: AppViewModel) {
+    if (vm.online) return
+    val ctx = LocalContext.current
+    val waiting = remember(vm.message, vm.pending) { vm.store.outbox.size + com.closeros.app.data.Ops.count(ctx) }
+    Text("📴 No internet — keep working. " + (if (waiting > 0) "$waiting saved on this phone, sent automatically when you're back online." else "Everything you save is sent when you're back online."),
+        Modifier.fillMaxWidth().background(androidx.compose.ui.graphics.Color(0xFFFEF3C7)).padding(horizontal = 12.dp, vertical = 8.dp),
+        color = androidx.compose.ui.graphics.Color(0xFF92400E), fontSize = 13.sp)
 }

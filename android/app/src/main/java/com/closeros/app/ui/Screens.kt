@@ -148,7 +148,15 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
     val ctx = LocalContext.current
     LaunchedEffect(leadId) {
         runCatching { Repo.lead(leadId) }.getOrNull()?.let { lead = it }
-        calls = runCatching { Repo.leadCalls(leadId) }.getOrDefault(emptyList())
+        calls = runCatching { Repo.leadCalls(leadId) }.getOrElse {
+            // No internet: this number's calls from the phone's own call history.
+            val ph = lead?.phone?.filter { c -> c.isDigit() }?.takeLast(10).orEmpty()
+            if (ph.isEmpty()) emptyList() else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching { com.closeros.app.calls.PhoneCalls.history(ctx, 2000) }.getOrDefault(emptyList())
+                    .filter { c -> c.phone.filter { d -> d.isDigit() }.endsWith(ph) }.take(20)
+                    .map { c -> CallRow(c.id, c.direction, java.time.Instant.ofEpochMilli(c.startedAtMs).toString(), c.durationSec, sim_slot = c.simSlot, channel = c.channel) }
+            }
+        }
     }
     val outcomes = vm.outcomes.associateBy { it.id }
     var waOpen by remember { mutableStateOf(false) }

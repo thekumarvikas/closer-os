@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.10.10
+## Android app (`android/`) — v0.11.0
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -779,3 +779,23 @@ intelligence → Play Store launch.
   (alarm extras; outcome label from the cached outcomes). Call → MainActivity call_lead + fu_id
   (cancels that reminder) + purpose (reminder follow-ups call with purpose "reminder").
 - v0.10.10: scheduled time shown in both views ("⏰ 3:49 PM · …" closed; "⏰ Scheduled for 3:49 PM · Follow-up · number" opened).
+
+## Works with no internet (v0.11.0, Nov 2026)
+- Owner: app must work with NO network (no mobile data, no Wi-Fi). data/Offline.kt:
+  AppCtx (app context, set in CloserApp), Net (ConnectivityManager default-network callback →
+  online StateFlow; back online → CallSync.syncNow; isNetworkError(t)), LocalLeads (search/filters/
+  sort on the phone's lead copy = Repo.leads rules; byId; focus() = my_focus_list buckets), Ops
+  (queue in LocalDb cache "ops": note, facts, wa, lead → flushed in CallSync after the outbox, in
+  order; server rejections dropped + logged), LocalFollowUps.apply(ctx, payload) (outcome saved
+  offline → replaces the lead's pending follow-up of that purpose in cache "followUps", schedules
+  alarms, updates the lead copy).
+- LeadIndex now stores FULL lead rows (* + batch_leads) — cursor lead_index_cursor4; LocalDb
+  leadJsonById / allLeadJson / leadsVersion. Lead gained profession_category_id.
+- Repo.leads / Repo.lead fall back to the phone copy (offline or network error); addNote,
+  setKeyFacts, logWa queue offline (…Now / logWaOrThrow are the raw calls Ops uses).
+- Login: SessionStatus.RefreshFailure (no internet when the token needed renewing) keeps the rep
+  signed in (MainActivity routing + VM loadOrg from cache). CallSync returns early when offline.
+- VM: online state; focus list/queue fall back to LocalLeads.focus; webinar lists + my_batches cached
+  (bl_<batch>_<purpose>_<everyone>, "batches"); addLeadFromCall → Ops.lead offline; lead page shows
+  the number's calls from the phone call log offline; pop-up skips the server lookup offline.
+  MainActivity OfflineBar: "📴 No internet — keep working. N saved on this phone…".

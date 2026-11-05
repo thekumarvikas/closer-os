@@ -26,14 +26,17 @@ object CallSync {
         val store = LocalStore(ctx)
         val orgId = store.orgId ?: return@runCatching 0
         if (Backend.uid == null) return@runCatching 0
+        if (!com.closeros.app.data.Net.isOnline) return@runCatching 0   // nothing can be sent; runs again when the internet is back
         Backend.ensureFreshSession()
 
         // 1) Outcomes saved while offline.
         val pending = store.outbox
         val sentOk = pending.filter { o ->
-            runCatching { Repo.logCall(o) }.onFailure { com.closeros.app.data.AppLog.error(ctx, "outbox", it) }.isSuccess
+            runCatching { Repo.logCall(o) }.onFailure { if (!com.closeros.app.data.Net.isNetworkError(it)) com.closeros.app.data.AppLog.error(ctx, "outbox", it) }.isSuccess
         }
         store.removeFromOutbox(sentOk)
+        // Notes, key facts, WhatsApp "sent" marks and leads added with no internet.
+        runCatching { com.closeros.app.data.Ops.flush(ctx) }
         // Keep the phone's copy of the leads fresh (instant after-call pop-up, works offline).
         val newLeadPhones = runCatching { com.closeros.app.data.LeadIndex.sync(ctx, orgId) }
             .onFailure { com.closeros.app.data.AppLog.error(ctx, "lead index", it) }.getOrDefault(emptySet())

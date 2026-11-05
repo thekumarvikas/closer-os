@@ -148,8 +148,10 @@ object AfterCall {
         val cardMs = if (shown) ms() else null
 
         // 3) Confirm with the server (fresh login first) — the card is already on screen meanwhile.
-        val loggedIn = com.closeros.app.data.Backend.ensureFreshSession()
-        var lookupFailed = !loggedIn
+        // No internet: the phone's own lead copy is the answer (no waiting, no "couldn't check").
+        val offline = !com.closeros.app.data.Net.isOnline
+        val loggedIn = !offline && com.closeros.app.data.Backend.ensureFreshSession()
+        var lookupFailed = !loggedIn && !offline
         if (loggedIn) runCatching { Repo.leadsByPhones(co.orgId, listOf(num))[num] }
             .onSuccess { found -> lead = found; found?.let { com.closeros.app.data.LeadIndex.remember(ctx, listOf(it)) } }
             .onFailure { lookupFailed = true; com.closeros.app.data.AppLog.error(ctx, "after-call lead lookup", it) }

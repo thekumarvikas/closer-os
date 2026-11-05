@@ -109,7 +109,7 @@ data class LeadFact(val key: String, val label: String, val options: List<String
     val total_talk_sec: Int = 0, val call_count: Int = 0, val dial_count: Int = 0, val pickup_count: Int = 0, val wa_count: Int = 0,
     val last_call_status: String? = null, val has_talked: Boolean = false, val score: Int = 0, val won_at: String? = null,
     val tags: List<String>? = null, val custom: JsonObject? = null, val created_at: String? = null, val best_hour: Int? = null,
-    val conversation_count: Int = 0,
+    val conversation_count: Int = 0, val profession_category_id: String? = null,
 ) {
     /** Latest webinar/event this lead registered for. */
     val latestBatch: BatchLink? get() = batch_leads.maxByOrNull { it.batch?.webinar_at ?: "" }
@@ -254,7 +254,15 @@ object Repo {
     suspend fun filterOptions(orgId: String): FilterOptions =
         json.decodeFromString(db.rpc("lead_filter_options", buildJsonObject { put("p_org", orgId) }).data)
 
+    /** Leads for the Leads tab — from the phone's own copy when there is no internet. */
     suspend fun leads(orgId: String, query: String, page: Int, mineOnly: Boolean, f: LeadFilters = LeadFilters()): List<Lead> {
+        if (!Net.isOnline) return LocalLeads.search(AppCtx.ctx, query, page, mineOnly, f)
+        return runCatching { leadsOnline(orgId, query, page, mineOnly, f) }.getOrElse { e ->
+            if (Net.isNetworkError(e)) LocalLeads.search(AppCtx.ctx, query, page, mineOnly, f) else throw e
+        }
+    }
+
+    private suspend fun leadsOnline(orgId: String, query: String, page: Int, mineOnly: Boolean, f: LeadFilters): List<Lead> {
         // Text search covers name, phone, email, company, profession, city, own fields, key facts and all notes.
         val ids: List<String>? = if (query.trim().length >= 2) runCatching {
             json.decodeFromString<List<String>>(db.rpc("search_leads", buildJsonObject { put("p_org", orgId); put("p_q", query.trim()) }).data)
@@ -306,16 +314,31 @@ object Repo {
         }.decodeList()
     }
 
-    suspend fun lead(id: String): Lead? = Backend.client.from("leads").select(Columns.raw(LEAD_COLUMNS)) { filter { eq("id", id) } }.decodeSingleOrNull()
+    suspend fun lead(id: String): Lead? {
+        if (!Net.isOnline) return LocalLeads.byId(AppCtx.ctx, id)
+        return runCatching { Backend.client.from("leads").select(Columns.raw(LEAD_COLUMNS)) { filter { eq("id", id) } }.decodeSingleOrNull<Lead>() }
+            .getOrElse { e -> if (Net.isNetworkError(e)) LocalLeads.byId(AppCtx.ctx, id) else throw e }
+    }
 
     suspend fun leadNotes(id: String): List<NoteEntry> =
         json.decodeFromString(db.rpc("lead_notes", buildJsonObject { put("p_lead", id) }).data)
 
+    /** Adds a note; with no internet it is kept on the phone and sent later. */
     suspend fun addNote(leadId: String, text: String, tags: List<String>) {
+        if (!Net.isOnline) { Ops.note(AppCtx.ctx, leadId, text, tags); return }
+        runCatching { addNoteNow(leadId, text, tags) }.onFailure { e -> if (Net.isNetworkError(e)) Ops.note(AppCtx.ctx, leadId, text, tags) else throw e }
+    }
+
+    suspend fun addNoteNow(leadId: String, text: String, tags: List<String>) {
         db.rpc("add_lead_note", buildJsonObject { put("p_lead", leadId); put("p_text", text); put("p_tags", buildJsonArray { tags.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } }) })
     }
 
     suspend fun setKeyFacts(leadId: String, text: String) {
+        if (!Net.isOnline) { Ops.facts(AppCtx.ctx, leadId, text); return }
+        runCatching { setKeyFactsNow(leadId, text) }.onFailure { e -> if (Net.isNetworkError(e)) Ops.facts(AppCtx.ctx, leadId, text) else throw e }
+    }
+
+    suspend fun setKeyFactsNow(leadId: String, text: String) {
         db.rpc("set_key_facts", buildJsonObject { put("p_lead", leadId); put("p_text", text) })
     }
 
@@ -500,12 +523,18 @@ object Repo {
     private fun uuids(v: Collection<String>) = buildJsonArray { v.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } }
 
     /** Records a WhatsApp message sent from Closer OS (counts as an interaction). Returns its id (for Undo). */
-    suspend fun logWa(orgId: String, leadId: String?, phone: String, templateId: String?, templateName: String?, source: String): String? = runCatching {
+    suspend fun logWa(orgId: String, leadId: String?, phone: String, templateId: String?, templateName: String?, source: String): String? {
+        if (!Net.isOnline) { Ops.wa(AppCtx.ctx, orgId, leadId, phone, templateId, templateName, source); return null }
+        return runCatching { logWaOrThrow(orgId, leadId, phone, templateId, templateName, source) }.getOrElse { e ->
+            if (Net.isNetworkError(e)) Ops.wa(AppCtx.ctx, orgId, leadId, phone, templateId, templateName, source); null }
+    }
+
+    suspend fun logWaOrThrow(orgId: String, leadId: String?, phone: String, templateId: String?, templateName: String?, source: String): String? = run {
         Backend.client.from("wa_messages").insert(buildJsonObject {
             put("org_id", orgId); leadId?.takeIf { it.isNotBlank() }?.let { put("lead_id", it) }; put("phone", phone)
             templateId?.let { put("template_id", it) }; templateName?.let { put("template_name", it) }; put("source", source)
         }) { select(Columns.raw("id")) }.decodeSingle<JsonObject>()["id"]?.jsonPrimitive?.content
-    }.getOrNull()
+    }
 
     suspend fun undoWa(id: String) {
         Backend.client.from("wa_messages").update(buildJsonObject { put("undone_at", Instant.now().toString()) }) { filter { eq("id", id) } }

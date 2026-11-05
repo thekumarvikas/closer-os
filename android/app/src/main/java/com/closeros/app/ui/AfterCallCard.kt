@@ -237,6 +237,7 @@ private suspend fun saveQuick(ctx: Context, info: AfterCall.Info, lead: Lead?, o
         if (err.contains("next call time") || err.contains("Unknown outcome") || err.contains("Lead not found"))
             return err.substringAfter("ERROR:").trim().ifEmpty { "Couldn't save — open the full form" }
         store.addToOutbox(payload)   // no internet: sent automatically later
+        com.closeros.app.data.LocalFollowUps.apply(ctx, payload)   // next call + its reminder set right now
     }
     store.markLogged(c.id)
     if (sent.isSuccess) com.closeros.app.data.AppEvents.bumpLeads()   // Leads tab + call history refresh now

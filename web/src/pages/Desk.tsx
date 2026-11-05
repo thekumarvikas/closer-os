@@ -317,7 +317,9 @@ function OutcomePanel({ call, dir, onClose, onSaved }: { call: NeedCall; dir: Di
 function outcomesFor(list: Outcome[], direction: string, talk: number): Outcome[] {
   const noContact = (o: Outcome) => o.category === 'not_connected'
   const invalid = (o: Outcome) => o.category === 'invalid'
-  if (direction === 'incoming') return list.filter(o => !noContact(o))
+  // Received call: hide "couldn't reach / dead number" kinds; wrong-number kinds go last.
+  const dialledOnly = ['not_in_service', 'invalid_number', 'r_invalid', 'r_out_of_service', 'someone_else', 'r_someone_else']
+  if (direction === 'incoming') return list.filter(o => !noContact(o) && !dialledOnly.includes(o.code)).sort((a, b) => Number(invalid(a)) - Number(invalid(b)))
   if (!talk) { const l = list.filter(o => noContact(o) || invalid(o)); return l.length ? l : list }
   return [...list].sort((a, b) => talk < 20 ? Number(!noContact(a)) - Number(!noContact(b)) : Number(noContact(a)) - Number(noContact(b)))
 }

@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.10.5
+## Android app (`android/`) — v0.10.6
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -751,3 +751,13 @@ intelligence → Play Store launch.
   (registerForActivityResult) → vm.onRecordingsFolderPicked (save, setupTick++, sync now);
   PhoneSetup.pickRecordingsFolder(ctx) opens it; PhoneSetup.recordingsFolder(ctx) also adopts a
   folder Android still remembers (persistedUriPermissions) → auto-detected tick.
+
+## Recording uploads + received-call outcomes (v0.10.6, migration 0048, Nov 2026)
+- Owner: no Play button although calls were recorded. device_status: folder OK, 6 files, 5 matched,
+  0 uploaded — "Upload refused (400) … new row violates row-level security policy". Cause: upload
+  uses x-upsert, which needs SELECT on the object; recordings_select only allowed files already set
+  as calls.recording_path (set AFTER upload). Migration 0048 recordings_select_own: a rep reads
+  <org>/<own uid>/… . Server-side fix, works with any app version.
+- Received calls: outcomesFor (app OutcomeScreen.kt DIALLED_ONLY + web Desk) hides not_connected AND
+  dialled-only codes (not_in_service, invalid_number, r_invalid, r_out_of_service, someone_else,
+  r_someone_else); invalid-category (wrong number, not the right person, DNC) go last.

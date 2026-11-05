@@ -236,6 +236,9 @@ private fun Chip(label: String, selected: Boolean, onClick: () -> Unit) {
  *  - dialled, 20 s or more → conversation types first, "not connected" last
  * [direction] null = not known yet (pop-up's first second): everything.
  */
+/** Outcomes that only make sense when WE dialled (shown nowhere for a received call). */
+val DIALLED_ONLY = setOf("not_in_service", "invalid_number", "r_invalid", "r_out_of_service", "someone_else", "r_someone_else")
+
 fun outcomesFor(all: List<Outcome>, purpose: String, direction: String?, durationSec: Int?): List<Outcome> {
     val list = all.filter { it.is_active && (it.purpose == purpose || it.purpose == "both") }.sortedBy { it.position }
     val noContact = { o: Outcome -> o.category == "not_connected" }
@@ -243,7 +246,9 @@ fun outcomesFor(all: List<Outcome>, purpose: String, direction: String?, duratio
     val talk = durationSec ?: 0
     return when {
         direction == null -> list
-        direction == "incoming" -> list.filterNot(noContact)
+        // They called us: nothing about failing to reach them or a dead number; conversation outcomes first,
+        // "wrong number / not the right person" kinds last.
+        direction == "incoming" -> list.filterNot { noContact(it) || it.code in DIALLED_ONLY }.sortedBy { if (invalid(it)) 1 else 0 }
         direction != "outgoing" -> list.filter { noContact(it) || invalid(it) }.ifEmpty { list }
         talk == 0 -> list.filter { noContact(it) || invalid(it) }.ifEmpty { list }
         talk < 20 -> list.sortedBy { if (noContact(it)) 0 else 1 }

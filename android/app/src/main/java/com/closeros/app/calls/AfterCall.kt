@@ -109,6 +109,8 @@ object AfterCall {
         suspend fun canShow() = blockedBy == null && !MainActivity.visible
         var shown = false
         suspend fun showOrUpdate(info: Info) = withContext(Dispatchers.Main) {
+            // A card for this same number is already up (Android's second "call ended" message): fill it in, never replace it.
+            if (!shown && Overlay.current?.let { cur -> info.phone != null && cur.phone == info.phone } == true) shown = true
             if (shown) Overlay.update(info) else if (canShow()) shown = Overlay.show(ctx.applicationContext, info)
         }
 
@@ -130,7 +132,7 @@ object AfterCall {
             delay(150)
         }
         val c = call ?: run { if (shown) withContext(Dispatchers.Main) { Overlay.hide(ctx) }; return trace(ctx, "call not found in the call log") }
-        if (c.id == store.lastAfterCallId) return
+        if (c.id == store.lastAfterCallId && !shown) return
         store.lastAfterCallId = c.id
         if (c.id in store.loggedCalls) { if (shown) withContext(Dispatchers.Main) { Overlay.hide(ctx) }; return trace(ctx, "outcome already saved") }
         if (c.phone.isBlank()) { if (shown) withContext(Dispatchers.Main) { Overlay.hide(ctx) }; return trace(ctx, "no pop-up: private number") }
@@ -166,6 +168,13 @@ object AfterCall {
             MainActivity.visible -> "no pop-up: Closer OS was on screen (it asks itself)"
             else -> "pop-up blocked by the phone"
         })
+    }
+
+    /** The call-log entry of a call with this number that ended in the last 10 minutes (newest first). */
+    fun findRecentCall(ctx: Context, phone: String, prefix: String): LogCall? {
+        val since = System.currentTimeMillis() - 600_000
+        return runCatching { PhoneCalls.latest(ctx, 10) }.getOrNull()
+            ?.firstOrNull { it.startedAtMs + it.durationSec * 1000L >= since && normalizePhone(it.phone, prefix) == phone }
     }
 
     /** Profile → "Test the pop-up": shows the card for the most recent call right now. */
@@ -206,6 +215,8 @@ object AfterCall {
 
         /** New details for the card already on screen (keeps what the rep has tapped). */
         fun update(info: Info) { state?.value = info }
+        /** What the card on screen is showing (null when no card). */
+        val current: Info? get() = state?.value
 
         fun show(ctx: Context, info: Info): Boolean {
             hide(ctx)

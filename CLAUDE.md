@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.10.2
+## Android app (`android/`) — v0.10.3
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -717,3 +717,14 @@ intelligence → Play Store launch.
 - Leads tab chip "Select to call / WhatsApp".
 - Dashboard on phones (checked with a temporary test user at 390 px, then deleted): index.css makes
   tables scroll sideways inside their card on < 768 px; Leads page has a card list on phones.
+
+## Pop-up Save fix (v0.10.3, Nov 2026)
+- Owner: pop-up Save stayed grey after picking outcome + time. Cause: Android's second "call ended"
+  message (> 5 s after the first) opened a NEW blank card (call = null) over the finished one, then
+  returned at lastAfterCallId without filling it. Now run() adopts a card already showing for the same
+  number (Overlay.current), and continues when shown; the card self-repairs (AfterCall.findRecentCall
+  every 1 s, 2 min) and Save is never disabled for a missing call (looks it up on tap).
+- Rep-day simulation findings (awaiting owner's go): calls from focus / follow-ups / notifications /
+  pop-up / desk are always purpose 'sales' (reminder follow-ups stay pending forever); reminder
+  next-call can land after webinar start; dashboard follow-up done doesn't refresh
+  leads.next_follow_up_at; focus ignores tonight's webinar + hot watchers.

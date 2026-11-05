@@ -34,6 +34,7 @@ import com.closeros.app.data.LocalStore
 import com.closeros.app.data.Outcome
 import com.closeros.app.data.Repo
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.time.Instant
@@ -62,6 +63,7 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
     // The call's details arrive a moment later: drop a choice that no longer fits this kind of call.
     LaunchedEffect(choices) { if (outcome != null && choices.none { it.id == outcome?.id }) outcome = null }
     var next by remember { mutableStateOf<ZonedDateTime?>(null) }
+    var nextKey by remember { mutableStateOf<String?>(null) }   // keeps "In 30 min" highlighted when the clock ticks over
     var noFollow by remember { mutableStateOf(false) }
     // Each outcome suggests its next step (e.g. Busy → in 1 hour, Not interested → no follow-up).
     LaunchedEffect(outcome) {
@@ -71,7 +73,7 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
             "none" -> { noFollow = true; next = null }
             "30d" -> { noFollow = false; next = ZonedDateTime.now(zone).toLocalDate().plusDays(30).atTime(11, 0).atZone(zone) }
             null, "pick" -> { noFollow = false; next = null }
-            else -> opts.firstOrNull { it.first == o.next_default }?.let { noFollow = false; next = it.third }
+            else -> opts.firstOrNull { it.first == o.next_default }?.let { noFollow = false; next = it.third; nextKey = it.first }
         }
     }
     var saving by remember { mutableStateOf(false) }
@@ -81,6 +83,16 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
     var waStep by remember { mutableStateOf(false) }
     var sendingWa by remember { mutableStateOf(false) }
     val maxH = (LocalConfiguration.current.screenHeightDp * 0.8f).dp
+    // Self-repair: if the call's details never reached the card, look them up here (every second, up to 2 minutes).
+    LaunchedEffect(c == null, info.phone) {
+        val ph = info.phone ?: return@LaunchedEffect
+        if (c != null) return@LaunchedEffect
+        repeat(120) {
+            kotlinx.coroutines.delay(1_000)
+            val found = withContext(kotlinx.coroutines.Dispatchers.IO) { AfterCall.findRecentCall(ctx, ph, co.prefix) }
+            if (found != null) { AfterCall.Overlay.current?.takeIf { it.phone == ph && it.call == null }?.let { AfterCall.Overlay.update(it.copy(call = found)) }; return@LaunchedEffect }
+        }
+    }
 
     fun open(i: Intent) { onClose(); com.closeros.app.calls.safeStart(ctx, i) }
     fun fullForm(mode: String) {
@@ -120,7 +132,7 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
                     }
                     Text("Next call", fontWeight = FontWeight.SemiBold)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        quickTimes(zone).forEach { (_, label, t) -> PopChip(label, !noFollow && next == t) { next = t; noFollow = false } }
+                        quickTimes(zone).forEach { (key, label, t) -> PopChip(label, !noFollow && next != null && (next == t || nextKey == key)) { next = t; nextKey = key; noFollow = false } }
                         PopChip("No follow-up", noFollow) { noFollow = true; next = null }
                         PopChip("Other time…", false) { fullForm(if (lead == null) "add" else "outcome") }
                     }
@@ -131,7 +143,11 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
                         if (sale) { fullForm(if (lead == null) "add" else "outcome"); return@Button }
                         saving = true; error = null
                         scope.launch {
-                            val r = saveQuick(ctx, info, lead, o, next, noFollow)
+                            // Call details still missing: read the call log right now instead of making the rep wait.
+                            val withCall = if (info.call != null) info else info.phone?.let { ph ->
+                                withContext(kotlinx.coroutines.Dispatchers.IO) { AfterCall.findRecentCall(ctx, ph, co.prefix) }
+                            }?.let { info.copy(call = it) } ?: info
+                            val r = saveQuick(ctx, withCall, lead, o, next, noFollow)
                             saving = false
                             // Saved: step 2 on the same card — send a WhatsApp message, or close and dial the next.
                             if (r == null) {
@@ -139,7 +155,7 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
                                 waStep = true
                             } else error = r
                         }
-                    }, enabled = c != null && !saving && outcome != null && (noFollow || next != null), modifier = Modifier.fillMaxWidth().height(50.dp)) {
+                    }, enabled = !saving && outcome != null && (noFollow || next != null), modifier = Modifier.fillMaxWidth().height(50.dp)) {
                         Text(when { saving -> "Saving…"; sale -> "Continue — add the amount"; else -> "Save" }, fontSize = 16.sp)
                     }
                     TextButton(onClick = { fullForm(if (lead == null) "add" else "outcome") }, modifier = Modifier.fillMaxWidth()) {
@@ -200,7 +216,7 @@ private fun quickTimes(zone: ZoneId): List<Triple<String, String, ZonedDateTime>
 
 /** Saves from the card. Returns null when saved (or kept on the phone to send later), else the reason it can't be saved. */
 private suspend fun saveQuick(ctx: Context, info: AfterCall.Info, lead: Lead?, o: Outcome, next: ZonedDateTime?, noFollow: Boolean): String? {
-    val c = info.call ?: return "One moment — still reading the call"
+    val c = info.call ?: return "Couldn't find this call in the phone's call history yet — wait 2 seconds and tap Save again"
     val co = info.co
     val store = LocalStore(ctx)
     val payload = buildJsonObject {

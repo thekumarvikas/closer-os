@@ -32,8 +32,8 @@ private const val GRACE_MS = 15 * 60_000L
 enum class FuState { Upcoming, DueNow, NotCalled, OnTime, Late }
 
 fun fuState(f: FollowUp, now: Long): FuState {
-    val due = runCatching { Instant.parse(f.due_at).toEpochMilli() }.getOrDefault(now)
-    val dialled = f.dialled_at?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
+    val due = runCatching { com.closeros.app.data.parseInstant(f.due_at).toEpochMilli() }.getOrDefault(now)
+    val dialled = f.dialled_at?.let { runCatching { com.closeros.app.data.parseInstant(it).toEpochMilli() }.getOrNull() }
     return when {
         dialled != null && dialled <= due + GRACE_MS -> FuState.OnTime
         dialled != null -> FuState.Late
@@ -56,7 +56,7 @@ fun FollowUpsTabs(vm: AppViewModel) {
     LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(30_000); now = System.currentTimeMillis() } }
     val today = LocalDate.now(zone)
     val endOfToday = today.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
-    fun dueMs(f: FollowUp) = runCatching { Instant.parse(f.due_at).toEpochMilli() }.getOrDefault(0)
+    fun dueMs(f: FollowUp) = runCatching { com.closeros.app.data.parseInstant(f.due_at).toEpochMilli() }.getOrDefault(0)
 
     val pending = vm.followUps
     val overdue = pending.filter { fuState(it, now) == FuState.NotCalled }.sortedBy { it.due_at }
@@ -112,7 +112,7 @@ fun FollowUpsTabs(vm: AppViewModel) {
 
 @Composable
 private fun FollowUpCard(vm: AppViewModel, f: FollowUp, now: Long, zone: ZoneId) {
-    val due = runCatching { Instant.parse(f.due_at) }.getOrNull()
+    val due = runCatching { com.closeros.app.data.parseInstant(f.due_at) }.getOrNull()
     val dueMs = due?.toEpochMilli() ?: now
     val st = fuState(f, now)
     val dueDay = due?.atZone(zone)?.toLocalDate()
@@ -125,7 +125,7 @@ private fun FollowUpCard(vm: AppViewModel, f: FollowUp, now: Long, zone: ZoneId)
         FuState.DueNow -> Triple("Due now", Color(0xFFB45309), Color(0xFFFEF3C7))
         FuState.NotCalled -> Triple("Not called · ${mins(now - dueMs)} late", Brand.red, Color(0xFFFEE2E2))
         FuState.OnTime -> Triple("Called on time", Brand.primaryDark, Color(0xFFD1FAE5))
-        FuState.Late -> Triple("Called ${mins((f.dialled_at?.let { Instant.parse(it).toEpochMilli() } ?: now) - dueMs)} late", Color(0xFFC2410C), Color(0xFFFFEDD5))
+        FuState.Late -> Triple("Called ${mins((f.dialled_at?.let { com.closeros.app.data.parseInstant(it).toEpochMilli() } ?: now) - dueMs)} late", Color(0xFFC2410C), Color(0xFFFFEDD5))
     }
     Card(Modifier.fillMaxWidth().clickable { vm.openLeadId = f.lead_id }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {

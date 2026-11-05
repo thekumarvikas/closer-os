@@ -87,6 +87,14 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     var tab by mutableStateOf(runCatching { Tab.valueOf(LocalStore(app).startTab) }.getOrDefault(Tab.Home))
     var openLeadId by mutableStateOf<String?>(null)
     var message by mutableStateOf<String?>(null)
+    /** Bumped when phone setup changed outside the setup screen (e.g. the recordings folder was saved). */
+    var setupTick by mutableStateOf(0)
+    fun onRecordingsFolderPicked(uri: android.net.Uri?) = viewModelScope.launch {
+        if (uri != null) message = "Checking the folder…"
+        message = com.closeros.app.calls.PhoneSetup.saveRecordingsFolder(ctx, uri)
+        setupTick++
+        if (uri != null) com.closeros.app.calls.CallSync.syncNow(ctx)   // look for recordings straight away
+    }
 
     /** The call waiting for its outcome, and what the call log says about it. */
     var needsSetup by mutableStateOf(!store.setupDone)
@@ -272,7 +280,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Queue of leads whose follow-ups are due within 24 hours (overdue first). */
     fun startFollowUpQueue() = viewModelScope.launch {
         val soon = System.currentTimeMillis() + 86_400_000
-        val due = followUps.filter { runCatching { java.time.Instant.parse(it.due_at).toEpochMilli() }.getOrDefault(0) < soon }.sortedBy { it.due_at }
+        val due = followUps.filter { runCatching { com.closeros.app.data.parseInstant(it.due_at).toEpochMilli() }.getOrDefault(0) < soon }.sortedBy { it.due_at }
         val leads = runCatching { Repo.leadsByIds(due.map { it.lead_id }) }.getOrDefault(emptyList()).associateBy { it.id }
         startQueue(due.mapNotNull { leads[it.lead_id] })
     }
@@ -284,7 +292,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         // Settings → "Best time to call first": after due follow-ups, leads whose best pick-up hour is now go next.
         if (store.queueBestTimeFirst) {
             val now = java.time.Instant.now(); val hour = java.time.LocalTime.now().hour
-            fun due(l: Lead) = l.next_follow_up_at?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }?.isBefore(now.plusSeconds(7200)) == true
+            fun due(l: Lead) = l.next_follow_up_at?.let { runCatching { com.closeros.app.data.parseInstant(it) }.getOrNull() }?.isBefore(now.plusSeconds(7200)) == true
             list = list.sortedBy { if (due(it)) 0 else if (it.best_hour == hour) 1 else 2 }
         }
         if (list.isEmpty()) { message = "No leads to call"; return }
@@ -824,7 +832,7 @@ fun fillTemplateText(body: String, lead: Lead, companyName: String, timezone: St
     val b = lead.latestBatch?.batch
     val tz = runCatching { java.time.ZoneId.of(timezone) }.getOrDefault(java.time.ZoneId.systemDefault())
     val df = java.time.format.DateTimeFormatter.ofPattern("d MMM, h:mm a").withZone(tz)
-    fun t(iso: String?) = iso?.let { runCatching { df.format(java.time.Instant.parse(it)) }.getOrNull() } ?: ""
+    fun t(iso: String?) = iso?.let { runCatching { df.format(com.closeros.app.data.parseInstant(it)) }.getOrNull() } ?: ""
     return body
         .replace("{{leadName}}", lead.name.substringBefore(' ').ifBlank { "there" })
         .replace("{{leadFullName}}", lead.name.ifBlank { "there" })

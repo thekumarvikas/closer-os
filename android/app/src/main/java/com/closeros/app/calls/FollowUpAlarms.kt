@@ -54,7 +54,7 @@ object FollowUpAlarms {
         val am = ctx.getSystemService(AlarmManager::class.java)
         val now = System.currentTimeMillis()
         val wanted = followUps.filter { it.status == "pending" }.mapNotNull { f ->
-            val due = runCatching { Instant.parse(f.due_at).toEpochMilli() }.getOrNull() ?: return@mapNotNull null
+            val due = runCatching { com.closeros.app.data.parseInstant(f.due_at).toEpochMilli() }.getOrNull() ?: return@mapNotNull null
             if (due < now - 15 * 60_000 || due > now + 3 * 86_400_000L) null else f to due
         }
         val keep = wanted.map { it.first.id }.toSet()
@@ -88,7 +88,7 @@ class FollowUpReceiver : BroadcastReceiver() {
         val lead = i.getStringExtra("lead") ?: return
         val name = i.getStringExtra("name").orEmpty().ifBlank { i.getStringExtra("phone").orEmpty() }
         val phone = i.getStringExtra("phone").orEmpty()
-        val due = runCatching { Instant.parse(i.getStringExtra("due")).toEpochMilli() }.getOrDefault(System.currentTimeMillis())
+        val due = runCatching { com.closeros.app.data.parseInstant(i.getStringExtra("due")).toEpochMilli() }.getOrDefault(System.currentTimeMillis())
 
         // Already called this lead around the follow-up time? Then no reminder.
         if (phone.isNotEmpty() && PhoneCalls.has(ctx, android.Manifest.permission.READ_CALL_LOG)) {

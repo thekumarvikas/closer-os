@@ -38,12 +38,8 @@ fun SetupChecklistScreen(vm: AppViewModel, onBack: () -> Unit) {
     var tick by remember { mutableStateOf(0) }
     val scope = rememberCoroutineScope()
     LifecycleResumeEffect(Unit) { tick++; onPauseOrDispose { } }
-    val items = remember(tick) { PhoneSetup.items(ctx) }
+    val items = remember(tick, vm.setupTick) { PhoneSetup.items(ctx) }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { tick++ }
-    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        if (uri != null) vm.message = "Checking the folder…"
-        scope.launch { vm.message = PhoneSetup.saveRecordingsFolder(ctx, uri); tick++ }
-    }
     BackHandler { onBack() }
     val needed = items.filter { it.required }
     Column(Modifier.fillMaxSize().background(Brand.bg).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -53,15 +49,15 @@ fun SetupChecklistScreen(vm: AppViewModel, onBack: () -> Unit) {
         }
         Text("${needed.count { it.done }} of ${needed.size} essentials done. Tap \"Turn on\" on each one — Closer OS takes you straight to the right switch.", color = Brand.muted)
         LinearProgressIndicator(progress = { needed.count { it.done }.toFloat() / needed.size.coerceAtLeast(1) }, Modifier.fillMaxWidth())
-        Section("Essentials", items.filter { it.required }, vm, ask, pickFolder) { tick++ }
-        Section("Call recordings", items.filter { !it.required }, vm, ask, pickFolder) { tick++ }
+        Section("Essentials", items.filter { it.required }, vm, ask) { tick++ }
+        Section("Call recordings", items.filter { !it.required }, vm, ask) { tick++ }
     }
 }
 
 @Composable
 private fun Section(title: String, list: List<PhoneSetup.Item>, vm: AppViewModel,
                     ask: androidx.activity.result.ActivityResultLauncher<Array<String>>,
-                    pickFolder: androidx.activity.result.ActivityResultLauncher<Uri?>, refresh: () -> Unit) {
+                    refresh: () -> Unit) {
     if (list.isEmpty()) return
     val ctx = LocalContext.current
     Text(title, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
@@ -82,7 +78,7 @@ private fun Section(title: String, list: List<PhoneSetup.Item>, vm: AppViewModel
                             Button(onClick = {
                                 when {
                                     it.kind == PhoneSetup.Kind.Runtime -> ask.launch(it.perms.toTypedArray())
-                                    it.key == "recfolder" -> pickFolder.launch(PhoneSetup.recordingsHint())
+                                    it.key == "recfolder" -> PhoneSetup.pickRecordingsFolder(ctx)
                                     it.intent != null -> runCatching { safeStart(ctx, it.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
                                         .onFailure { _ -> safeStart(ctx, Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
                                 }

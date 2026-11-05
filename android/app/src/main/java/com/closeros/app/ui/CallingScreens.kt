@@ -63,7 +63,7 @@ fun todayMatches(key: String, h: HistoryItem): Boolean = when (key) {
 fun HomeScreen(vm: AppViewModel) {
     val m = vm.membership ?: return
     val now = System.currentTimeMillis()
-    fun ms(iso: String?) = iso?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
+    fun ms(iso: String?) = iso?.let { runCatching { com.closeros.app.data.parseInstant(it).toEpochMilli() }.getOrNull() }
     val dueToday = vm.followUps.filter { (ms(it.due_at) ?: 0) < now + 86_400_000 }
     val overdue = vm.followUps.count { (ms(it.due_at) ?: 0) < now }
     val newFeedback = vm.reviews.count { it.seen_at == null }
@@ -419,7 +419,7 @@ fun leadTags(vm: AppViewModel, l: Lead): List<Tag> {
     if (l.source == "Phone call") out += Tag("Added from a call", Color(0xFFFEF3C7), Color(0xFF92400E))
     if (l.score >= 40 && l.won_at == null) out += Tag("⚡ Close to converting", Color(0xFFFEF3C7), Color(0xFF92400E))
     // Speed to first call: a fresh lead nobody has dialled yet shows how long it has been waiting.
-    if (l.dial_count == 0 && !l.do_not_call) l.created_at?.let { runCatching { Instant.parse(it) }.getOrNull() }?.let { at ->
+    if (l.dial_count == 0 && !l.do_not_call) l.created_at?.let { runCatching { com.closeros.app.data.parseInstant(it) }.getOrNull() }?.let { at ->
         val min = java.time.Duration.between(at, Instant.now()).toMinutes()
         if (min in 0..(7 * 24 * 60)) out += Tag("🆕 New · ${if (min < 60) "$min min" else if (min < 1440) "${min / 60} h" else "${min / 1440} d"} waiting",
             if (min <= 30) Color(0xFFDBEAFE) else Color(0xFFFEE2E2), if (min <= 30) Color(0xFF1E40AF) else Color(0xFF991B1B))

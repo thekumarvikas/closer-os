@@ -45,6 +45,11 @@ class CloserApp : Application() {
 
 class MainActivity : ComponentActivity() {
     private val vm: AppViewModel by viewModels()
+    /** Recordings folder picker, owned by the activity so the choice is never lost — even when another screen
+     *  (e.g. a pending call outcome) opens first, or the phone closed the app while the picker was open. */
+    val pickRecordingsFolder = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()) { uri ->
+        vm.onRecordingsFolderPicked(uri)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

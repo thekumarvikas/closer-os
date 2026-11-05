@@ -143,12 +143,8 @@ internal fun AddLeadDialog(phone: String, onDismiss: () -> Unit, onSave: (String
 @Composable
 fun RecordingSettings(vm: AppViewModel) {
     val ctx = LocalContext.current
-    var folder by remember { mutableStateOf(vm.store.recordingsFolder) }
+    val folder = remember(vm.setupTick) { com.closeros.app.calls.PhoneSetup.recordingsFolder(ctx) }
     val scope = rememberCoroutineScope()
-    val pick = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()) { uri ->
-        if (uri != null) vm.message = "Checking the folder…"
-        scope.launch { vm.message = com.closeros.app.calls.PhoneSetup.saveRecordingsFolder(ctx, uri); folder = vm.store.recordingsFolder }
-    }
     Text("Call recordings", fontWeight = FontWeight.SemiBold)
     if (com.closeros.app.calls.RecordingSync.googleDialer(ctx)) {
         Text("This phone uses Google's Phone app, which keeps recordings private. Closer OS can't upload them on this phone.", color = Brand.red, fontSize = 14.sp)
@@ -157,7 +153,7 @@ fun RecordingSettings(vm: AppViewModel) {
          else "Folder set ✓ · ${vm.store.recordingsUploaded} recordings uploaded", color = Brand.muted, fontSize = 14.sp)
     vm.store.lastRecordingCheck?.let { Text("Last check: $it", fontSize = 12.sp, color = Brand.muted) }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = { pick.launch(null) }) { Text(if (folder == null) "Choose recordings folder" else "Change folder") }
+        OutlinedButton(onClick = { com.closeros.app.calls.PhoneSetup.pickRecordingsFolder(ctx) }) { Text(if (folder == null) "Choose recordings folder" else "Change folder") }
         if (folder != null) OutlinedButton(onClick = { vm.checkRecordingsNow() }) { Text("Check now") }
     }
 }

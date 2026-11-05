@@ -54,7 +54,7 @@ fun BatchesScreen(vm: AppViewModel) {
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (list.isEmpty()) item { Text("No webinars or events with leads for you in the last 4 months. They're created on the dashboard (Events & Batches).", color = Brand.muted) }
             items(list.distinctBy { it.id }, key = { it.id }) { b ->
-                val at = runCatching { Instant.parse(b.webinar_at).atZone(zone) }.getOrNull()
+                val at = runCatching { com.closeros.app.data.parseInstant(b.webinar_at).atZone(zone) }.getOrNull()
                 val upcoming = at?.toInstant()?.isAfter(Instant.now()) == true
                 val rem = if (vm.listEveryone) b.reminder_all else b.reminder_mine
                 val sal = if (vm.listEveryone) b.sales_all else b.sales_mine

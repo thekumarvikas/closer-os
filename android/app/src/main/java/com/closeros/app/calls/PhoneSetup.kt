@@ -126,7 +126,7 @@ object PhoneSetup {
                         else if (brand == "samsung") "Phone app → ⋮ → Settings → Record calls → Auto record calls → All calls. Then come back and tap \"Done\"."
                         else "Phone app → Settings → Call recording → turn on automatic recording for all calls. Then come back and tap \"Done\".")
             list += Item("recfolder", "Recordings folder", "Closer OS uploads your call recordings from this folder.",
-                store.recordingsFolder != null, Kind.Special, required = false,
+                recordingsFolder(ctx) != null, Kind.Special, required = false,
                 steps = if (brand == "xiaomi" || brand == "redmi" || brand == "poco") "Open MIUI → sound_recorder → call_rec, then tap \"Use this folder\" → Allow."
                         else if (brand == "samsung") "Open Recordings → Call (or Call recordings), then tap \"Use this folder\" → Allow."
                         else "Open the folder where your Phone app saves call recordings, then tap \"Use this folder\" → Allow.")
@@ -135,6 +135,24 @@ object PhoneSetup {
     }
 
     /** Saves the folder the rep picked and says how many recordings are in it. */
+    /** Opens the folder picker (result handled by MainActivity, see pickRecordingsFolder there). */
+    fun pickRecordingsFolder(ctx: Context) {
+        val a = generateSequence(ctx) { (it as? android.content.ContextWrapper)?.baseContext }.firstOrNull { it is com.closeros.app.MainActivity } as? com.closeros.app.MainActivity
+        if (a == null) { android.widget.Toast.makeText(ctx, "Open this from Closer OS", android.widget.Toast.LENGTH_SHORT).show(); return }
+        runCatching { a.pickRecordingsFolder.launch(recordingsHint()) }
+            .onFailure { runCatching { a.pickRecordingsFolder.launch(null) } }   // some pickers refuse a starting folder
+    }
+
+    /** The saved recordings folder. If it was never saved but Android still remembers a folder the rep allowed, use that. */
+    fun recordingsFolder(ctx: Context): String? {
+        val store = LocalStore(ctx)
+        store.recordingsFolder?.let { return it }
+        val granted = runCatching { ctx.contentResolver.persistedUriPermissions }.getOrDefault(emptyList())
+            .filter { it.isReadPermission && android.provider.DocumentsContract.isTreeUri(it.uri) }
+        val best = granted.firstOrNull { p -> val s = Uri.decode(p.uri.toString()).lowercase(); "call" in s || "record" in s } ?: granted.firstOrNull()
+        return best?.uri?.toString()?.also { store.recordingsFolder = it }
+    }
+
     suspend fun saveRecordingsFolder(ctx: Context, uri: Uri?): String {
         if (uri == null) return "No folder chosen"
         runCatching { ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }

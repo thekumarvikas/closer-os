@@ -98,7 +98,7 @@ object RecordingSync {
     /** Uploads recordings for answered calls of the last [days] days. */
     suspend fun run(ctx: Context, orgId: String, days: Int = 7): Result {
         val store = LocalStore(ctx)
-        val tree = store.recordingsFolder?.let(Uri::parse) ?: return Result(error = "Recordings folder not chosen")
+        val tree = PhoneSetup.recordingsFolder(ctx)?.let(Uri::parse) ?: return Result(error = "Recordings folder not chosen")
         val uid = Backend.uid ?: return Result(error = "Not signed in")
         val since = System.currentTimeMillis() - days * 86_400_000L
         val calls = PhoneCalls.readLog(ctx, since).filter { it.durationSec > 0 && (it.direction == "outgoing" || it.direction == "incoming") }

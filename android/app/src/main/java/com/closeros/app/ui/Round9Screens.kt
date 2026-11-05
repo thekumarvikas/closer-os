@@ -179,7 +179,7 @@ fun WaTodayScreen(vm: AppViewModel) {
                     Text("💬", fontSize = 18.sp, modifier = Modifier.width(30.dp))
                     Column(Modifier.weight(1f)) {
                         Text(w.s("name")?.ifBlank { null } ?: fmtPhone(w.s("phone") ?: ""), fontWeight = FontWeight.SemiBold)
-                        Text("${w.s("template_name") ?: "Message"} · ${runCatching { fmt.format(Instant.parse(w.s("sent_at")).atZone(zone)) }.getOrDefault("")}", fontSize = 12.sp, color = Brand.muted)
+                        Text("${w.s("template_name") ?: "Message"} · ${runCatching { fmt.format(com.closeros.app.data.parseInstant(w.s("sent_at")).atZone(zone)) }.getOrDefault("")}", fontSize = 12.sp, color = Brand.muted)
                     }
                 }
                 HorizontalDivider(color = Color(0xFFF1F5F9))

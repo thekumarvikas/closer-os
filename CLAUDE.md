@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.10.4
+## Android app (`android/`) — v0.10.5
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -739,3 +739,15 @@ intelligence → Play Store launch.
   call in the WHOLE phone call history whose number is a lead; afterwards LeadIndex.sync returns
   numbers new on this phone and only their older calls are uploaded. Personal (non-lead) history is
   never backfilled. Stable ids → no duplicates. Old calls can't mark follow-ups dialled (2-day window).
+
+## Android 11 times + recordings folder (v0.10.5, Nov 2026)
+- Owner (Redmi K20 Pro, Android 11): follow-up cards had no time/day and all said "Due now". Cause:
+  Instant.parse can't read "+00:00" offsets (server format) on Android ≤ 11. ALWAYS use
+  data/Time.kt parseInstant() (OffsetDateTime first) — never Instant.parse for server times.
+  Also fixes follow-up alarms on old Androids.
+- Owner: recordings folder picked but still "pending" (device_status rec_folder_set false). The
+  picker result was registered inside the Phone setup composable and got lost when another screen
+  (outcome) opened first or the app was recreated. Now MainActivity.pickRecordingsFolder
+  (registerForActivityResult) → vm.onRecordingsFolderPicked (save, setupTick++, sync now);
+  PhoneSetup.pickRecordingsFolder(ctx) opens it; PhoneSetup.recordingsFolder(ctx) also adopts a
+  folder Android still remembers (persistedUriPermissions) → auto-detected tick.

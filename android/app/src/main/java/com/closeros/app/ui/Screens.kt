@@ -50,7 +50,7 @@ import java.time.format.DateTimeFormatter
 
 private val zone: ZoneId = ZoneId.of("Asia/Kolkata")
 fun fmtWhen(iso: String?): String = iso?.let {
-    runCatching { DateTimeFormatter.ofPattern("dd/MM, h:mm a").withZone(zone).format(Instant.parse(it)) }.getOrNull()
+    runCatching { DateTimeFormatter.ofPattern("dd/MM, h:mm a").withZone(zone).format(com.closeros.app.data.parseInstant(it)) }.getOrNull()
 } ?: "—"
 fun fmtDur(sec: Int): String = when {
     sec >= 3600 -> "${sec / 3600}h ${sec % 3600 / 60}m"

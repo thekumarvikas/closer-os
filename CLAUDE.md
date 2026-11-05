@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.10.3
+## Android app (`android/`) — v0.10.4
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -728,3 +728,14 @@ intelligence → Play Store launch.
   pop-up / desk are always purpose 'sales' (reminder follow-ups stay pending forever); reminder
   next-call can land after webinar start; dashboard follow-up done doesn't refresh
   leads.next_follow_up_at; focus ignores tonight's webinar + hot watchers.
+
+## Complete call counts (v0.10.4, migration 0047, Nov 2026)
+- Owner: "N calls" on lead cards was lower than the phone's history. Causes: server only had calls since
+  each phone's first sync (2 days back), and the number counted dialled calls only.
+- leads.call_count = ALL calls with the lead (dialled, received, missed, WhatsApp), kept by
+  refresh_lead_stats; callsLine()/dashboard Leads use it ("17 calls · 1 conversation"); lead page
+  says "17 calls (13 dialled, 1 picked up)".
+- CallSync step 2a: once per phone (store.leadHistoryDone, needs LeadIndex filled) uploads every
+  call in the WHOLE phone call history whose number is a lead; afterwards LeadIndex.sync returns
+  numbers new on this phone and only their older calls are uploaded. Personal (non-lead) history is
+  never backfilled. Stable ids → no duplicates. Old calls can't mark follow-ups dialled (2-day window).

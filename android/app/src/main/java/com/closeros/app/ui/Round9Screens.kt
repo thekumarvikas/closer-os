@@ -378,7 +378,7 @@ fun EffortCard(vm: AppViewModel, lead: Lead) {
     val interactions = lead.dial_count + (e?.i("received") ?: 0) + lead.wa_count
     Column(Modifier.fillMaxWidth().background(if (won) Color(0xFFECFDF5) else Color.White, RoundedCornerShape(12.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(if (won) "💰 Path to sale" else "Effort so far", fontWeight = FontWeight.SemiBold)
-        Text("$interactions interactions · ${fmtDur(lead.total_talk_sec)} talk · ${lead.dial_count} calls (${lead.pickup_count} picked up) · ${lead.wa_count} WhatsApp",
+        Text("$interactions interactions · ${fmtDur(lead.total_talk_sec)} talk · ${lead.call_count} calls (${lead.dial_count} dialled, ${lead.pickup_count} picked up) · ${lead.wa_count} WhatsApp",
             fontSize = 13.sp)
         if (e != null && won) Text(effortLine(e), fontSize = 12.sp, color = Brand.muted)
         // Neutral comparison with my usual sale (never a warning).

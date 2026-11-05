@@ -105,7 +105,7 @@ data class LeadFact(val key: String, val label: String, val options: List<String
     val do_not_call: Boolean = false, val last_connected_at: String? = null, val key_facts: String? = null,
     val batch_leads: List<BatchLink> = emptyList(),
     // Effort so far (kept up to date by the server): talk time, dials, real pick-ups, WhatsApp sent, score.
-    val total_talk_sec: Int = 0, val dial_count: Int = 0, val pickup_count: Int = 0, val wa_count: Int = 0,
+    val total_talk_sec: Int = 0, val call_count: Int = 0, val dial_count: Int = 0, val pickup_count: Int = 0, val wa_count: Int = 0,
     val last_call_status: String? = null, val has_talked: Boolean = false, val score: Int = 0, val won_at: String? = null,
     val tags: List<String>? = null, val custom: JsonObject? = null, val created_at: String? = null, val best_hour: Int? = null,
     val conversation_count: Int = 0,
@@ -209,7 +209,7 @@ data class LeadFilters(
 
 @Serializable data class CallRequest(val id: String, val lead_id: String, val purpose: String = "sales", val batch_id: String? = null)
 
-@Serializable data class LeadMini(val name: String = "", val phone: String = "", val dial_count: Int = 0, val conversation_count: Int = 0)
+@Serializable data class LeadMini(val name: String = "", val phone: String = "", val dial_count: Int = 0, val conversation_count: Int = 0, val call_count: Int = 0)
 @Serializable data class FollowUp(
     val id: String, val lead_id: String, val due_at: String, val status: String, val reason: String? = null,
     val notes: String? = null, val purpose: String = "sales", val lead: LeadMini? = null,
@@ -538,7 +538,7 @@ object Repo {
 
     suspend fun followUps(orgId: String): List<FollowUp> {
         val uid = Backend.uid ?: return emptyList()
-        return Backend.client.from("follow_ups").select(Columns.raw("*, lead:leads(name, phone, dial_count, conversation_count)")) {
+        return Backend.client.from("follow_ups").select(Columns.raw("*, lead:leads(name, phone, dial_count, conversation_count, call_count)")) {
             filter { eq("org_id", orgId); eq("assigned_to", uid); eq("status", "pending") }
             order("due_at", Order.ASCENDING)
             limit(200)
@@ -548,7 +548,7 @@ object Repo {
     /** Follow-ups of the last 7 days that are finished, to show on time / late / not called. */
     suspend fun pastFollowUps(orgId: String): List<FollowUp> {
         val uid = Backend.uid ?: return emptyList()
-        return Backend.client.from("follow_ups").select(Columns.raw("*, lead:leads(name, phone, dial_count, conversation_count)")) {
+        return Backend.client.from("follow_ups").select(Columns.raw("*, lead:leads(name, phone, dial_count, conversation_count, call_count)")) {
             filter { eq("org_id", orgId); eq("assigned_to", uid); eq("status", "done"); gte("due_at", Instant.now().minusSeconds(7 * 86400).toString()) }
             order("due_at", Order.DESCENDING)
             limit(300)

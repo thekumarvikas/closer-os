@@ -136,7 +136,7 @@ private fun FollowUpCard(vm: AppViewModel, f: FollowUp, now: Long, zone: ZoneId)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(f.lead?.name?.ifBlank { null } ?: fmtPhone(f.lead?.phone ?: ""), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(listOfNotNull(if (!f.lead?.name.isNullOrBlank()) fmtPhone(f.lead?.phone ?: "") else null,
-                    f.lead?.let { callsLine(it.dial_count, it.conversation_count) }).joinToString(" · "), fontSize = 12.sp, color = Brand.muted)
+                    f.lead?.let { callsLine(it.call_count, it.conversation_count) }).joinToString(" · "), fontSize = 12.sp, color = Brand.muted)
                 Text(badge, fontSize = 12.sp, color = color, fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.background(bg, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
                 listOfNotNull(if (f.purpose == "reminder") "Reminder call" else null, f.reason, f.notes).joinToString(" · ").takeIf { it.isNotBlank() }?.let {

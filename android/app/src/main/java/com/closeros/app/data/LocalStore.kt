@@ -40,6 +40,10 @@ class LocalStore(ctx: Context) {
         set(v) { p.edit().putLong("last_sync_ms", v).apply() }
 
     /** Newest call-log time already uploaded. */
+    /** True once this phone's whole call history with lead numbers has been uploaded. */
+    var leadHistoryDone: Boolean
+        get() = p.getBoolean("lead_history_done", false)
+        set(v) { p.edit().putBoolean("lead_history_done", v).apply() }
     var callLogCursorMs: Long
         get() = p.getLong("call_log_cursor_ms", 0)
         set(v) { p.edit().putLong("call_log_cursor_ms", v).apply() }

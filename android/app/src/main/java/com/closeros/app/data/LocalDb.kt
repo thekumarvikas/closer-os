@@ -38,6 +38,7 @@ class LocalDb private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "closero
         } finally { w.endTransaction() }
     }
     fun leadJsonByPhone(phone: String): String? = readableDatabase.rawQuery("select v from lead_index where phone = ?", arrayOf(phone)).use { if (it.moveToFirst()) it.getString(0) else null }
+    fun leadPhones(): Set<String> = readableDatabase.rawQuery("select phone from lead_index", null).use { c -> buildSet { while (c.moveToNext()) add(c.getString(0)) } }
     fun leadIndexCount(): Int = readableDatabase.rawQuery("select count(*) from lead_index", null).use { if (it.moveToFirst()) it.getInt(0) else 0 }
 
     // ── cache ──

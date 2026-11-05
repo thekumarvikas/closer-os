@@ -23,7 +23,7 @@ function LeadListModal({ title, leads, dir, onClose }: { title: string; leads: J
             <tbody>{leads.map(l => (
               <tr key={l.id} className="cursor-pointer border-t border-slate-100 hover:bg-slate-50" onClick={() => setOpen(l.id)}>
                 <td className="py-1.5"><div className="truncate font-medium">{l.name || fmtPhone(l.phone)}</div><div className="truncate text-xs text-slate-500">{fmtPhone(l.phone)}</div></td>
-                <td className="truncate">{name(l.assigned_to)}</td><td>{l.dial_count} <span className="text-xs text-slate-400">({l.conversation_count ?? 0} talked)</span></td>
+                <td className="truncate">{name(l.assigned_to)}</td><td>{l.call_count ?? l.dial_count} <span className="text-xs text-slate-400">({l.conversation_count ?? 0} talked)</span></td>
                 <td>{mins(l.total_talk_sec ?? 0)}</td><td>{l.wa_count}</td>
                 <td className="truncate">{dir.outcomes.find(o => o.id === l.last_outcome_id)?.label ?? '—'}</td>
               </tr>))}</tbody>

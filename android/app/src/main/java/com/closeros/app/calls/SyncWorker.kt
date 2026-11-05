@@ -35,7 +35,8 @@ object CallSync {
         }
         store.removeFromOutbox(sentOk)
         // Keep the phone's copy of the leads fresh (instant after-call pop-up, works offline).
-        runCatching { com.closeros.app.data.LeadIndex.sync(ctx, orgId) }.onFailure { com.closeros.app.data.AppLog.error(ctx, "lead index", it) }
+        val newLeadPhones = runCatching { com.closeros.app.data.LeadIndex.sync(ctx, orgId) }
+            .onFailure { com.closeros.app.data.AppLog.error(ctx, "lead index", it) }.getOrDefault(emptySet())
 
         // 2) New call-log entries (first run: the last 2 days).
         val since = store.callLogCursorMs.takeIf { it > 0 } ?: (System.currentTimeMillis() - 2 * 86_400_000L)
@@ -43,20 +44,15 @@ object CallSync {
         var sent = 0
         val device = PhoneCalls.deviceId(ctx)
         for (chunk in entries.chunked(200)) {
-            val arr = buildJsonArray {
-                chunk.forEach { c ->
-                    add(buildJsonObject {
-                        put("id", c.id); put("phone", c.phone); put("direction", c.direction)
-                        put("started_at", Instant.ofEpochMilli(c.startedAtMs).toString()); put("duration_sec", c.durationSec)
-                        put("device_id", device)
-                        c.simSlot?.let { put("sim_slot", it) }; c.simLabel?.let { put("sim_label", JsonPrimitive(it)) }
-                        c.simNumber?.let { put("sim_number", JsonPrimitive(it)) }
-                    })
-                }
-            }
-            sent += Repo.syncCalls(orgId, arr)
+            sent += Repo.syncCalls(orgId, phoneCallsJson(chunk, device))
             store.callLogCursorMs = chunk.last().startedAtMs
         }
+        // 2a) Older calls with lead numbers, from the phone's whole call history — so each lead's call count is complete.
+        //     Once for all leads, then again only for numbers that just became leads. Personal calls stay on the phone.
+        runCatching {
+            if (!store.leadHistoryDone && com.closeros.app.data.LocalDb.get(ctx).leadIndexCount() > 0) { sent += uploadLeadHistory(ctx, orgId, device, null); store.leadHistoryDone = true }
+            else if (newLeadPhones.isNotEmpty()) sent += uploadLeadHistory(ctx, orgId, device, newLeadPhones)
+        }.onFailure { com.closeros.app.data.AppLog.error(ctx, "lead call history", it) }
         // 2b) WhatsApp calls noted from WhatsApp's call notifications (if the rep allowed it).
         val wa = WhatsAppCalls.since(ctx, store.waCursorMs).filter { it.phone.isNotBlank() || !it.name.isNullOrBlank() }
         for (chunk in wa.chunked(200)) {
@@ -83,6 +79,35 @@ object CallSync {
         // 5) Refresh follow-up reminders.
         runCatching { FollowUpAlarms.scheduleAll(ctx, Repo.followUps(orgId)) }
         sent
+    }
+
+    private fun phoneCallsJson(chunk: List<LogCall>, device: String) = buildJsonArray {
+        chunk.forEach { c ->
+            add(buildJsonObject {
+                put("id", c.id); put("phone", c.phone); put("direction", c.direction)
+                put("started_at", Instant.ofEpochMilli(c.startedAtMs).toString()); put("duration_sec", c.durationSec)
+                put("device_id", device)
+                c.simSlot?.let { put("sim_slot", it) }; c.simLabel?.let { put("sim_label", JsonPrimitive(it)) }
+                c.simNumber?.let { put("sim_number", JsonPrimitive(it)) }
+            })
+        }
+    }
+
+    /** Uploads every call in the phone's history whose number is a lead ([phones] = only these numbers). Safe to repeat: ids are stable. */
+    private suspend fun uploadLeadHistory(ctx: Context, orgId: String, device: String, phones: Set<String>?): Int {
+        val leadPhones = phones ?: com.closeros.app.data.LocalDb.get(ctx).leadPhones()
+        if (leadPhones.isEmpty()) return 0
+        val prefix = AfterCall.company(ctx)?.prefix ?: "+91"
+        var cursor = 0L; var sent = 0
+        while (true) {
+            val page = PhoneCalls.readLog(ctx, cursor, 2000)
+            if (page.isEmpty()) break
+            page.filter { com.closeros.app.ui.normalizePhone(it.phone, prefix) in leadPhones }.chunked(200)
+                .forEach { sent += Repo.syncCalls(orgId, phoneCallsJson(it, device)) }
+            cursor = page.last().startedAtMs
+            if (page.size < 2000) break
+        }
+        return sent
     }
 
     /** Runs the recording upload and reports this phone's status to the dashboard. */

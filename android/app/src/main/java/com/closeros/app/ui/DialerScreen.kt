@@ -72,7 +72,7 @@ fun DialerScreen(vm: AppViewModel) {
                     verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(l.name.ifBlank { "No name" }, fontWeight = FontWeight.SemiBold)
-                        Text(listOfNotNull(fmtPhone(l.phone), callsLine(l.dial_count, l.conversation_count), vm.outcomes.firstOrNull { it.id == l.last_outcome_id }?.label).joinToString(" · "), fontSize = 12.sp, color = Brand.muted)
+                        Text(listOfNotNull(fmtPhone(l.phone), callsLine(l.call_count, l.conversation_count), vm.outcomes.firstOrNull { it.id == l.last_outcome_id }?.label).joinToString(" · "), fontSize = 12.sp, color = Brand.muted)
                     }
                     IconButton(onClick = { vm.callRequest = l; vm.showDialer = false }) { Icon(Icons.Default.Call, "Call", tint = Brand.primary) }
                 }

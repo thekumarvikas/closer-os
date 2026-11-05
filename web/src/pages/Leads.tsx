@@ -154,7 +154,7 @@ export default function Leads() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5"><span className="truncate font-medium text-slate-900">{l.name || 'No name'}</span>{l.do_not_call && <Badge color="red">DNC</Badge>}</div>
                   <div className="text-xs text-slate-500">{[fmtPhone(l.phone), l.city, l.assigned_to ? dir.nameOf(l.assigned_to) : 'Unassigned'].filter(Boolean).join(' · ')}</div>
-                  <div className="text-xs text-brand-700">{(l.dial_count ?? 0) === 0 ? 'Not called yet' : `${l.dial_count} calls · ${l.conversation_count ?? 0} conversations`}{dir.outcomeOf(l.last_outcome_id) ? ` · ${dir.outcomeOf(l.last_outcome_id)!.label}` : ''}</div>
+                  <div className="text-xs text-brand-700">{(l.call_count ?? 0) === 0 ? 'Not called yet' : `${l.call_count} calls · ${l.conversation_count ?? 0} conversations`}{dir.outcomeOf(l.last_outcome_id) ? ` · ${dir.outcomeOf(l.last_outcome_id)!.label}` : ''}</div>
                   {l.next_follow_up_at && <div className={`text-xs ${new Date(l.next_follow_up_at) < new Date() ? 'font-medium text-red-600' : 'text-slate-500'}`}>Next call {fmtDate(l.next_follow_up_at, org)}</div>}
                 </div>
               </div>))}
@@ -185,7 +185,7 @@ export default function Leads() {
                       <td className="td tabular-nums">{fmtPhone(l.phone)}</td>
                       <td className="td">{st ? <Badge color={st.is_won ? 'green' : st.is_lost ? 'red' : 'brand'}>{st.name}</Badge> : <Badge>New</Badge>}</td>
                       <td className="td">{l.assigned_to ? dir.nameOf(l.assigned_to) : <span className="text-amber-700">Unassigned</span>}</td>
-                      <td className="td text-slate-600 whitespace-nowrap">{(l.dial_count ?? 0) === 0 ? '—' : <>{l.dial_count} <span className="text-xs text-slate-400">({l.conversation_count ?? 0} talked)</span></>}</td>
+                      <td className="td text-slate-600 whitespace-nowrap">{(l.call_count ?? 0) === 0 ? '—' : <>{l.call_count} <span className="text-xs text-slate-400">({l.conversation_count ?? 0} talked)</span></>}</td>
                       <td className="td text-slate-600">{l.source || '—'}</td>
                       <td className="td text-slate-600">{dir.outcomeOf(l.last_outcome_id)?.label ?? '—'}</td>
                       <td className={`td ${overdue ? 'font-medium text-red-600' : 'text-slate-600'}`}>{fmtDate(l.next_follow_up_at, org)}</td>

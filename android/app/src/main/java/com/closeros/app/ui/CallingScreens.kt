@@ -315,7 +315,7 @@ fun HistoryRow(vm: AppViewModel, h: HistoryItem, onAdd: (() -> Unit)? = null, co
                         modifier = Modifier.padding(start = 6.dp).background(Color(0xFFE2E8F0), RoundedCornerShape(50)).padding(horizontal = 6.dp, vertical = 1.dp))
                 }
                 Text(listOfNotNull(if (h.log.channel == "whatsapp") "WhatsApp" else null, what, time,
-                    h.lead?.let { "${it.dial_count} calls · ${it.conversation_count} conv." },
+                    h.lead?.let { "${it.call_count} calls · ${it.conversation_count} conv." },
                     h.log.simSlot?.takeIf { twoSims && h.log.channel == "phone" }?.let { "SIM $it" }).joinToString(" · "),
                     fontSize = 12.sp, color = if (missed) Brand.red else Brand.muted, maxLines = 1)
             }
@@ -448,7 +448,7 @@ fun LeadCard(vm: AppViewModel, l: Lead, onCall: ((Lead) -> Unit)?) {
                 // Effort so far in one line: talk time, calls (real pick-ups), WhatsApp sent, last outcome.
                 val last = listOfNotNull(
                     l.total_talk_sec.takeIf { it > 0 }?.let { "Talked ${fmtDur(it)}" },
-                    callsLine(l.dial_count, l.conversation_count),
+                    callsLine(l.call_count, l.conversation_count),
                     l.wa_count.takeIf { it > 0 }?.let { "$it WA" },
                     vm.outcomes.firstOrNull { it.id == l.last_outcome_id }?.label ?: l.last_call_at?.let { "Last called ${fmtWhen(it)}" },
                 ).joinToString(" · ")

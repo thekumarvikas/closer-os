@@ -115,7 +115,7 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
                 color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)
                     .background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 3.dp))
             lead?.let { l ->
-                val about = listOfNotNull(callsLine(l.dial_count, l.conversation_count), l.profession, l.company, l.city).filter { it.isNotBlank() }.joinToString(" · ")
+                val about = listOfNotNull(callsLine(l.call_count, l.conversation_count), l.profession, l.company, l.city).filter { it.isNotBlank() }.joinToString(" · ")
                 if (about.isNotBlank()) Text(about, color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 l.key_facts?.takeIf { it.isNotBlank() }?.let { Text("📌 $it", color = Color(0xFFFDE68A), fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
             }

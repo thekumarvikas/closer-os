@@ -103,7 +103,7 @@ data class LeadFact(val key: String, val label: String, val options: List<String
 @Serializable data class Lead(
     val id: String, val org_id: String, val name: String = "", val phone: String, val email: String? = null,
     val city: String? = null, val state: String? = null, val company: String? = null, val profession: String? = null,
-    val source: String? = null, val campaign: String? = null, val assigned_to: String? = null,
+    val source: String? = null, val campaign: String? = null, val assigned_to: String? = null, val assigned_at: String? = null,
     val stage_id: String? = null, val deal_value: Double? = null, val notes: String? = null,
     val last_call_at: String? = null, val last_outcome_id: String? = null, val next_follow_up_at: String? = null,
     val do_not_call: Boolean = false, val last_connected_at: String? = null, val key_facts: String? = null,

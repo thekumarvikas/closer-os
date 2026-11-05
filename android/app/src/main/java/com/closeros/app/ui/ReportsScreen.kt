@@ -50,11 +50,28 @@ fun ReportsScreen(vm: AppViewModel) {
     var error by remember { mutableStateOf<String?>(null) }
     var leadScope by remember { mutableStateOf("all") }   // all = every lead · period = leads assigned in this period
     var status by remember { mutableStateOf<JsonObject?>(null) }
+    var onPhone by remember { mutableStateOf(false) }   // true = worked out on this phone
     LaunchedEffect(Unit) { if (vm.isManager) team = runCatching { Repo.teamBrief(m.org_id) }.getOrDefault(emptyList()) }
     LaunchedEffect(from, to, who) {
         data = null; error = null
         val users = when (who) { "all" -> null; "me" -> listOfNotNull(com.closeros.app.data.Backend.uid); else -> listOf(who) }
         val a = from.atStartOfDay(zone).toInstant(); val b = to.plusDays(1).atStartOfDay(zone).toInstant()
+        // My own numbers: worked out on this phone (no internet needed, includes calls not uploaded yet).
+        if (who == "me") {
+            runCatching {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    val L = com.closeros.app.data.LocalReports
+                    val cr = L.callReport(ctx, from, to, zone)["rows"]!!.jsonArray.map { it.jsonObject }
+                    val or = L.outcomeReport(ctx, from, to, zone)["rows"]!!.jsonArray.map { it.jsonObject }
+                    val fu = L.followUpReport(ctx, m.org_id, from, to, zone).map { it.jsonObject }.firstOrNull()
+                    val tg = runCatching { Repo.targetsFor(m.org_id, from, to, users) }.getOrNull()?.let { t ->
+                        t.copy(rows = t.rows.map { r -> L.withMyActuals(ctx, r, from, to, zone, vm.outcomes) ?: r }) }
+                    Rep(cr, or, fu, tg)
+                }
+            }.onSuccess { data = it; onPhone = true }.onFailure { error = it.message?.take(120) ?: "Couldn't work out the report" }
+            return@LaunchedEffect
+        }
+        onPhone = false
         runCatching {
             val cr = Repo.report("call_report", m.org_id, a, b, users).jsonObject["rows"]!!.jsonArray.map { it.jsonObject }
             val or = Repo.report("outcome_report", m.org_id, a, b, users).jsonObject["rows"]!!.jsonArray.map { it.jsonObject }
@@ -66,7 +83,10 @@ fun ReportsScreen(vm: AppViewModel) {
     LaunchedEffect(from, to, who, leadScope) {
         status = null
         val users = when (who) { "all" -> null; "me" -> listOfNotNull(com.closeros.app.data.Backend.uid); else -> listOf(who) }
-        status = runCatching {
+        status = if (who == "me") kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { com.closeros.app.data.LocalReports.leadStatus(ctx, com.closeros.app.data.Backend.uid, vm.outcomes,
+                if (leadScope == "all") null else from.atStartOfDay(zone).toInstant(), if (leadScope == "all") null else to.plusDays(1).atStartOfDay(zone).toInstant()) }.getOrNull()
+        } else runCatching {
             if (leadScope == "all") Repo.leadStatus(m.org_id, users, null, null)
             else Repo.leadStatus(m.org_id, users, from.atStartOfDay(zone).toInstant(), to.plusDays(1).atStartOfDay(zone).toInstant())
         }.getOrNull()
@@ -100,6 +120,9 @@ fun ReportsScreen(vm: AppViewModel) {
             team.filter { it.id != com.closeros.app.data.Backend.uid }.forEach { p -> FilterChip(who == p.id, { who = p.id }, { Text(p.name.substringBefore(' ')) }) }
         }
         val d = data
+        if (d != null) Text(if (onPhone) "📱 Counted on this phone — up to the minute, works without internet"
+            else if (!vm.online) "📴 No internet — team numbers as last saved" else "☁ Whole team, from Closer OS",
+            fontSize = 12.sp, color = Brand.muted, modifier = Modifier.padding(horizontal = 16.dp))
         if (error != null) Text(error!!, color = Brand.red, modifier = Modifier.padding(16.dp))
         if (d == null) { if (error == null) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }; return }
         val total = d.rows.firstOrNull { it.i("g") == 15 } ?: JsonObject(emptyMap())

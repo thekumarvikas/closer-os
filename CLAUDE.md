@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.11.1
+## Android app (`android/`) — v0.11.2
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -812,3 +812,21 @@ intelligence → Play Store launch.
   today/week/month/all) and my newest 30 recordings (Repo.recordingFile audit=false; cache keeps 60).
   Net.isNetworkError treats CancellationException as retry-later (Ops never dropped). LeadIndex pages
   of 250 (weak-internet timeouts seen in app_errors).
+
+## My numbers counted on the phone (v0.11.2, Nov 2026)
+- Owner: the data is on the phone → compute there. data/LocalReports.kt mirrors the server rules:
+  callReport (call_report rows g15 total / g11 day / g13 hour: calls, out, inc, conn = talk > 0,
+  conn_dur, not_picked, missed, rejected, never_attended, uniq…), outcomeReport (g6 outcome_id/calls/
+  leads), followUpReport (g1; on time ≤ 15 min after due via dialled_at or the phone log), actuals /
+  withMyActuals (target_progress actuals: dialled, talk > 0, talk min, won), leadStatus (lead copy;
+  Lead gained assigned_at). Outcomes saved on this phone are remembered (cache "my_outcomes",
+  callId → "outcome|lead|ms", 60 days; recordOutcome in vm.saveOutcome + pop-up saveQuick);
+  Prefetch merges my server-side outcomes (45 days).
+- Reports "Me" (every rep) = phone-computed ("📱 Counted on this phone"); Everyone / a person =
+  server (saved copy offline, "📴 … as last saved"). Home today/month target bars: manager's targets +
+  phone actuals (vm.mine()). Lead work / What works stay server-side (saved copies).
+- Caveat: phone numbers only include THIS phone's calls (one login on two phones → each shows its own).
+- Owner's next rule (not built yet): one login = one phone at a time; signing in on a second phone
+  signs the first out (subscription seats). Proposed: device registered at login (server
+  active_device per user), others sign out on next online check AFTER uploading their outbox;
+  dashboard/laptop not affected; Super Admin can allow 2 phones per user later.

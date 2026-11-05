@@ -231,6 +231,7 @@ private suspend fun saveQuick(ctx: Context, info: AfterCall.Info, lead: Lead?, o
         put("outcome_id", o.id); put("outcome_data", buildJsonObject { })
         if (noFollow) put("no_follow_up", true) else next?.let { put("follow_up_at", it.toInstant().toString()) }
     }
+    com.closeros.app.data.LocalReports.recordOutcome(ctx, payload)   // my reports count it right away, even offline
     val sent = runCatching { Repo.logCall(payload) }
     if (sent.isFailure) {
         val err = sent.exceptionOrNull()?.message.orEmpty()

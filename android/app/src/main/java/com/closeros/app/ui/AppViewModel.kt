@@ -262,7 +262,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
             launch { runCatching { stats = Repo.todayStats(m.organization).also { save("stats", it) } } }
             launch { runCatching { followUps = Repo.followUps(m.org_id).also { save("followUps", it) }; FollowUpAlarms.scheduleAll(ctx, followUps) } }
             launch { runCatching { pastFollowUps = Repo.pastFollowUps(m.org_id) } }
-            launch { runCatching { progress = Repo.myProgressToday(m.organization) } }
+            launch { runCatching { val d = java.time.LocalDate.now(java.time.ZoneId.of(m.organization.timezone)); progress = mine(Repo.myProgressToday(m.organization), d, d) } }
             launch { runCatching { access = Repo.orgAccess(m.org_id) } }
             launch { runCatching { leaderboard = Repo.leaderboard(m.organization, "today") } }
         }
@@ -463,6 +463,13 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** call id → recording path for the calls shown in the Calls tab. */
     var recordingPaths by mutableStateOf<Map<String, String>>(emptyMap())
 
+    /** Manager's targets with my own actual numbers counted on the phone. */
+    private suspend fun mine(p: com.closeros.app.data.Progress?, from: java.time.LocalDate, to: java.time.LocalDate) =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val zone = runCatching { java.time.ZoneId.of(membership?.organization?.timezone ?: "Asia/Kolkata") }.getOrDefault(java.time.ZoneId.systemDefault())
+            runCatching { com.closeros.app.data.LocalReports.withMyActuals(ctx, p, from, to, zone, outcomes) }.getOrDefault(p)
+        }
+
     fun loadRound9() = viewModelScope.launch {
         val m = membership ?: return@launch
         val zone = runCatching { java.time.ZoneId.of(m.organization.timezone) }.getOrDefault(java.time.ZoneId.systemDefault())
@@ -471,8 +478,9 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
             launch { runCatching { waToday = Repo.myWaToday(m.org_id).let { it as kotlinx.serialization.json.JsonArray }.map { it as kotlinx.serialization.json.JsonObject } } }
             launch { runCatching { val f = Repo.focusList(m.org_id, 1, 0) as kotlinx.serialization.json.JsonObject
                 focusTotal = f["total"]?.toString()?.toIntOrNull() ?: 0; focusDone = f["done_today"]?.toString()?.toIntOrNull() ?: 0 } }
-            launch { runCatching { monthFull = Repo.myProgress(m.organization, today.withDayOfMonth(1), today.withDayOfMonth(today.lengthOfMonth())) } }
-            launch { runCatching { monthToDate = Repo.myProgress(m.organization, today.withDayOfMonth(1), today) } }
+            // Targets come from the manager; MY numbers are worked out on this phone (offline too, up to the minute).
+            launch { runCatching { monthFull = mine(Repo.myProgress(m.organization, today.withDayOfMonth(1), today.withDayOfMonth(today.lengthOfMonth())), today.withDayOfMonth(1), today) } }
+            launch { runCatching { monthToDate = mine(Repo.myProgress(m.organization, today.withDayOfMonth(1), today), today.withDayOfMonth(1), today) } }
             launch { runCatching { recipe = (Repo.salesRecipe(m.org_id, listOfNotNull(Backend.uid), null, null) as kotlinx.serialization.json.JsonObject).let { r ->
                 (r["mine"] as? kotlinx.serialization.json.JsonObject) ?: (r["team"] as? kotlinx.serialization.json.JsonObject) } } }
         }
@@ -803,6 +811,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Saves the outcome. If there is no internet it is kept on the phone and sent later. */
     fun saveOutcome(payload: JsonObject, onDone: () -> Unit) = viewModelScope.launch {
+        com.closeros.app.data.LocalReports.recordOutcome(ctx, payload)   // my reports count it right away, even offline
         val sent = runCatching { Repo.logCall(payload) }
         if (sent.isFailure) {
             val err = sent.exceptionOrNull()?.message.orEmpty()

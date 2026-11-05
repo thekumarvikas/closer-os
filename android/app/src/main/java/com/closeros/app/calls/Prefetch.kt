@@ -22,6 +22,7 @@ import java.time.ZoneId
  */
 object Prefetch {
     @Serializable private data class Rec(val id: String, val recording_path: String? = null)
+    @Serializable private data class OcRow(val id: String, val outcome_id: String? = null, val lead_id: String? = null, val started_at: String)
 
     suspend fun run(ctx: Context, force: Boolean = false) {
         if (!Net.isOnline) return
@@ -54,6 +55,16 @@ object Prefetch {
             }
             t { Repo.leadStatus(org, users, null, null) }
             for (k in listOf("today", "week", "month", "all")) { val (f, to) = com.closeros.app.ui.range(k); t { Repo.leadWorkReport(org, users, f, to) } }
+        }
+
+        // Outcomes of my calls saved anywhere (laptop desk, earlier app versions) → my phone reports count them.
+        t {
+            val rows = Backend.client.from("calls").select(Columns.raw("id,outcome_id,lead_id,started_at")) {
+                filter { eq("org_id", org); eq("user_id", uid); gte("started_at", java.time.Instant.now().minusSeconds(45L * 86400).toString()); neq("outcome_id", "00000000-0000-0000-0000-000000000000") }
+                order("started_at", Order.DESCENDING); limit(5000)
+            }.decodeList<OcRow>()
+            com.closeros.app.data.LocalReports.merge(ctx, rows.filter { it.outcome_id != null }.associate { r ->
+                r.id to "${r.outcome_id}|${r.lead_id.orEmpty()}|${runCatching { com.closeros.app.data.parseInstant(r.started_at).toEpochMilli() }.getOrDefault(now)}" })
         }
 
         // The newest recordings of my calls, so they play with no internet too.

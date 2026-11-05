@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Follow-up reminder, opened: everything needed before dialling, plus Call / WhatsApp / Open. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+    <TextView android:id="@+id/n_title" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:textSize="18sp" android:textStyle="bold" android:textColor="#0F172A" android:maxLines="1" android:ellipsize="end" />
+    <TextView android:id="@+id/n_time" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:textSize="14sp" android:textStyle="bold" android:textColor="#B45309" android:maxLines="1" android:ellipsize="end" />
+    <TextView android:id="@+id/n_text" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp"
+        android:textSize="14sp" android:textColor="#334155" android:maxLines="5" android:ellipsize="end" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="8dp">
+        <TextView android:id="@+id/n_call" android:layout_width="0dp" android:layout_weight="1.4" android:layout_height="40dp"
+            android:background="@drawable/notif_btn_call" android:gravity="center" android:text="📞 Call"
+            android:textColor="#FFFFFF" android:textSize="15sp" android:textStyle="bold" />
+        <TextView android:id="@+id/n_wa" android:layout_width="0dp" android:layout_weight="1" android:layout_height="40dp" android:layout_marginStart="8dp"
+            android:background="@drawable/notif_btn_plain" android:gravity="center" android:text="WhatsApp"
+            android:textColor="#15803D" android:textSize="14sp" android:textStyle="bold" />
+        <TextView android:id="@+id/n_open" android:layout_width="0dp" android:layout_weight="1" android:layout_height="40dp" android:layout_marginStart="8dp"
+            android:background="@drawable/notif_btn_plain" android:gravity="center" android:text="Open"
+            android:textColor="#0E5E57" android:textSize="14sp" android:textStyle="bold" />
+    </LinearLayout>
+</LinearLayout>

@@ -64,7 +64,10 @@ class MainActivity : ComponentActivity() {
 
     /** Taps on follow-up notifications: open the lead, or start the call. */
     private fun handle(i: Intent?) {
-        i?.getStringExtra("call_lead")?.let { vm.callLeadById(it); i.removeExtra("call_lead") }
+        i?.getStringExtra("call_lead")?.let {
+            // From a follow-up reminder's Call button: close that reminder and call with the right purpose.
+            i.getStringExtra("fu_id")?.let { fu -> androidx.core.app.NotificationManagerCompat.from(this).cancel(fu.hashCode()) }
+            vm.callLeadById(it, i.getStringExtra("purpose")); i.removeExtra("call_lead") }
         i?.getStringExtra("open_lead")?.let { vm.openLeadId = it; i.removeExtra("open_lead") }
         i?.getStringExtra("open_tab")?.let { if (it == "leads") { vm.tab = Tab.Leads; vm.reloadLeads() }; i.removeExtra("open_tab") }
     }

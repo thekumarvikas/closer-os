@@ -385,8 +385,8 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** From a notification's Call button. */
-    fun callLeadById(id: String) = viewModelScope.launch {
-        runCatching { Repo.lead(id) }.getOrNull()?.let { callRequest = it } ?: run { message = "Lead not found" }
+    fun callLeadById(id: String, purpose: String? = null) = viewModelScope.launch {
+        runCatching { Repo.lead(id) }.getOrNull()?.let { if (purpose == "reminder") callContext = "reminder" to null; callRequest = it } ?: run { message = "Lead not found" }
     }
 
     fun saveSetup(myPhone: String, sims: Map<Int, String>, onError: (String) -> Unit) = viewModelScope.launch {

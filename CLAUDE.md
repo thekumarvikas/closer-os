@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.10.8
+## Android app (`android/`) — v0.10.9
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -768,3 +768,13 @@ intelligence → Play Store launch.
 - v0.10.8: real cause of "Couldn't play" (app_errors): "Plugin storage not installed" — Backend.client
   only installed Auth + Postgrest, so EVERY storage call failed (recording play, WhatsApp template
   attachments, company files). Now install(Storage). Uploads were fine (raw HttpURLConnection).
+
+## One-glance follow-up reminders (v0.10.9, Nov 2026)
+- Owner: reminder had to be expanded to see the Call action and gave no context. Now custom
+  RemoteViews: closed/heads-up = layout/notif_fu_small (title "Name · 5 min late" red when late,
+  line "last outcome · 62 calls · 7 conv.", green 📞 Call button via setOnClickPendingIntent);
+  expanded = notif_fu_big (kind + due + phone, Last outcome/counts/talk, profession · city, 📌 key
+  facts, reason/notes, buttons Call · WhatsApp (wa.me) · Open). VISIBILITY_PUBLIC for the lock screen.
+  FollowUp.lead (LeadMini) now also carries last_outcome_id, key_facts, profession, city, total_talk_sec
+  (alarm extras; outcome label from the cached outcomes). Call → MainActivity call_lead + fu_id
+  (cancels that reminder) + purpose (reminder follow-ups call with purpose "reminder").

@@ -80,6 +80,14 @@ object Backend {
     val settings: JsonObject? = null,
 ) {
     val trackWhatsapp get() = settings?.get("track_whatsapp")?.jsonPrimitive?.booleanOrNull ?: true
+    /** Hourly check-ins (dashboard Settings → Hourly check-ins). */
+    private val checkin get() = settings?.get("checkin") as? JsonObject
+    val checkinOn get() = checkin?.get("enabled")?.jsonPrimitive?.booleanOrNull ?: true
+    val checkinStart get() = checkin?.get("start_hour")?.jsonPrimitive?.intOrNull ?: 10
+    val checkinEnd get() = checkin?.get("end_hour")?.jsonPrimitive?.intOrNull ?: 19
+    /** Reminder calls should be finished this many minutes before the webinar starts. */
+    val reminderCutoffMin get() = checkin?.get("reminder_cutoff_min")?.jsonPrimitive?.intOrNull ?: 30
+    val workDays: List<Int> get() = runCatching { settings?.get("work_days")?.jsonArray?.map { it.jsonPrimitive.int } }.getOrNull() ?: listOf(1, 2, 3, 4, 5, 6)
     /** Tag groups (dashboard Settings → Note tags), e.g. Objection: Price · Time. Falls back to the flat tag list. */
     val tagGroups: List<TagGroup> get() = runCatching {
         settings?.get("tag_groups")?.jsonArray?.map { g -> val o = g.jsonObject
@@ -263,6 +271,14 @@ object Repo {
     }
 
     suspend fun signOut() = Backend.auth.signOut()
+
+    // Hourly check-ins
+    @Serializable data class TalkHour(val hour: String, val talk_sec: Int)
+    @Serializable data class TalkRecords(val top: List<TalkHour> = emptyList())
+    suspend fun myTalkRecords(orgId: String): TalkRecords = json.decodeFromString(rpcR("my_talk_records", buildJsonObject { put("p_org", orgId) }).data)
+    suspend fun saveCheckin(orgId: String, slot: Instant, summary: JsonObject, acked: Boolean) {
+        db.rpc("save_checkin", buildJsonObject { put("p_org", orgId); put("p_slot", slot.toString()); put("p_summary", summary); put("p_acked", acked) })
+    }
 
     // One login = one phone (see calls/DeviceGuard.kt)
     suspend fun claimDevice(device: String, name: String) {

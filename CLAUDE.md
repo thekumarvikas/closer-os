@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.12.0
+## Android app (`android/`) — v0.13.0
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -855,3 +855,29 @@ intelligence → Play Store launch.
   leads where I'm reminder_by) · 3 due in 2 h · 4 hot watchers (≥ hot_minutes in last 14 days, "🔥 Watched
   N min") · 5 new never dialled (NEWEST first) · 6 best hour · 7 score ≥ 40 · 8 rest; rows include
   call_purpose / call_batch_id. LocalLeads.focus mirrors it offline. Tested on a temporary org (deleted).
+
+## Hourly check-ins (v0.13.0, migration 0052, Nov 2026)
+- Owner: every working hour, an encouraging progress note every rep must acknowledge (sales-only,
+  reminder-only or both — same layout, adapts automatically). Rules: never negative; compare with the
+  rep's OWN best hour (today + all-time); goal = this hour only (reachable step when far behind); a
+  sale always in the title; first slot = morning plan, last = wrap-up.
+- calls/CheckIn.kt: schedule() = exact alarm for the next top-of-hour in [checkinStart..checkinEnd] on
+  work days (Org.checkinOn/Start/End/reminderCutoffMin/workDays from settings.checkin + work_days;
+  scheduled from loadOrg, CallSync, boot). compute() on the phone: last clock hour + today from the call
+  log (dialled = outgoing, picked/connected = talk > 0), hours map, best hour today, all-time best (server
+  my_talk_records top 3 + today), streak (hours ≥ 70% of best, min 15 min), sales (LocalReports.sales;
+  amounts in cache "my_sale_amounts"), daily targets (cache "my_daily_targets" saved from progress.daily),
+  reminder maths per batch starting within 14 h (saved batch_call_list: left = not talked; finish =
+  webinar − cutoff; pickup = today's dials ≥ 20 s (default 40% under 10 dials); ring 35 s + 15 s between
+  calls; allPick = time/left − 15; perAnswered; canFinish at usual talk; missed), tip, action
+  (reminder:<batch> > due follow-ups > hot leads > focus). post() = ongoing BigText notification (title ·
+  last hour · today · best line · reminder line · goal) + action button; pending in cache
+  "checkin_pending"; save_checkin(shown) / acknowledge() (save_checkin acked, cancel notification).
+- ui/CheckInScreen.kt card (sales, last hour, today, talk vs your best bars, top 3 hours, streak, hour by
+  hour, targets, reminder maths, tip, goal) → "Got it — <action>" (vm.checkInGo: acknowledge + open the
+  right list) / Later. Opens from the notification (MainActivity extra checkin=open|go) and once per slot
+  on app resume when unacknowledged (< 2 h). Settings → "Show my check-in now".
+- Server: checkin_acks (user, slot, summary, shown_at, acked_at), save_checkin, my_talk_records,
+  team_checkins (managers: last hour, today, sales, best today / all-time, latest check-in + acks).
+  Dashboard: Settings → Hourly check-ins (on/off, from/to hour, reminder finish minutes before start);
+  Team page → "Hourly check-ins — today" (refreshes every minute).

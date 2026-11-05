@@ -297,6 +297,16 @@ fun ProfileScreen(vm: AppViewModel) {
             vm.store.lastAfterCallTrace?.let { Text("Last call: $it", fontSize = 12.sp, color = Brand.muted) }
         }
         HorizontalDivider()
+        Text("Hourly check-in", fontWeight = FontWeight.SemiBold)
+        Text("Every working hour: your last hour, today, your best hours and what to do next. Hours are set by your manager.", fontSize = 13.sp, color = Brand.muted)
+        run {
+            val scope = rememberCoroutineScope()
+            OutlinedButton(onClick = { scope.launch {
+                val s = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.closeros.app.calls.CheckIn.compute(ctx) }
+                if (s == null) vm.message = "Still loading your company — try again in a moment" else { com.closeros.app.calls.CheckIn.post(ctx, s); vm.checkIn = s }
+            } }) { Text("Show my check-in now") }
+        }
+        HorizontalDivider()
         Text("Sync", fontWeight = FontWeight.SemiBold)
         Text(if (vm.store.lastSyncMs == 0L) "Not synced yet" else "Last sync ${fmtWhen(Instant.ofEpochMilli(vm.store.lastSyncMs).toString())}", color = Brand.muted)
         OutlinedButton(onClick = { com.closeros.app.calls.CallSync.syncNow(ctx); vm.message = "Syncing calls…" }) { Icon(Icons.Default.Refresh, null); Spacer(Modifier.width(6.dp)); Text("Sync calls now") }

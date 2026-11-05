@@ -110,6 +110,34 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     var showReports by mutableStateOf(false)
     var access by mutableStateOf<com.closeros.app.data.OrgAccess?>(null)
     var showFeedback by mutableStateOf(false)
+
+    // ── Hourly check-in card ──
+    var checkIn by mutableStateOf<com.closeros.app.calls.CheckIn.Summary?>(null)
+    private var checkInSeenSlot = 0L
+    /** From the notification: the check-in it showed (or a fresh one). */
+    fun openCheckIn() = viewModelScope.launch {
+        checkIn = com.closeros.app.calls.CheckIn.pending(ctx) ?: kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.closeros.app.calls.CheckIn.compute(ctx) }
+    }
+    /** Back in the app with an unacknowledged check-in from the last 2 hours: show it once. */
+    fun maybeShowCheckIn() {
+        val p = com.closeros.app.calls.CheckIn.pending(ctx) ?: return
+        if (p.slotMs != checkInSeenSlot && System.currentTimeMillis() - p.slotMs < 2 * 3_600_000L) { checkInSeenSlot = p.slotMs; checkIn = p }
+    }
+    /** "Got it — start calling": acknowledge, then go straight to the right list. */
+    fun checkInGo() = viewModelScope.launch {
+        val s = checkIn ?: com.closeros.app.calls.CheckIn.pending(ctx)
+        com.closeros.app.calls.CheckIn.acknowledge(ctx); checkIn = null
+        val a = s?.action ?: "focus"
+        val m = membership ?: return@launch
+        when {
+            a.startsWith("reminder:") -> { loadBatches(quiet = true).join(); batches?.firstOrNull { it.id == a.removePrefix("reminder:") }?.let { openBatchList(it, "reminder") } ?: openFocusList() }
+            a == "followups" -> { tab = Tab.FollowUps }
+            a == "hot" -> genericList = "🔥 Hot leads" to kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.closeros.app.data.LocalLeads.focus(ctx, outcomes, m.organization.timezone).filter { it.score >= 40 || it.batch_leads.any { b -> (b.watch_minutes ?: 0) >= 60 } } }
+            else -> openFocusList()
+        }
+    }
+    fun checkInLater() { checkIn = null }
     var reviews by mutableStateOf<List<com.closeros.app.data.CallReview>>(emptyList())
     fun loadReviews() = viewModelScope.launch {
         val m = membership ?: return@launch
@@ -244,7 +272,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
                 outcomes = Repo.outcomes(m.org_id).also { save("outcomes", it) }
                 runCatching { categories = Repo.categories(m.org_id).also { save("categories", it) } }
                 runCatching { templates = Repo.templates(m.org_id).also { save("templates", it) } }
-                if (!lite) { refreshHome(); reloadLeads(); CallSync.schedule(ctx); CallSync.syncNow(ctx) }
+                if (!lite) { refreshHome(); reloadLeads(); CallSync.schedule(ctx); CallSync.syncNow(ctx); com.closeros.app.calls.CheckIn.schedule(ctx) }
             }
         }.onFailure {
             if (membership == null) { message = "Couldn't load your company: ${it.message}"; com.closeros.app.data.AppLog.error(ctx, "load company", it) }
@@ -262,7 +290,8 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
             launch { runCatching { stats = Repo.todayStats(m.organization).also { save("stats", it) } } }
             launch { runCatching { followUps = Repo.followUps(m.org_id).also { save("followUps", it) }; FollowUpAlarms.scheduleAll(ctx, followUps) } }
             launch { runCatching { pastFollowUps = Repo.pastFollowUps(m.org_id) } }
-            launch { runCatching { val d = java.time.LocalDate.now(java.time.ZoneId.of(m.organization.timezone)); progress = mine(Repo.myProgressToday(m.organization), d, d) } }
+            launch { runCatching { val d = java.time.LocalDate.now(java.time.ZoneId.of(m.organization.timezone)); progress = mine(Repo.myProgressToday(m.organization), d, d)
+                progress?.daily?.let { save("my_daily_targets", it) } } }   // the hourly check-in uses today's targets (also offline)
             launch { runCatching { access = Repo.orgAccess(m.org_id) } }
             launch { runCatching { leaderboard = Repo.leaderboard(m.organization, "today") } }
         }
@@ -612,6 +641,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
             showLeadWork && genericList == null && openLeadId == null -> showLeadWork = false
             showRecipe && genericList == null && openLeadId == null -> showRecipe = false
             showPlaybook -> showPlaybook = false
+            checkIn != null -> checkIn = null
             showFeedback -> showFeedback = false
             showDialer -> showDialer = false
             showReports && openLeadId == null && genericList == null && !showLeadWork && !showRecipe -> showReports = false
@@ -685,6 +715,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Called when the app comes back to the front: look up the finished call in the call log. */
     fun onResume() {
         viewModelScope.launch { com.closeros.app.calls.DeviceGuard.check(ctx) }   // signed in on another phone? (one login, one phone)
+        maybeShowCheckIn()
         loadWaToConfirm()
         if (waActive && waAwaiting) waBackFromWhatsApp()
         // Saved in the after-call pop-up while the app was in the background: move on.

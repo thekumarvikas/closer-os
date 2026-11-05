@@ -81,6 +81,7 @@ object CallSync {
         runCatching { com.closeros.app.data.LocalDb.get(ctx).pruneMarks() }
         // 4) Announcements from management + new leads assigned to me.
         runCatching { TeamAlerts.check(ctx, orgId) }
+        runCatching { CheckIn.schedule(ctx) }   // hourly check-ins (settings may have changed)
         // 5) Refresh follow-up reminders.
         runCatching { FollowUpAlarms.scheduleAll(ctx, Repo.followUps(orgId)) }
         // 6) Save copies of reports, lead work, playbook, focus and recent recordings for use with no internet.

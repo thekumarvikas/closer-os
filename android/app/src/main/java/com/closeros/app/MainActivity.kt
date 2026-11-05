@@ -72,6 +72,8 @@ class MainActivity : ComponentActivity() {
             i.getStringExtra("fu_id")?.let { fu -> androidx.core.app.NotificationManagerCompat.from(this).cancel(fu.hashCode()) }
             vm.callLeadById(it, i.getStringExtra("purpose")); i.removeExtra("call_lead") }
         i?.getStringExtra("open_lead")?.let { vm.openLeadId = it; i.removeExtra("open_lead") }
+        // Hourly check-in notification: open the card, or "start calling" straight away.
+        i?.getStringExtra("checkin")?.let { if (it == "go") vm.checkInGo() else vm.openCheckIn(); i.removeExtra("checkin") }
         i?.getStringExtra("open_tab")?.let { if (it == "leads") { vm.tab = Tab.Leads; vm.reloadLeads() }; i.removeExtra("open_tab") }
     }
 
@@ -145,6 +147,7 @@ fun Root(vm: AppViewModel) {
             vm.showSetup -> SetupChecklistScreen(vm) { vm.showSetup = false }
             vm.pending != null -> OutcomeScreen(vm)
             vm.announcements.isNotEmpty() -> AnnouncementScreen(vm, vm.announcements.first())
+            vm.checkIn != null -> vm.checkIn?.let { CheckInScreen(vm, it) }
             vm.waActive -> WaQueueScreen(vm)
             vm.showPlaybook -> PlaybookScreen(vm)
             vm.showFeedback -> FeedbackScreen(vm)

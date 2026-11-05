@@ -6,6 +6,7 @@ import { useDirectory } from '../lib/directory'
 import { fmtDate, roleLabel } from '../lib/format'
 import type { Invitation, Role } from '../lib/types'
 import { Badge, Button, Card, Empty, ErrorBox, Field, Modal, PageHeader, Spinner } from '../components/ui'
+import TeamCheckins from '../components/TeamCheckins'
 
 export default function Team() {
   const { org, isAdmin, role: myRole, session } = useOrg()
@@ -37,6 +38,7 @@ export default function Team() {
       <PageHeader title="Team" subtitle={`${dir.members.filter(m => m.status === 'active').length} active people`}
         actions={isAdmin && <Button onClick={() => setShowInvite(true)}><UserPlus className="h-4 w-4" /> Invite people</Button>} />
       <ErrorBox error={error} />
+      <TeamCheckins />
 
       <Card className="mb-6 overflow-x-auto">
         <table className="min-w-full divide-y divide-slate-100">

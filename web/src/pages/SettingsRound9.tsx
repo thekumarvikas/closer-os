@@ -192,3 +192,35 @@ export function LeadFacts() {
     </Card>
   )
 }
+
+/** Hourly check-ins on reps' phones: on/off, working hours, when reminder calls must be finished. */
+export function CheckinSettings() {
+  const { org, save, error, saved } = useSaveSettings()
+  const c = (org.settings?.checkin as { enabled?: boolean; start_hour?: number; end_hour?: number; reminder_cutoff_min?: number } | undefined) ?? {}
+  const [on, setOn] = useState(c.enabled ?? true)
+  const [start, setStart] = useState(c.start_hour ?? 10)
+  const [end, setEnd] = useState(c.end_hour ?? 19)
+  const [cut, setCut] = useState(c.reminder_cutoff_min ?? 30)
+  const hours = Array.from({ length: 24 }, (_, h) => h)
+  const lbl = (h: number) => `${h % 12 === 0 ? 12 : h % 12} ${h < 12 ? 'AM' : 'PM'}`
+  return (
+    <Card className="p-5">
+      <h2 className="font-semibold">Hourly check-ins</h2>
+      <p className="mb-3 mt-1 text-sm text-slate-500">Every working hour each rep's phone shows their last hour, today, sales, their best hours (today and all-time) and the one thing to do next — encouraging, never negative. Reps tap "Got it" to acknowledge; you see it on the Team page. Days follow the Working calendar.</p>
+      <ErrorBox error={error} />
+      <div className="space-y-3 text-sm">
+        <label className="flex items-center gap-2"><input type="checkbox" checked={on} onChange={e => setOn(e.target.checked)} /> Send hourly check-ins</label>
+        <div className="flex flex-wrap items-center gap-2">From
+          <select className="rounded border border-slate-200 px-2 py-1" value={start} onChange={e => setStart(+e.target.value)}>{hours.map(h => <option key={h} value={h}>{lbl(h)}</option>)}</select>
+          to <select className="rounded border border-slate-200 px-2 py-1" value={end} onChange={e => setEnd(+e.target.value)}>{hours.map(h => <option key={h} value={h}>{lbl(h)}</option>)}</select>
+          <span className="text-slate-500">(first = morning plan, last = day wrap-up)</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">Reminder calls must be finished
+          <select className="rounded border border-slate-200 px-2 py-1" value={cut} onChange={e => setCut(+e.target.value)}>{[0, 15, 30, 45, 60, 90, 120].map(m => <option key={m} value={m}>{m === 0 ? 'by the start' : `${m} min before`}</option>)}</select>
+          the webinar starts
+        </div>
+        <Button onClick={() => save({ checkin: { enabled: on, start_hour: start, end_hour: Math.max(end, start), reminder_cutoff_min: cut } })}>{saved ? 'Saved ✓' : 'Save'}</Button>
+      </div>
+    </Card>
+  )
+}

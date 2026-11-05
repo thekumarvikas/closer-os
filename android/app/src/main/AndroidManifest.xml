@@ -64,6 +64,7 @@
             <intent-filter><action android:name="android.intent.action.PHONE_STATE" /></intent-filter>
         </receiver>
         <receiver android:name=".calls.FollowUpReceiver" android:exported="false" />
+        <receiver android:name=".calls.CheckInReceiver" android:exported="false" />
         <receiver android:name=".calls.BootReceiver" android:exported="false">
             <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter>
         </receiver>

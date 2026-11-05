@@ -39,6 +39,20 @@ object LocalReports {
         val oc = payload["outcome_id"]?.jsonPrimitive?.content?.takeIf { it != "null" } ?: return
         val lead = payload["lead_id"]?.jsonPrimitive?.content?.takeIf { it != "null" }.orEmpty()
         merge(ctx, mapOf(id to "$oc|$lead|${System.currentTimeMillis()}"))
+        // Sale amount (for the hourly check-in's "🎉 1 sale · ₹12,000").
+        val od = payload["outcome_data"] as? JsonObject
+        val amt = (od?.get("amount") ?: od?.get("deal_value"))?.jsonPrimitive?.content?.toLongOrNull()
+        if (amt != null) synchronized(lock) {
+            val m = LocalDb.get(ctx).get("my_sale_amounts")?.let { runCatching { json.decodeFromString(mapSer, it) }.getOrNull() }.orEmpty()
+            LocalDb.get(ctx).put("my_sale_amounts", json.encodeToString(mapSer, (m + (id to amt.toString())).entries.toList().takeLast(500).associate { it.key to it.value }))
+        }
+    }
+
+    /** My sales (won outcomes) among these call ids: (callId, leadId, amount ₹ or null). */
+    fun sales(ctx: Context, callIds: Set<String>, outcomeList: List<Outcome>): List<Triple<String, String?, Long?>> {
+        val won = outcomeList.filter { it.category == "won" }.map { it.id }.toSet()
+        val amounts = LocalDb.get(ctx).get("my_sale_amounts")?.let { runCatching { json.decodeFromString(mapSer, it) }.getOrNull() }.orEmpty()
+        return outcomes(ctx).filter { (k, v) -> k in callIds && v.outcome in won }.map { (k, v) -> Triple(k, v.lead, amounts[k]?.toLongOrNull()) }
     }
 
     /** Outcomes of my calls from the server (saved on the laptop or before this phone), merged in. */

@@ -451,6 +451,21 @@ object Repo {
         Backend.client.from("leads").select(Columns.raw(LEAD_COLUMNS)) { filter { isIn("id", ids.distinct()) } }.decodeList()
 
     /** Short-lived private link to play a recording; each play is written to the audit log. */
+    /** Downloads a call recording to the phone's cache (once) and returns the file — playing a local file works on every phone. */
+    suspend fun recordingFile(cacheDir: java.io.File, callId: String, path: String): java.io.File {
+        runCatching { db.rpc("log_recording_access", buildJsonObject { put("p_call", callId); put("p_action", "play") }) }
+        val dir = java.io.File(cacheDir, "recordings").apply { mkdirs() }
+        val f = java.io.File(dir, path.substringAfterLast('/'))
+        if (f.exists() && f.length() > 0) return f
+        val bytes = Backend.client.storage.from("recordings").downloadAuthenticated(path)
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val tmp = java.io.File(dir, f.name + ".part"); tmp.writeBytes(bytes); tmp.renameTo(f)
+            // Keep the cache small: newest 30 recordings.
+            dir.listFiles()?.sortedByDescending { it.lastModified() }?.drop(30)?.forEach { it.delete() }
+        }
+        return f
+    }
+
     suspend fun recordingUrl(callId: String, path: String): String {
         runCatching { db.rpc("log_recording_access", buildJsonObject { put("p_call", callId); put("p_action", "play") }) }
         return Backend.client.storage.from("recordings").createSignedUrl(path, kotlin.time.Duration.parse("15m"))

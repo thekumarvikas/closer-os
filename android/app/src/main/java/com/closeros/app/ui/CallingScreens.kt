@@ -605,13 +605,15 @@ private fun TemplateRow(vm: AppViewModel, name: String, preview: String, onDelet
 @Composable
 fun RecordingPlayer(callId: String, path: String) {
     val scope = rememberCoroutineScope()
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     var player by remember { mutableStateOf<android.media.MediaPlayer?>(null) }
     var state by remember { mutableStateOf("idle") } // idle, loading, playing, paused, error
     DisposableEffect(Unit) { onDispose { player?.release() } }
     Row(verticalAlignment = Alignment.CenterVertically) {
         when (state) {
             "loading" -> Text("Loading…", fontSize = 13.sp, color = Brand.muted)
-            "error" -> Text("Couldn't play the recording", fontSize = 13.sp, color = Brand.red)
+            "error" -> TextButton(onClick = { player?.release(); player = null; state = "idle" }, contentPadding = PaddingValues(horizontal = 8.dp)) {
+                Text("Couldn't play · Try again", fontSize = 13.sp, color = Brand.red) }
             else -> TextButton(onClick = {
                 val p = player
                 when {
@@ -620,15 +622,19 @@ fun RecordingPlayer(callId: String, path: String) {
                     else -> {
                         state = "loading"
                         scope.launch {
-                            runCatching { com.closeros.app.data.Repo.recordingUrl(callId, path) }.onSuccess { url ->
-                                player = android.media.MediaPlayer().apply {
-                                    setDataSource(url)
-                                    setOnPreparedListener { it.start(); state = "playing" }
-                                    setOnCompletionListener { state = "paused"; it.seekTo(0) }
-                                    setOnErrorListener { _, _, _ -> state = "error"; true }
-                                    prepareAsync()
-                                }
-                            }.onFailure { state = "error" }
+                            runCatching { com.closeros.app.data.Repo.recordingFile(ctx.cacheDir, callId, path) }.onSuccess { file ->
+                                runCatching {
+                                    player = android.media.MediaPlayer().apply {
+                                        setDataSource(file.absolutePath)
+                                        setOnPreparedListener { it.start(); state = "playing" }
+                                        setOnCompletionListener { state = "paused"; it.seekTo(0) }
+                                        setOnErrorListener { _, what, extra ->
+                                            com.closeros.app.data.AppLog.error(ctx, "play recording", null, message = "player error $what/$extra · ${file.name} · ${file.length()} bytes")
+                                            state = "error"; true }
+                                        prepareAsync()
+                                    }
+                                }.onFailure { state = "error"; com.closeros.app.data.AppLog.error(ctx, "play recording", it) }
+                            }.onFailure { state = "error"; com.closeros.app.data.AppLog.error(ctx, "play recording", it) }
                         }
                     }
                 }

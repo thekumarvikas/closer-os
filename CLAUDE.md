@@ -688,3 +688,11 @@ intelligence → Play Store launch.
   < 7 days; blue ≤ 30 min, red after) and "⏰ Best time now"; neutral talk bar on lead cards vs my
   usual talk per sale; Settings → Calling queue "Best time to call first" (store.queueBestTimeFirst,
   default on: due follow-ups, then best-hour-now leads, then the rest).
+
+## Outcomes from the owner's sheet (migration 0044, Nov 2026)
+- Owner's Google Sheet reminder outcomes are the reference: apply_outcome_set_v2 now lists, in the
+  sheet's order and names: Guided, Didn't pick, Switched off, Wrong number, Incoming calls not
+  available, Someone else picked, Out of service, Repeated, Not reachable, Disconnected after intro,
+  Team, Asked to call later, Busy on another call, Invalid number, Not interested (+ Will try / maybe,
+  Can't attend — wants next batch, Asked to send the link). "Confirmed — will join" hidden (= Guided).
+  Sales also gained Incoming calls not available, Invalid number, Disconnected after intro.

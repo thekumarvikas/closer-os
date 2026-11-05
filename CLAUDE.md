@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.10.7
+## Android app (`android/`) — v0.10.8
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -765,3 +765,6 @@ intelligence → Play Store launch.
   recording" (no error logged). RecordingPlayer now downloads via Repo.recordingFile
   (storage downloadAuthenticated → cacheDir/recordings, newest 30 kept, audit log_recording_access)
   and plays the local file; player/download errors go to AppLog "play recording"; "Try again" button.
+- v0.10.8: real cause of "Couldn't play" (app_errors): "Plugin storage not installed" — Backend.client
+  only installed Auth + Postgrest, so EVERY storage call failed (recording play, WhatsApp template
+  attachments, company files). Now install(Storage). Uploads were fine (raw HttpURLConnection).

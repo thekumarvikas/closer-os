@@ -42,6 +42,7 @@ object Backend {
         defaultSerializer = KotlinXSerializer(json)
         install(Auth)
         install(Postgrest)
+        install(io.github.jan.supabase.storage.Storage)   // recordings + WhatsApp attachments / company files
     }
     val auth get() = client.auth
     val uid: String? get() = client.auth.currentUserOrNull()?.id

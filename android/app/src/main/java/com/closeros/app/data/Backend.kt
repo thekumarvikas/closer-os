@@ -112,6 +112,10 @@ data class LeadFact(val key: String, val label: String, val options: List<String
     val id: String, val org_id: String, val name: String = "", val phone: String, val email: String? = null,
     val city: String? = null, val state: String? = null, val company: String? = null, val profession: String? = null,
     val source: String? = null, val campaign: String? = null, val assigned_to: String? = null, val assigned_at: String? = null,
+    /** Teammates this lead is shared with for follow-up (they see and work it too). */
+    val shared_with: List<String> = emptyList(),
+    /** Working seconds from the lead reaching the rep to the first call (speed to lead). */
+    val response_sec: Int? = null,
     val stage_id: String? = null, val deal_value: Double? = null, val notes: String? = null,
     val last_call_at: String? = null, val last_outcome_id: String? = null, val next_follow_up_at: String? = null,
     val do_not_call: Boolean = false, val last_connected_at: String? = null, val key_facts: String? = null,
@@ -138,6 +142,7 @@ data class LeadFact(val key: String, val label: String, val options: List<String
     val warmth: Int = 0, val warm_reason: String? = null, val is_repeat: Boolean = false,
     val chat: List<WebChat> = emptyList(), val polls: List<WebPoll> = emptyList(),
 )
+@Serializable data class Person(val user_id: String, val name: String = "", val role: String = "rep")
 @Serializable data class BatchMini(val name: String = "", val webinar_at: String? = null)
 @Serializable data class BatchLink(val watch_minutes: Int? = null, val attended: Boolean = false, val batch: BatchMini? = null,
     val batch_id: String? = null, val is_holdout: Boolean = false,
@@ -354,7 +359,7 @@ object Repo {
             filter {
                 eq("org_id", orgId)
                 filter("deleted_at", FilterOperator.IS, "null")
-                if (mineOnly) Backend.uid?.let { eq("assigned_to", it) }
+                if (mineOnly) Backend.uid?.let { u -> or { eq("assigned_to", u); filter("shared_with", FilterOperator.CS, "{$u}") } }
                 when {
                     ids != null -> filter("id", FilterOperator.IN, inList(ids))
                     digits.length >= 4 -> ilike("phone", "%$digits%")
@@ -524,6 +529,18 @@ object Repo {
     suspend fun setDoNotCall(leadId: String, value: Boolean) {
         db.rpc("set_do_not_call", buildJsonObject { put("p_lead", leadId); put("p_value", value) })
     }
+
+    /** Active teammates (to share a lead with). */
+    suspend fun orgPeople(orgId: String): List<Person> =
+        json.decodeFromString(rpcR("org_people", buildJsonObject { put("p_org", orgId) }).data)
+
+    suspend fun shareLead(leadId: String, userId: String, on: Boolean) {
+        Backend.client.postgrest.rpc("share_lead", buildJsonObject { put("p_lead", leadId); put("p_user", userId); put("p_on", on) })
+    }
+
+    /** Speed to lead for me (or my team, for managers) in a date range. */
+    suspend fun responseReport(orgId: String, from: java.time.LocalDate, to: java.time.LocalDate): JsonObject =
+        json.decodeFromString(rpcR("response_report", buildJsonObject { put("p_org", orgId); put("p_from", from.toString()); put("p_to", to.toString()) }).data)
 
     suspend fun bestTime(leadId: String): BestTime? = runCatching {
         val d = rpcR("best_time_to_call", buildJsonObject { put("p_lead", leadId) }).data

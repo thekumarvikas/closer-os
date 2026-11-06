@@ -993,3 +993,29 @@ intelligence → Play Store launch.
   checkOutcomeSavedElsewhere saw the pop-up's saved outcome and set vm.whatsappNext). Now that path only
   closes the outcome screen ("Outcome already saved ✓"); vm.whatsappNext is set only by vm.saveOutcome
   (outcome saved in the app itself, not lite, not in the queue).
+
+## Shared leads + speed to lead (v0.15.0, migrations 0059–0060, Nov 2026)
+- Shared leads (owner: a rep shares a lead with another for follow-up; both log outcomes, see each
+  other's notes and cloud recordings): lead_shares (lead, user, shared_by) → trigger keeps
+  leads.shared_with uuid[]. lead_visible + leads_select include auth.uid() = any(shared_with) (and
+  their managers) → calls/notes/recordings/webinars follow. share_lead(lead, user, on) — owner, a sharer
+  or a manager; unshare returns that person's pending follow-ups to the owner; activities shared/
+  unshared. org_people(org) = active teammates' names. log_call on a SHARED lead: only the caller's
+  pending follow-ups close and the new one is the caller's (each keeps their own next call); sharers'
+  reminder purpose unchanged. after_lead_update moves only the old owner's follow-ups. search_leads,
+  my_focus_list, app Repo.leads (or assigned_to / shared_with cs) and LocalLeads include shared leads.
+  App lead page LeadShareCard (ui/ShareCard.kt); dashboard LeadDrawer components/LeadShares.tsx.
+  LeadIndex cursor v7 (Lead.shared_with, response_sec).
+- Speed to lead: leads.response_sec = work_seconds(org, lead_start_at, first_dialled_at) set by trigger
+  when first_dialled_at is first set (backfilled). lead_start_at = assigned_at if after arrival and
+  before the first call, else created_at. work_seconds counts only working time: settings.work_days
+  (holidays skipped) × settings.response.start_hour–end_hour (default 9–21), company tz. lead_is_live
+  = not source 'Phone call' and < 5 leads with the same created_at (bulk imports share one timestamp).
+  response_report(org, from, to): target (settings.response.target_min, default 15), median/avg,
+  within target, buckets 5/15/60/240/more/waiting, per person, per day, waiting_list, slowest.
+  my_focus_list bucket 3 = new live lead (< 24 h, never called), longest waiting first, reason
+  "🆕 New lead · waiting N min" (buckets after it shifted +1; LocalLeads.focus mirrors).
+- Dashboard Reports → "Response time" tab (components/ResponseTime.tsx: target + working hours editor,
+  tiles, buckets, waiting now, by person, day by day, slowest). LeadDrawer "⚡ First call N working
+  min after it came in". App Home ResponseLine (vm.response = last 7 days; red when leads are waiting,
+  tap → focus list) + lead page response line.

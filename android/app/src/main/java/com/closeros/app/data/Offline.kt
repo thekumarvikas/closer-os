@@ -94,7 +94,7 @@ object LocalLeads {
         val dayEnd = LocalDate.now().plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant()
         fun t(s: String?) = s?.let { runCatching { parseInstant(it) }.getOrNull() }
         return all(ctx).asSequence().filter { l ->
-            (!mineOnly || uid == null || l.assigned_to == uid) &&
+            (!mineOnly || uid == null || l.assigned_to == uid || uid in l.shared_with) &&
             (q.isEmpty() || (digits.length >= 4 && l.phone.contains(digits)) ||
                 listOfNotNull(l.name, l.city, l.profession, l.company, l.email, l.source, l.campaign, l.key_facts, l.state)
                     .any { it.lowercase().contains(q) }) &&
@@ -140,7 +140,7 @@ object LocalLeads {
         val uid = Backend.uid
         fun t(s: String?) = s?.let { runCatching { parseInstant(it) }.getOrNull() }
         return all(ctx).filter { l ->
-            (uid == null || l.assigned_to == uid) && !l.do_not_call && l.last_outcome_id !in closed &&
+            (uid == null || l.assigned_to == uid || uid in l.shared_with) && !l.do_not_call && l.last_outcome_id !in closed &&
                 (t(l.next_follow_up_at)?.isBefore(dayEnd) ?: true) &&
                 ((t(l.last_call_at)?.isBefore(dayStart) ?: true) || t(l.next_follow_up_at)?.isBefore(now.plusSeconds(7200)) == true)
         }.map { l ->
@@ -148,20 +148,24 @@ object LocalLeads {
             val fu = t(l.next_follow_up_at)
             val up = l.batch_leads.filter { !it.is_holdout }.mapNotNull { b -> t(b.batch?.webinar_at)?.takeIf { it.isAfter(now) && it.isBefore(now.plusSeconds(18 * 3600)) } }.minOrNull()
             val hot = l.batch_leads.any { b -> (b.warmth >= 40 || (b.watch_minutes ?: 0) >= 60) && t(b.batch?.webinar_at)?.let { it.isAfter(now.minusSeconds(14L * 86_400)) && !it.isAfter(now) } == true }
+            // A new lead that arrived on its own in the last 24 h and was never called: speed to lead.
+            val newLive = l.dial_count == 0 && l.source != "Phone call" && t(l.created_at)?.isAfter(now.minusSeconds(86_400)) == true
             val bucket = when {
                 fu != null && fu.isBefore(now) -> 1
                 up != null -> 2
-                fu != null && fu.isBefore(now.plusSeconds(7200)) -> 3
-                hot -> 4
-                l.dial_count == 0 -> 5
-                l.best_hour == hour -> 6
-                l.score >= 40 -> 7
-                else -> 8
+                newLive -> 3
+                fu != null && fu.isBefore(now.plusSeconds(7200)) -> 4
+                hot -> 5
+                l.dial_count == 0 -> 6
+                l.best_hour == hour -> 7
+                l.score >= 40 -> 8
+                else -> 9
             }
             Triple(l, bucket, up)
         }.sortedWith(compareBy<Triple<Lead, Int, Instant?>>({ it.second }, { it.third ?: Instant.MAX }, { t(it.first.next_follow_up_at) ?: Instant.MAX },
-            { if (it.second == 4) -(it.first.batch_leads.maxOfOrNull { b -> b.warmth } ?: 0).toLong() else 0L },
-            { if (it.second == 5) -(t(it.first.created_at)?.toEpochMilli() ?: 0L) else 0L }, { -it.first.score }))
+            { if (it.second == 5) -(it.first.batch_leads.maxOfOrNull { b -> b.warmth } ?: 0).toLong() else 0L },
+            { when (it.second) { 6 -> -(t(it.first.created_at)?.toEpochMilli() ?: 0L); 3 -> t(it.first.created_at)?.toEpochMilli() ?: 0L; else -> 0L } },
+            { -it.first.score }))
             .map { it.first }   // reminder vs sales is worked out per lead when calling (CallPurpose)
     }
 }

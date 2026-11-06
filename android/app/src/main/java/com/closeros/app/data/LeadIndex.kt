@@ -14,7 +14,7 @@ import kotlinx.serialization.Serializable
 object LeadIndex {
     @Serializable private data class Meta(val id: String, val phone: String, val updated_at: String, val deleted_at: String? = null)
 
-    private const val CURSOR = "lead_index_cursor6"   // v5: full lead rows + webinar ids (reminder vs sales offline)
+    private const val CURSOR = "lead_index_cursor7"   // v5: full lead rows + webinar ids (reminder vs sales offline)
     private const val MAX_PAGES = 120   // up to 30,000 leads per sync run (pages of 250: small enough for weak internet)
 
     fun find(ctx: Context, phone: String): Lead? =

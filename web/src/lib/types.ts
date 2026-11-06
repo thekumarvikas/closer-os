@@ -21,6 +21,7 @@ export interface Lead {
   deal_value: number | null; tags: string[]; custom: Record<string, unknown>; notes: string | null; key_facts?: string | null
   last_call_at: string | null; last_outcome_id: string | null; next_follow_up_at: string | null
   do_not_call: boolean; created_at: string
+  shared_with?: string[]; response_sec?: number | null; first_dialled_at?: string | null
   dial_count?: number; call_count?: number; conversation_count?: number; total_talk_sec?: number; wa_count?: number
 }
 export interface Call {

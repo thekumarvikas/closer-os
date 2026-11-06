@@ -294,6 +294,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
                 progress?.daily?.let { save("my_daily_targets", it) } } }   // the hourly check-in uses today's targets (also offline)
             launch { runCatching { access = Repo.orgAccess(m.org_id) } }
             launch { runCatching { leaderboard = Repo.leaderboard(m.organization, "today") } }
+            launch { runCatching { val d = java.time.LocalDate.now(java.time.ZoneId.of(m.organization.timezone)); response = Repo.responseReport(m.org_id, d.minusDays(6), d) } }
         }
         loadReviews()
         checkAlerts()
@@ -677,6 +678,8 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Lead to offer a WhatsApp message to, right after its outcome was saved. */
     var whatsappNext by mutableStateOf<Lead?>(null)
+    /** Speed to lead, last 7 days (mine; managers: team). */
+    var response by mutableStateOf<kotlinx.serialization.json.JsonObject?>(null)
 
     /** Outcomes still waiting for internet when the rep tried to sign out (asks before they are lost). */
     var signOutWaiting by mutableStateOf<Int?>(null)

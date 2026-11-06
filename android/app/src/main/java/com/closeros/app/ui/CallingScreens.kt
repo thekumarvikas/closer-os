@@ -190,6 +190,8 @@ fun HomeScreen(vm: AppViewModel) {
             }
         }
 
+        // Speed to lead: how fast new leads get their first call (last 7 days) + who is waiting now.
+        if (vm.response != null) item { ResponseLine(vm, vm.response!!) }
         // Leaderboard in one line.
         if (vm.leaderboard.size >= 2) item {
             val rows = vm.leaderboard
@@ -648,3 +650,27 @@ fun RecordingPlayer(callId: String, path: String) {
 /** "5 calls · 3 conversations" — shown wherever a lead appears. Conversations = they really talked. */
 fun callsLine(dials: Int, conversations: Int): String =
     if (dials == 0 && conversations == 0) "Not called yet" else "$dials call${if (dials == 1) "" else "s"} · $conversations conversation${if (conversations == 1) "" else "s"}"
+
+
+/** Home: "⚡ New leads called in 6 min (median, 7 days) · target 15" and new leads waiting right now. */
+@Composable
+fun ResponseLine(vm: AppViewModel, r: kotlinx.serialization.json.JsonObject) {
+    fun kotlinx.serialization.json.JsonElement?.num() = (this as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull()
+    val t = r["total"] as? kotlinx.serialization.json.JsonObject ?: return
+    val arrived = t["arrived"].num()?.toInt() ?: 0
+    if (arrived == 0) return
+    val target = r["target_min"].num()?.toInt() ?: 15
+    val median = t["median_min"].num()
+    val within = t["within"].num()?.toInt() ?: 0; val responded = t["responded"].num()?.toInt() ?: 0
+    val waiting = (r["waiting_list"] as? kotlinx.serialization.json.JsonArray)?.size ?: 0
+    val oldest = ((r["waiting_list"] as? kotlinx.serialization.json.JsonArray)?.firstOrNull() as? kotlinx.serialization.json.JsonObject)?.get("wait_min").num()?.toInt()
+    fun mins(m: Double) = if (m < 1) "under a minute" else if (m < 60) "${m.toInt()} min" else "${(m / 60).toInt()} h ${(m % 60).toInt()} min"
+    val good = median != null && median <= target
+    Column(Modifier.fillMaxWidth().background(if (waiting > 0) Color(0xFFFEF2F2) else if (good) Color(0xFFECFDF5) else Color(0xFFFFFBEB), RoundedCornerShape(10.dp))
+        .clickable { vm.openFocusList() }.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        if (waiting > 0) Text("🆕 $waiting new lead${if (waiting > 1) "s" else ""} waiting" + (oldest?.let { " · oldest $it min" } ?: "") + " — call now ›",
+            fontWeight = FontWeight.SemiBold, color = Color(0xFFB91C1C), fontSize = 14.sp)
+        median?.let { m -> Text("⚡ New leads called in ${mins(m)} (median, 7 days) · target $target min · $within of $responded on time",
+            fontSize = 13.sp, color = if (good) Color(0xFF047857) else Color(0xFF92400E)) }
+    }
+}

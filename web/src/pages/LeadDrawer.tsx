@@ -1,4 +1,5 @@
 import LeadWebinars from '../components/LeadWebinars'
+import LeadShares from '../components/LeadShares'
 import { useEffect, useState } from 'react'
 import { X, Phone, Mail, MapPin, Building2, GraduationCap } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
@@ -134,6 +135,8 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
                 )}
               </div>
 
+              {lead.response_sec != null && <p className="text-sm text-slate-600">⚡ First call {lead.response_sec < 60 ? 'within a minute' : `${Math.round(lead.response_sec / 60)} working min`} after it came in</p>}
+              <LeadShares leadId={leadId} assignedTo={lead.assigned_to} sharedWith={lead.shared_with ?? []} onChanged={() => { load(); onChanged() }} />
               <LeadWebinars leadId={leadId} />
 
               <EffortSummary leadId={leadId} />

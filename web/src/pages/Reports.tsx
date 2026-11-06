@@ -13,9 +13,10 @@ import { T, Hint, dur } from '../components/terms'
 import CallLog from '../components/CallLog'
 import OutcomeReportView from './OutcomeReport'
 import { LeadWork, WhatWorks, Insights } from '../components/Round9Reports'
+import ResponseTime from '../components/ResponseTime'
 
-type Tab = 'overview' | 'outcomes' | 'targets' | 'team' | 'daily' | 'hourly' | 'followups' | 'log' | 'leadwork' | 'works' | 'insights'
-const tabs: [Tab, string][] = [['overview', 'Overview'], ['outcomes', 'Outcomes'], ['targets', 'Targets'], ['team', 'Team'], ['daily', 'Daily'], ['hourly', 'By hour'], ['followups', 'Follow-ups'], ['leadwork', 'Lead work'], ['works', 'What works'], ['insights', 'Insights'], ['log', 'Call log']]
+type Tab = 'overview' | 'outcomes' | 'targets' | 'team' | 'daily' | 'hourly' | 'followups' | 'log' | 'leadwork' | 'works' | 'insights' | 'response'
+const tabs: [Tab, string][] = [['overview', 'Overview'], ['outcomes', 'Outcomes'], ['targets', 'Targets'], ['team', 'Team'], ['daily', 'Daily'], ['hourly', 'By hour'], ['followups', 'Follow-ups'], ['response', 'Response time'], ['leadwork', 'Lead work'], ['works', 'What works'], ['insights', 'Insights'], ['log', 'Call log']]
 interface Filters { from: string; to: string; users: string[]; dir: Dir; ch: Channel }
 
 export default function Reports() {
@@ -88,6 +89,7 @@ export default function Reports() {
         tab === 'leadwork' ? (dir ? <LeadWork dir={dir} users={applied.users} from={applied.from} to={applied.to} /> : <Spinner />) :
         tab === 'works' ? (dir ? <WhatWorks dir={dir} users={applied.users} from={applied.from} to={applied.to} /> : <Spinner />) :
         tab === 'insights' ? <Insights from={applied.from} to={applied.to} /> :
+        tab === 'response' ? <ResponseTime dir={dir} from={applied.from} to={applied.to} /> :
         tab === 'log' ? <CallLog org={org} dir={dir} f={logFilters} fileTag={fileTag} outcome={logOutcome} setOutcome={setLogOutcome} /> :
         tab === 'outcomes' ? <><LeadStatus orgId={org.id} dir={dir} users={applied.users} from={range.from} to={range.to} /><OutcomeReportView org={org} dir={dir} from={applied.from} to={applied.to} users={applied.users} callDir={applied.dir} channel={applied.ch} fileTag={fileTag} onOpenOutcome={id => { setLogOutcome(id); setTab('log') }} /></> :
         tab === 'targets' ? <Targets dir={dir} from={applied.from} to={applied.to} users={applied.users} fileTag={fileTag} /> :

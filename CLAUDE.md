@@ -975,3 +975,9 @@ intelligence → Play Store launch.
   no DEAD_NUMBER (not_in_service, invalid_number, r_invalid, r_out_of_service, incoming_na,
   r_incoming_na); ≥ 60 s → also no SHORT_TALK_ONLY (disconnected, r_disconnected). Received calls
   unchanged (no not_connected / dialled-only / shown_on outgoing).
+- v0.14.2: received calls never offer dialled-only / "couldn't reach" outcomes, even in the pop-up's
+  first moments: calls/CallEndReceiver.kt CallKind notes RINGING / OFFHOOK (prefs "call_kind") and at
+  IDLE decides incoming (rang + answered) | missed (rang, never answered) | outgoing; the 2nd IDLE copy
+  (< 60 s) reuses the answer. AfterCall.dirHint → Info.dirHint → AfterCallCard uses it until the
+  call-log entry arrives (missed → no outcome step). outcomesFor: missed/declined calls are treated
+  like received ones (no not_connected / DIALLED_ONLY / shown_on outgoing); web Desk same.

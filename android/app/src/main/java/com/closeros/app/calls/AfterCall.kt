@@ -71,7 +71,9 @@ object AfterCall {
      * own lead list first, then confirmed by the server), [checking] while the server is asked.
      */
     data class Info(val call: LogCall?, val phone: String?, val lead: Lead?, val co: Company, val appCall: LocalStore.PendingCall?,
-                    val lookupFailed: Boolean = false, val checking: Boolean = false, val contactName: String? = null) {
+                    val lookupFailed: Boolean = false, val checking: Boolean = false, val contactName: String? = null,
+                    /** incoming | missed | outgoing from the phone's ringing state, before the call-log entry exists. */
+                    val dirHint: String? = null) {
         /** Reminder or sales: from the app's own call, else worked out for the lead (webinar within 24 h → reminder). */
         private val auto get() = com.closeros.app.data.CallPurpose.guess(lead, co.followUps)
         val purpose get() = appCall?.purpose ?: auto.purpose
@@ -100,7 +102,11 @@ object AfterCall {
         runCatching { com.closeros.app.data.AppLog.flush(ctx) }
     }
 
+    /** Set by CallEndReceiver just before handle(). */
+    @Volatile var dirHint: String? = null
+
     private suspend fun run(ctx: Context, endedAtMs: Long, number: String?) {
+        val hint = dirHint
         val store = LocalStore(ctx)
         if (store.orgId == null) return trace(ctx, "not signed in")
         val co = company(ctx) ?: return trace(ctx, "company not loaded yet — open Closer OS once")
@@ -129,7 +135,7 @@ object AfterCall {
             if (phone == null) (number ?: lateNumber)?.takeIf { it.isNotBlank() }?.let { n ->
                 phone = normalizePhone(n, co.prefix)
                 lead = com.closeros.app.data.LeadIndex.find(ctx, phone!!)
-                if (mode == "all" || lead != null) { showOrUpdate(Info(null, phone, lead, co, null, checking = true)); if (shown) firstShownMs = ms() }
+                if (mode == "all" || lead != null) { showOrUpdate(Info(null, phone, lead, co, null, checking = true, dirHint = hint)); if (shown) firstShownMs = ms() }
             }
             call = runCatching { PhoneCalls.latest(ctx, 2).firstOrNull() }.getOrNull()
                 ?.takeIf { it.startedAtMs + it.durationSec * 1000L >= endedAtMs - 180_000 && it.startedAtMs <= endedAtMs + 5_000 }
@@ -149,7 +155,7 @@ object AfterCall {
         // A call started from Closer OS (lead list, queue, webinar list): keep its purpose / webinar.
         val appCall = store.pendingCall?.takeIf { p -> p.logId == c.id || (p.logId == null && normalizePhone(p.phone, co.prefix) == phone) }
         val num = phone!!
-        if (mode == "all" || lead != null) showOrUpdate(Info(c, phone, lead, co, appCall, checking = true, contactName = contact))
+        if (mode == "all" || lead != null) showOrUpdate(Info(c, phone, lead, co, appCall, checking = true, contactName = contact, dirHint = hint))
         val cardMs = if (shown) ms() else null
 
         // 3) Confirm with the server (fresh login first) — the card is already on screen meanwhile.
@@ -168,7 +174,7 @@ object AfterCall {
             if (shown) withContext(Dispatchers.Main) { Overlay.hide(ctx) }
             return trace(ctx, "no pop-up: not a lead (pop-up set to leads only)")
         }
-        showOrUpdate(Info(c, num, l, co, appCall, lookupFailed = lookupFailed && l == null, checking = false, contactName = contact))
+        showOrUpdate(Info(c, num, l, co, appCall, lookupFailed = lookupFailed && l == null, checking = false, contactName = contact, dirHint = hint))
         trace(ctx, when {
             shown -> "pop-up shown after ${((firstShownMs ?: cardMs ?: ms()) / 100) / 10.0} s" +
                 (if (l != null) " (lead)" else if (lookupFailed) " (couldn't check: ${if (loggedIn) "no internet" else "login"})" else " (not a lead)")

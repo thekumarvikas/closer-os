@@ -278,7 +278,8 @@ fun outcomesFor(all: List<Outcome>, purpose: String, direction: String?, duratio
         // They called us: nothing about failing to reach them or a dead number; conversation outcomes first,
         // "wrong number / not the right person" kinds last.
         direction == "incoming" -> list.filterNot { noContact(it) || it.code in DIALLED_ONLY || it.shown_on == "outgoing" }.sortedBy { if (invalid(it)) 1 else 0 }
-        direction != "outgoing" -> list.filter { noContact(it) || invalid(it) }.ifEmpty { list }
+        // A call they made that wasn't answered (missed / declined): still their call — never "didn't pick" kinds.
+        direction != "outgoing" -> list.filterNot { noContact(it) || it.code in DIALLED_ONLY || it.shown_on == "outgoing" }.sortedBy { if (invalid(it)) 1 else 0 }
         // Dialled, nobody answered: only "couldn't reach them" kinds.
         talk == 0 -> list.filter { noContact(it) || it.code in DEAD_NUMBER }.ifEmpty { list }
         // A few seconds: could be an operator message or a quick hang-up — everything, "couldn't reach" first.

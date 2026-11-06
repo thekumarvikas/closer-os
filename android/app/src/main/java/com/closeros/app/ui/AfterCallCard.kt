@@ -55,12 +55,14 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
     val zone = runCatching { ZoneId.of(co.timezone) }.getOrDefault(ZoneId.systemDefault())
     // While the call-log entry is still being read (first second), assume an outcome is needed.
     // Every call is treated alike: leads and numbers not in the lead list get the same outcome step.
-    val needs = (lead != null || !info.checking) && (c == null || AfterCall.needsOutcome(c))
+    val needs = (lead != null || !info.checking) && (if (c == null) info.dirHint != "missed" else AfterCall.needsOutcome(c))
     val notInList = lead == null && !info.checking
     val number = info.number.orEmpty()
     // Reminder or sales (worked out for the lead; the rep can switch it).
     var purpose by remember(info.purpose) { mutableStateOf(info.purpose) }
-    val choices = outcomesFor(co.outcomes, purpose, c?.direction, c?.durationSec)
+    // Until Android's call history has the entry, the ringing state tells received from dialled.
+    val dir = c?.direction ?: info.dirHint?.takeIf { it == "incoming" || it == "missed" }
+    val choices = outcomesFor(co.outcomes, purpose, dir, c?.durationSec)
     // A reminder call-back must be before the webinar starts.
     val webinarAt = if (purpose == "reminder") com.closeros.app.data.CallPurpose.webinarOf(lead, info.batchId)?.takeIf { it.isAfter(Instant.now()) } else null
     var outcome by remember { mutableStateOf<Outcome?>(null) }

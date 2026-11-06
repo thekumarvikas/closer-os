@@ -267,19 +267,16 @@ private fun Chip(label: String, selected: Boolean, onClick: () -> Unit) {
 val DIALLED_ONLY = setOf("not_in_service", "invalid_number", "r_invalid", "r_out_of_service", "someone_else", "r_someone_else")
 
 fun outcomesFor(all: List<Outcome>, purpose: String, direction: String?, durationSec: Int?): List<Outcome> {
+    // Positive first, negative last: sale → interested → still talking → not interested → disqualified.
     val list = all.filter { it.is_active && (it.purpose == purpose || it.purpose == "both") }
         .filter { direction == null || direction == "incoming" || it.shown_on != "incoming" }   // received-only outcomes never on a dialled call
-        .sortedBy { it.position }
+        .sortedWith(compareBy({ outcomeRank(it) }, { it.position }))
     val noContact = { o: Outcome -> o.category == "not_connected" }
-    val invalid = { o: Outcome -> o.category == "invalid" }
     val talk = durationSec ?: 0
     return when {
         direction == null -> list
-        // They called us: nothing about failing to reach them or a dead number; conversation outcomes first,
-        // "wrong number / not the right person" kinds last.
-        direction == "incoming" -> list.filterNot { noContact(it) || it.code in DIALLED_ONLY || it.shown_on == "outgoing" }.sortedBy { if (invalid(it)) 1 else 0 }
-        // A call they made that wasn't answered (missed / declined): still their call — never "didn't pick" kinds.
-        direction != "outgoing" -> list.filterNot { noContact(it) || it.code in DIALLED_ONLY || it.shown_on == "outgoing" }.sortedBy { if (invalid(it)) 1 else 0 }
+        // They called us (answered, missed or declined): nothing about failing to reach them or a dead number.
+        direction != "outgoing" -> list.filterNot { noContact(it) || it.code in DIALLED_ONLY || it.shown_on == "outgoing" }
         // Dialled, nobody answered: only "couldn't reach them" kinds.
         talk == 0 -> list.filter { noContact(it) || it.code in DEAD_NUMBER }.ifEmpty { list }
         // A few seconds: could be an operator message or a quick hang-up — everything, "couldn't reach" first.
@@ -287,6 +284,21 @@ fun outcomesFor(all: List<Outcome>, purpose: String, direction: String?, duratio
         // They talked: nothing about not reaching them or a dead number; "disconnected after intro" only for short talks.
         else -> list.filterNot { noContact(it) || it.code in DEAD_NUMBER || (talk >= 60 && it.code in SHORT_TALK_ONLY) }.ifEmpty { list }
     }
+}
+
+/** Conversation outcomes that aren't progress (shown after the positive ones). */
+val LOW_CONNECTED = setOf("language", "someone_else", "r_someone_else", "disconnected", "r_disconnected", "call_back", "r_call_later", "r_repeated")
+
+/** Order of outcome groups: 0 sale · 1 interested · 2 still talking · 3 low-value conversation · 4 not interested · 5 disqualified · 6 couldn't reach. */
+fun outcomeRank(o: Outcome): Int = when {
+    o.category == "won" -> 0
+    o.category == "positive" -> 1
+    o.code in LOW_CONNECTED -> 3
+    o.category == "connected" -> 2
+    o.category == "lost" -> 4
+    o.category == "invalid" -> 5
+    o.category == "not_connected" -> 6
+    else -> 2
 }
 
 /** Dead / wrong-line numbers: only possible when the call didn't really connect. */

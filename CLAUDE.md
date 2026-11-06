@@ -983,9 +983,7 @@ intelligence → Play Store launch.
   like received ones (no not_connected / DIALLED_ONLY / shown_on outgoing); web Desk same.
 
 ## Pending owner ideas (not built yet — owner said "don't build it now")
-- Outcome order (Nov 2026): positive outcomes first, negative after; "Language barrier", wrong number,
-  disqualified kinds must not sit in the first rows. Proposed order: won → positive → connected
-  (objections / call later) → lost → invalid / disqualified; not_connected first only on 0 s dialled calls.
+- (Built in v0.15.1 — see "Load test + outcome order" below.)
 - Later: per-rep automatic order by usage (most-used outcomes rise to the top, unused sink), on top of
   the existing call-type rules (outcomesFor). Count use per rep from their saved outcomes (phone
   cache my_outcomes + server), recent weeks weighted more.
@@ -1019,3 +1017,18 @@ intelligence → Play Store launch.
   tiles, buckets, waiting now, by person, day by day, slowest). LeadDrawer "⚡ First call N working
   min after it came in". App Home ResponseLine (vm.response = last 7 days; red when leads are waiting,
   tap → focus list) + lead page response line.
+
+## Load test + outcome order (v0.15.1, migration 0061, Nov 2026)
+- Positive-first outcome order: outcomeRank() (app OutcomeScreen.kt + web Desk) = won 0 · positive 1 ·
+  connected 2 · LOW_CONNECTED (language, someone_else, disconnected, call_back, r_call_later,
+  r_repeated…) 3 · lost 4 · invalid 5 · not_connected 6, then position; call-type filters unchanged
+  (dialled < 20 s still puts not_connected first). Per-rep usage order still pending.
+- Load test (temporary org, deleted): Supabase project = Micro (2 shared CPU, 1 GB, 60 direct / 200 pooled
+  conns). 20 reps, 40k leads, 60k calls. Writes: ~280 leads/s, ~410 calls/s (with triggers). Storage:
+  ~2 KB per lead (trigram indexes), ~1.5 KB per call. Fixes found: response_report did work_seconds per
+  waiting lead (17 s → 16 ms) — now leads.is_live (BEFORE INSERT trigger: 5th+ lead with the same
+  created_at = bulk; lead_is_live() just returns it) and work_seconds only for shown rows;
+  my_focus_list ran lead_call_context for every candidate (2.7 s → 0.43 s) — now only for the page;
+  call_report / outcome_report get work_mem 24MB (owner 30 d: 2.8 → 2.2 s). 10 reps loading Home at
+  once: 4.3 s each (vs 0.6 s alone) — 2 shared cores are the limit. Lead import is chunked by 1,000
+  (~4 s per chunk). Biggest steady per-rep DB load is the 30-min Prefetch of reports.

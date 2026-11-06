@@ -313,20 +313,30 @@ function OutcomePanel({ call, dir, onClose, onSaved }: { call: NeedCall; dir: Di
   )
 }
 
-/** Same rule as the app: only outcomes that make sense for this kind of call. */
-function outcomesFor(list: Outcome[], direction: string, talk: number): Outcome[] {
+/** Positive first, negative last: sale → interested → still talking → low-value talk → not interested → disqualified → couldn't reach. */
+const LOW_CONNECTED = ['language', 'someone_else', 'r_someone_else', 'disconnected', 'r_disconnected', 'call_back', 'r_call_later', 'r_repeated']
+function outcomeRank(o: Outcome): number {
+  if (o.category === 'won') return 0
+  if (o.category === 'positive') return 1
+  if (LOW_CONNECTED.includes(o.code)) return 3
+  if (o.category === 'connected') return 2
+  if (o.category === 'lost') return 4
+  if (o.category === 'invalid') return 5
+  if (o.category === 'not_connected') return 6
+  return 2
+}
+
+/** Same rule as the app: only outcomes that make sense for this kind of call, positive ones first. */
+function outcomesFor(all: Outcome[], direction: string, talk: number): Outcome[] {
+  const list = [...all].sort((a, b) => outcomeRank(a) - outcomeRank(b) || a.position - b.position)
   const noContact = (o: Outcome) => o.category === 'not_connected'
-  const invalid = (o: Outcome) => o.category === 'invalid'
-  // Received call: hide "couldn't reach / dead number" kinds; wrong-number kinds go last.
   const dialledOnly = ['not_in_service', 'invalid_number', 'r_invalid', 'r_out_of_service', 'someone_else', 'r_someone_else']
-  if (direction !== 'outgoing') return list.filter(o => !noContact(o) && !dialledOnly.includes(o.code) && o.shown_on !== 'outgoing').sort((a, b) => Number(invalid(a)) - Number(invalid(b)))
-  list = list.filter(o => o.shown_on !== 'incoming')
-  // Dialled, nobody answered: only "couldn't reach them" kinds.
+  // Received / missed / declined: hide "couldn't reach / dead number" kinds.
+  if (direction !== 'outgoing') return list.filter(o => !noContact(o) && !dialledOnly.includes(o.code) && o.shown_on !== 'outgoing')
+  const dialled = list.filter(o => o.shown_on !== 'incoming')
   const dead = ['not_in_service', 'invalid_number', 'r_invalid', 'r_out_of_service', 'incoming_na', 'r_incoming_na']
-  if (!talk) { const l = list.filter(o => noContact(o) || dead.includes(o.code)); return l.length ? l : list }
-  // A few seconds: everything, "couldn't reach" first.
-  if (talk < 20) return [...list].sort((a, b) => Number(!noContact(a)) - Number(!noContact(b)))
-  // They talked: no "couldn't reach" / dead-number kinds; "disconnected after intro" only under a minute.
-  const l = list.filter(o => !noContact(o) && !dead.includes(o.code) && !(talk >= 60 && ['disconnected', 'r_disconnected'].includes(o.code)))
-  return l.length ? l : list
+  if (!talk) { const l = dialled.filter(o => noContact(o) || dead.includes(o.code)); return l.length ? l : dialled }
+  if (talk < 20) return [...dialled].sort((a, b) => Number(!noContact(a)) - Number(!noContact(b)))
+  const l = dialled.filter(o => !noContact(o) && !dead.includes(o.code) && !(talk >= 60 && ['disconnected', 'r_disconnected'].includes(o.code)))
+  return l.length ? l : dialled
 }

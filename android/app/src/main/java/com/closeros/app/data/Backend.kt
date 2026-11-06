@@ -215,9 +215,22 @@ data class LeadFilters(
     /** any | yes | no — WhatsApp sent from Closer OS */
     val messaged: String = "any",
     val hot: Boolean = false, val tags: Set<String> = emptySet(),
+    /** Total talk time with the lead, as TalkBands keys. */
+    val talk: Set<String> = emptySet(),
 ) {
     val count get() = (if (followup != "all") 1 else 0) + listOf(stages, outcomes, sources, campaigns, cities, categories, tags).count { it.isNotEmpty() } +
-        (if (neverCalled) 1 else 0) + custom.count { it.value.isNotEmpty() } + (if (lastCall != "any") 1 else 0) + (if (messaged != "any") 1 else 0) + (if (hot) 1 else 0)
+        (if (neverCalled) 1 else 0) + custom.count { it.value.isNotEmpty() } + (if (lastCall != "any") 1 else 0) + (if (messaged != "any") 1 else 0) + (if (hot) 1 else 0) +
+        (if (talk.isNotEmpty()) 1 else 0)
+}
+
+/** Leads grouped by total talk time with them (same bands as the dashboard, lead_talk_bands). */
+object TalkBands {
+    data class Band(val key: String, val label: String, val from: Int, val until: Int?)
+    val all = listOf(
+        Band("none", "No talk yet", 0, 1), Band("u1", "Under 1 min", 1, 60), Band("m1_5", "1–5 min", 60, 300),
+        Band("m5_15", "5–15 min", 300, 900), Band("m15_30", "15–30 min", 900, 1800), Band("m30", "30 min+", 1800, null),
+    )
+    fun of(sec: Int) = all.first { sec >= it.from && (it.until == null || sec < it.until) }.key
 }
 
 @Serializable data class BoardRow(val user_id: String, val name: String = "", val calls: Int = 0, val conversations: Int = 0, val talk_sec: Int = 0, val sales: Int = 0)
@@ -357,6 +370,11 @@ object Repo {
                 }
                 when (f.messaged) { "yes" -> gt("wa_count", 0); "no" -> eq("wa_count", 0) }
                 if (f.hot) gte("score", 40)
+                if (f.talk.isNotEmpty()) or {
+                    TalkBands.all.filter { it.key in f.talk }.forEach { b ->
+                        and { gte("total_talk_sec", b.from); b.until?.let { lt("total_talk_sec", it) } }
+                    }
+                }
                 if (f.tags.isNotEmpty()) filter("tags", FilterOperator.OV, "{" + f.tags.joinToString(",") { "\"" + it.replace("\"", "") + "\"" } + "}")
             }
             order("next_follow_up_at", Order.ASCENDING, nullsFirst = false)

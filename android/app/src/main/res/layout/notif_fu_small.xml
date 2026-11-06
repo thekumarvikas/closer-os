@@ -4,9 +4,9 @@
     android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
     <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:orientation="vertical">
         <TextView android:id="@+id/n_title" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:textSize="16sp" android:textStyle="bold" android:textColor="#0F172A" android:maxLines="1" android:ellipsize="end" />
+            android:textSize="16sp" android:textStyle="bold" android:textColor="@color/n_title" android:maxLines="1" android:ellipsize="end" />
         <TextView android:id="@+id/n_line" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:textSize="13sp" android:textColor="#475569" android:maxLines="1" android:ellipsize="end" />
+            android:textSize="13sp" android:textColor="@color/n_muted" android:maxLines="1" android:ellipsize="end" />
     </LinearLayout>
     <TextView android:id="@+id/n_call" android:layout_width="wrap_content" android:layout_height="40dp" android:layout_marginStart="8dp"
         android:background="@drawable/notif_btn_call" android:gravity="center" android:paddingStart="16dp" android:paddingEnd="16dp"

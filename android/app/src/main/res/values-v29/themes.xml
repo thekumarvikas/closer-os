@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 10+: don't let the phone's dark mode (MIUI "force dark") invert Closer OS's own screens. -->
+<resources>
+    <style name="Theme.CloserOS" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#0E5E57</item>
+        <item name="android:windowBackground">#F8FAFC</item>
+        <item name="android:forceDarkAllowed">false</item>
+    </style>
+    <style name="Theme.CloserOS.Popup" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowAnimationStyle">@android:style/Animation.Translucent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:forceDarkAllowed">false</item>
+    </style>
+</resources>

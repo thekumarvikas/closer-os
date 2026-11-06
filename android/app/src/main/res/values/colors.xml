@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Follow-up reminder colours. values-night has the dark-mode versions. -->
+<resources>
+    <color name="n_title">#0F172A</color>
+    <color name="n_text">#334155</color>
+    <color name="n_muted">#475569</color>
+    <color name="n_accent">#B45309</color>
+    <color name="n_late">#B91C1C</color>
+    <color name="n_btn_bg">#FFFFFF</color>
+    <color name="n_btn_stroke">#CBD5E1</color>
+    <color name="n_wa">#15803D</color>
+    <color name="n_open">#0E5E57</color>
+</resources>

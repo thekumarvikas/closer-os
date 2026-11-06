@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.closeros.app.data.Lead
 import com.closeros.app.data.LeadFilters
+import com.closeros.app.data.LocalLeads
+import com.closeros.app.data.TalkBands
 
 /** Default filters shown when the company hasn't chosen its own (dashboard Settings → App lead filters). */
 val defaultLeadFilters = listOf("followup", "outcome", "stage", "source", "category", "city", "never_called")
@@ -104,6 +106,14 @@ private fun FilterSheet(vm: AppViewModel, onClose: () -> Unit) {
             Section("Last call") {
                 listOf("any" to "Any", "talked" to "Talked", "not_picked" to "Not picked up", "missed" to "Missed their call", "never" to "Never called",
                     "tried3" to "Tried 3+, never talked").forEach { (k, l) -> FilterChip(f.lastCall == k, { f = f.copy(lastCall = k) }, { Text(l) }) }
+            }
+            Section("Total talk time with the lead") {
+                val ctx = androidx.compose.ui.platform.LocalContext.current
+                val counts = remember { runCatching { LocalLeads.all(ctx).groupingBy { TalkBands.of(it.total_talk_sec) }.eachCount() }.getOrDefault(emptyMap()) }
+                TalkBands.all.forEach { b ->
+                    val n = counts[b.key]
+                    FilterChip(b.key in f.talk, { f = f.copy(talk = f.talk.flip(b.key)) }, { Text(b.label + (n?.let { " · $it" } ?: "")) })
+                }
             }
             Section("WhatsApp") {
                 listOf("any" to "Any", "yes" to "Messaged", "no" to "Not messaged").forEach { (k, l) -> FilterChip(f.messaged == k, { f = f.copy(messaged = k) }, { Text(l) }) }

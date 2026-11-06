@@ -888,3 +888,15 @@ intelligence → Play Store launch.
   team_checkins (managers: last hour, today, sales, best today / all-time, latest check-in + acks).
   Dashboard: Settings → Hourly check-ins (on/off, from/to hour, reminder finish minutes before start);
   Team page → "Hourly check-ins — today" (refreshes every minute).
+
+## Dark mode + talk-time bands (v0.13.2, migration 0053, Nov 2026)
+- Owner: follow-up reminder text invisible in dark mode (custom RemoteViews had hard-coded dark text).
+  res/values/colors.xml + values-night/colors.xml (n_title, n_text, n_muted, n_accent, n_late, n_btn_*,
+  n_wa, n_open) used by notif_fu_small/big + notif_btn_plain; late colour via ctx.getColor(R.color.n_late).
+  App screens stay light: values-v29/themes.xml forceDarkAllowed=false (MIUI force dark) + the
+  after-call overlay ComposeView isForceDarkAllowed=false.
+- "Duration-wise" lead groups = total talk time with the lead (leads.total_talk_sec): none · < 1 min ·
+  1–5 · 5–15 · 15–30 · 30+ (TalkBands in Backend.kt; LeadFilters.talk set; server or/and ranges +
+  LocalLeads offline). App filter sheet "Total talk time with the lead" with counts from the phone's
+  lead copy. Dashboard Leads: chip row with counts (lead_talk_bands(org, assignee), security invoker)
+  filters the list + export.

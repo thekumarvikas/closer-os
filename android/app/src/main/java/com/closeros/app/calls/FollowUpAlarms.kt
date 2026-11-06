@@ -140,14 +140,14 @@ class FollowUpReceiver : BroadcastReceiver() {
         val small = android.widget.RemoteViews(ctx.packageName, com.closeros.app.R.layout.notif_fu_small).apply {
             setTextViewText(com.closeros.app.R.id.n_title, title)
             setTextViewText(com.closeros.app.R.id.n_line, line)
-            if (late) setTextColor(com.closeros.app.R.id.n_title, 0xFFB91C1C.toInt())
+            if (late) setTextColor(com.closeros.app.R.id.n_title, ctx.getColor(com.closeros.app.R.color.n_late))
             setOnClickPendingIntent(com.closeros.app.R.id.n_call, call)
         }
         val big = android.widget.RemoteViews(ctx.packageName, com.closeros.app.R.layout.notif_fu_big).apply {
             setTextViewText(com.closeros.app.R.id.n_title, title)
             setTextViewText(com.closeros.app.R.id.n_time, timeLine)
             setTextViewText(com.closeros.app.R.id.n_text, detail)
-            if (late) setTextColor(com.closeros.app.R.id.n_title, 0xFFB91C1C.toInt())
+            if (late) setTextColor(com.closeros.app.R.id.n_title, ctx.getColor(com.closeros.app.R.color.n_late))
             setOnClickPendingIntent(com.closeros.app.R.id.n_call, call)
             setOnClickPendingIntent(com.closeros.app.R.id.n_wa, wa)
             setOnClickPendingIntent(com.closeros.app.R.id.n_open, open)

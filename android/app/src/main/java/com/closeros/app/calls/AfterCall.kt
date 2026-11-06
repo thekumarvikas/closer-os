@@ -231,6 +231,7 @@ object AfterCall {
             val o = Owner().also { it.start() }
             val st = androidx.compose.runtime.mutableStateOf(info)
             val v = ComposeView(ctx).apply {
+                if (android.os.Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
                 setViewTreeLifecycleOwner(o); setViewTreeSavedStateRegistryOwner(o); setViewTreeViewModelStoreOwner(o)
                 setContent { CloserTheme { AfterCallCard(st.value, onClose = { hide(ctx) }) } }
             }

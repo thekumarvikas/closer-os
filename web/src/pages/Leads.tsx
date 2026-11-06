@@ -12,6 +12,16 @@ import LeadDrawer from './LeadDrawer'
 
 const PAGE = 50
 
+/** Total talk time with the lead — same bands as the app and lead_talk_bands(). */
+const TALK_BANDS = [
+  { key: 'none', label: 'No talk yet', from: 0, until: 1 },
+  { key: 'u1', label: 'Under 1 min', from: 1, until: 60 },
+  { key: 'm1_5', label: '1–5 min', from: 60, until: 300 },
+  { key: 'm5_15', label: '5–15 min', from: 300, until: 900 },
+  { key: 'm15_30', label: '15–30 min', from: 900, until: 1800 },
+  { key: 'm30', label: '30 min+', from: 1800, until: null },
+] as const
+
 export default function Leads() {
   const { org, isManager } = useOrg()
   const [version, setVersion] = useState(0)
@@ -23,6 +33,8 @@ export default function Leads() {
   const [assignee, setAssignee] = useState('')
   const [stage, setStage] = useState('')
   const [source, setSource] = useState('')
+  const [talk, setTalk] = useState('')
+  const [bands, setBands] = useState<Record<string, number> | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [showImport, setShowImport] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
@@ -38,8 +50,10 @@ export default function Leads() {
     else if (assignee) query = query.eq('assigned_to', assignee)
     if (stage) query = query.eq('stage_id', stage)
     if (source) query = query.ilike('source', source)
+    const b = TALK_BANDS.find(x => x.key === talk)
+    if (b) { query = query.gte('total_talk_sec', b.from); if (b.until != null) query = query.lt('total_talk_sec', b.until) }
     return query
-  }, [assignee, stage, source])
+  }, [assignee, stage, source, talk])
   const searchIds = useCallback(async (): Promise<string[] | null> => {
     const term = q.trim()
     if (term.length < 2) return null
@@ -55,7 +69,9 @@ export default function Leads() {
     const { data, count, error } = await query
     if (error) { setError(errorText(error)); return }
     setError(null); setLeads(data as Lead[]); setCount(count ?? 0)
-  }, [org.id, page, filtered, searchIds])
+    const { data: tb } = await supabase.rpc('lead_talk_bands', { p_org: org.id, p_assignee: assignee || null })
+    setBands(Object.fromEntries(((tb ?? []) as { band: string; leads: number }[]).map(r => [r.band, Number(r.leads)])))
+  }, [org.id, page, filtered, searchIds, assignee])
 
   const [exporting, setExporting] = useState(false)
   /** Every lead matching the current filters (in pages of 1,000), as a spreadsheet file. */
@@ -121,6 +137,16 @@ export default function Leads() {
           </select>
           <input className="input !w-36" placeholder="Source" value={source} onChange={e => setSource(e.target.value)} />
         </div>
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-200 px-3 py-2 text-xs">
+          <span className="mr-1 font-medium text-slate-500">Talk time with the lead:</span>
+          {TALK_BANDS.map(b => (
+            <button key={b.key} onClick={() => { setTalk(talk === b.key ? '' : b.key); setPage(0) }}
+              className={`rounded-full border px-2.5 py-1 ${talk === b.key ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}>
+              {b.label}{bands && <b className="ml-1">{bands[b.key] ?? 0}</b>}
+            </button>
+          ))}
+          {talk && <button className="ml-1 text-slate-500 hover:underline" onClick={() => setTalk('')}>Clear</button>}
+        </div>
 
         {selected.size > 0 && isManager && (
           <div className="flex items-center gap-3 border-b border-slate-200 bg-brand-50 px-4 py-2 text-sm">
@@ -140,7 +166,7 @@ export default function Leads() {
 
         <ErrorBox error={error} />
         {!leads || !dir ? <Spinner /> : leads.length === 0 ? (
-          <Empty icon={<Users className="h-6 w-6" />} title={q || assignee || stage || source ? 'No leads match these filters' : 'No leads yet'}
+          <Empty icon={<Users className="h-6 w-6" />} title={q || assignee || stage || source || talk ? 'No leads match these filters' : 'No leads yet'}
             text={isManager ? 'Import a CSV/Excel file or add a lead by hand.' : 'Leads assigned to you will appear here.'}
             action={isManager && !q ? <Button onClick={() => setShowImport(true)}><Upload className="h-4 w-4" /> Import leads</Button> : undefined} />
         ) : (

@@ -442,7 +442,7 @@ fun LeadCard(vm: AppViewModel, l: Lead, onCall: ((Lead) -> Unit)?) {
                 Text(listOfNotNull(fmtPhone(l.phone), l.company?.takeIf { it.isNotBlank() }, l.profession?.takeIf { it.isNotBlank() }, l.city?.takeIf { it.isNotBlank() })
                     .joinToString(" · "), fontSize = 13.sp, color = Brand.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 l.latestBatch?.let { b ->
-                    Text("${b.batch?.name ?: "Webinar"} · " + when { b.watch_minutes == null -> "attendance not uploaded"; b.watch_minutes > 0 -> "watched ${b.watch_minutes} min"; else -> "didn't join" },
+                    Text("${b.batch?.name ?: "Webinar"} · " + when { b.watch_minutes == null -> "attendance not uploaded"; b.watch_minutes > 0 -> "watched ${b.watch_minutes} min"; else -> "didn't join" } + (b.warm_reason?.let { " · $it" } ?: ""),
                         fontSize = 12.sp, color = Brand.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 // Effort so far in one line: talk time, calls (real pick-ups), WhatsApp sent, last outcome.

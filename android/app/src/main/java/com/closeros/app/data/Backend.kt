@@ -128,9 +128,21 @@ data class LeadFact(val key: String, val label: String, val options: List<String
     val latestBatch: BatchLink? get() = batch_leads.maxByOrNull { it.batch?.webinar_at ?: "" }
 }
 
+@Serializable data class WebSession(val join: String, val leave: String)
+@Serializable data class WebChat(val at: String? = null, val minute: Int? = null, val message: String = "")
+@Serializable data class WebPoll(val question: String = "", val answer: String = "")
+@Serializable data class LeadWebinar(
+    val batch_id: String, val name: String = "", val webinar_at: String? = null, val pitch_minute: Int? = null, val pitch_at: String? = null,
+    val zoom_uploaded: Boolean = false, val chat_uploaded: Boolean = false, val polls_uploaded: Boolean = false, val poll_questions: Int = 0,
+    val watch_minutes: Int? = null, val sessions: List<WebSession>? = null, val at_pitch: Boolean? = null, val saw_pitch: Boolean? = null,
+    val warmth: Int = 0, val warm_reason: String? = null, val is_repeat: Boolean = false,
+    val chat: List<WebChat> = emptyList(), val polls: List<WebPoll> = emptyList(),
+)
 @Serializable data class BatchMini(val name: String = "", val webinar_at: String? = null)
 @Serializable data class BatchLink(val watch_minutes: Int? = null, val attended: Boolean = false, val batch: BatchMini? = null,
-    val batch_id: String? = null, val is_holdout: Boolean = false)
+    val batch_id: String? = null, val is_holdout: Boolean = false,
+    /** Webinar engagement: 0–100 (watch + present at pitch + chat + polls) and its one-line reason. */
+    val warmth: Int = 0, val warm_reason: String? = null, val saw_pitch: Boolean? = null)
 @Serializable data class Template(val id: String, val name: String, val body: String, val position: Int = 0, val owner_id: String? = null,
     val media_path: String? = null, val media_type: String? = null, val media_name: String? = null)
 
@@ -159,12 +171,13 @@ data class LeadFact(val key: String, val label: String, val options: List<String
     val watch_minutes: Int? = null, val attended: Boolean = false, val is_hot: Boolean = false, val is_repeat: Boolean = false,
     val registered_at: String? = null, val attempts: Int = 0, val talked: Boolean = false, val last_called_at: String? = null,
     val last_outcome_id: String? = null, val next_follow_up_at: String? = null, val bought: Boolean = false,
+    val saw_pitch: Boolean? = null, val warmth: Int = 0, val warm_reason: String? = null, val chat_count: Int = 0, val poll_answered: Int = 0,
 ) {
     fun toLead(batchName: String, webinarAt: String) = Lead(
         id = id, org_id = org_id, name = name, phone = phone, email = email, city = city, state = state, company = company,
         profession = profession, source = source, campaign = campaign, assigned_to = assigned_to, last_call_at = last_called_at,
         last_outcome_id = last_outcome_id, next_follow_up_at = next_follow_up_at, do_not_call = do_not_call,
-        batch_leads = listOf(BatchLink(watch_minutes, attended, BatchMini(batchName, webinarAt))),
+        batch_leads = listOf(BatchLink(watch_minutes, attended, BatchMini(batchName, webinarAt), warmth = warmth, warm_reason = warm_reason, saw_pitch = saw_pitch)),
     )
 }
 @Serializable data class BatchList(val hot_minutes: Int = 60, val webinar_at: String? = null, val leads: List<BatchRow> = emptyList())
@@ -256,7 +269,7 @@ object TalkBands {
 
 @Serializable data class TodayStats(val calls: Int = 0, val connected: Int = 0, val talkSec: Int = 0, val notPicked: Int = 0, val missed: Int = 0)
 
-private const val LEAD_COLUMNS = "*, batch_leads(batch_id, is_holdout, watch_minutes, attended, batch:batches(name, webinar_at))"
+private const val LEAD_COLUMNS = "*, batch_leads(batch_id, is_holdout, watch_minutes, attended, warmth, warm_reason, saw_pitch, batch:batches(name, webinar_at))"
 
 object Repo {
     private val db get() = Backend.client.postgrest
@@ -390,6 +403,10 @@ object Repo {
         return runCatching { Backend.client.from("leads").select(Columns.raw(LEAD_COLUMNS)) { filter { eq("id", id) } }.decodeSingleOrNull<Lead>() }
             .getOrElse { e -> if (Net.isNetworkError(e)) LocalLeads.byId(AppCtx.ctx, id) else throw e }
     }
+
+    /** Webinars of a lead: watch time, join/leave, pitch, chat, polls, warmth (saved copy offline). */
+    suspend fun leadWebinars(id: String): List<LeadWebinar> =
+        json.decodeFromString(rpcR("lead_webinars", buildJsonObject { put("p_lead", id) }).data)
 
     suspend fun leadNotes(id: String): List<NoteEntry> =
         json.decodeFromString(rpcR("lead_notes", buildJsonObject { put("p_lead", id) }).data)

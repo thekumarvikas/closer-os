@@ -147,7 +147,7 @@ object LocalLeads {
             // Same order as the server: late → tonight's webinar (reminder) → due in 2 h → hot watchers → new (newest first) → best time → close → rest.
             val fu = t(l.next_follow_up_at)
             val up = l.batch_leads.filter { !it.is_holdout }.mapNotNull { b -> t(b.batch?.webinar_at)?.takeIf { it.isAfter(now) && it.isBefore(now.plusSeconds(18 * 3600)) } }.minOrNull()
-            val hot = l.batch_leads.any { b -> (b.watch_minutes ?: 0) >= 60 && t(b.batch?.webinar_at)?.let { it.isAfter(now.minusSeconds(14L * 86_400)) && !it.isAfter(now) } == true }
+            val hot = l.batch_leads.any { b -> (b.warmth >= 40 || (b.watch_minutes ?: 0) >= 60) && t(b.batch?.webinar_at)?.let { it.isAfter(now.minusSeconds(14L * 86_400)) && !it.isAfter(now) } == true }
             val bucket = when {
                 fu != null && fu.isBefore(now) -> 1
                 up != null -> 2
@@ -160,6 +160,7 @@ object LocalLeads {
             }
             Triple(l, bucket, up)
         }.sortedWith(compareBy<Triple<Lead, Int, Instant?>>({ it.second }, { it.third ?: Instant.MAX }, { t(it.first.next_follow_up_at) ?: Instant.MAX },
+            { if (it.second == 4) -(it.first.batch_leads.maxOfOrNull { b -> b.warmth } ?: 0).toLong() else 0L },
             { if (it.second == 5) -(t(it.first.created_at)?.toEpochMilli() ?: 0L) else 0L }, { -it.first.score }))
             .map { it.first }   // reminder vs sales is worked out per lead when calling (CallPurpose)
     }

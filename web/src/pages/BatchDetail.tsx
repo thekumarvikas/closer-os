@@ -8,6 +8,7 @@ import { useOrg } from '../lib/session'
 import { useDirectory, type Directory } from '../lib/directory'
 import { fmtDateTime, fmtMoney, fmtPhone } from '../lib/format'
 import { downloadCsv, hms, pct } from '../lib/report'
+import { cellText, isDayFirst, parseWall, wallToUtc, parseChat, parsePolls } from '../lib/zoom'
 import type { Batch, ProfessionCategory } from '../lib/types'
 import { Button, Card, Empty, ErrorBox, Field, Modal, Spinner } from '../components/ui'
 import { BatchForm } from './Batches'
@@ -61,7 +62,7 @@ export default function BatchDetail() {
   const [batch, setBatch] = useState<Batch | null>(null)
   const [purpose, setPurpose] = useState<View>('sales')
   const [version, setVersion] = useState(0)
-  const [modal, setModal] = useState<'import' | 'zoom' | 'remind' | 'edit' | null>(null)
+  const [modal, setModal] = useState<'import' | 'zoom' | 'remind' | 'edit' | 'chat' | 'polls' | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(() => {
@@ -93,6 +94,8 @@ export default function BatchDetail() {
             <Button variant="secondary" onClick={() => setModal('import')}><Upload className="h-4 w-4" /> Add registrations</Button>
             <Button variant="secondary" onClick={() => setModal('remind')}><UserPlus className="h-4 w-4" /> Assign reminder calls</Button>
             <Button onClick={() => setModal('zoom')}><Video className="h-4 w-4" /> Upload attendance (Zoom)</Button>
+            <Button variant="secondary" onClick={() => setModal('chat')}>💬 Upload chat{batch.chat_uploaded_at ? ' ✓' : ''}</Button>
+            <Button variant="secondary" onClick={() => setModal('polls')}>📊 Upload polls{batch.polls_uploaded_at ? ' ✓' : ''}</Button>
           </div>
         )}
       </div>
@@ -110,6 +113,8 @@ export default function BatchDetail() {
 
       {modal === 'import' && <LeadImport orgId={org.id} dir={dir} batchId={batch.id} onClose={() => setModal(null)} onDone={refresh} />}
       {modal === 'zoom' && <ZoomUpload batch={batch} dir={dir} onClose={() => setModal(null)} onDone={refresh} />}
+      {modal === 'chat' && <ChatUpload batch={batch} onClose={() => setModal(null)} onDone={refresh} />}
+      {modal === 'polls' && <PollUpload batch={batch} onClose={() => setModal(null)} onDone={refresh} />}
       {modal === 'remind' && <AssignReminders batch={batch} dir={dir} onClose={() => setModal(null)} onDone={refresh} />}
       {modal === 'edit' && <BatchForm batch={batch} onClose={() => setModal(null)} onSaved={refresh} />}
     </>
@@ -345,18 +350,21 @@ function LeadList({ batch, purpose, dir, title, metric, rep, outcome, onClose }:
 
 /* ───────────── Zoom report upload ───────────── */
 
-type ZoomCol = 'name' | 'email' | 'phone' | 'minutes'
+type ZoomCol = 'name' | 'email' | 'phone' | 'minutes' | 'join' | 'leave'
 const zoomGuess: Record<ZoomCol, RegExp> = {
   name: /^(name|user name|name \(original name\)|user name \(original name\)|attendee name|first name)/i,
   email: /e-?mail/i,
   phone: /phone|mobile|contact/i,
   minutes: /(duration|time in session|minutes)/i,
+  join: /join time/i,
+  leave: /leave time/i,
 }
 
 function ZoomUpload({ batch, dir, onClose, onDone }: { batch: Batch; dir: Directory; onClose: () => void; onDone: () => void }) {
   const { org } = useOrg()
   const [table, setTable] = useState<string[][] | null>(null)
-  const [cols, setCols] = useState<Record<ZoomCol, number>>({ name: -1, email: -1, phone: -1, minutes: -1 })
+  const [cols, setCols] = useState<Record<ZoomCol, number>>({ name: -1, email: -1, phone: -1, minutes: -1, join: -1, leave: -1 })
+  const [started, setStarted] = useState('')   // actual start, wall time in the company time zone (yyyy-mm-ddThh:mm)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<{ by_email: number; by_phone: number; added_to_batch: number; unmatched: { name: string; email: string; phone: string; minutes: number }[] } | null>(null)
@@ -368,7 +376,7 @@ function ZoomUpload({ batch, dir, onClose, onDone }: { batch: Batch; dir: Direct
     setError(null)
     try {
       let rows: string[][]
-      if (/\.xlsx$/i.test(f.name)) rows = (await readXlsxFile(f)).map(r => r.map(c => c == null ? '' : String(c)))
+      if (/\.xlsx$/i.test(f.name)) rows = (await readXlsxFile(f)).map(r => r.map(cellText))
       else rows = Papa.parse<string[]>(await f.text(), { skipEmptyLines: false }).data
       // Zoom reports start with summary lines; the attendee table starts at the row that has
       // an email column and a duration column.
@@ -385,7 +393,22 @@ function ZoomUpload({ batch, dir, onClose, onDone }: { batch: Batch; dir: Direct
         body.push(r)
       }
       const find = (k: ZoomCol) => head.findIndex(h => zoomGuess[k].test(h))
-      setCols({ name: find('name'), email: find('email'), phone: find('phone'), minutes: find('minutes') })
+      setCols({ name: find('name'), email: find('email'), phone: find('phone'), minutes: find('minutes'), join: find('join'), leave: find('leave') })
+      // The summary at the top has the webinar's actual start time ("Actual Start Time" / "Start Time").
+      let st = ''
+      for (let i = 0; i < start && !st; i++) {
+        const c = rows[i].findIndex(x => /^(actual start time|start time)$/i.test(String(x).trim()))
+        if (c >= 0 && rows[i + 1]?.[c]) st = String(rows[i + 1][c])
+      }
+      const w = st ? parseWall(st, isDayFirst([st])) : null
+      const pad = (n: number) => String(n).padStart(2, '0')
+      if (w) setStarted(`${w.y}-${pad(w.M)}-${pad(w.d)}T${pad(w.h)}:${pad(w.m)}`)
+      else {
+        const parts = new Intl.DateTimeFormat('en-CA', { timeZone: org.timezone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+          .formatToParts(new Date(batch.started_at ?? batch.webinar_at))
+        const g = (t: string) => parts.find(x => x.type === t)?.value
+        setStarted(`${g('year')}-${g('month')}-${g('day')}T${g('hour')}:${g('minute')}`)
+      }
       setTable([head, ...body])
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not read this file') }
   }
@@ -393,23 +416,29 @@ function ZoomUpload({ batch, dir, onClose, onDone }: { batch: Batch; dir: Direct
   // One entry per person; Zoom lists a row per join, so minutes are added up.
   const attendees = useMemo(() => {
     if (!table) return []
-    const map = new Map<string, { name: string; email: string; phone: string; minutes: number }>()
+    const map = new Map<string, { name: string; email: string; phone: string; minutes: number; sessions?: { join: string; leave: string }[] }>()
+    const dmy = isDayFirst(table.slice(1).flatMap(r => [cols.join >= 0 ? String(r[cols.join] ?? '') : '', cols.leave >= 0 ? String(r[cols.leave] ?? '') : '']))
     for (const r of table.slice(1)) {
       const g = (k: ZoomCol) => cols[k] >= 0 ? String(r[cols[k]] ?? '').trim() : ''
       const email = g('email').toLowerCase(), phone = g('phone').replace(/[^\d+]/g, ''), name = g('name').replace(/\s*\(.*\)\s*$/, '')
       const key = email || phone || name.toLowerCase()
       if (!key) continue
       const minutes = Number(g('minutes').replace(/[^\d.]/g, '')) || 0
+      // Join / leave times → one session, in UTC.
+      const jw = cols.join >= 0 ? parseWall(g('join'), dmy) : null, lw = cols.leave >= 0 ? parseWall(g('leave'), dmy) : null
+      const sess = jw && lw ? { join: wallToUtc(jw, org.timezone), leave: wallToUtc(lw, org.timezone) } : null
       const cur = map.get(key)
-      if (cur) cur.minutes += minutes
-      else map.set(key, { name, email, phone, minutes })
+      if (cur) { cur.minutes += minutes; if (sess) cur.sessions = [...(cur.sessions ?? []), sess] }
+      else map.set(key, { name, email, phone, minutes, ...(sess ? { sessions: [sess] } : {}) })
     }
     return [...map.values()]
-  }, [table, cols])
+  }, [table, cols, org.timezone])
+  const hasTimes = attendees.some(a => a.sessions?.length)
 
   async function apply() {
     setBusy(true); setError(null)
-    const { data, error } = await supabase.rpc('apply_zoom_report', { p_batch: batch.id, p_rows: attendees })
+    const sw = started ? parseWall(started.replace('T', ' '), false) : null
+    const { data, error } = await supabase.rpc('apply_zoom_report', { p_batch: batch.id, p_rows: attendees, p_started_at: sw ? wallToUtc(sw, org.timezone) : null })
     setBusy(false)
     if (error) return setError(errorText(error))
     setResult(data); onDone()
@@ -486,9 +515,9 @@ function ZoomUpload({ batch, dir, onClose, onDone }: { batch: Batch; dir: Direct
       ) : (
         <div className="space-y-4 text-sm">
           <p>Found <b>{table.length - 1}</b> rows → <b>{attendees.length}</b> different people. Check the columns:</p>
-          <div className="grid gap-3 sm:grid-cols-4">
-            {(['name', 'email', 'phone', 'minutes'] as ZoomCol[]).map(k => (
-              <Field key={k} label={{ name: 'Name', email: 'Email', phone: 'Phone', minutes: 'Minutes watched' }[k]}>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {(['name', 'email', 'phone', 'minutes', 'join', 'leave'] as ZoomCol[]).map(k => (
+              <Field key={k} label={{ name: 'Name', email: 'Email', phone: 'Phone', minutes: 'Minutes watched', join: 'Join time', leave: 'Leave time' }[k]}>
                 <select className="input" value={cols[k]} onChange={e => setCols({ ...cols, [k]: Number(e.target.value) })}>
                   <option value={-1}>— none —</option>
                   {table[0].map((h, i) => <option key={i} value={i}>{h || `Column ${i + 1}`}</option>)}
@@ -503,6 +532,13 @@ function ZoomUpload({ batch, dir, onClose, onDone }: { batch: Batch; dir: Direct
                 <tr key={i}><td className="td">{a.name}</td><td className="td">{a.email || '—'}</td><td className="td">{a.phone || '—'}</td><td className="td">{Math.round(a.minutes)}</td></tr>
               ))}</tbody>
             </table>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label={`Webinar actually started at (${org.timezone})`} hint="Read from the report when possible. The pitch time is counted from here.">
+              <input className="input" type="datetime-local" value={started} onChange={e => setStarted(e.target.value)} /></Field>
+            <p className={`self-end rounded-lg p-2 text-xs ${hasTimes ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'}`}>
+              {hasTimes ? '✓ Join and leave times found — "saw the pitch" will be exact (present at the pitch moment).'
+                : 'No join / leave times found — "saw the pitch" will use total minutes watched instead.'}</p>
           </div>
           {cols.minutes < 0 && <ErrorBox error="Choose the column with minutes watched." />}
           <ErrorBox error={error} />
@@ -549,3 +585,138 @@ function AssignReminders({ batch, dir, onClose, onDone }: { batch: Batch; dir: D
   )
 }
 
+
+/* ───────────── Zoom chat + polls ───────────── */
+
+function ChatUpload({ batch, onClose, onDone }: { batch: Batch; onClose: () => void; onDone: () => void }) {
+  const { org } = useOrg()
+  const [lines, setLines] = useState<ReturnType<typeof parseChat> | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [result, setResult] = useState<{ messages: number; matched: number; unmatched: { sender: string; messages: number }[] } | null>(null)
+  async function read(f: File) {
+    setError(null)
+    let l: ReturnType<typeof parseChat> = []
+    if (/\.(csv|xlsx)$/i.test(f.name)) {
+      // A table with name / message (and time) columns.
+      const rows: string[][] = /\.xlsx$/i.test(f.name) ? (await readXlsxFile(f)).map(r => r.map(cellText)) : Papa.parse<string[]>(await f.text()).data
+      const h = rows.findIndex(r => r.some(c => /name|sender|from/i.test(c)) && r.some(c => /message|chat|text|question/i.test(c)))
+      if (h >= 0) {
+        const head = rows[h]; const ni = head.findIndex(c => /name|sender|from/i.test(c)), mi = head.findIndex(c => /message|chat|text|question/i.test(c)), ti = head.findIndex(c => /time/i.test(c))
+        l = rows.slice(h + 1).filter(r => r[ni] && r[mi]).map(r => ({ time: ti >= 0 ? String(r[ti]) : '', sender: String(r[ni]), to: 'Everyone', message: String(r[mi]) }))
+      }
+    } else l = parseChat(await f.text())
+    if (!l.length) return setError("Couldn't find chat messages in this file. Use the chat file Zoom saves (meeting_saved_chat.txt) or a CSV with name and message columns.")
+    setLines(l)
+  }
+  async function apply() {
+    if (!lines) return
+    setBusy(true); setError(null)
+    // Clock time → full date-time on the webinar day. Times under 3 h when the webinar starts later in the day = time since the start (recording chat files).
+    const start = new Date(batch.started_at ?? batch.webinar_at)
+    const day = new Intl.DateTimeFormat('en-CA', { timeZone: org.timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(start)
+    const startH = Number(new Intl.DateTimeFormat('en-GB', { timeZone: org.timezone, hour: '2-digit', hourCycle: 'h23' }).format(start))
+    const rows = lines.map(c => {
+      const t = c.time.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/)
+      let sent_at: string | null = null, minute: number | null = null
+      if (t) {
+        const h = +t[1], m = +t[2], sec = +(t[3] ?? 0)
+        if (h < 3 && startH >= 6) { minute = h * 60 + m; sent_at = new Date(start.getTime() + (h * 3600 + m * 60 + sec) * 1000).toISOString() }
+        else {
+          const [y, M, d] = day.split('-').map(Number)
+          sent_at = wallToUtc({ y, M, d, h, m, s: sec }, org.timezone)
+          minute = Math.round((new Date(sent_at).getTime() - start.getTime()) / 60000)
+        }
+      }
+      return { sender: c.sender, message: c.message, sent_at, minute }
+    })
+    const { data, error } = await supabase.rpc('apply_zoom_chat', { p_batch: batch.id, p_rows: rows })
+    setBusy(false)
+    if (error) return setError(errorText(error))
+    setResult(data); onDone()
+  }
+  const people = lines ? new Set(lines.map(l => l.sender.toLowerCase())).size : 0
+  return (
+    <Modal open wide onClose={onClose} title="Upload Zoom chat" footer={result ? <Button onClick={onClose}>Done</Button> : <>
+      <Button variant="secondary" onClick={onClose}>Cancel</Button>
+      <Button onClick={apply} loading={busy} disabled={!lines?.length}>Save {lines?.length ?? ''} messages</Button></>}>
+      {result ? (
+        <div className="space-y-3 text-sm">
+          <p className="rounded-lg bg-emerald-50 p-3 text-emerald-900">✅ {result.messages} messages saved · <b>{result.matched}</b> matched to leads. Reps now see them in the lead's profile.</p>
+          {result.unmatched.length > 0 && <div><p className="mb-1 font-medium">Not matched to a lead (usually hosts, or a different name in Zoom):</p>
+            <p className="text-slate-600">{result.unmatched.slice(0, 40).map(u => `${u.sender} (${u.messages})`).join(' · ')}</p></div>}
+        </div>
+      ) : !lines ? (
+        <label className="flex cursor-pointer flex-col items-center rounded-xl border-2 border-dashed border-slate-300 px-6 py-12 text-center hover:border-brand-400 hover:bg-brand-50/40">
+          <Upload className="h-8 w-8 text-brand-600" />
+          <span className="mt-3 font-medium">Choose the Zoom chat file (.txt) — or a CSV</span>
+          <span className="mt-1 max-w-md text-sm text-slate-500">In Zoom during the webinar: Chat → ⋯ → Save chat. Or from the recording: Recordings → the webinar → chat file. Messages are matched to leads by the name they used in Zoom (from the attendance report), then by lead name. Upload attendance first.</span>
+          <input type="file" accept=".txt,.csv,.xlsx" className="hidden" onChange={e => e.target.files?.[0] && read(e.target.files[0])} />
+          {error && <span className="mt-3 text-sm text-red-600">{error}</span>}
+        </label>
+      ) : (
+        <div className="space-y-3 text-sm">
+          <p>Found <b>{lines.length}</b> messages from <b>{people}</b> people. First few:</p>
+          <div className="max-h-56 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100">
+            {lines.slice(0, 12).map((l, i) => <p key={i} className="px-3 py-1.5"><span className="text-slate-500">{l.time}</span> <b>{l.sender}</b>: {l.message}</p>)}
+          </div>
+          {batch.chat_uploaded_at && <p className="text-xs text-amber-700">This replaces the chat uploaded earlier for this webinar.</p>}
+          <ErrorBox error={error} />
+        </div>
+      )}
+    </Modal>
+  )
+}
+
+function PollUpload({ batch, onClose, onDone }: { batch: Batch; onClose: () => void; onDone: () => void }) {
+  const { org } = useOrg()
+  const [answers, setAnswers] = useState<ReturnType<typeof parsePolls> | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [result, setResult] = useState<{ answers: number; people: number; questions: number; unmatched: string[] } | null>(null)
+  async function read(f: File) {
+    setError(null)
+    const rows: string[][] = /\.xlsx$/i.test(f.name) ? (await readXlsxFile(f)).map(r => r.map(cellText)) : Papa.parse<string[]>(await f.text()).data
+    const a = parsePolls(rows)
+    if (!a.length) return setError("Couldn't find poll answers in this file. Use Zoom → Reports → Webinar → Poll report → Export.")
+    setAnswers(a)
+  }
+  async function apply() {
+    if (!answers) return
+    setBusy(true); setError(null)
+    const dmy = isDayFirst(answers.map(a => a.at))
+    const rows = answers.map(a => { const w = a.at ? parseWall(a.at, dmy) : null; return { name: a.name, email: a.email, question: a.question, answer: a.answer, answered_at: w ? wallToUtc(w, org.timezone) : null } })
+    const { data, error } = await supabase.rpc('apply_zoom_polls', { p_batch: batch.id, p_rows: rows })
+    setBusy(false)
+    if (error) return setError(errorText(error))
+    setResult(data); onDone()
+  }
+  const qs = answers ? [...new Set(answers.map(a => a.question))] : []
+  return (
+    <Modal open wide onClose={onClose} title="Upload Zoom poll report" footer={result ? <Button onClick={onClose}>Done</Button> : <>
+      <Button variant="secondary" onClick={onClose}>Cancel</Button>
+      <Button onClick={apply} loading={busy} disabled={!answers?.length}>Save {answers?.length ?? ''} answers</Button></>}>
+      {result ? (
+        <div className="space-y-3 text-sm">
+          <p className="rounded-lg bg-emerald-50 p-3 text-emerald-900">✅ {result.answers} answers to {result.questions} questions saved · <b>{result.people}</b> leads answered. Attendees who didn't answer show “Didn't answer the polls” in their profile.</p>
+          {result.unmatched.length > 0 && <p className="text-slate-600"><b>Not matched to a lead:</b> {result.unmatched.slice(0, 40).join(' · ')}</p>}
+        </div>
+      ) : !answers ? (
+        <label className="flex cursor-pointer flex-col items-center rounded-xl border-2 border-dashed border-slate-300 px-6 py-12 text-center hover:border-brand-400 hover:bg-brand-50/40">
+          <Upload className="h-8 w-8 text-brand-600" />
+          <span className="mt-3 font-medium">Choose the Zoom poll report (CSV or XLSX)</span>
+          <span className="mt-1 max-w-md text-sm text-slate-500">Zoom → Reports → Webinar → Poll report → Export. Answers are matched to leads by email, then by Zoom name.</span>
+          <input type="file" accept=".csv,.xlsx" className="hidden" onChange={e => e.target.files?.[0] && read(e.target.files[0])} />
+          {error && <span className="mt-3 text-sm text-red-600">{error}</span>}
+        </label>
+      ) : (
+        <div className="space-y-3 text-sm">
+          <p>Found <b>{answers.length}</b> answers from <b>{new Set(answers.map(a => (a.email || a.name).toLowerCase())).size}</b> people to <b>{qs.length}</b> questions:</p>
+          <ul className="list-disc pl-5 text-slate-700">{qs.slice(0, 10).map(q => <li key={q}>{q}</li>)}</ul>
+          {batch.polls_uploaded_at && <p className="text-xs text-amber-700">This replaces the polls uploaded earlier for this webinar.</p>}
+          <ErrorBox error={error} />
+        </div>
+      )}
+    </Modal>
+  )
+}

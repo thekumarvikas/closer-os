@@ -912,3 +912,32 @@ intelligence → Play Store launch.
 - App webinar list Sort & filter: attendance "🎯 Saw the pitch (N+ min)" / "Left before the pitch"
   (when pitch set) + multi-select "Watched — 10-minute groups" (ListPrefs.bands, watchBand()); row
   badge 🎯 for leads who saw the pitch.
+
+## Webinar engagement: exact pitch, chat, polls, warmth (v0.14.0, migrations 0055–0056, Nov 2026)
+- Owner: "saw the pitch" must be exact (present at the pitch moment), plus Zoom chat + poll reports
+  uploaded by management, shown in the rep's lead profile, and a warmth score that pushes leads up
+  the priority (focus) calling list.
+- batches: started_at (actual start from the Zoom report; pitch moment = started_at + pitch_minute),
+  chat_uploaded_at, polls_uploaded_at, poll_questions. batch_leads: sessions [{join, leave}] (UTC),
+  zoom_name, at_pitch (exact, null without join/leave times), saw_pitch (final: at_pitch else
+  minutes ≥ pitch), chat_count, poll_answered, warmth 0–100, warm_reason. Tables batch_chat,
+  batch_poll_answers (RLS read: managers or lead_visible; writes only via RPCs).
+- batch_recompute(batch) (definer, not callable by users; trigger on batches pitch/start/hot change)
+  sets counts, at_pitch, saw_pitch, warmth = watch/ref×40 (ref = pitch or hot minutes) + 25 saw pitch
+  + chat 10/15 + polls 10 + 2.5 per answer (max 4) ; labels 🔥 Hot ≥ 70, Warm 40–69, Cold 1–39; bumps
+  leads.updated_at so phones re-download. apply_zoom_report(batch, rows, p_started_at) (old 2-arg
+  dropped) stores sessions + zoom_name. apply_zoom_chat / apply_zoom_polls replace the batch's data;
+  batch_match_person(batch, name, email): email → zoom_name → unique lead name among batch leads.
+  lead_webinars(lead) for profiles. batch_watch_bands adds exact + warmth {hot,warm,cold}.
+- my_focus_list bucket 4 = warmth ≥ 40 or hot minutes (last 14 days), ordered by warmth, reason
+  "🎥 🔥 Hot · 82 · watched … · saw the pitch · 2 chats · answered 3 polls". LocalLeads.focus mirrors.
+  batch_call_list rows carry saw_pitch, warmth, warm_reason, chat_count, poll_answered.
+- Web: lib/zoom.ts (parseWall MM/DD vs DD/MM detection, wallToUtc(tz), cellText for xlsx Dates,
+  parseChat for both Zoom chat formats — times < 03:00 on a later-starting webinar = elapsed time —,
+  parsePolls wide or Question/Answer tables). ZoomUpload reads Join/Leave Time + "Actual Start Time"
+  (editable). BatchDetail buttons 💬 Upload chat / 📊 Upload polls. WatchBands: Saw / Missed the pitch
+  (left early or joined late), warmth chips, warmth column. components/LeadWebinars.tsx in LeadDrawer.
+- App: LeadWebinarsCard (ui/WebinarCard.kt) on the lead page (Repo.leadWebinars, saved copy; offline
+  falls back to batch_leads). Webinar list: sort "Webinar warmth: hottest first" (sales default),
+  filters Saw/Missed the pitch + Hot/Warm, warm_reason line on rows; glance + lead cards show it.
+  BatchLink gains warmth/warm_reason/saw_pitch (LEAD_COLUMNS, LeadIndex cursor v6).

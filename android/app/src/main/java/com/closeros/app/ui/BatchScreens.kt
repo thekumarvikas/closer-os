@@ -101,6 +101,7 @@ data class ListPrefs(
 private val prefsJson = Json { ignoreUnknownKeys = true }
 
 val sortOptions = listOf(
+    "warmth_desc" to "Webinar warmth: hottest first",
     "watch_desc" to "Watch time: highest first",
     "watch_asc" to "Watch time: lowest first",
     "cat_order" to "Profession group: my order",
@@ -114,6 +115,7 @@ val sortOptions = listOf(
 )
 
 private fun comparatorFor(key: String, cats: List<String>): Comparator<BatchRow>? = when (key) {
+    "warmth_desc" -> compareByDescending<BatchRow> { it.warmth }.thenByDescending { it.watch_minutes ?: -1 }
     "watch_desc" -> compareByDescending<BatchRow> { it.watch_minutes ?: -1 }
     "watch_asc" -> compareBy { it.watch_minutes ?: Int.MAX_VALUE }
     "cat_order" -> compareBy { cats.indexOf(it.category_id ?: "none").let { i -> if (i < 0) Int.MAX_VALUE else i } }
@@ -137,7 +139,8 @@ fun applyPrefs(rows: List<BatchRow>, p: ListPrefs, hot: Int, pitch: Int? = null)
     val filtered = rows.filter { r ->
         val w = r.watch_minutes ?: 0
         (when (p.attendance) { "hot" -> r.is_hot; "attended" -> w > 0; "low" -> w in 1 until hot; "absent" -> w == 0
-            "pitch" -> pitch != null && w > 0 && w >= pitch; "before_pitch" -> pitch != null && w in 1 until pitch; else -> true }) &&
+            "pitch" -> pitch != null && w > 0 && (r.saw_pitch ?: (w >= pitch)); "before_pitch" -> pitch != null && w > 0 && !(r.saw_pitch ?: (w >= pitch))
+            "warm" -> r.warmth >= 40; "hotw" -> r.warmth >= 70; else -> true }) &&
         (p.bands.isEmpty() || watchBand(r.watch_minutes) in p.bands) &&
         (when (p.status) { "new" -> r.attempts == 0; "not_talked" -> r.attempts > 0 && !r.talked; "tried3" -> r.attempts >= 3 && !r.talked; "talked" -> r.talked
             "due" -> r.next_follow_up_at != null && r.next_follow_up_at <= now; else -> true }) &&
@@ -160,7 +163,7 @@ fun BatchListScreen(vm: AppViewModel) {
     BackHandler { vm.openList = null }
     var prefs by remember(purpose) {
         mutableStateOf(vm.store.listPrefs(purpose)?.let { runCatching { prefsJson.decodeFromString<ListPrefs>(it) }.getOrNull() }
-            ?: ListPrefs(sort1 = if (purpose == "sales") "watch_desc" else "attempts_asc", sort2 = if (purpose == "sales") "none" else "reg_new"))
+            ?: ListPrefs(sort1 = if (purpose == "sales") "warmth_desc" else "attempts_asc", sort2 = if (purpose == "sales") "none" else "reg_new"))
     }
     fun update(p: ListPrefs) { prefs = p; vm.store.setListPrefs(purpose, prefsJson.encodeToString(p)) }
     var showFilters by remember { mutableStateOf(false) }
@@ -226,7 +229,8 @@ private fun FilterPanel(vm: AppViewModel, rows: List<BatchRow>, p: ListPrefs, pu
             Label("Webinar attendance")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 (listOf("all" to "All") +
-                    (if (pm != null) listOf("pitch" to "🎯 Saw the pitch ($pm+ min)", "before_pitch" to "Left before the pitch") else emptyList()) +
+                    (if (pm != null) listOf("pitch" to "🎯 Saw the pitch", "before_pitch" to "Missed the pitch") else emptyList()) +
+                    (if (rows.any { it.warmth > 0 }) listOf("hotw" to "🔥 Hot (warmth 70+)", "warm" to "Warm 40+") else emptyList()) +
                     listOf("hot" to "🔥 ${batch.hot_minutes}+ min", "attended" to "Attended", "low" to "Joined < ${batch.hot_minutes} min", "absent" to "Didn't attend"))
                     .forEach { (k, l) -> Pill("$l (${count(rows, p.copy(attendance = k), batch.hot_minutes, pm)})", p.attendance == k) { update(p.copy(attendance = k)) } }
             }
@@ -330,7 +334,7 @@ private fun BatchRowCard(vm: AppViewModel, r: BatchRow, n: Int) {
                 Text(r.name.ifBlank { fmtPhone(r.phone) }, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, false))
                 r.watch_minutes?.let { w ->
                     Spacer(Modifier.width(6.dp))
-                    val saw = vm.openList?.first?.pitch_minute?.let { pm -> w > 0 && w >= pm } == true
+                    val saw = r.saw_pitch ?: (vm.openList?.first?.pitch_minute?.let { pm -> w > 0 && w >= pm } == true)
                     Text((if (saw) "🎯 " else "") + (if (r.is_hot) "🔥 $w min" else if (w > 0) "$w min" else "absent"), fontSize = 12.sp,
                         color = if (r.is_hot) Color(0xFFC2410C) else if (w > 0) Brand.primaryDark else Brand.muted,
                         modifier = Modifier.background(if (r.is_hot) Color(0xFFFFEDD5) else Color(0xFFF1F5F9), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 1.dp))
@@ -338,6 +342,8 @@ private fun BatchRowCard(vm: AppViewModel, r: BatchRow, n: Int) {
             }
             Text(listOfNotNull(r.category, r.profession?.takeIf { it.isNotBlank() && it != r.category }, r.city).joinToString(" · ").ifBlank { "No profession yet" },
                 fontSize = 13.sp, color = Brand.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            r.warm_reason?.takeIf { r.warmth > 0 }?.let { Text(it, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                color = if (r.warmth >= 70) Color(0xFFC2410C) else if (r.warmth >= 40) Color(0xFFB45309) else Brand.muted) }
             val last = r.last_outcome_id?.let { id -> vm.outcomes.firstOrNull { it.id == id }?.label }
             Text((if (r.attempts == 0) "Not called yet" else "${r.attempts} call${if (r.attempts > 1) "s" else ""}" + (if (r.talked) " · talked" else " · no talk yet")) +
                 (last?.let { " · $it" } ?: "") + (if (r.is_repeat) " · repeat" else "") + (if (r.bought) " · bought" else ""),

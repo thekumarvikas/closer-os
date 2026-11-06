@@ -1,5 +1,6 @@
+import LeadWebinars from '../components/LeadWebinars'
 import { useEffect, useState } from 'react'
-import { X, Phone, Mail, MapPin, Building2, GraduationCap, Video } from 'lucide-react'
+import { X, Phone, Mail, MapPin, Building2, GraduationCap } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
 import type { Directory } from '../lib/directory'
@@ -133,17 +134,7 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
                 )}
               </div>
 
-              {batches.length > 0 && (
-                <section>
-                  <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold"><Video className="h-4 w-4" /> Webinars</h3>
-                  <ul className="space-y-1 text-sm">{batches.map((b, i) => (
-                    <li key={i} className="flex justify-between rounded-lg border border-slate-200 px-3 py-2">
-                      <span>{b.batch?.name} {b.is_repeat && <Badge color="amber">Repeated</Badge>}</span>
-                      <span className="text-slate-600">{b.watch_minutes == null ? 'Not uploaded yet' : b.attended ? `Watched ${b.watch_minutes} min` : "Didn't attend"}</span>
-                    </li>))}
-                  </ul>
-                </section>
-              )}
+              <LeadWebinars leadId={leadId} />
 
               <EffortSummary leadId={leadId} />
               <section className="rounded-lg border border-amber-200 bg-amber-50 p-3">

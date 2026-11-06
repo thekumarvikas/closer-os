@@ -42,5 +42,6 @@ export interface Batch {
   zoom_uploaded_at: string | null; is_archived: boolean; created_at: string; holdout_pct: number; kind?: 'webinar' | 'event' | 'batch'
   /** Minute of the webinar when the pitch / payment link was shown. */
   pitch_minute?: number | null
+  started_at?: string | null; chat_uploaded_at?: string | null; polls_uploaded_at?: string | null; poll_questions?: number
 }
 export interface ProfessionCategory { id: string; name: string; keywords: string[]; position: number }

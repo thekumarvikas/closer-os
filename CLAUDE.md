@@ -989,3 +989,7 @@ intelligence → Play Store launch.
 - Later: per-rep automatic order by usage (most-used outcomes rise to the top, unused sink), on top of
   the existing call-type rules (outcomesFor). Count use per rep from their saved outcomes (phone
   cache my_outcomes + server), recent weeks weighted more.
+- v0.14.3: WhatsApp step was offered twice (pop-up step 2, then again when the app opened: the app's
+  checkOutcomeSavedElsewhere saw the pop-up's saved outcome and set vm.whatsappNext). Now that path only
+  closes the outcome screen ("Outcome already saved ✓"); vm.whatsappNext is set only by vm.saveOutcome
+  (outcome saved in the app itself, not lite, not in the queue).

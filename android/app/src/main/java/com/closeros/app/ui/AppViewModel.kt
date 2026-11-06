@@ -834,11 +834,9 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (log.id in done && pending == p) {
             store.markLogged(log.id)
             pending?.let { FollowUpAlarms.cancelForLead(ctx, it.leadId, followUps) }
-        // Next step after the outcome: a WhatsApp message (not in the calling queue — it moves on by itself).
-        if (!lite && !queueActive) pending?.let { p -> membership?.let { m ->
-            whatsappNext = Lead(id = p.leadId, org_id = m.org_id, name = p.leadName, phone = p.phone, profession = p.profession) } }
+            // Saved in the after-call pop-up or on the laptop — the WhatsApp step was offered there, not again here.
             discardPending()
-            message = "Outcome saved on your laptop ✓"
+            message = "Outcome already saved ✓"
             queueAfterOutcome()
             refreshHome(); checkUnloggedCalls()
         }
@@ -865,6 +863,9 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         pending?.let { FollowUpAlarms.cancelForLead(ctx, it.leadId, followUps) }
         pendingLog?.id?.let { store.markLogged(it) }
         com.closeros.app.calls.AfterCall.cancelNotification(ctx)   // outcome saved here → remove the "Save the outcome" reminder
+        // Saved here in the app: offer the WhatsApp message once (not in the calling queue — it moves on by itself).
+        if (!lite && !queueActive) pending?.let { p -> membership?.let { m ->
+            if (p.phone.isNotBlank()) whatsappNext = Lead(id = p.leadId, org_id = m.org_id, name = p.leadName, phone = p.phone, profession = p.profession) } }
         discardPending()
         onDone()
         CallSync.syncNow(ctx)

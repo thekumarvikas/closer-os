@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { UserPlus, Users, Copy, Trash2, Plus } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
-import { useDirectory } from '../lib/directory'
+import { useDirectory, type Directory } from '../lib/directory'
 import { fmtDate, roleLabel } from '../lib/format'
 import type { Invitation, Role } from '../lib/types'
 import { Badge, Button, Card, Empty, ErrorBox, Field, Modal, PageHeader, Spinner } from '../components/ui'
@@ -14,6 +14,7 @@ export default function Team() {
   const dir = useDirectory(org.id, version)
   const [invites, setInvites] = useState<Invitation[]>([])
   const [showInvite, setShowInvite] = useState(false)
+  const [removing, setRemoving] = useState<string | null>(null)
   const [newTeam, setNewTeam] = useState('')
   const [error, setError] = useState<string | null>(null)
   const reload = () => setVersion(v => v + 1)
@@ -73,7 +74,11 @@ export default function Team() {
                         onClick={() => run(supabase.from('org_members').update({ status: m.status === 'active' ? 'deactivated' : 'active' }).eq('org_id', org.id).eq('user_id', m.user_id))}>
                         {m.status === 'active' ? 'Deactivate' : 'Reactivate'}
                       </button>
-                    ) : <Badge color={m.status === 'active' ? 'green' : 'gray'}>{m.status}</Badge>}
+                    ) : null}
+                    {isAdmin && !me && (m.role !== 'owner' || myRole === 'owner') ? (
+                      <button className="ml-3 text-sm text-red-600 hover:underline" onClick={() => setRemoving(m.user_id)}>Delete</button>
+                    ) : null}
+                    {!(isAdmin && !me) && <Badge color={m.status === 'active' ? 'green' : 'gray'}>{m.status}</Badge>}
                   </td>
                 </tr>
               )
@@ -82,6 +87,7 @@ export default function Team() {
         </table>
       </Card>
 
+      {removing && <RemoveMember userId={removing} dir={dir} onClose={() => setRemoving(null)} onDone={() => { setRemoving(null); reload() }} />}
       <PhoneStatus orgId={org.id} nameOf={dir.nameOf} version={version} />
 
       {isAdmin && invites.length > 0 && (
@@ -274,5 +280,47 @@ function PhoneStatus({ orgId, nameOf, version }: { orgId: string; nameOf: (id: s
         )}
       </Card>
     </>
+  )
+}
+
+/** Permanently removes a person from the company; their leads go to someone else. */
+function RemoveMember({ userId, dir, onClose, onDone }: { userId: string; dir: Directory; onClose: () => void; onDone: () => void }) {
+  const { org } = useOrg()
+  const name = dir.nameOf(userId)
+  const [to, setTo] = useState('')
+  const [typed, setTyped] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [done, setDone] = useState<{ leads: number; reminders: number; follow_ups: number } | null>(null)
+  const others = dir.members.filter(m => m.status === 'active' && m.user_id !== userId)
+  async function go() {
+    setBusy(true); setError(null)
+    const { data, error } = await supabase.rpc('remove_member', { p_org: org.id, p_user: userId, p_reassign_to: to || null })
+    setBusy(false)
+    if (error) return setError(errorText(error))
+    setDone(data)
+  }
+  return (
+    <Modal open onClose={done ? onDone : onClose} title={`Delete ${name} from the company`} footer={done ? <Button onClick={onDone}>Done</Button> : <>
+      <Button variant="secondary" onClick={onClose}>Cancel</Button>
+      <Button className="!bg-red-600 hover:!bg-red-700" onClick={go} loading={busy} disabled={typed.trim().toUpperCase() !== 'DELETE'}>Delete permanently</Button></>}>
+      {done ? (
+        <p className="text-sm">✅ {name} was removed. {done.leads} leads, {done.reminders} reminder calls and {done.follow_ups} follow-ups were {to ? `moved to ${dir.nameOf(to)}` : 'unassigned / closed'}.</p>
+      ) : (
+        <div className="space-y-3 text-sm">
+          <p>{name} will be removed from <b>{org.name}</b> for good: they can't open it any more and won't show in the team, filters or reports' people lists.
+            Their past calls stay in reports, shown as “{name} (removed)”. To bring them back later, invite them again.</p>
+          <p className="text-slate-600">Just want to pause someone? Use <b>Deactivate</b> instead — it can be undone.</p>
+          <Field label="Give their leads, reminder calls and follow-ups to">
+            <select className="input" value={to} onChange={e => setTo(e.target.value)}>
+              <option value="">Nobody — leave leads unassigned, close follow-ups</option>
+              {others.map(m => <option key={m.user_id} value={m.user_id}>{dir.nameOf(m.user_id)}</option>)}
+            </select>
+          </Field>
+          <Field label='Type DELETE to confirm'><input className="input" value={typed} onChange={e => setTyped(e.target.value)} placeholder="DELETE" /></Field>
+          <ErrorBox error={error} />
+        </div>
+      )}
+    </Modal>
   )
 }

@@ -28,6 +28,9 @@ export function useDirectory(orgId: string | undefined, version = 0) {
         supabase.from('pipeline_stages').select('*').eq('org_id', orgId).order('position'),
         supabase.from('call_outcomes').select('*').eq('org_id', orgId).order('position'),
       ])
+      // People removed from the company: their name still shows on their old calls and leads.
+      const { data: former } = await supabase.from('org_former_members').select('user_id, full_name, email').eq('org_id', orgId)
+      const formerById = new Map((former ?? []).map(f => [f.user_id as string, `${f.full_name || f.email || 'Someone'} (removed)`]))
       const ids = (m.data ?? []).map(x => x.user_id)
       const { data: profiles } = ids.length
         ? await supabase.from('profiles').select('id,email,full_name,avatar_url,phone').in('id', ids)
@@ -43,7 +46,7 @@ export function useDirectory(orgId: string | undefined, version = 0) {
         nameOf: id => {
           if (!id) return 'Unassigned'
           const p = byId.get(id)
-          return p?.full_name || p?.email || 'Unknown'
+          return p?.full_name || p?.email || formerById.get(id) || 'Unknown'
         },
         phoneOf: id => {
           const ph = id ? (byId.get(id) as Profile & { phone?: string | null } | undefined)?.phone : null

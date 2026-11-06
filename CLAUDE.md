@@ -941,3 +941,12 @@ intelligence → Play Store launch.
   falls back to batch_leads). Webinar list: sort "Webinar warmth: hottest first" (sales default),
   filters Saw/Missed the pitch + Hot/Warm, warm_reason line on rows; glance + lead cards show it.
   BatchLink gains warmth/warm_reason/saw_pitch (LEAD_COLUMNS, LeadIndex cursor v6).
+
+## Delete a team member (migration 0057, Nov 2026)
+- Owner: managers need a permanent delete, not only Deactivate. remove_member(org, user, reassign_to?)
+  (owner/admin; not self; only owners remove owners; last owner stays): moves leads (assigned_to),
+  batch_leads.reminder_by and pending follow-ups to reassign_to — or unassigns leads + cancels
+  follow-ups —, deletes team_members, rep_targets, their personal templates, announcement acks, call
+  requests, device_status and the org_members row; keeps the name in org_former_members (members read)
+  so the dashboard directory shows "Name (removed)" on old calls; audit member.removed.
+- Team page: red "Delete" next to Deactivate → modal (who gets the leads, type DELETE).

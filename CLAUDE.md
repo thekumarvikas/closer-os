@@ -981,3 +981,11 @@ intelligence → Play Store launch.
   (< 60 s) reuses the answer. AfterCall.dirHint → Info.dirHint → AfterCallCard uses it until the
   call-log entry arrives (missed → no outcome step). outcomesFor: missed/declined calls are treated
   like received ones (no not_connected / DIALLED_ONLY / shown_on outgoing); web Desk same.
+
+## Pending owner ideas (not built yet — owner said "don't build it now")
+- Outcome order (Nov 2026): positive outcomes first, negative after; "Language barrier", wrong number,
+  disqualified kinds must not sit in the first rows. Proposed order: won → positive → connected
+  (objections / call later) → lost → invalid / disqualified; not_connected first only on 0 s dialled calls.
+- Later: per-rep automatic order by usage (most-used outcomes rise to the top, unused sink), on top of
+  the existing call-type rules (outcomesFor). Count use per rep from their saved outcomes (phone
+  cache my_outcomes + server), recent weeks weighted more.

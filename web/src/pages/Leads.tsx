@@ -9,6 +9,7 @@ import type { Lead } from '../lib/types'
 import { Badge, Button, Card, Empty, ErrorBox, Field, Modal, PageHeader, Spinner } from '../components/ui'
 import LeadImport from './LeadImport'
 import LeadDrawer from './LeadDrawer'
+import LeadUtilisation from '../components/LeadUtilisation'
 
 const PAGE = 50
 
@@ -34,6 +35,7 @@ export default function Leads() {
   const [stage, setStage] = useState('')
   const [source, setSource] = useState('')
   const [talk, setTalk] = useState('')
+  const [util, setUtil] = useState<'' | 'used' | 'unused'>('')
   const [bands, setBands] = useState<Record<string, number> | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [showImport, setShowImport] = useState(false)
@@ -50,10 +52,12 @@ export default function Leads() {
     else if (assignee) query = query.eq('assigned_to', assignee)
     if (stage) query = query.eq('stage_id', stage)
     if (source) query = query.ilike('source', source)
+    if (util === 'used') query = query.gt('dial_count', 0)
+    else if (util === 'unused') query = query.eq('dial_count', 0)
     const b = TALK_BANDS.find(x => x.key === talk)
     if (b) { query = query.gte('total_talk_sec', b.from); if (b.until != null) query = query.lt('total_talk_sec', b.until) }
     return query
-  }, [assignee, stage, source, talk])
+  }, [assignee, stage, source, talk, util])
   const searchIds = useCallback(async (): Promise<string[] | null> => {
     const term = q.trim()
     if (term.length < 2) return null
@@ -98,7 +102,7 @@ export default function Leads() {
   }
 
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t) }, [load])
-  useEffect(() => { setPage(0) }, [q, assignee, stage, source])
+  useEffect(() => { setPage(0) }, [q, assignee, stage, source, util])
 
   const refresh = () => { setSelected(new Set()); load(); setVersion(v => v + 1) }
   async function bulk(p: Record<string, unknown>) {
@@ -118,6 +122,8 @@ export default function Leads() {
         </>
       } />
 
+      {isManager && dir && <LeadUtilisation dir={dir} version={version} onChanged={refresh}
+        onPick={(u, f) => { setAssignee(u); setUtil(f); setQ(''); setPage(0) }} />}
       <Card>
         <div className="flex flex-wrap gap-2 border-b border-slate-200 p-3">
           <div className="relative min-w-[200px] flex-1">
@@ -131,6 +137,9 @@ export default function Leads() {
               {dir?.members.map(m => <option key={m.user_id} value={m.user_id}>{dir.nameOf(m.user_id)}</option>)}
             </select>
           )}
+          <select className="input !w-auto" value={util} onChange={e => setUtil(e.target.value as typeof util)}>
+            <option value="">Called or not</option><option value="used">Utilised (called)</option><option value="unused">Not utilised (never called)</option>
+          </select>
           <select className="input !w-auto" value={stage} onChange={e => setStage(e.target.value)}>
             <option value="">All stages</option>
             {dir?.stages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -166,7 +175,7 @@ export default function Leads() {
 
         <ErrorBox error={error} />
         {!leads || !dir ? <Spinner /> : leads.length === 0 ? (
-          <Empty icon={<Users className="h-6 w-6" />} title={q || assignee || stage || source || talk ? 'No leads match these filters' : 'No leads yet'}
+          <Empty icon={<Users className="h-6 w-6" />} title={q || assignee || stage || source || talk || util ? 'No leads match these filters' : 'No leads yet'}
             text={isManager ? 'Import a CSV/Excel file or add a lead by hand.' : 'Leads assigned to you will appear here.'}
             action={isManager && !q ? <Button onClick={() => setShowImport(true)}><Upload className="h-4 w-4" /> Import leads</Button> : undefined} />
         ) : (

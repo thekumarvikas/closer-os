@@ -950,3 +950,19 @@ intelligence → Play Store launch.
   requests, device_status and the org_members row; keeps the name in org_former_members (members read)
   so the dashboard directory shows "Name (removed)" on old calls; audit member.removed.
 - Team page: red "Delete" next to Deactivate → modal (who gets the leads, type DELETE).
+
+## Lead utilisation + reassign with full history (migration 0058, Nov 2026)
+- Owner: Leads assigned / utilised / not utilised, and reassigning must keep call history, notes and
+  outcomes visible to the next person. Before: calls_select only let reps see their OWN calls, so a
+  new assignee couldn't see earlier calls/outcomes/recordings (notes were already lead-visible).
+- calls_select and storage recordings_select now also allow anyone who can see the lead
+  (lead_visible(lead_id)). after_lead_update (assignment logged as 'assigned' activity; pending
+  follow-ups move) also moves batch_leads.reminder_by for UPCOMING webinars from the old to the new rep.
+- lead_utilisation(org, from?, to?) (period = assigned_at): per person assigned, utilised (dial_count
+  > 0 — called at least once by anyone), not_utilised (never called), talked, oldest_waiting; total
+  incl. unassigned. Managers see visible users (+ unassigned); reps themselves.
+- reassign_leads(org, from|null=unassigned, scope not_utilised|not_reached|all, to[] round-robin,
+  limit?) managers only, oldest assigned first, audit leads.reassigned.
+- Dashboard Leads page (managers): components/LeadUtilisation.tsx card (period All / 30 days / this
+  month, clickable numbers → list filtered by person + utilisation, Reassign per row + "Reassign
+  leads" modal); new list filter "Called or not".

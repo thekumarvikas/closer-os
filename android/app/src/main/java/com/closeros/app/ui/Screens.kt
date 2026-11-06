@@ -251,7 +251,7 @@ fun ProfileScreen(vm: AppViewModel) {
         HorizontalDivider()
         Text("Phone setup", fontWeight = FontWeight.SemiBold)
         val setupItems = remember { com.closeros.app.calls.PhoneSetup.items(ctx) }
-        Text("${setupItems.count { it.done }} of ${setupItems.size} done — permissions, reminders, WhatsApp calls, recordings.", color = Brand.muted, fontSize = 14.sp)
+        Text("${setupItems.count { it.done }} of ${setupItems.size} done — permissions, reminders, ${if (com.closeros.app.BuildConfig.WA_TRACKING) "WhatsApp calls, " else ""}recordings.", color = Brand.muted, fontSize = 14.sp)
         Button(onClick = { vm.showSetup = true }) { Text("Open phone setup") }
         if (android.os.Build.VERSION.SDK_INT >= 31 && !com.closeros.app.calls.FollowUpAlarms.canExact(ctx)) ExactAlarmHint()
         HorizontalDivider()

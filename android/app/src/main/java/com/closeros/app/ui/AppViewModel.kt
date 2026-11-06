@@ -864,6 +864,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         } else message = "Saved"
         pending?.let { FollowUpAlarms.cancelForLead(ctx, it.leadId, followUps) }
         pendingLog?.id?.let { store.markLogged(it) }
+        com.closeros.app.calls.AfterCall.cancelNotification(ctx)   // outcome saved here → remove the "Save the outcome" reminder
         discardPending()
         onDone()
         CallSync.syncNow(ctx)

@@ -117,7 +117,7 @@ object PhoneSetup {
             }, makerDialer(dialer) && !google, Kind.Special, required = false,
             intent = Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS),
             steps = "Open \"Phone app\" and choose your phone's own Phone app (not a third-party dialer).",
-            warning = if (google) "Recordings can't be uploaded on this phone. Call history, talk time and WhatsApp calls still work." else null)
+            warning = if (google) "Recordings can't be uploaded on this phone. Call history, talk time${if (com.closeros.app.BuildConfig.WA_TRACKING) " and WhatsApp calls" else ""} still work." else null)
         if (!google) {
             list += Item("autorecord", "Auto call recording on", "Turn on automatic recording in your Phone app so every call is recorded.",
                 store.confirmed("autorecord"), Kind.Confirm, required = false,

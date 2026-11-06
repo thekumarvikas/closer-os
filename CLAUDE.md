@@ -494,6 +494,13 @@ intelligence → Play Store launch.
 - Maven Central rate-limits this sandbox; settings.gradle.kts uses Google's mirror
   `https://maven-central.storage-download.googleapis.com/maven2/` first.
 - Built APKs for the owner go in `downloads/` (git-ignored) and are sent with SendUserFile.
+- Owner's Mac (Nov 2026): Homebrew openjdk@17 + android-commandlinetools. Build with
+  JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
+  ANDROID_HOME=/opt/homebrew/share/android-commandlinetools. The sandbox blocks Java from downloading
+  the Gradle zip → fetch it with curl into ~/.gradle/wrapper/dists/gradle-8.14.3-bin/<hash>/.
+  Redmi K20 Pro over USB = adb serial 2da6b6e9; install with `adb install -r` (keeps data).
+- v0.13.1: saving an outcome in the app now also clears the "Save the outcome" notification (it was
+  only cleared by the pop-up); direct build no longer mentions WhatsApp calls in setup texts.
 
 ## Quality pass (v0.9.10, Nov 2026)
 - Owner: "Launch should wait. Make the app perfect." Crash/robustness fixes, no new features:

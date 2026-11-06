@@ -900,3 +900,15 @@ intelligence → Play Store launch.
   LocalLeads offline). App filter sheet "Total talk time with the lead" with counts from the phone's
   lead copy. Dashboard Leads: chip row with counts (lead_talk_bands(org, assignee), security invoker)
   filters the list + export.
+
+## Webinar watch-time groups + pitch (v0.13.3, migration 0054, Nov 2026)
+- Owner: group webinar attendees by watch time in 10-minute steps and split "saw the pitch" vs
+  "left before the pitch". batches.pitch_minute (dashboard batch form "Pitch / payment link shown at
+  (minute)"). Owner's rule: watch_minutes >= pitch_minute = saw the pitch; 1..pitch-1 = left before.
+- batch_watch_bands(batch) (security invoker): bands k = (w-1)/10 (−1 didn't join, −2 no Zoom data)
+  with leads/called/talked/won + pitch split saw|before|absent. my_batches now returns pitch_minute.
+- Dashboard BatchDetail (sales tab) → components/WatchBands.tsx: 3 pitch tiles + 10-min bars (▲ = pitch
+  band), click → lead list (batch_leads join leads, CSV, LeadDrawer).
+- App webinar list Sort & filter: attendance "🎯 Saw the pitch (N+ min)" / "Left before the pitch"
+  (when pitch set) + multi-select "Watched — 10-minute groups" (ListPrefs.bands, watchBand()); row
+  badge 🎯 for leads who saw the pitch.

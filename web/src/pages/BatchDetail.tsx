@@ -14,6 +14,7 @@ import { BatchForm } from './Batches'
 import LeadImport from './LeadImport'
 import LeadDrawer from './LeadDrawer'
 import ShowUpImpact from './ShowUp'
+import WatchBands from '../components/WatchBands'
 
 type Purpose = 'sales' | 'reminder'
 type View = Purpose | 'showup'
@@ -84,7 +85,7 @@ export default function BatchDetail() {
           <h1 className="flex items-center gap-2 text-xl font-semibold text-slate-900">{batch.name}
             {isManager && <button onClick={() => setModal('edit')} className="text-slate-400 hover:text-slate-700" aria-label="Edit"><Pencil className="h-4 w-4" /></button>}
           </h1>
-          <p className="mt-0.5 text-sm text-slate-500">{fmtDateTime(batch.webinar_at, org)} · hot lead = {batch.hot_minutes}+ min · guided target {batch.guided_target_pct}%{batch.holdout_pct > 0 ? ` · test group ${batch.holdout_pct}%` : ''}
+          <p className="mt-0.5 text-sm text-slate-500">{fmtDateTime(batch.webinar_at, org)} · hot lead = {batch.hot_minutes}+ min{batch.pitch_minute != null ? ` · pitch at ${batch.pitch_minute} min` : ''} · guided target {batch.guided_target_pct}%{batch.holdout_pct > 0 ? ` · test group ${batch.holdout_pct}%` : ''}
             {batch.zoom_uploaded_at ? <> · Zoom report uploaded {fmtDateTime(batch.zoom_uploaded_at, org)}</> : null}</p>
         </div>
         {isManager && (
@@ -105,6 +106,7 @@ export default function BatchDetail() {
       {purpose === 'showup'
         ? <ShowUpImpact key={'s' + version} batch={batch} dir={dir} />
         : <BatchReport key={purpose + version} batch={batch} purpose={purpose} dir={dir} />}
+      {purpose === 'sales' && <WatchBands key={'w' + version} batch={batch} dir={dir} onSetPitch={isManager ? () => setModal('edit') : undefined} />}
 
       {modal === 'import' && <LeadImport orgId={org.id} dir={dir} batchId={batch.id} onClose={() => setModal(null)} onDone={refresh} />}
       {modal === 'zoom' && <ZoomUpload batch={batch} dir={dir} onClose={() => setModal(null)} onDone={refresh} />}

@@ -40,5 +40,7 @@ export interface Rule {
 export interface Batch {
   id: string; org_id: string; name: string; webinar_at: string; hot_minutes: number; guided_target_pct: number
   zoom_uploaded_at: string | null; is_archived: boolean; created_at: string; holdout_pct: number; kind?: 'webinar' | 'event' | 'batch'
+  /** Minute of the webinar when the pitch / payment link was shown. */
+  pitch_minute?: number | null
 }
 export interface ProfessionCategory { id: string; name: string; keywords: string[]; position: number }

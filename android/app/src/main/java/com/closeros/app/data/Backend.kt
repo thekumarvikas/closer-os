@@ -144,6 +144,8 @@ data class LeadFact(val key: String, val label: String, val options: List<String
 /** A webinar / event with how many leads I (or my team) have to call. */
 @Serializable data class BatchSummary(
     val id: String, val name: String, val kind: String = "webinar", val webinar_at: String, val hot_minutes: Int = 60,
+    /** Minute of the webinar when the pitch / payment link was shown (set on the dashboard). */
+    val pitch_minute: Int? = null,
     val zoom_uploaded: Boolean = false, val reminder_mine: Int = 0, val sales_mine: Int = 0,
     val reminder_all: Int = 0, val sales_all: Int = 0, val attended: Int = 0,
 )

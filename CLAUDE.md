@@ -966,3 +966,12 @@ intelligence → Play Store launch.
 - Dashboard Leads page (managers): components/LeadUtilisation.tsx card (period All / 30 days / this
   month, clickable numbers → list filtered by person + utilisation, Reassign per row + "Reassign
   leads" modal); new list filter "Called or not".
+
+## Strict outcomes by call (v0.14.1, Nov 2026)
+- Owner: a dialled call with 2m29s talk still offered Didn't pick / Invalid number / Incoming not
+  available / Disconnected after intro. outcomesFor (app OutcomeScreen.kt, used by the outcome form +
+  pop-up) and web Desk now FILTER, not just sort: dialled 0 s → not_connected + DEAD_NUMBER only;
+  1–19 s → all (not_connected first; operator messages / quick hang-ups); ≥ 20 s → no not_connected,
+  no DEAD_NUMBER (not_in_service, invalid_number, r_invalid, r_out_of_service, incoming_na,
+  r_incoming_na); ≥ 60 s → also no SHORT_TALK_ONLY (disconnected, r_disconnected). Received calls
+  unchanged (no not_connected / dialled-only / shown_on outgoing).

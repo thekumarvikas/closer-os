@@ -321,6 +321,12 @@ function outcomesFor(list: Outcome[], direction: string, talk: number): Outcome[
   const dialledOnly = ['not_in_service', 'invalid_number', 'r_invalid', 'r_out_of_service', 'someone_else', 'r_someone_else']
   if (direction === 'incoming') return list.filter(o => !noContact(o) && !dialledOnly.includes(o.code) && o.shown_on !== 'outgoing').sort((a, b) => Number(invalid(a)) - Number(invalid(b)))
   list = list.filter(o => o.shown_on !== 'incoming')
-  if (!talk) { const l = list.filter(o => noContact(o) || invalid(o)); return l.length ? l : list }
-  return [...list].sort((a, b) => talk < 20 ? Number(!noContact(a)) - Number(!noContact(b)) : Number(noContact(a)) - Number(noContact(b)))
+  // Dialled, nobody answered: only "couldn't reach them" kinds.
+  const dead = ['not_in_service', 'invalid_number', 'r_invalid', 'r_out_of_service', 'incoming_na', 'r_incoming_na']
+  if (!talk) { const l = list.filter(o => noContact(o) || dead.includes(o.code)); return l.length ? l : list }
+  // A few seconds: everything, "couldn't reach" first.
+  if (talk < 20) return [...list].sort((a, b) => Number(!noContact(a)) - Number(!noContact(b)))
+  // They talked: no "couldn't reach" / dead-number kinds; "disconnected after intro" only under a minute.
+  const l = list.filter(o => !noContact(o) && !dead.includes(o.code) && !(talk >= 60 && ['disconnected', 'r_disconnected'].includes(o.code)))
+  return l.length ? l : list
 }

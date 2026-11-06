@@ -279,11 +279,19 @@ fun outcomesFor(all: List<Outcome>, purpose: String, direction: String?, duratio
         // "wrong number / not the right person" kinds last.
         direction == "incoming" -> list.filterNot { noContact(it) || it.code in DIALLED_ONLY || it.shown_on == "outgoing" }.sortedBy { if (invalid(it)) 1 else 0 }
         direction != "outgoing" -> list.filter { noContact(it) || invalid(it) }.ifEmpty { list }
-        talk == 0 -> list.filter { noContact(it) || invalid(it) }.ifEmpty { list }
+        // Dialled, nobody answered: only "couldn't reach them" kinds.
+        talk == 0 -> list.filter { noContact(it) || it.code in DEAD_NUMBER }.ifEmpty { list }
+        // A few seconds: could be an operator message or a quick hang-up — everything, "couldn't reach" first.
         talk < 20 -> list.sortedBy { if (noContact(it)) 0 else 1 }
-        else -> list.sortedBy { if (noContact(it)) 1 else 0 }
+        // They talked: nothing about not reaching them or a dead number; "disconnected after intro" only for short talks.
+        else -> list.filterNot { noContact(it) || it.code in DEAD_NUMBER || (talk >= 60 && it.code in SHORT_TALK_ONLY) }.ifEmpty { list }
     }
 }
+
+/** Dead / wrong-line numbers: only possible when the call didn't really connect. */
+val DEAD_NUMBER = setOf("not_in_service", "invalid_number", "r_invalid", "r_out_of_service", "incoming_na", "r_incoming_na")
+/** Only fits a short conversation. */
+val SHORT_TALK_ONLY = setOf("disconnected", "r_disconnected")
 
 /** One-tap next-call options: key, minutes from now, label. */
 val quickIns = listOf(Triple("30m", 30L, "In 30 min"), Triple("1h", 60L, "1 hour"), Triple("2h", 120L, "2 hours"), Triple("3h", 180L, "3 hours"))

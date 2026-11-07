@@ -1,5 +1,6 @@
 import LeadWebinars from '../components/LeadWebinars'
 import LeadShares from '../components/LeadShares'
+import { PlayButton } from '../components/CallLog'
 import { useEffect, useState } from 'react'
 import { X, Phone, Mail, MapPin, Building2, GraduationCap } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
@@ -194,7 +195,9 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
                 {calls.length === 0 ? <p className="text-sm text-slate-500">No calls yet. Calls made from the Closer OS app appear here.</p> : (
                   <ul className="space-y-1 text-sm">{calls.map(c => (
                     <li key={c.id} className="flex justify-between rounded-lg border border-slate-200 px-3 py-2">
-                      <span>{fmtDateTime(c.started_at, org)} · {c.direction} · {fmtDuration(c.duration_sec)} · {dir.nameOf(c.user_id)}</span>
+                      <span>{fmtDateTime(c.started_at, org)} · {c.direction} · {fmtDuration(c.duration_sec)} · {dir.nameOf(c.user_id)}
+                        {(c.recording_status === 'uploaded' || c.recording_status === 'expired') && <span className="block"><PlayButton call={c} status={c.recording_status} /></span>}
+                        {c.recording_status === 'missing' && <span className="block text-xs text-slate-400">No recording uploaded from the phone</span>}</span>
                       <span className="text-slate-600">{dir.outcomeOf(c.outcome_id)?.label ?? ''}</span>
                     </li>))}
                   </ul>

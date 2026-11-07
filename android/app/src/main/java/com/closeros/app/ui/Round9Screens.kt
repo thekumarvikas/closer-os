@@ -220,6 +220,7 @@ private fun WhoPicker(vm: AppViewModel, who: String, onWho: (String) -> Unit) {
 @Composable
 fun LeadWorkScreen(vm: AppViewModel) {
     BackHandler { vm.showLeadWork = false }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     val m = vm.membership ?: return
     var period by remember { mutableStateOf("month") }
     var who by remember { mutableStateOf(if (vm.isManager) "all" else "me") }
@@ -229,7 +230,13 @@ fun LeadWorkScreen(vm: AppViewModel) {
     val (from, to) = range(period)
     LaunchedEffect(period, who) {
         data = null; error = null
-        runCatching { Repo.leadWorkReport(m.org_id, users, from, to) as JsonObject }.onSuccess { data = it }.onFailure { error = it.message?.takeIf { m -> m.startsWith("No internet") } ?: "Couldn't load — check internet" }
+        runCatching {
+            // My own leads: counted on the phone (works offline, no server work). Team: from the server.
+            if (who == "me") kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.closeros.app.data.LocalReports.leadWork(ctx, com.closeros.app.data.Backend.uid, vm.outcomes, from, to,
+                    runCatching { java.time.ZoneId.of(m.organization.timezone) }.getOrDefault(java.time.ZoneId.systemDefault()))
+            } else Repo.leadWorkReport(m.org_id, users, from, to) as JsonObject
+        }.onSuccess { data = it }.onFailure { error = it.message?.takeIf { m -> m.startsWith("No internet") } ?: "Couldn't load — check internet" }
     }
     val scope = rememberCoroutineScope()
     fun open(title: String, kind: String, attempts: Int? = null, user: String? = null) = scope.launch {

@@ -605,17 +605,47 @@ private fun TemplateRow(vm: AppViewModel, name: String, preview: String, onDelet
 
 /** Plays a call recording inside the app (private link, 15 minutes). */
 @Composable
-fun RecordingPlayer(callId: String, path: String) {
+fun RecordingPlayer(callId: String, path: String?, status: String? = "uploaded") {
     val scope = rememberCoroutineScope()
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var player by remember { mutableStateOf<android.media.MediaPlayer?>(null) }
     var state by remember { mutableStateOf("idle") } // idle, loading, playing, paused, error
+    var errorText by remember { mutableStateOf("Couldn't play · Try again") }
     DisposableEffect(Unit) { onDispose { player?.release() } }
+    // Where the recording is: on this phone (recordings folder), already downloaded, or only on the server.
+    var where by remember(callId) { mutableStateOf<String?>(null) }   // phone | saved | server | gone
+    LaunchedEffect(callId, path, status) {
+        where = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            when {
+                com.closeros.app.calls.LocalRecordings.uri(ctx, callId) != null -> "phone"
+                path != null && java.io.File(java.io.File(ctx.cacheDir, "recordings"), path.substringAfterLast('/')).let { it.exists() && it.length() > 0 } -> "saved"
+                path != null && status == "uploaded" -> "server"
+                else -> "gone"
+            }
+        }
+    }
+    fun start(prepare: android.media.MediaPlayer.() -> Unit) {
+        runCatching {
+            player = android.media.MediaPlayer().apply {
+                prepare()
+                setOnPreparedListener { it.start(); state = "playing" }
+                setOnCompletionListener { state = "paused"; it.seekTo(0) }
+                setOnErrorListener { _, what, extra ->
+                    com.closeros.app.data.AppLog.error(ctx, "play recording", null, message = "player error $what/$extra · $where")
+                    state = "error"; true }
+                prepareAsync()
+            }
+        }.onFailure { state = "error"; com.closeros.app.data.AppLog.error(ctx, "play recording", it) }
+    }
+    if (where == "gone") {
+        Text("🎙 Recording deleted from this phone and the server", fontSize = 12.sp, color = Brand.muted, modifier = Modifier.padding(horizontal = 8.dp))
+        return
+    }
     Row(verticalAlignment = Alignment.CenterVertically) {
         when (state) {
-            "loading" -> Text("Loading…", fontSize = 13.sp, color = Brand.muted)
+            "loading" -> Text(if (where == "server") "Downloading…" else "Loading…", fontSize = 13.sp, color = Brand.muted)
             "error" -> TextButton(onClick = { player?.release(); player = null; state = "idle" }, contentPadding = PaddingValues(horizontal = 8.dp)) {
-                Text("Couldn't play · Try again", fontSize = 13.sp, color = Brand.red) }
+                Text(errorText, fontSize = 13.sp, color = Brand.red) }
             else -> TextButton(onClick = {
                 val p = player
                 when {
@@ -624,26 +654,33 @@ fun RecordingPlayer(callId: String, path: String) {
                     else -> {
                         state = "loading"
                         scope.launch {
+                            // 1) The phone's own recording file — no internet needed, nothing downloaded.
+                            val local = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.closeros.app.calls.LocalRecordings.uri(ctx, callId) }
+                            if (local != null) { runCatching { com.closeros.app.data.Repo.logRecordingPlay(callId) }; start { setDataSource(ctx, local) }; return@launch }
+                            // 2) Not on the phone any more: download the copy kept on the server (if it hasn't been deleted there).
+                            if (path == null) { state = "error"; errorText = "Not on this phone or the server"; return@launch }
                             runCatching { com.closeros.app.data.Repo.recordingFile(ctx.cacheDir, callId, path) }.onSuccess { file ->
-                                runCatching {
-                                    player = android.media.MediaPlayer().apply {
-                                        setDataSource(file.absolutePath)
-                                        setOnPreparedListener { it.start(); state = "playing" }
-                                        setOnCompletionListener { state = "paused"; it.seekTo(0) }
-                                        setOnErrorListener { _, what, extra ->
-                                            com.closeros.app.data.AppLog.error(ctx, "play recording", null, message = "player error $what/$extra · ${file.name} · ${file.length()} bytes")
-                                            state = "error"; true }
-                                        prepareAsync()
-                                    }
-                                }.onFailure { state = "error"; com.closeros.app.data.AppLog.error(ctx, "play recording", it) }
-                            }.onFailure { state = "error"; com.closeros.app.data.AppLog.error(ctx, "play recording", it) }
+                                where = "saved"; start { setDataSource(file.absolutePath) }
+                            }.onFailure {
+                                state = "error"
+                                errorText = when {
+                                    it.message?.contains("No internet") == true -> "No internet · Try again"
+                                    it.message?.contains("not found", true) == true || it.message?.contains("404") == true -> "Deleted from the server"
+                                    else -> "Couldn't download · Try again"
+                                }
+                                com.closeros.app.data.AppLog.error(ctx, "play recording", it)
+                            }
                         }
                     }
                 }
             }, contentPadding = PaddingValues(horizontal = 8.dp)) {
-                Text(when (state) { "playing" -> "❚❚ Pause"; "paused" -> "▶ Resume"; else -> "▶ Play recording" }, fontSize = 13.sp, color = Brand.primary)
+                Text(when (state) {
+                    "playing" -> "❚❚ Pause"; "paused" -> "▶ Resume"
+                    else -> when (where) { "server" -> "⬇ Download & play recording"; else -> "▶ Play recording" }
+                }, fontSize = 13.sp, color = Brand.primary)
             }
         }
+        if (where == "phone" && state == "idle") Text("on this phone", fontSize = 11.sp, color = Brand.muted)
     }
 }
 

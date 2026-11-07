@@ -10,6 +10,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -185,6 +186,38 @@ object LocalReports {
             })
             put("by_rep", JsonArray(emptyList()))
             put("note", JsonNull)
+        }
+    }
+
+    /** Same shape as lead_work_report for MY leads, from the lead copy on the phone (period = when assigned). */
+    fun leadWork(ctx: Context, uid: String?, outcomeList: List<Outcome>, from: java.time.LocalDate?, to: java.time.LocalDate?, zone: ZoneId): JsonObject {
+        val cat = outcomeList.associate { it.id to it.category }
+        val a = from?.atStartOfDay(zone)?.toInstant(); val b = to?.plusDays(1)?.atStartOfDay(zone)?.toInstant()
+        val mine = LocalLeads.all(ctx).filter { l -> (uid == null || l.assigned_to == uid) &&
+            (a == null && b == null || l.assigned_at?.let { s -> runCatching { parseInstant(s) }.getOrNull() }?.let { t -> (a == null || !t.isBefore(a)) && (b == null || t.isBefore(b)) } == true) }
+        fun junk(l: Lead) = l.do_not_call || cat[l.last_outcome_id] == "invalid"
+        fun avgTalkDial(ls: List<Lead>) = ls.mapNotNull { it.first_talk_dial }.takeIf { it.isNotEmpty() }?.average()?.let { kotlin.math.round(it * 10) / 10 }
+        fun counts(ls: List<Lead>) = buildJsonObject {
+            put("assigned", ls.size); put("dialled", ls.count { it.dial_count > 0 }); put("never", ls.count { it.dial_count == 0 })
+            put("conversation", ls.count { it.has_talked }); put("not_reached", ls.count { it.dial_count > 0 && !it.has_talked && !junk(it) })
+            put("junk", ls.count { junk(it) }); avgTalkDial(ls)?.let { put("avg_dials_to_talk", it) } ?: put("avg_dials_to_talk", JsonNull)
+        }
+        return buildJsonObject {
+            put("totals", counts(mine))
+            put("attempts", buildJsonArray {
+                mine.groupBy { minOf(it.dial_count, 6) }.toSortedMap().forEach { (n, ls) -> add(buildJsonObject {
+                    put("n", n); put("leads", ls.size)
+                    put("talked_on", ls.count { it.first_talk_dial == n || (n == 6 && (it.first_talk_dial ?: 0) >= 6) })
+                    put("talked", ls.count { it.has_talked }); put("not_talked", ls.count { !it.has_talked && !junk(it) }); put("junk", ls.count { junk(it) })
+                }) }
+            })
+            put("people", buildJsonArray {
+                if (mine.isNotEmpty()) add(buildJsonObject {
+                    put("user_id", uid ?: ""); put("name", "Me")
+                    counts(mine).forEach { (k, v) -> put(k, v) }
+                })
+            })
+            put("counted_on_phone", true)
         }
     }
 }

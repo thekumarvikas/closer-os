@@ -28,6 +28,7 @@ export interface Call {
   id: string; lead_id: string | null; user_id: string; direction: 'outgoing' | 'incoming' | 'missed' | 'rejected'
   phone: string; started_at: string; duration_sec: number; sim_slot: number | null; sim_label: string | null
   outcome_id: string | null; outcome_data: Record<string, unknown>; notes: string | null; recording_status: string
+  recording_path?: string | null
 }
 export interface FollowUp {
   id: string; lead_id: string; assigned_to: string; due_at: string; status: 'pending' | 'done' | 'cancelled'

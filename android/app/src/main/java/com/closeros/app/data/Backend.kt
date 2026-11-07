@@ -116,6 +116,8 @@ data class LeadFact(val key: String, val label: String, val options: List<String
     val shared_with: List<String> = emptyList(),
     /** Working seconds from the lead reaching the rep to the first call (speed to lead). */
     val response_sec: Int? = null,
+    /** Which dial first got a conversation (for "dials it took"). */
+    val first_talk_dial: Int? = null,
     val stage_id: String? = null, val deal_value: Double? = null, val notes: String? = null,
     val last_call_at: String? = null, val last_outcome_id: String? = null, val next_follow_up_at: String? = null,
     val do_not_call: Boolean = false, val last_connected_at: String? = null, val key_facts: String? = null,
@@ -530,6 +532,10 @@ object Repo {
         db.rpc("set_do_not_call", buildJsonObject { put("p_lead", leadId); put("p_value", value) })
     }
 
+    /** Per-company change counters of management content (playbook, templates, files, outcomes, groups, webinars, targets, settings). */
+    suspend fun contentVersions(orgId: String): Map<String, Long> =
+        json.decodeFromString<Map<String, Long>>(Backend.client.postgrest.rpc("content_versions", buildJsonObject { put("p_org", orgId) }).data.ifBlank { "{}" }.let { if (it == "null") "{}" else it })
+
     /** Active teammates (to share a lead with). */
     suspend fun orgPeople(orgId: String): List<Person> =
         json.decodeFromString(rpcR("org_people", buildJsonObject { put("p_org", orgId) }).data)
@@ -596,6 +602,9 @@ object Repo {
         }
         return f
     }
+
+    /** Every play is written to the audit log (also when played from the phone's own file). */
+    suspend fun logRecordingPlay(callId: String) { if (Net.isOnline) db.rpc("log_recording_access", buildJsonObject { put("p_call", callId); put("p_action", "play") }) }
 
     suspend fun recordingUrl(callId: String, path: String): String {
         runCatching { db.rpc("log_recording_access", buildJsonObject { put("p_call", callId); put("p_action", "play") }) }

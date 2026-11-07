@@ -1032,3 +1032,28 @@ intelligence → Play Store launch.
   call_report / outcome_report get work_mem 24MB (owner 30 d: 2.8 → 2.2 s). 10 reps loading Home at
   once: 4.3 s each (vs 0.6 s alone) — 2 shared cores are the limit. Lead import is chunked by 1,000
   (~4 s per chunk). Biggest steady per-rep DB load is the 30-min Prefetch of reports.
+
+## Lighter background sync + recordings from the phone (v0.16.0, migration 0062, Nov 2026)
+- Owner: copy management content only when management changes it; the phone is the source of its own
+  data, so don't download it back. calls/Prefetch.kt rewritten (every 15 min while online, cheap):
+  (1) content_versions(org) → per-company counters in org_content_versions bumped by row triggers
+  t_bump_content on playbook_items, message_templates, company_files, profession_categories,
+  call_outcomes, batches, rep_targets/org_holidays/member_leave ('targets') and organizations settings
+  ('settings'); the phone fetches only keys whose counter moved (LocalDb "content_v"), everything once a
+  day (prefs content_full_ms); targets for my 4 report periods also once per new day (targets_day).
+  (2) My calls' outcomes saved elsewhere: only calls with updated_at > prefs oc_since (index
+  calls_user_updated). REMOVED from background: my call/outcome/follow-up reports, lead status, lead
+  work, focus list, past follow-ups, leaderboard, manager team reports, recording downloads.
+  LocalReports.leadWork() = lead_work_report shape for "Me" (Lead.first_talk_dial; LeadIndex cursor v8);
+  LeadWorkScreen "me" uses it.
+- Recordings: LocalRecordings (calls/RecordingSync.kt, LocalDb "rec_local" callId → SAF uri, newest
+  3,000) filled when a file is matched/uploaded (also maps calls uploaded by older versions).
+  RecordingPlayer(callId, path?, status?): plays the phone's own file ("on this phone"); if gone,
+  "⬇ Download & play recording" from the server (cached); expired/missing → "Recording deleted…".
+  Repo.logRecordingPlay audits phone plays. RecordingSync logs a once-a-day "recordings / no match"
+  info (masked file names + call times) to app_errors when files exist but none match.
+- log_recording_access allows anyone who can see the lead (shared / reassigned).
+- Dashboard: PlayButton is a clear green "▶ Play" with Download (signed URL, audited 'download'),
+  "Recording deleted" for expired; also in the LeadDrawer call list ("No recording uploaded" when missing).
+- Recording facts (Nov 7): only 6 uploaded vs 113 missing — Samsung S24 FE never chose the folder,
+  11T Pro uses a third-party dialer (no recorder), K20 Pro finds 8 files but matched 0 (diagnostic added).

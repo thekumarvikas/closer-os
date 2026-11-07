@@ -14,6 +14,7 @@ import kotlinx.serialization.json.put
 import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlin.math.abs
+import kotlinx.serialization.builtins.serializer
 
 /**
  * Finds the phone's own call recordings (in the folder the rep picked once) and uploads each one
@@ -21,6 +22,27 @@ import kotlin.math.abs
  * recordings as normal files (Xiaomi/MIUI dialer, Samsung, Vivo, many Realme/Oppo…). Google's
  * Phone app keeps recordings private, so nothing can be picked up on those phones.
  */
+/** Which file in the phone's recordings folder belongs to which call — so recordings play from the phone itself. */
+object LocalRecordings {
+    private const val KEY = "rec_local"
+    private val ser = kotlinx.serialization.builtins.MapSerializer(String.serializer(), String.serializer())
+    private val lock = Any()
+    private fun read(ctx: Context): Map<String, String> = com.closeros.app.data.LocalDb.get(ctx).get(KEY)
+        ?.let { runCatching { com.closeros.app.data.json.decodeFromString(ser, it) }.getOrNull() } ?: emptyMap()
+    fun put(ctx: Context, callId: String, uri: Uri) = synchronized(lock) {
+        val m = read(ctx).toMutableMap(); m[callId] = uri.toString()
+        // Keep the newest 3,000.
+        val trimmed = if (m.size > 3000) m.entries.toList().takeLast(3000).associate { it.key to it.value } else m
+        com.closeros.app.data.LocalDb.get(ctx).put(KEY, com.closeros.app.data.json.encodeToString(ser, trimmed))
+    }
+    fun known(ctx: Context): Set<String> = read(ctx).keys
+    /** The recording on this phone, if the file is still there and readable. */
+    fun uri(ctx: Context, callId: String): Uri? {
+        val u = read(ctx)[callId]?.let(Uri::parse) ?: return null
+        return runCatching { ctx.contentResolver.openFileDescriptor(u, "r")?.use { true } }.getOrNull()?.let { u }
+    }
+}
+
 object RecordingSync {
     data class Result(val filesFound: Int = 0, val callsChecked: Int = 0, val matched: Int = 0, val uploaded: Int = 0, val error: String? = null)
 
@@ -103,7 +125,9 @@ object RecordingSync {
         val since = System.currentTimeMillis() - days * 86_400_000L
         val calls = PhoneCalls.readLog(ctx, since).filter { it.durationSec > 0 && (it.direction == "outgoing" || it.direction == "incoming") }
         val done = store.uploadedRecordings
-        val todo = calls.filter { it.id !in done }
+        val mapped = LocalRecordings.known(ctx)
+        // Calls uploaded by older versions: also remember their phone file (no upload), so they play from the phone.
+        val todo = calls.filter { it.id !in done || it.id !in mapped }
         val files = try { listFiles(ctx, tree, since - 86_400_000L).toMutableList() } catch (e: Exception) { return Result(error = e.message) }
         var matched = 0; var uploaded = 0; var lastError: String? = null
         for (c in todo) {
@@ -118,6 +142,8 @@ object RecordingSync {
                 f to (if (numberOk) d / 10 else d)
             }.minByOrNull { it.second }?.first ?: continue
             matched++
+            LocalRecordings.put(ctx, c.id, best.uri)
+            if (c.id in done) { files.remove(best); continue }
             val ext = best.name.substringAfterLast('.', "m4a").lowercase()
             val path = "$orgId/$uid/${c.id}.$ext"
             runCatching {
@@ -127,6 +153,16 @@ object RecordingSync {
              .onFailure { lastError = (it.message ?: it.toString()).take(200) }
         }
         store.recordingsUploaded += uploaded
+        // Nothing matched although there are files and calls: note what the names and times look like (for support).
+        val diagP = ctx.getSharedPreferences("closeros", Context.MODE_PRIVATE)
+        if (matched == 0 && files.isNotEmpty() && todo.isNotEmpty() && System.currentTimeMillis() - diagP.getLong("rec_diag_ms", 0) > 86_400_000L) runCatching {
+            diagP.edit().putLong("rec_diag_ms", System.currentTimeMillis()).apply()
+            val zone = ZoneId.systemDefault(); val fmt = java.time.format.DateTimeFormatter.ofPattern("dd/MM HH:mm:ss")
+            fun t(ms: Long) = java.time.Instant.ofEpochMilli(ms).atZone(zone).format(fmt)
+            com.closeros.app.data.AppLog.error(ctx, "recordings", null, kind = "info", message = "no match · files: " +
+                files.sortedByDescending { it.modified }.take(5).joinToString(" | ") { "${it.name.replace(Regex("\\d{6,}")) { m -> "…" + m.value.takeLast(4) }} (mod ${t(it.modified)}, name ${it.nameTime?.let(::t) ?: "-"})" } +
+                " · calls: " + todo.take(4).joinToString(" | ") { "${t(it.startedAtMs)} ${it.durationSec}s …${it.phone.takeLast(4)}" })
+        }
         return Result(files.size + uploaded, calls.size, matched, uploaded,
             lastError ?: if (files.isEmpty() && uploaded == 0) "No recording files found in the folder for the last $days days" else null)
     }

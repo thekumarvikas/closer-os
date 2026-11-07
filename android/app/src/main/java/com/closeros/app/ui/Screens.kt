@@ -218,7 +218,7 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
                     }
                     Column(horizontalAlignment = Alignment.End) {
                         Text(outcomes[c.outcome_id]?.label ?: "", fontSize = 13.sp, color = Brand.primary)
-                        if (c.recording_status == "uploaded" && c.recording_path != null) RecordingPlayer(c.id, c.recording_path)
+                        if (c.recording_path != null || c.recording_status == "expired" || com.closeros.app.calls.LocalRecordings.known(ctx).contains(c.id)) RecordingPlayer(c.id, c.recording_path, c.recording_status)
                         else if (c.recording_status == "missing") Text("No recording", fontSize = 11.sp, color = Brand.red)
                     }
                 }

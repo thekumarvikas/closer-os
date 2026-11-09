@@ -1062,8 +1062,7 @@ intelligence → Play Store launch.
 - REVISED: keep "Lead" everywhere (owner withdrew the "Client" rename). Only change: the call log's
   "Contact" column (web CallLog.tsx header + CSV "Contact" / "Contact number") → "Lead" / "Lead number".
 - "Person" → "Team member" on the dashboard (reports, utilisation, response time, filters, CSV).
-- Lead journey labels (proposed): New lead · Trying to reach · Prospect · Hot prospect · Customer ·
-  Not now · Not a fit.
+- Lead journey labels: DROPPED — owner doesn't want lead stages changed.
 - Call colours (app + dashboard, with a colour key): Dialled answered = dark green; Dialled not picked
   up = light green; Received = blue; Missed = red; Declined/rejected = dark red; WhatsApp = same colour
   + small "WA" badge.

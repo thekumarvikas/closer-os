@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useState } from 'react'
 import { Download, ChevronLeft, ChevronRight, Search, MicOff, PhoneCall, Play } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import type { Directory } from '../lib/directory'
@@ -7,6 +7,7 @@ import { fmtDateTime, fmtPhone } from '../lib/format'
 import type { Organization } from '../lib/types'
 import { Badge, Button, Card, Empty, ErrorBox, Spinner } from './ui'
 import { dur } from './terms'
+import AudioPlayer from './AudioPlayer'
 import { CallColorKey, CallType, missingReason, type RecDevice } from './CallColors'
 
 export interface CallLogFilters { from?: string; to?: string; users: string[]; dir?: 'all' | 'out' | 'in'; ch?: 'all' | 'phone' | 'whatsapp' } // ISO instants; empty = all time
@@ -40,6 +41,7 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
   const setOc = setOutcome ?? setLocalOutcome
   const [error, setError] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
+  const [playing, setPlaying] = useState<string | null>(null)
   const [devices, setDevices] = useState<Map<string, RecDevice>>(new Map())
   useEffect(() => {
     // Each team member's latest phone report: explains the red mic (why a call has no recording).
@@ -126,21 +128,22 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
               <th className="th w-[18%]">Outcome</th><th className="th w-[17%]">Team member</th><th className="th w-[13%]">Dialled from</th>
             </tr></thead>
             <tbody className="divide-y divide-slate-100">
-              {rows.map(c => (
-                <tr key={c.id} className="align-top hover:bg-slate-50">
+              {rows.map(c => (<Fragment key={c.id}>
+                <tr className="align-top hover:bg-slate-50">
                   <td className="px-3 py-2 text-slate-600">{fmtDateTime(c.started_at, org)}</td>
                   <td className="truncate px-3 py-2">{c.lead ? <span className="font-medium">{c.lead.name || 'No name'}</span> : c.contact_name ? <span className="font-medium">{c.contact_name}</span> : null}
                     <span className={`block truncate ${c.lead || c.contact_name ? 'text-xs text-slate-500' : ''}`}>{fmtPhone(c.phone)}</span></td>
                   <td className="px-3 py-2"><CallType direction={c.direction} duration={c.duration_sec} channel={c.channel} />
                     {c.recording_status === 'missing' ? <span title={missingReason(devices.get(c.user_id))} className="ml-1 inline-block cursor-help"><MicOff className="inline h-3 w-3 text-red-500" /></span> : null}
-                    {(c.recording_status === 'uploaded' || c.recording_status === 'expired') && <PlayButton call={c} status={c.recording_status} />}</td>
+                    {(c.recording_status === 'uploaded' || c.recording_status === 'expired') && <PlayButton call={c} status={c.recording_status} open={playing === c.id} onPlay={() => setPlaying(p => p === c.id ? null : c.id)} />}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{c.duration_sec ? dur(c.duration_sec) : '—'}</td>
                   <td className="px-3 py-2"><span className="block truncate">{dir.outcomeOf(c.outcome_id)?.label ?? <span className="text-slate-400">—</span>}</span>
                     {c.notes && <span className="block truncate text-xs text-slate-500" title={c.notes}>{c.notes}</span>}</td>
                   <td className="truncate px-3 py-2">{dir.nameOf(c.user_id)}{dir.phoneOf(c.user_id) && <span className="block truncate text-xs text-slate-500">{dir.phoneOf(c.user_id)}</span>}</td>
                   <td className="truncate px-3 py-2 text-slate-600">{from(c)}</td>
                 </tr>
-              ))}
+                {playing === c.id && <tr><td colSpan={7} className="bg-emerald-50/50 px-3 py-2"><RecordingPlayer call={c} onClose={() => setPlaying(null)} /></td></tr>}
+              </Fragment>))}
             </tbody>
           </table>
         )}
@@ -160,37 +163,46 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
   )
 }
 
-/** Plays a recording through a short-lived private link (every play is written to the audit log), with a Download link. */
-export function PlayButton({ call, status }: { call: { id: string; recording_path?: string | null }; status?: string | null }) {
+async function signedRecording(path: string, download: boolean): Promise<{ url?: string; err?: string }> {
+  const { data, error } = await supabase.storage.from('recordings').createSignedUrl(path, 900, download ? { download: true } : undefined)
+  if (error || !data?.signedUrl) return { err: /not.?found/i.test(error?.message ?? '') ? 'Deleted from the server' : 'Couldn\'t open the recording' }
+  return { url: data.signedUrl }
+}
+
+/** Loads a short-lived private link (every play / download is written to the audit log) and shows the player. */
+export function RecordingPlayer({ call, onClose }: { call: { id: string; recording_path?: string | null }; onClose?: () => void }) {
   const [url, setUrl] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  useEffect(() => {
+    if (!call.recording_path) return
+    let alive = true
+    supabase.rpc('log_recording_access', { p_call: call.id, p_action: 'play' })
+    signedRecording(call.recording_path, false).then(r => { if (!alive) return; if (r.url) setUrl(r.url); else setErr(r.err!) })
+    return () => { alive = false }
+  }, [call.id, call.recording_path])
+  if (err) return <span className="text-xs text-red-600">{err}</span>
+  if (!url) return <span className="text-xs text-slate-500">Loading recording…</span>
+  return <AudioPlayer src={url} onClose={onClose} onDownload={async () => {
+    await supabase.rpc('log_recording_access', { p_call: call.id, p_action: 'download' })
+    const r = await signedRecording(call.recording_path!, true); if (r.url) window.location.href = r.url; else setErr(r.err!)
+  }} />
+}
+
+/** Green "▶ Play" button. With onPlay the parent shows the player (full-width row in the call log);
+ *  without it the player opens right below the button. */
+export function PlayButton({ call, status, onPlay, open }: {
+  call: { id: string; recording_path?: string | null }; status?: string | null; onPlay?: () => void; open?: boolean
+}) {
+  const [show, setShow] = useState(false)
   if (status === 'expired') return <span className="ml-1 text-xs text-slate-400" title="Older than the company keeps recordings">Recording deleted</span>
   if (!call.recording_path) return null
-  async function link(download: boolean) {
-    const { data, error } = await supabase.storage.from('recordings').createSignedUrl(call.recording_path!, 900, download ? { download: true } : undefined)
-    if (error || !data?.signedUrl) { setErr(/not.?found/i.test(error?.message ?? '') ? 'Deleted from the server' : 'Couldn\'t open the recording'); return null }
-    return data.signedUrl
-  }
-  if (url) return (
-    <span className="mt-1 flex items-center gap-2">
-      <audio src={url} controls autoPlay className="h-8 w-full max-w-[240px]" />
-      <button className="text-xs text-brand-700 hover:underline" onClick={async () => {
-        await supabase.rpc('log_recording_access', { p_call: call.id, p_action: 'download' })
-        const u = await link(true); if (u) window.location.href = u
-      }}>Download</button>
-    </span>
-  )
+  const isOpen = onPlay ? open : show
   return (
-    <span className="ml-1 inline-flex items-center gap-1">
-      <button disabled={busy} title="Play recording" className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
-        onClick={async () => {
-          setBusy(true); setErr(null)
-          await supabase.rpc('log_recording_access', { p_call: call.id, p_action: 'play' })
-          const u = await link(false)
-          setBusy(false); if (u) setUrl(u)
-        }}><Play className="h-3 w-3" /> {busy ? 'Loading…' : 'Play'}</button>
-      {err && <span className="text-xs text-red-600">{err}</span>}
-    </span>
+    <>
+      <button title={isOpen ? 'Player open' : 'Play recording'}
+        className={`ml-1 inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold ${isOpen ? 'bg-emerald-100 text-emerald-800' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
+        onClick={() => (onPlay ? onPlay() : setShow(v => !v))}><Play className="h-3 w-3" /> Play</button>
+      {!onPlay && show && <div className="mt-1.5 w-full"><RecordingPlayer call={call} onClose={() => setShow(false)} /></div>}
+    </>
   )
 }

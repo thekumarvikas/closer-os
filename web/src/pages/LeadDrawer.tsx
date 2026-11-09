@@ -1,6 +1,6 @@
 import LeadWebinars from '../components/LeadWebinars'
 import LeadShares from '../components/LeadShares'
-import { PlayButton } from '../components/CallLog'
+import { PlayButton, RecordingPlayer } from '../components/CallLog'
 import { CallColorKey, CallType } from '../components/CallColors'
 import { useEffect, useState } from 'react'
 import { X, Phone, Mail, MapPin, Building2, GraduationCap } from 'lucide-react'
@@ -20,6 +20,7 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
   const { org, isManager } = useOrg()
   const [lead, setLead] = useState<Lead | null>(null)
   const [calls, setCalls] = useState<Call[]>([])
+  const [playing, setPlaying] = useState<string | null>(null)
   const [notes, setNotes] = useState<NoteEntry[]>([])
   const [facts, setFacts] = useState<string | null>(null)
   const [followUps, setFollowUps] = useState<FollowUp[]>([])
@@ -196,11 +197,12 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
                 {calls.length > 0 && <CallColorKey className="mb-2" />}
                 {calls.length === 0 ? <p className="text-sm text-slate-500">No calls yet. Calls made from the Closer OS app appear here.</p> : (
                   <ul className="space-y-1 text-sm">{calls.map(c => (
-                    <li key={c.id} className="flex justify-between rounded-lg border border-slate-200 px-3 py-2">
+                    <li key={c.id} className="flex flex-wrap justify-between gap-x-2 rounded-lg border border-slate-200 px-3 py-2">
                       <span>{fmtDateTime(c.started_at, org)} · <CallType direction={c.direction} duration={c.duration_sec} channel={(c as { channel?: string }).channel} /> · {fmtDuration(c.duration_sec)} · {dir.nameOf(c.user_id)}
-                        {(c.recording_status === 'uploaded' || c.recording_status === 'expired') && <span className="block"><PlayButton call={c} status={c.recording_status} /></span>}
+                        {(c.recording_status === 'uploaded' || c.recording_status === 'expired') && <span className="block"><PlayButton call={c} status={c.recording_status} open={playing === c.id} onPlay={() => setPlaying(p => p === c.id ? null : c.id)} /></span>}
                         {c.recording_status === 'missing' && <span className="block text-xs text-slate-400">No recording uploaded from the phone</span>}</span>
                       <span className="text-slate-600">{dir.outcomeOf(c.outcome_id)?.label ?? ''}</span>
+                      {playing === c.id && <div className="mt-2 w-full"><RecordingPlayer call={c} onClose={() => setPlaying(null)} /></div>}
                     </li>))}
                   </ul>
                 )}

@@ -1079,6 +1079,10 @@ intelligence → Play Store launch.
   call. Battery/Autostart setup texts say "Required". Home sync line warns after 1 h ("Not synced for
   N h — turn on Battery 'No restrictions'"). Dashboard Team → phones not synced for > 1 h banner +
   "Last synced" column (device_status.updated_at).
+- Recording player (owner screenshot: browser <audio controls> squeezed in the Type column showed only
+  "⋮"): components/AudioPlayer.tsx custom player (play/pause, ±10 s on ≥ sm, seek bar, time, 1–2× speed,
+  download, close). CallLog + LeadDrawer open it in a full-width row under the call (PlayButton onPlay/open);
+  RecordingPlayer(call) signs the URL + audits. Checked with Playwright at 1280 / 420 / 390 px.
 - Still pending: Firebase push (needs owner's Firebase project); Cloudflare Pages move (optional).
 
 ## Owner decisions — wording + call colours (Nov 9, 2026) — BUILT in v0.17.0 (see Round 11)

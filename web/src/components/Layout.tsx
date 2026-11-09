@@ -10,7 +10,7 @@ const nav = [
   { to: '/desk', label: 'My desk', icon: Headphones },
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
-  { to: '/webinars', label: 'Events & Batches', icon: Video },
+  { to: '/webinars', label: 'Webinars / Sales Events', icon: Video },
   { to: '/leads', label: 'Leads', icon: Users },
   { to: '/lead-sources', label: 'Lead sources', icon: Plug, manager: true },
   { to: '/calls', label: 'Calls', icon: PhoneCall },

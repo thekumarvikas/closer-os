@@ -433,6 +433,19 @@ object Repo {
         runCatching { setKeyFactsNow(leadId, text) }.onFailure { e -> if (Net.isNetworkError(e)) Ops.facts(AppCtx.ctx, leadId, text) else throw e }
     }
 
+    /** Edit a lead's details (name, number, email, company, profession, city, state, group, own fields).
+     *  Offline: queued and sent later; returns false when queued. */
+    suspend fun updateLeadDetails(leadId: String, changes: JsonObject): Boolean {
+        if (!Net.isOnline) { Ops.add(AppCtx.ctx, "edit", buildJsonObject { put("lead", leadId); put("p", changes) }); return false }
+        return runCatching { updateLeadDetailsNow(leadId, changes); true }.getOrElse { e ->
+            if (Net.isNetworkError(e)) { Ops.add(AppCtx.ctx, "edit", buildJsonObject { put("lead", leadId); put("p", changes) }); false } else throw e
+        }
+    }
+
+    suspend fun updateLeadDetailsNow(leadId: String, changes: JsonObject) {
+        db.rpc("update_lead_details", buildJsonObject { put("p_lead", leadId); put("p", changes) })
+    }
+
     suspend fun setKeyFactsNow(leadId: String, text: String) {
         db.rpc("set_key_facts", buildJsonObject { put("p_lead", leadId); put("p_text", text) })
     }

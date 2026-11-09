@@ -35,7 +35,7 @@ export default function Batches() {
 
   return (
     <>
-      <PageHeader title="Events & Batches" subtitle="Webinars, events or any group of leads — each with its own reminder and sales calls"
+      <PageHeader title="Webinars / Sales Events" subtitle="Webinars, sales events or any group of leads — each with its own reminder and sales calls"
         actions={<>
           <Button variant="ghost" onClick={() => setArchived(!archived)}>{archived ? 'Show active' : 'Show archived'}</Button>
           {isManager && <Button onClick={() => setShowNew(true)}><Plus className="h-4 w-4" /> New</Button>}
@@ -48,7 +48,7 @@ export default function Batches() {
       </div>
       {view === 'compare' ? <Compare /> : <Card className="overflow-x-auto">
         {!rows ? <Spinner /> : rows.length === 0 ? (
-          <Empty icon={<Video className="h-6 w-6" />} title={archived ? 'Nothing archived' : 'No webinars, events or batches yet'}
+          <Empty icon={<Video className="h-6 w-6" />} title={archived ? 'Nothing archived' : 'No webinars or sales events yet'}
             text="Create one, add its registrations or leads, then (for webinars) upload the Zoom report afterwards."
             action={isManager && !archived ? <Button onClick={() => setShowNew(true)}><Plus className="h-4 w-4" /> New</Button> : undefined} />
         ) : (
@@ -63,7 +63,7 @@ export default function Batches() {
                 return (
                   <tr key={b.id} className="hover:bg-slate-50">
                     <td className="td"><Link to={`/webinars/${b.id}`} className="font-medium text-brand-700 hover:underline">{b.name}</Link></td>
-                    <td className="td capitalize">{b.kind ?? 'webinar'}</td>
+                    <td className="td">{kindLabel(b.kind)}</td>
                     <td className="td text-slate-600">{fmtDateTime(b.webinar_at, org)} {!past && <Badge color="blue">Upcoming</Badge>}</td>
                     <td className="td tabular-nums">{b.leads.toLocaleString('en-IN')}</td>
                     <td className="td tabular-nums">{b.zoom_uploaded_at ? `${b.attended.toLocaleString('en-IN')} (${b.leads ? Math.round(b.attended / b.leads * 100) : 0}%)` : '—'}</td>
@@ -96,7 +96,7 @@ export function BatchForm({ batch, onClose, onSaved }: { batch?: Batch; onClose:
   const [hot, setHot] = useState(batch?.hot_minutes ?? 60)
   const [pitch, setPitch] = useState<string>(batch?.pitch_minute != null ? String(batch.pitch_minute) : '')
   const [target, setTarget] = useState(batch?.guided_target_pct ?? 70)
-  const [holdout, setHoldout] = useState(batch?.holdout_pct ?? 0)
+  const holdout = batch?.holdout_pct ?? 0   // test group option removed from the form (owner); old batches keep theirs
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -118,14 +118,14 @@ export function BatchForm({ batch, onClose, onSaved }: { batch?: Batch; onClose:
   }
 
   return (
-    <Modal open onClose={onClose} title={batch ? 'Edit' : 'New webinar, event or batch'} footer={<>
+    <Modal open onClose={onClose} title={batch ? 'Edit' : 'New webinar or sales event'} footer={<>
       <Button variant="secondary" onClick={onClose}>Cancel</Button>
       <Button type="submit" form="batch-form" loading={busy}>Save</Button>
     </>}>
       <form id="batch-form" onSubmit={save} className="grid gap-3 sm:grid-cols-2">
         <Field label="Type">
           <select className="input" value={kind} onChange={e => setKind(e.target.value as typeof kind)}>
-            <option value="webinar">Webinar</option><option value="event">Event</option><option value="batch">Batch</option>
+            <option value="webinar">Webinar</option><option value="event">Sales event</option><option value="batch">Batch</option>
           </select>
         </Field>
         <Field label="Name"><input className="input" required value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Webinar 4 Oct 2026" autoFocus /></Field>
@@ -134,14 +134,6 @@ export function BatchForm({ batch, onClose, onSaved }: { batch?: Batch; onClose:
         <Field label="Pitch / payment link shown at (minute)" hint="e.g. 80. People who watched this long saw the pitch. Leave empty if not known yet.">
           <input className="input" type="number" min={0} value={pitch} onChange={e => setPitch(e.target.value)} placeholder="e.g. 80" /></Field>
         <Field label="Guided target (%)"><input className="input" type="number" min={0} max={100} value={target} onChange={e => setTarget(Number(e.target.value))} /></Field>
-        <div className="sm:col-span-2">
-          <Field label="Test group (optional)" hint="Leaves a random share of leads out of reminder calls, to measure how much reminder calls really add. Most teams keep this off.">
-            <select className="input" value={holdout} onChange={e => setHoldout(Number(e.target.value))}>
-              <option value={0}>Off — call every lead</option>
-              {[5, 10, 15, 20].map(n => <option key={n} value={n}>Leave {n}% of leads uncalled</option>)}
-            </select>
-          </Field>
-        </div>
         <div className="sm:col-span-2"><ErrorBox error={error} /></div>
       </form>
     </Modal>
@@ -181,7 +173,7 @@ function Compare() {
             {rows.map(r => (
               <tr key={r.id} className="align-top hover:bg-slate-50">
                 <td className="px-3 py-2"><Link to={`/webinars/${r.id}`} className="font-medium text-brand-700 hover:underline">{r.name}</Link>
-                  <span className="block text-xs capitalize text-slate-500">{r.kind} · {fmtDateTime(r.at, org).split(' ')[0]}</span></td>
+                  <span className="block text-xs text-slate-500">{kindLabel(r.kind)} · {fmtDateTime(r.at, org).split(' ')[0]}</span></td>
                 <td className="px-3 py-2 tabular-nums">{r.leads.toLocaleString('en-IN')}<span className="block text-xs text-slate-500">{r.repeated} repeat</span></td>
                 <td className="px-3 py-2">{cell(r.reminder_called, r.leads)}</td>
                 <td className="px-3 py-2">{cell(r.guided, r.leads)}</td>
@@ -200,3 +192,5 @@ function Compare() {
     </div>
   )
 }
+
+function kindLabel(k?: string | null) { return k === 'event' ? 'Sales event' : k === 'batch' ? 'Batch' : 'Webinar' }

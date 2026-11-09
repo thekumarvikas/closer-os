@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.17.1
+## Android app (`android/`) — v0.17.2
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -1086,6 +1086,13 @@ intelligence → Play Store launch.
 - App v0.17.1: same player in the app (CallingScreens RecordingControls: round play/pause, −10s/+10s,
   speed 1–2× via playbackParams (re-pause if paused), close, Slider seek + time); lead page shows it on its
   own full-width line under the call; Feedback screen stacks it under "Listen to the call".
+- v0.17.2 (migration 0064): "Events & Batches" renamed "Webinars / Sales Events" (nav, pages, app; kind
+  'event' shown as "Sales event"); test group (holdout) field REMOVED from the batch form (owner) — old
+  batches keep their value, new ones 0. Lead editing in the app: lead page "✏ Edit" → ui/EditLead.kt
+  (name, number, email, company, profession, group, city, state, company facts + existing custom keys);
+  update_lead_details(lead, jsonb) (lead_visible; only those fields; phone normalised + duplicate check
+  "Another lead already has this number: X"; new number links unlinked calls; activity 'edited');
+  offline → Ops "edit".
 - Still pending: Firebase push (needs owner's Firebase project); Cloudflare Pages move (optional).
 
 ## Owner decisions — wording + call colours (Nov 9, 2026) — BUILT in v0.17.0 (see Round 11)

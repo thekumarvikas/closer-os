@@ -80,13 +80,13 @@ export default function BatchDetail() {
 
   return (
     <>
-      <Link to="/webinars" className="mb-3 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"><ArrowLeft className="h-4 w-4" /> Events & Batches</Link>
+      <Link to="/webinars" className="mb-3 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"><ArrowLeft className="h-4 w-4" /> Webinars / Sales Events</Link>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-semibold text-slate-900">{batch.name}
             {isManager && <button onClick={() => setModal('edit')} className="text-slate-400 hover:text-slate-700" aria-label="Edit"><Pencil className="h-4 w-4" /></button>}
           </h1>
-          <p className="mt-0.5 text-sm text-slate-500">{fmtDateTime(batch.webinar_at, org)} · hot lead = {batch.hot_minutes}+ min{batch.pitch_minute != null ? ` · pitch at ${batch.pitch_minute} min` : ''} · guided target {batch.guided_target_pct}%{batch.holdout_pct > 0 ? ` · test group ${batch.holdout_pct}%` : ''}
+          <p className="mt-0.5 text-sm text-slate-500">{fmtDateTime(batch.webinar_at, org)} · hot lead = {batch.hot_minutes}+ min{batch.pitch_minute != null ? ` · pitch at ${batch.pitch_minute} min` : ''} · guided target {batch.guided_target_pct}%
             {batch.zoom_uploaded_at ? <> · Zoom report uploaded {fmtDateTime(batch.zoom_uploaded_at, org)}</> : null}</p>
         </div>
         {isManager && (

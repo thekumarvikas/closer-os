@@ -43,7 +43,7 @@ fun BatchesScreen(vm: AppViewModel) {
     Column(Modifier.fillMaxSize().background(Brand.bg)) {
         Row(Modifier.fillMaxWidth().padding(8.dp, 8.dp, 8.dp, 0.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { vm.showBatches = false }) { Icon(Icons.Default.ArrowBack, "Back") }
-            Text("Webinars & events", fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text("Webinars / Sales Events", fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             IconButton(onClick = { vm.loadBatches() }) { Icon(Icons.Default.Refresh, "Refresh") }
         }
         if (vm.isManager) Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -52,7 +52,7 @@ fun BatchesScreen(vm: AppViewModel) {
         }
         if (list == null) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }; return }
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (list.isEmpty()) item { Text("No webinars or events with leads for you in the last 4 months. They're created on the dashboard (Events & Batches).", color = Brand.muted) }
+            if (list.isEmpty()) item { Text("No webinars or sales events with leads for you in the last 4 months. They're created on the dashboard (Webinars / Sales Events).", color = Brand.muted) }
             items(list.distinctBy { it.id }, key = { it.id }) { b ->
                 val at = runCatching { com.closeros.app.data.parseInstant(b.webinar_at).atZone(zone) }.getOrNull()
                 val upcoming = at?.toInstant()?.isAfter(Instant.now()) == true

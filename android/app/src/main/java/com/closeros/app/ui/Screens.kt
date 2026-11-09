@@ -164,9 +164,12 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
     val outcomes = vm.outcomes.associateBy { it.id }
     var waOpen by remember { mutableStateOf(false) }
     if (waOpen && lead != null) WhatsAppPicker(vm, lead!!) { waOpen = false }
+    var editing by remember { mutableStateOf(false) }
+    if (editing && lead != null) { EditLeadScreen(vm, lead!!, onClose = { editing = false }) { lead = it; editing = false }; return }
     Scaffold(topBar = {
         TopAppBar(title = { Text(lead?.name?.ifBlank { "Lead" } ?: "Lead") },
-            navigationIcon = { IconButton(onClick = { vm.openLeadId = null }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } })
+            navigationIcon = { IconButton(onClick = { vm.openLeadId = null }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+            actions = { if (lead != null) TextButton(onClick = { editing = true }) { Text("✏ Edit", fontSize = 15.sp) } })
     }) { pad ->
         val l = lead
         if (l == null) { Box(Modifier.fillMaxSize().padding(pad), contentAlignment = Alignment.Center) { CircularProgressIndicator() }; return@Scaffold }

@@ -1059,11 +1059,11 @@ intelligence → Play Store launch.
   11T Pro uses a third-party dialer (no recorder), K20 Pro finds 8 files but matched 0 (diagnostic added).
 
 ## Owner decisions — wording + call colours (Nov 9, 2026; NOT built yet — owner said "don't build right now")
-- Rename "Lead" → "Client" in every user-facing text (app + dashboard: pages, tabs, filters, buttons,
-  pop-up "Not in lead list" → "Not in client list", reports, CSV headers). Database/code names stay "lead".
+- REVISED: keep "Lead" everywhere (owner withdrew the "Client" rename). Only change: the call log's
+  "Contact" column (web CallLog.tsx header + CSV "Contact" / "Contact number") → "Lead" / "Lead number".
 - "Person" → "Team member" on the dashboard (reports, utilisation, response time, filters, CSV).
-- Client journey labels (proposed, final wording for buyers to confirm): New client · Trying to reach ·
-  Interested · Hot · Paid client/Customer · Not now · Not a fit.
+- Lead journey labels (proposed): New lead · Trying to reach · Prospect · Hot prospect · Customer ·
+  Not now · Not a fit.
 - Call colours (app + dashboard, with a colour key): Dialled answered = dark green; Dialled not picked
   up = light green; Received = blue; Missed = red; Declined/rejected = dark red; WhatsApp = same colour
   + small "WA" badge.

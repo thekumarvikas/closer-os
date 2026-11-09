@@ -1151,3 +1151,17 @@ intelligence → Play Store launch.
   files found but none matched / not uploaded yet); comparison reports (Today/Yesterday/7 days/This month/Last month × totals, uniques, averages,
   percentages, ▲▼ vs previous); sync right after every call end + battery/autostart required + "not synced
   for N h" on dashboard Team page; Firebase push later.
+
+## Verified sales + incentives — owner decisions (Nov 2026; NOT built yet — waiting for "go")
+- Part A first (every customer needs it): rep marks a sale → MANAGER must verify every sale, shown the
+  facts on one screen (calls, talk time, WhatsApp, recordings, webinar watch, who else talked, red flags
+  like "40 s of talk", amount ≠ price, duplicate, not their lead). Payments ledger, MANAGERS ONLY add
+  payments (token, part, UPI, bank, cash; Razorpay auto later). Order stays "Balance due" until fully paid
+  (never auto-dropped). Net revenue = amount − GST % (company setting, off by default — owner not GST
+  registered yet, customers may be) − gateway % (default 2–3 %, editable). Reports count verified only.
+- Part B next: incentive settings with BOTH styles (company chooses): % of net revenue (slabs optional) and
+  fixed ₹ per sale; base salary; minimum to qualify; monthly CSV export. Rep earns on the ENTIRE order
+  amount, but incentive counts as EARNED only when the order is FULLY PAID; also show what's still
+  pending (balance due → incentive waiting). Reps see only their own numbers.
+- App card name: "My Sales Revenue" (NOT "My earnings"). Motivating, never negative.
+- Later only if customers ask: credit splits, clawbacks, custom formulas.

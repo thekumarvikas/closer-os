@@ -95,6 +95,8 @@ export function LeadWork({ dir, users, from, to }: { dir: Directory; users: stri
   )
 }
 
+const rupees = (v: unknown) => v == null || v === '' ? '–' : '₹' + Math.round(Number(v)).toLocaleString('en-IN')
+
 /** What it took to win each sale: per person and for the whole company. */
 export function WhatWorks({ dir, users, from, to }: { dir: Directory; users: string[] | null; from: string; to: string }) {
   const { org } = useOrg()
@@ -104,7 +106,7 @@ export function WhatWorks({ dir, users, from, to }: { dir: Directory; users: str
   useEffect(() => { setR(null); supabase.rpc('sales_recipe', { p_org: org.id, p_users: users, p_from: from, p_to: to }).then(({ data, error }) => { if (error) setError(errorText(error)); else setR(data as J) }) }, [org.id, JSON.stringify(users), from, to])
   if (error) return <ErrorBox error={error} />
   if (!r) return <Spinner />
-  const rows: [string, string][] = [['Talk time (min)', 'talk_min'], ['Calls dialled', 'calls'], ['Picked up', 'picked'], ['WhatsApp sent', 'wa'], ['Interactions', 'interactions'], ['Follow-ups made', 'follow_ups'], ['Days to close', 'days']]
+  const rows: [string, string][] = [['Sale value (₹)', 'avg_sale'], ['Talk time (min)', 'talk_min'], ['Calls dialled', 'calls'], ['Picked up', 'picked'], ['WhatsApp sent', 'wa'], ['Interactions', 'interactions'], ['Follow-ups made', 'follow_ups'], ['Days to close', 'days']]
   return (
     <div className="space-y-4">
       {!r.mine && !r.team ? <p className="text-sm text-slate-500">No sales in this period yet. When leads are marked “Sale closed”, this shows what it took to win them.</p> : <>
@@ -112,18 +114,19 @@ export function WhatWorks({ dir, users, from, to }: { dir: Directory; users: str
           <h3 className="mb-1 font-semibold">Average effort per sale</h3>
           <p className="mb-2 text-xs text-slate-500">A follow-up = a planned next call that was actually made. Interactions = calls dialled + received + WhatsApp sent from Closer OS.</p>
           <table className="w-full table-fixed text-sm"><thead className="text-left text-xs text-slate-500"><tr><th>Per sale</th><th>Selected people ({r.mine?.n ?? 0} sales)</th><th>Whole company ({r.team?.n ?? 0} sales)</th></tr></thead>
-            <tbody>{rows.map(([l, k]) => <tr key={k} className="border-t border-slate-100"><td className="py-1.5">{l}</td><td className="font-semibold">{n1(r.mine?.[k])}</td><td className="text-slate-600">{n1(r.team?.[k])}</td></tr>)}</tbody></table>
+            <tbody>{rows.map(([l, k]) => <tr key={k} className="border-t border-slate-100"><td className="py-1.5">{l}</td><td className="font-semibold">{k === 'avg_sale' ? rupees(r.mine?.[k]) : n1(r.mine?.[k])}</td><td className="text-slate-600">{k === 'avg_sale' ? rupees(r.team?.[k]) : n1(r.team?.[k])}</td></tr>)}</tbody></table>
+          <p className="mt-2 text-sm">Revenue: <b>{rupees(r.mine?.revenue)}</b> <span className="text-slate-500">(whole company {rupees(r.team?.revenue)})</span> · per talk hour <b>{rupees(r.mine?.rev_per_talk_hour)}</b> <span className="text-slate-500">(company {rupees(r.team?.rev_per_talk_hour)})</span></p>
         </Card>
         {(r.people as J[]).length > 0 && <Card className="p-4">
           <h3 className="mb-2 font-semibold">Per person</h3>
-          <table className="w-full table-fixed text-sm"><thead className="text-left text-xs text-slate-500"><tr><th className="w-[26%]">Team member</th><th>Sales</th><th>Talk min</th><th>Calls</th><th>WhatsApp</th><th>Follow-ups</th><th>Days</th></tr></thead>
-            <tbody>{(r.people as J[]).map(p => <tr key={p.user_id} className="border-t border-slate-100"><td className="truncate py-1.5 font-medium">{p.name}</td><td>{p.sales}</td><td>{n1(p.talk_min)}</td><td>{n1(p.calls)}</td><td>{n1(p.wa)}</td><td>{n1(p.follow_ups)}</td><td>{n1(p.days)}</td></tr>)}</tbody></table>
+          <table className="w-full table-fixed text-sm"><thead className="text-left text-xs text-slate-500"><tr><th className="w-[22%]">Team member</th><th>Sales</th><th>Revenue</th><th>Avg sale</th><th>₹ / talk hour</th><th>Talk min</th><th>Calls</th><th>WhatsApp</th><th>Follow-ups</th><th>Days</th></tr></thead>
+            <tbody>{(r.people as J[]).map(p => <tr key={p.user_id} className="border-t border-slate-100"><td className="truncate py-1.5 font-medium">{p.name}</td><td>{p.sales}</td><td className="font-semibold">{rupees(p.revenue)}</td><td>{rupees(p.avg_sale)}</td><td>{rupees(p.rev_per_talk_hour)}</td><td>{n1(p.talk_min)}</td><td>{n1(p.calls)}</td><td>{n1(p.wa)}</td><td>{n1(p.follow_ups)}</td><td>{n1(p.days)}</td></tr>)}</tbody></table>
         </Card>}
         <Card className="p-4">
           <h3 className="mb-2 font-semibold">Converted clients ({(r.leads as J[]).length})</h3>
           <div className="divide-y divide-slate-100">{(r.leads as J[]).map(l => { const e = l.effort as J; return (
             <button key={l.id} onClick={() => setOpen(l.id)} className="block w-full py-2 text-left text-sm hover:bg-slate-50">
-              <div className="font-medium">💰 {l.name || fmtPhone(l.phone)}</div>
+              <div className="font-medium">💰 {l.name || fmtPhone(l.phone)}{Number(l.revenue) > 0 && <span className="ml-2 text-emerald-700">{rupees(l.revenue)}</span>}</div>
               <div className="text-xs text-slate-500">{[e.days != null && `won in ${n1(e.days)} days`, `${n1(e.talk_min)} min talk`, `${e.calls} calls (${e.picked} picked up)`, `${e.wa} WhatsApp`,
                 e.follow_ups && `${e.follow_ups} follow-ups (${e.follow_ups_on_time} on time)`, e.category, e.source, e.watch_minutes != null && `webinar ${e.watch_minutes} min`].filter(Boolean).join(' · ')}</div>
             </button>) })}</div>
@@ -136,6 +139,7 @@ export function WhatWorks({ dir, users, from, to }: { dir: Directory; users: str
 /** What converts, by lead type, and how fast new leads get their first call. */
 export function Insights({ from, to }: { from: string; to: string }) {
   const { org } = useOrg()
+  const [by, setBy] = useState<'rate' | 'revenue' | 'per_lead'>('rate')
   const [r, setR] = useState<J | null>(null)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => { setR(null); supabase.rpc('conversion_insights', { p_org: org.id, p_from: from, p_to: to }).then(({ data, error }) => { if (error) setError(errorText(error)); else setR(data as J) }) }, [org.id, from, to])
@@ -143,18 +147,32 @@ export function Insights({ from, to }: { from: string; to: string }) {
   if (!r) return <Spinner />
   const groups = r.groups as J[]
   const dims: [string, string][] = [['speed', 'Speed to first call'], ['watch', 'Webinar watch time'], ['source', 'Lead source'], ['category', 'Profession group'], ['city', 'City']]
-  const best = groups.filter(g => g.leads >= 10 && g.won > 0).sort((a, b) => b.rate - a.rate)[0]
+  const val = (g: J) => Number(by === 'rate' ? g.rate ?? 0 : by === 'revenue' ? g.revenue ?? 0 : g.rev_per_lead ?? 0)
+  const fmt = (g: J) => by === 'rate' ? `${g.rate ?? 0}%` : by === 'revenue' ? rupees(g.revenue) : rupees(g.rev_per_lead)
+  const best = groups.filter(g => g.leads >= 10 && g.won > 0).sort((a, b) => val(b) - val(a))[0]
   return (
     <div className="space-y-4">
-      <p className="text-sm text-slate-500">Who buys: of the leads that came in between the chosen dates, how many became sales — by source, profession, city, webinar watch time and how fast they were called.</p>
-      {best && <p className="rounded-lg bg-brand-50 p-3 text-sm text-brand-800">💡 Best group: <b>{best.key}</b> ({dims.find(d => d[0] === best.dim)?.[1]}) — {best.rate}% of {best.leads} leads bought.</p>}
+      <p className="text-sm text-slate-500">Of the leads that came in between the chosen dates: how many bought and how much money they brought — by source, profession, city, webinar watch time and how fast they were called.</p>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {([['Leads', String(r.leads ?? 0)], ['Sales', String(r.won ?? 0)], ['Revenue', rupees(r.revenue)], ['Average sale', r.won ? rupees(Math.round(Number(r.revenue) / Number(r.won))) : '–']] as const).map(([l, v]) => (
+          <Card key={l} className="p-3"><div className="text-xs text-slate-500">{l}</div><div className="text-xl font-semibold">{v}</div></Card>))}
+      </div>
+      <div className="flex flex-wrap items-center gap-2 text-sm"><span className="text-slate-500">Compare groups by</span>
+        <div className="flex rounded-lg bg-slate-100 p-1">
+          {([['rate', 'Conversion %'], ['revenue', 'Revenue'], ['per_lead', 'Revenue per lead']] as const).map(([k, l]) => (
+            <button key={k} onClick={() => setBy(k)} className={`rounded-md px-3 py-1 font-medium ${by === k ? 'bg-white shadow-sm' : 'text-slate-600'}`}>{l}</button>))}
+        </div>
+        <span className="text-xs text-slate-400">Revenue per lead = revenue ÷ all leads in the group: what one more lead of this kind is worth.</span>
+      </div>
+      {best && val(best) > 0 && <p className="rounded-lg bg-brand-50 p-3 text-sm text-brand-800">💡 Best group: <b>{best.key}</b> ({dims.find(d => d[0] === best.dim)?.[1]}) — {best.won} of {best.leads} leads bought, {rupees(best.revenue)} revenue ({rupees(best.rev_per_lead)} per lead).</p>}
       <div className="grid gap-4 lg:grid-cols-2">
-        {dims.map(([d, title]) => { const rows = groups.filter(g => g.dim === d).slice(0, 10); const max = Math.max(1, ...rows.map(x => x.rate ?? 0)); return (
+        {dims.map(([d, title]) => { const rows = groups.filter(g => g.dim === d).sort((a, b) => val(b) - val(a) || b.leads - a.leads).slice(0, 10); const max = Math.max(1, ...rows.map(val)); return (
           <Card key={d} className="p-4"><h3 className="mb-2 font-semibold">{title}</h3>
             {rows.length === 0 ? <p className="text-sm text-slate-500">No leads.</p> : rows.map(g => (
               <div key={g.key} className="mb-1.5 text-sm">
-                <div className="flex justify-between"><span className="truncate">{g.key}</span><span className="text-slate-600">{g.won}/{g.leads} · <b>{g.rate ?? 0}%</b></span></div>
-                <div className="h-1.5 rounded bg-slate-100"><div className="h-1.5 rounded bg-brand-600" style={{ width: `${((g.rate ?? 0) / max) * 100}%` }} /></div>
+                <div className="flex justify-between gap-2"><span className="truncate">{g.key}</span>
+                  <span className="shrink-0 text-slate-600">{g.won}/{g.leads} · {g.rate ?? 0}% · {rupees(g.revenue)} <b className="text-slate-900">{by === 'rate' ? '' : `· ${fmt(g)}${by === 'per_lead' ? '/lead' : ''}`}</b></span></div>
+                <div className="h-1.5 rounded bg-slate-100"><div className="h-1.5 rounded bg-brand-600" style={{ width: `${(val(g) / max) * 100}%` }} /></div>
               </div>))}
           </Card>) })}
         <Card className="p-4"><h3 className="mb-2 font-semibold">Time to first call, per person</h3>

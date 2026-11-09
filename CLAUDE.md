@@ -1098,6 +1098,11 @@ intelligence → Play Store launch.
   live leads (is_live, source <> 'Phone call'), working minutes (response_sec), never < 0.
   Owner: "Who buys" (was Insights) + "What works" merged into ONE Reports tab "Sales": 1 · Who buys
   (conversion by lead type) then 2 · What it takes to close a sale (sales_recipe). Old saved tab values map to it.
+  Tab name "Sales insights" (owner). Migration 0067: lead_revenue(lead) = sum of amounts on won-category
+  calls (outcome_data.amount / deal_value), else leads.deal_value when won; conversion_insights adds totals
+  (leads, won, revenue) + per group revenue / avg_sale / rev_per_lead; sales_recipe adds revenue, avg_sale,
+  rev_per_talk_hour (mine/team/people, people sorted by revenue) + revenue per converted lead. UI: summary
+  tiles, "Compare groups by: Conversion % · Revenue · Revenue per lead" (sorts + bars), revenue columns.
 - Still pending: Firebase push (needs owner's Firebase project); Cloudflare Pages move (optional).
 
 ## Efficiency system (v0.18.0, migration 0065, Nov 2026)

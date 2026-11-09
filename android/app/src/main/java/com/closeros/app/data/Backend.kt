@@ -446,6 +446,22 @@ object Repo {
         db.rpc("update_lead_details", buildJsonObject { put("p_lead", leadId); put("p", changes) })
     }
 
+    suspend fun logWorkEvents(orgId: String, events: kotlinx.serialization.json.JsonArray) {
+        db.rpc("log_work_events", buildJsonObject { put("p_org", orgId); put("p", events) })
+    }
+    suspend fun uploadActivity(orgId: String, segments: kotlinx.serialization.json.JsonArray) {
+        db.rpc("upload_activity", buildJsonObject { put("p_org", orgId); put("p", segments) })
+    }
+    /** Efficiency report (scores, time split, lead efficiency) for a period. */
+    suspend fun efficiency(orgId: String, from: LocalDate, to: LocalDate, users: List<String>?): JsonObject =
+        json.parseToJsonElement(rpcR("efficiency_report", buildJsonObject {
+            put("p_org", orgId); put("p_from", from.toString()); put("p_to", to.toString())
+            put("p_users", users?.let { u -> buildJsonArray { u.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } } } ?: kotlinx.serialization.json.JsonNull)
+        }).data).jsonObject
+    /** One person's day hour by hour. */
+    suspend fun workHours(orgId: String, userId: String, day: LocalDate): JsonObject =
+        json.parseToJsonElement(rpcR("work_hours", buildJsonObject { put("p_org", orgId); put("p_user", userId); put("p_day", day.toString()) }).data).jsonObject
+
     suspend fun setKeyFactsNow(leadId: String, text: String) {
         db.rpc("set_key_facts", buildJsonObject { put("p_lead", leadId); put("p_text", text) })
     }

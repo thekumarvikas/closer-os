@@ -122,6 +122,7 @@ object PhoneCalls {
             .putExtra("jid", "$digits@s.whatsapp.net").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
         i.clipData = android.content.ClipData.newRawUri("media", uri)
         if (pkg != null) i.setPackage(pkg)
+        com.closeros.app.data.WorkLog.whatsappOpened(ctx)
         safeStart(ctx, if (pkg != null) i else Intent.createChooser(i, "Send with").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
@@ -140,6 +141,7 @@ object PhoneCalls {
     fun whatsapp(ctx: Context, phone: String, text: String = "") {
         val digits = phone.filter { it.isDigit() }
         val uri = Uri.parse("https://wa.me/$digits" + if (text.isNotEmpty()) "?text=${Uri.encode(text)}" else "")
+        com.closeros.app.data.WorkLog.whatsappOpened(ctx)
         safeStart(ctx, Intent(Intent.ACTION_VIEW, uri), "WhatsApp isn't installed on this phone")
     }
 

@@ -85,6 +85,7 @@ fun HomeScreen(vm: AppViewModel) {
                 }
             }
         }
+        item { WorkDayBar(vm) }
         // Alerts — only when they apply.
         if (vm.access?.state == "grace") item {
             Text("Your company's Closer OS plan has ended — ask the owner to renew it on the dashboard.",
@@ -211,6 +212,7 @@ fun HomeScreen(vm: AppViewModel) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ToolTile("📖", "Playbook", Modifier.weight(1f)) { vm.openPlaybook(null) }
                 ToolTile("📊", if (vm.isManager) "Reports" else "My reports", Modifier.weight(1f)) { vm.showReports = true }
+                ToolTile("⚡", "Efficiency", Modifier.weight(1f)) { vm.showEfficiency = true }
                 ToolTile("📈", "Lead work", Modifier.weight(1f)) { vm.showLeadWork = true }
                 ToolTile("💡", "What works", Modifier.weight(1f)) { vm.showRecipe = true }
                 if (vm.reviews.isNotEmpty()) ToolTile("🎯", "Feedback", Modifier.weight(1f)) { vm.showFeedback = true }

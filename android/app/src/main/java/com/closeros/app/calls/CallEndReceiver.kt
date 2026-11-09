@@ -52,6 +52,8 @@ object CallKind {
         // Android sends "call ended" twice: the second copy keeps the first answer.
         if (now - idle < 60_000 && last != null && sp.getLong("ring", 0) <= idle && sp.getLong("off", 0) <= idle) return last
         val ring = sp.getLong("ring", 0); val off = sp.getLong("off", 0)
+        // Phone line busy (dialling, ringing out, talking) = calling time for the efficiency report.
+        if (off > idle) com.closeros.app.data.WorkLog.segment(ctx, "call", off, now)
         val kind = when {
             ring > idle && off > ring -> "incoming"
             ring > idle -> "missed"

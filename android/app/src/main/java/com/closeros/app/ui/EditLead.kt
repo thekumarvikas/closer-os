@@ -31,6 +31,7 @@ import kotlinx.serialization.json.*
 @Composable
 fun EditLeadScreen(vm: AppViewModel, lead: Lead, onClose: () -> Unit, onSaved: (Lead) -> Unit) {
     BackHandler { onClose() }
+    TrackCrm()
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf(lead.name) }
@@ -126,5 +127,15 @@ fun EditLeadScreen(vm: AppViewModel, lead: Lead, onClose: () -> Unit, onSaved: (
                 }
             }) { Text(if (saving) "Saving…" else "Save changes", fontSize = 16.sp) }
         }
+    }
+}
+
+/** Time on this screen counts as "CRM updates" in the efficiency report (10 min at most per visit). */
+@Composable
+fun TrackCrm() {
+    val ctx = LocalContext.current
+    DisposableEffect(Unit) {
+        val start = com.closeros.app.data.WorkLog.crmStart(ctx)
+        onDispose { com.closeros.app.data.WorkLog.crmEnd(ctx, start) }
     }
 }

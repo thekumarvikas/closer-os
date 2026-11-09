@@ -224,3 +224,50 @@ export function CheckinSettings() {
     </Card>
   )
 }
+
+/** Efficiency report rules: shift, break allowance, idle gap, WhatsApp time per message, score weights. */
+export function EfficiencySettings() {
+  const { org, save, error, saved } = useSaveSettings()
+  type E = { shift_start?: string; shift_end?: string; break_min?: number; idle_min?: number; wa_sec?: number; weights?: Record<string, number> }
+  const e = (org.settings?.efficiency as E | undefined) ?? {}
+  const [start, setStart] = useState(e.shift_start ?? '10:00')
+  const [end, setEnd] = useState(e.shift_end ?? '19:00')
+  const [brk, setBrk] = useState(e.break_min ?? 60)
+  const [idle, setIdle] = useState(e.idle_min ?? 15)
+  const [wa, setWa] = useState(e.wa_sec ?? 30)
+  const [w, setW] = useState<Record<string, number>>({ time: 30, calling: 35, conversion: 10, discipline: 25, ...(e.weights ?? {}) })
+  const [measured, setMeasured] = useState<{ sec: number | null; n: number } | null>(null)
+  useEffect(() => {
+    supabase.rpc('efficiency_settings', { p_org: org.id }).then(({ data }) => data && setMeasured({ sec: data.wa_measured_sec, n: data.wa_measured_n }))
+  }, [org.id])
+  const total = Object.values(w).reduce((a, b) => a + (b || 0), 0)
+  const num = (v: number, set: (n: number) => void, min = 0, max = 600) =>
+    <input type="number" className="w-20 rounded border border-slate-200 px-2 py-1" value={v} min={min} max={max} onChange={ev => set(Math.max(min, Math.min(max, +ev.target.value)))} />
+  return (
+    <Card className="p-5">
+      <h2 className="font-semibold">Efficiency report</h2>
+      <p className="mb-3 mt-1 text-sm text-slate-500">How Reports → Efficiency measures each team member's day. Reps tap "Start my day", "Break" and "End day" in the app; if they forget, the first and last call (between 2 h before and 3 h after the shift) are used.</p>
+      <ErrorBox error={error} />
+      <div className="space-y-3 text-sm">
+        <div className="flex flex-wrap items-center gap-2">Shift
+          <input type="time" className="rounded border border-slate-200 px-2 py-1" value={start} onChange={ev => setStart(ev.target.value)} /> to
+          <input type="time" className="rounded border border-slate-200 px-2 py-1" value={end} onChange={ev => setEnd(ev.target.value)} />
+          <span className="text-slate-500">(starting later than 5 min after the shift lowers the Discipline score)</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">Break allowance per day {num(brk, setBrk, 0, 240)} min</div>
+        <div className="flex flex-wrap items-center gap-2">A gap of {num(idle, setIdle, 5, 120)} min or more with no calls, WhatsApp or app use counts as <b>Idle</b> <span className="text-slate-500">(shorter gaps = "between tasks", counted as work)</span></div>
+        <div className="flex flex-wrap items-center gap-2">Each WhatsApp message sent through Closer OS counts as {num(wa, setWa, 5, 600)} seconds
+          <span className="text-slate-500">{measured?.sec ? `· measured on your team's phones: typically ${measured.sec} s (${measured.n} messages, last 30 days)` : '· the app measures the real time; it shows here once messages are sent with app 0.18+'}</span>
+        </div>
+        <div>
+          <div className="mb-1">Overall score = weighted mix of the 4 scores {total !== 100 && <span className="text-amber-700">(adds up to {total}; it is scaled to 100)</span>}</div>
+          <div className="flex flex-wrap gap-3">
+            {([['time', 'Time'], ['calling', 'Calling'], ['conversion', 'Conversion'], ['discipline', 'Discipline']] as const).map(([k, l]) => (
+              <label key={k} className="flex items-center gap-1">{l} {num(w[k] ?? 0, n => setW({ ...w, [k]: n }), 0, 100)} %</label>))}
+          </div>
+        </div>
+        <Button onClick={() => save({ efficiency: { shift_start: start, shift_end: end, break_min: brk, idle_min: idle, wa_sec: wa, weights: w } })}>{saved ? 'Saved ✓' : 'Save'}</Button>
+      </div>
+    </Card>
+  )
+}

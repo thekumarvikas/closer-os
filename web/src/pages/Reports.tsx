@@ -16,9 +16,10 @@ import OutcomeReportView from './OutcomeReport'
 import { LeadWork, WhatWorks, Insights } from '../components/Round9Reports'
 import ResponseTime from '../components/ResponseTime'
 import Compare from '../components/Compare'
+import Efficiency from '../components/Efficiency'
 
-type Tab = 'compare' | 'overview' | 'outcomes' | 'targets' | 'team' | 'daily' | 'hourly' | 'followups' | 'log' | 'leadwork' | 'works' | 'insights' | 'response'
-const tabs: [Tab, string][] = [['overview', 'Overview'], ['compare', 'Compare periods'], ['outcomes', 'Outcomes'], ['targets', 'Targets'], ['team', 'Team'], ['daily', 'Daily'], ['hourly', 'By hour'], ['followups', 'Follow-ups'], ['response', 'Response time'], ['leadwork', 'Lead work'], ['works', 'What works'], ['insights', 'Insights'], ['log', 'Call log']]
+type Tab = 'efficiency' | 'compare' | 'overview' | 'outcomes' | 'targets' | 'team' | 'daily' | 'hourly' | 'followups' | 'log' | 'leadwork' | 'works' | 'insights' | 'response'
+const tabs: [Tab, string][] = [['overview', 'Overview'], ['compare', 'Compare periods'], ['efficiency', 'Efficiency'], ['outcomes', 'Outcomes'], ['targets', 'Targets'], ['team', 'Team'], ['daily', 'Daily'], ['hourly', 'By hour'], ['followups', 'Follow-ups'], ['response', 'Response time'], ['leadwork', 'Lead work'], ['works', 'What works'], ['insights', 'Insights'], ['log', 'Call log']]
 interface Filters { from: string; to: string; users: string[]; dir: Dir; ch: Channel }
 
 export default function Reports() {
@@ -89,6 +90,7 @@ export default function Reports() {
       <ErrorBox error={error} />
       {!dir ? <Spinner /> :
         tab === 'compare' ? <Compare dir={dir} users={applied.users} /> :
+        tab === 'efficiency' ? <Efficiency dir={dir} users={applied.users} from={applied.from} to={applied.to} /> :
         tab === 'leadwork' ? (dir ? <LeadWork dir={dir} users={applied.users} from={applied.from} to={applied.to} /> : <Spinner />) :
         tab === 'works' ? (dir ? <WhatWorks dir={dir} users={applied.users} from={applied.from} to={applied.to} /> : <Spinner />) :
         tab === 'insights' ? <Insights from={applied.from} to={applied.to} /> :

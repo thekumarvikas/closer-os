@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.17.2
+## Android app (`android/`) — v0.18.0
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -1094,6 +1094,37 @@ intelligence → Play Store launch.
   "Another lead already has this number: X"; new number links unlinked calls; activity 'edited');
   offline → Ops "edit".
 - Still pending: Firebase push (needs owner's Firebase project); Cloudflare Pages move (optional).
+
+## Efficiency system (v0.18.0, migration 0065, Nov 2026)
+- Owner decisions: Start/End Day button (forgot → first/last call, only inside shift −2 h … +3 h so
+  late-night personal calls don't stretch the day); Break button (Lunch/Tea/Personal) + auto idle
+  (gap ≥ idle_min, default 15, with no activity; shorter gaps = "between tasks" = work); WhatsApp =
+  FIXED seconds per message sent through Closer OS (wa_sec, default 30; owner: 2 min too high, 20–30 s
+  fine) — the app MEASURES the real away time (activity 'wa') and Settings shows the median to tune it;
+  weights activity-heavy: Time 30 · Calling 35 · Conversion 10 · Discipline 25 (Settings editable).
+- Tables work_events (day_start/day_end/break_start/break_end, client ids) + activity_segments (app =
+  Closer OS on screen, crm = outcome form / pop-up / edit lead, ≤ 10 min per visit; call = OFFHOOK→IDLE;
+  wa = away in WhatsApp ≤ 10 min). RPCs log_work_events, upload_activity (idempotent), calls.outcome_at
+  (trigger). efficiency_settings(org) (settings.efficiency: shift_start/end, break_min, idle_min, wa_sec,
+  weights + measured wa median). work_day(org,user,day,hour?) = multirange maths (PG17): calling (call
+  ranges incl. 30 s ring for unanswered / 15 s for answered dials + measured line time), wa, crm, app,
+  between, idle, break, talk, late_min. work_hours(org,user,day) hour by hour. efficiency_report(org,
+  from, to ≤ 62 d, users) — volatile (temp table); team comparisons over the WHOLE company, rows only
+  for visible users; scores: time = productive/(day − breaks); calling = 40 dials vs target (else team
+  avg/day) + 30 follow-ups on time + 30 outcomes filled; conversion = interested+won per conversation vs
+  team + sales per conversation vs team; discipline = on-time start (≤5 min 100 → 60 min 0) + breaks within
+  allowance + outcomes saved ≤ 10 min after the call + Start-day button used; lead efficiency = unique leads,
+  new leads connected (first dialled in period), follow-up leads connected (talk within due−10 min…+1 day).
+  ~40 ms for a month on the owner's data.
+- App: data/WorkLog.kt (prefs "worklog": day/break state, events + segments queued, flushed in CallSync);
+  MainActivity onResume/onPause → app blocks + WhatsApp trip end; PhoneCalls.whatsapp/whatsappMedia →
+  whatsappOpened; CallKind.atIdle → call block; TrackCrm() in OutcomeScreen, AfterCallCard, EditLeadScreen.
+  Home WorkDayBar (▶ Start my day · shift time / 🟢 Working since … · ☕ Break · End day / ☕ On break ·
+  Back to work); tools tile ⚡ Efficiency → ui/WorkDay.kt EfficiencyScreen (Today/Yesterday/7 days/month,
+  managers pick a person; overall + 4 score bars, time bar + key, leads, hour by hour for one day).
+- Dashboard: Reports → "Efficiency" tab (components/Efficiency.tsx: team time bar, per member scores,
+  working-day bar, leads; click → day by day + hour by hour; CSV); Settings → "Efficiency report"
+  (EfficiencySettings in SettingsRound9.tsx).
 
 ## Owner decisions — wording + call colours (Nov 9, 2026) — BUILT in v0.17.0 (see Round 11)
 - REVISED: keep "Lead" everywhere (owner withdrew the "Client" rename). Only change: the call log's

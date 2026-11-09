@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.17.0
+## Android app (`android/`) — v0.17.1
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -1083,6 +1083,9 @@ intelligence → Play Store launch.
   "⋮"): components/AudioPlayer.tsx custom player (play/pause, ±10 s on ≥ sm, seek bar, time, 1–2× speed,
   download, close). CallLog + LeadDrawer open it in a full-width row under the call (PlayButton onPlay/open);
   RecordingPlayer(call) signs the URL + audits. Checked with Playwright at 1280 / 420 / 390 px.
+- App v0.17.1: same player in the app (CallingScreens RecordingControls: round play/pause, −10s/+10s,
+  speed 1–2× via playbackParams (re-pause if paused), close, Slider seek + time); lead page shows it on its
+  own full-width line under the call; Feedback screen stacks it under "Listen to the call".
 - Still pending: Firebase push (needs owner's Firebase project); Cloudflare Pages move (optional).
 
 ## Owner decisions — wording + call colours (Nov 9, 2026) — BUILT in v0.17.0 (see Round 11)

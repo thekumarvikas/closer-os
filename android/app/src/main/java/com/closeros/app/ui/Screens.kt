@@ -211,7 +211,9 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
             item { Text("Calls", fontWeight = FontWeight.SemiBold); if (calls.isNotEmpty()) CallColorKey(Modifier.padding(top = 2.dp)) }
             if (calls.isEmpty()) item { Text("No calls yet.", color = Brand.muted) }
             items(calls) { c ->
-                Row(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(10.dp)).padding(12.dp)) {
+                val hasRec = c.recording_path != null || c.recording_status == "expired" || com.closeros.app.calls.LocalRecordings.known(ctx).contains(c.id)
+                Column(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(10.dp)).padding(12.dp)) {
+                Row(Modifier.fillMaxWidth()) {
                     Column(Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(CallColors.arrow(c.direction) + " ", color = CallColors.of(c.direction, c.duration_sec), fontWeight = FontWeight.Black)
@@ -223,9 +225,10 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
                     }
                     Column(horizontalAlignment = Alignment.End) {
                         Text(outcomes[c.outcome_id]?.label ?: "", fontSize = 13.sp, color = Brand.primary)
-                        if (c.recording_path != null || c.recording_status == "expired" || com.closeros.app.calls.LocalRecordings.known(ctx).contains(c.id)) RecordingPlayer(c.id, c.recording_path, c.recording_status)
-                        else if (c.recording_status == "missing") Text("No recording", fontSize = 11.sp, color = Brand.red)
+                        if (!hasRec && c.recording_status == "missing") Text("No recording", fontSize = 11.sp, color = Brand.red)
                     }
+                }
+                if (hasRec) Box(Modifier.fillMaxWidth().padding(top = 4.dp)) { RecordingPlayer(c.id, c.recording_path, c.recording_status) }
                 }
             }
         }

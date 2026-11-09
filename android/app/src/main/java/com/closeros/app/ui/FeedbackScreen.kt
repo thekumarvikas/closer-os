@@ -68,8 +68,8 @@ private fun ReviewCard(vm: AppViewModel, r: CallReview) {
                     else Text("Done ✓", color = Color(0xFF059669), fontSize = 13.sp)
                 }
             }
-            if (r.recording_status == "uploaded" && r.recording_path != null) Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Listen to the call ", fontSize = 13.sp, color = Brand.muted); RecordingPlayer(r.call_id, r.recording_path)
+            if (r.recording_status == "uploaded" && r.recording_path != null) Column {
+                Text("Listen to the call", fontSize = 13.sp, color = Brand.muted); RecordingPlayer(r.call_id, r.recording_path)
             }
         }
     }

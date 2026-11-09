@@ -8,6 +8,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -646,6 +648,14 @@ fun RecordingPlayer(callId: String, path: String?, status: String? = "uploaded")
         Text("🎙 Recording deleted from this phone and the server", fontSize = 12.sp, color = Brand.muted, modifier = Modifier.padding(horizontal = 8.dp))
         return
     }
+    // Once the recording is open: the full player (same as the dashboard).
+    val open = player
+    if (open != null && (state == "playing" || state == "paused")) {
+        RecordingControls(open, playing = state == "playing",
+            onToggle = { if (state == "playing") { open.pause(); state = "paused" } else { open.start(); state = "playing" } },
+            onClose = { open.release(); player = null; state = "idle" })
+        return
+    }
     Row(verticalAlignment = Alignment.CenterVertically) {
         when (state) {
             "loading" -> Text(if (where == "server") "Downloading…" else "Loading…", fontSize = 13.sp, color = Brand.muted)
@@ -686,6 +696,45 @@ fun RecordingPlayer(callId: String, path: String?, status: String? = "uploaded")
             }
         }
         if (where == "phone" && state == "idle") Text("on this phone", fontSize = 11.sp, color = Brand.muted)
+    }
+}
+
+/** Play/pause · −10 s · +10 s · seek bar · time · speed · close. */
+@Composable
+private fun RecordingControls(p: android.media.MediaPlayer, playing: Boolean, onToggle: () -> Unit, onClose: () -> Unit) {
+    val len = remember(p) { runCatching { p.duration }.getOrDefault(0).coerceAtLeast(0) }
+    var pos by remember(p) { mutableStateOf(0) }
+    var dragging by remember { mutableStateOf<Float?>(null) }
+    var speed by remember(p) { mutableStateOf(1f) }
+    LaunchedEffect(p, playing) { while (true) { if (dragging == null) pos = runCatching { p.currentPosition }.getOrDefault(pos); kotlinx.coroutines.delay(250) } }
+    fun t(ms: Int) = (ms / 1000).let { "${it / 60}:${(it % 60).toString().padStart(2, '0')}" }
+    fun seek(ms: Int) { val v = ms.coerceIn(0, len); runCatching { p.seekTo(v) }; pos = v }
+    Column(Modifier.fillMaxWidth().background(Color(0xFFF0FDF4), RoundedCornerShape(12.dp)).padding(horizontal = 6.dp, vertical = 4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(38.dp).background(Color(0xFF059669), CircleShape).clickable { onToggle() }, contentAlignment = Alignment.Center) {
+                Text(if (playing) "❚❚" else "▶", color = Color.White, fontSize = if (playing) 13.sp else 16.sp, fontWeight = FontWeight.Bold)
+            }
+            TextButton(onClick = { seek(pos - 10_000) }, contentPadding = PaddingValues(horizontal = 6.dp)) { Text("−10s", fontSize = 12.sp, color = Brand.muted) }
+            TextButton(onClick = { seek(pos + 10_000) }, contentPadding = PaddingValues(horizontal = 6.dp)) { Text("+10s", fontSize = 12.sp, color = Brand.muted) }
+            Spacer(Modifier.weight(1f))
+            OutlinedButton(onClick = {
+                val next = listOf(1f, 1.25f, 1.5f, 2f).let { l -> l[(l.indexOf(speed) + 1) % l.size] }
+                runCatching {
+                    p.playbackParams = p.playbackParams.setSpeed(next)
+                    if (!playing) p.pause()   // changing speed starts playback on some phones
+                }
+                speed = next
+            }, contentPadding = PaddingValues(horizontal = 8.dp), modifier = Modifier.height(30.dp)) {
+                Text("${if (speed % 1f == 0f) speed.toInt() else speed}×", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            }
+            IconButton(onClick = onClose, modifier = Modifier.size(34.dp)) { Icon(Icons.Default.Close, "Close player", tint = Brand.muted, modifier = Modifier.size(18.dp)) }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Slider(value = dragging ?: pos.toFloat(), onValueChange = { dragging = it }, onValueChangeFinished = { dragging?.let { seek(it.toInt()) }; dragging = null },
+                valueRange = 0f..len.coerceAtLeast(1).toFloat(), modifier = Modifier.weight(1f).height(28.dp),
+                colors = SliderDefaults.colors(thumbColor = Color(0xFF059669), activeTrackColor = Color(0xFF059669)))
+            Text("${t((dragging?.toInt()) ?: pos)} / ${t(len)}", fontSize = 12.sp, color = Brand.muted, modifier = Modifier.padding(start = 8.dp))
+        }
     }
 }
 

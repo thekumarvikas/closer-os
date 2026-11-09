@@ -146,7 +146,7 @@ export function Insights({ from, to }: { from: string; to: string }) {
   const best = groups.filter(g => g.leads >= 10 && g.won > 0).sort((a, b) => b.rate - a.rate)[0]
   return (
     <div className="space-y-4">
-      <p className="text-sm text-slate-500">Leads that came in between the chosen dates: how many became sales, by type.</p>
+      <p className="text-sm text-slate-500">Who buys: of the leads that came in between the chosen dates, how many became sales — by source, profession, city, webinar watch time and how fast they were called.</p>
       {best && <p className="rounded-lg bg-brand-50 p-3 text-sm text-brand-800">💡 Best group: <b>{best.key}</b> ({dims.find(d => d[0] === best.dim)?.[1]}) — {best.rate}% of {best.leads} leads bought.</p>}
       <div className="grid gap-4 lg:grid-cols-2">
         {dims.map(([d, title]) => { const rows = groups.filter(g => g.dim === d).slice(0, 10); const max = Math.max(1, ...rows.map(x => x.rate ?? 0)); return (

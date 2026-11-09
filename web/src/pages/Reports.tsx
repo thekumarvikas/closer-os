@@ -19,7 +19,7 @@ import Compare from '../components/Compare'
 import Efficiency from '../components/Efficiency'
 
 type Tab = 'efficiency' | 'compare' | 'overview' | 'outcomes' | 'targets' | 'team' | 'daily' | 'hourly' | 'followups' | 'log' | 'leadwork' | 'works' | 'insights' | 'response'
-const tabs: [Tab, string][] = [['overview', 'Overview'], ['compare', 'Compare periods'], ['efficiency', 'Efficiency'], ['outcomes', 'Outcomes'], ['targets', 'Targets'], ['team', 'Team'], ['daily', 'Daily'], ['hourly', 'By hour'], ['followups', 'Follow-ups'], ['response', 'Response time'], ['leadwork', 'Lead work'], ['works', 'What works'], ['insights', 'Insights'], ['log', 'Call log']]
+const tabs: [Tab, string][] = [['overview', 'Overview'], ['compare', 'Compare periods'], ['efficiency', 'Efficiency'], ['outcomes', 'Outcomes'], ['targets', 'Targets'], ['team', 'Team'], ['daily', 'Daily'], ['hourly', 'By hour'], ['followups', 'Follow-ups'], ['response', 'Response time'], ['leadwork', 'Lead work'], ['works', 'What works'], ['insights', 'Who buys'], ['log', 'Call log']]
 interface Filters { from: string; to: string; users: string[]; dir: Dir; ch: Channel }
 
 export default function Reports() {

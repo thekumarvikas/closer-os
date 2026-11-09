@@ -1093,6 +1093,9 @@ intelligence → Play Store launch.
   update_lead_details(lead, jsonb) (lead_visible; only those fields; phone normalised + duplicate check
   "Another lead already has this number: X"; new number links unlinked calls; activity 'edited');
   offline → Ops "edit".
+- Migration 0066: Insights speed-to-first-call showed negative minutes (leads added from a call were
+  first called before they were created). conversion_insights speed rows + speed_by_rep now only use
+  live leads (is_live, source <> 'Phone call'), working minutes (response_sec), never < 0.
 - Still pending: Firebase push (needs owner's Firebase project); Cloudflare Pages move (optional).
 
 ## Efficiency system (v0.18.0, migration 0065, Nov 2026)

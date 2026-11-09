@@ -18,8 +18,8 @@ import ResponseTime from '../components/ResponseTime'
 import Compare from '../components/Compare'
 import Efficiency from '../components/Efficiency'
 
-type Tab = 'efficiency' | 'compare' | 'overview' | 'outcomes' | 'targets' | 'team' | 'daily' | 'hourly' | 'followups' | 'log' | 'leadwork' | 'works' | 'insights' | 'response'
-const tabs: [Tab, string][] = [['overview', 'Overview'], ['compare', 'Compare periods'], ['efficiency', 'Efficiency'], ['outcomes', 'Outcomes'], ['targets', 'Targets'], ['team', 'Team'], ['daily', 'Daily'], ['hourly', 'By hour'], ['followups', 'Follow-ups'], ['response', 'Response time'], ['leadwork', 'Lead work'], ['works', 'What works'], ['insights', 'Who buys'], ['log', 'Call log']]
+type Tab = 'efficiency' | 'compare' | 'overview' | 'outcomes' | 'targets' | 'team' | 'daily' | 'hourly' | 'followups' | 'log' | 'leadwork' | 'sales' | 'response'
+const tabs: [Tab, string][] = [['overview', 'Overview'], ['compare', 'Compare periods'], ['efficiency', 'Efficiency'], ['outcomes', 'Outcomes'], ['targets', 'Targets'], ['team', 'Team'], ['daily', 'Daily'], ['hourly', 'By hour'], ['followups', 'Follow-ups'], ['response', 'Response time'], ['leadwork', 'Lead work'], ['sales', 'Sales'], ['log', 'Call log']]
 interface Filters { from: string; to: string; users: string[]; dir: Dir; ch: Channel }
 
 export default function Reports() {
@@ -28,7 +28,8 @@ export default function Reports() {
   const today = zonedYmd(org)
   const [draft, setDraft] = usePersisted<Filters>('reports.filters', { from: addDays(today, -6), to: today, users: [], dir: 'all', ch: 'all' }, { session: true })
   const [applied, setApplied] = usePersisted<Filters>('reports.applied', draft, { session: true })
-  const [tab, setTab] = usePersisted<Tab>('reports.tab', 'overview')
+  const [tabRaw, setTab] = usePersisted<Tab>('reports.tab', 'overview')
+  const tab: Tab = (tabRaw as string) === 'works' || (tabRaw as string) === 'insights' ? 'sales' : tabRaw
   const [logOutcome, setLogOutcome] = useState('')
   const [report, setReport] = useState<Report | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -92,8 +93,10 @@ export default function Reports() {
         tab === 'compare' ? <Compare dir={dir} users={applied.users} /> :
         tab === 'efficiency' ? <Efficiency dir={dir} users={applied.users} from={applied.from} to={applied.to} /> :
         tab === 'leadwork' ? (dir ? <LeadWork dir={dir} users={applied.users} from={applied.from} to={applied.to} /> : <Spinner />) :
-        tab === 'works' ? (dir ? <WhatWorks dir={dir} users={applied.users} from={applied.from} to={applied.to} /> : <Spinner />) :
-        tab === 'insights' ? <Insights from={applied.from} to={applied.to} /> :
+        tab === 'sales' ? <div className="space-y-8">
+          <section><h2 className="mb-1 text-lg font-semibold">1 · Who buys</h2><Insights from={applied.from} to={applied.to} /></section>
+          <section><h2 className="mb-1 text-lg font-semibold">2 · What it takes to close a sale</h2><WhatWorks dir={dir} users={applied.users} from={applied.from} to={applied.to} /></section>
+        </div> :
         tab === 'response' ? <ResponseTime dir={dir} from={applied.from} to={applied.to} /> :
         tab === 'log' ? <CallLog org={org} dir={dir} f={logFilters} fileTag={fileTag} outcome={logOutcome} setOutcome={setLogOutcome} /> :
         tab === 'outcomes' ? <><LeadStatus orgId={org.id} dir={dir} users={applied.users} from={range.from} to={range.to} /><OutcomeReportView org={org} dir={dir} from={applied.from} to={applied.to} users={applied.users} callDir={applied.dir} channel={applied.ch} fileTag={fileTag} onOpenOutcome={id => { setLogOutcome(id); setTab('log') }} /></> :

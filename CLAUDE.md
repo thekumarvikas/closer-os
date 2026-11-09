@@ -1096,7 +1096,8 @@ intelligence → Play Store launch.
 - Migration 0066: Insights speed-to-first-call showed negative minutes (leads added from a call were
   first called before they were created). conversion_insights speed rows + speed_by_rep now only use
   live leads (is_live, source <> 'Phone call'), working minutes (response_sec), never < 0.
-  Tab renamed "Insights" → "Who buys" (owner: it is sales conversion by lead type).
+  Owner: "Who buys" (was Insights) + "What works" merged into ONE Reports tab "Sales": 1 · Who buys
+  (conversion by lead type) then 2 · What it takes to close a sale (sales_recipe). Old saved tab values map to it.
 - Still pending: Firebase push (needs owner's Firebase project); Cloudflare Pages move (optional).
 
 ## Efficiency system (v0.18.0, migration 0065, Nov 2026)

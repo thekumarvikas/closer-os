@@ -1057,3 +1057,19 @@ intelligence → Play Store launch.
   "Recording deleted" for expired; also in the LeadDrawer call list ("No recording uploaded" when missing).
 - Recording facts (Nov 7): only 6 uploaded vs 113 missing — Samsung S24 FE never chose the folder,
   11T Pro uses a third-party dialer (no recorder), K20 Pro finds 8 files but matched 0 (diagnostic added).
+
+## Owner decisions — wording + call colours (Nov 9, 2026; NOT built yet — owner said "don't build right now")
+- Rename "Lead" → "Client" in every user-facing text (app + dashboard: pages, tabs, filters, buttons,
+  pop-up "Not in lead list" → "Not in client list", reports, CSV headers). Database/code names stay "lead".
+- "Person" → "Team member" on the dashboard (reports, utilisation, response time, filters, CSV).
+- Client journey labels (proposed, final wording for buyers to confirm): New client · Trying to reach ·
+  Interested · Hot · Paid client/Customer · Not now · Not a fit.
+- Call colours (app + dashboard, with a colour key): Dialled answered = dark green; Dialled not picked
+  up = light green; Received = blue; Missed = red; Declined/rejected = dark red; WhatsApp = same colour
+  + small "WA" badge.
+- Also pending from the same round: dashboard reload-on-tab-switch bug (supabase onAuthStateChange
+  SIGNED_IN on focus → session.tsx reloads everything) + keep filters in the URL/localStorage; faster
+  dashboard (748 KB single bundle → code-split pages, cache directory); red mic → "No recording" label +
+  tooltip; comparison reports (Today/Yesterday/7 days/This month/Last month × totals, uniques, averages,
+  percentages, ▲▼ vs previous); sync right after every call end + battery/autostart required + "not synced
+  for N h" on dashboard Team page; Firebase push later.

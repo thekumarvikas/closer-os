@@ -1082,7 +1082,7 @@ intelligence → Play Store launch.
 - Recording player (owner screenshot: browser <audio controls> squeezed in the Type column showed only
   "⋮"): components/AudioPlayer.tsx custom player (play/pause, ±10 s on ≥ sm, seek bar, time, 1–2× speed,
   download, close). CallLog + LeadDrawer open it in a full-width row under the call (PlayButton onPlay/open);
-  RecordingPlayer(call) signs the URL + audits. Checked with Playwright at 1280 / 420 / 390 px.
+  RecordingPlayer(call) signs the URL + audits. Checked with Playwright at 1280 / 420 / 390 px. Owner confirmed it works on the live dashboard (Nov 9).
 - App v0.17.1: same player in the app (CallingScreens RecordingControls: round play/pause, −10s/+10s,
   speed 1–2× via playbackParams (re-pause if paused), close, Slider seek + time); lead page shows it on its
   own full-width line under the call; Feedback screen stacks it under "Listen to the call".

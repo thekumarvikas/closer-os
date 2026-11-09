@@ -1081,7 +1081,7 @@ intelligence → Play Store launch.
   "Last synced" column (device_status.updated_at).
 - Still pending: Firebase push (needs owner's Firebase project); Cloudflare Pages move (optional).
 
-## Owner decisions — wording + call colours (Nov 9, 2026; NOT built yet — owner said "don't build right now")
+## Owner decisions — wording + call colours (Nov 9, 2026) — BUILT in v0.17.0 (see Round 11)
 - REVISED: keep "Lead" everywhere (owner withdrew the "Client" rename). Only change: the call log's
   "Contact" column (web CallLog.tsx header + CSV "Contact" / "Contact number") → "Lead" / "Lead number".
 - "Person" → "Team member" on the dashboard (reports, utilisation, response time, filters, CSV).

@@ -1068,7 +1068,8 @@ intelligence → Play Store launch.
   + small "WA" badge.
 - Also pending from the same round: dashboard reload-on-tab-switch bug (supabase onAuthStateChange
   SIGNED_IN on focus → session.tsx reloads everything) + keep filters in the URL/localStorage; faster
-  dashboard (748 KB single bundle → code-split pages, cache directory); red mic → "No recording" label +
-  tooltip; comparison reports (Today/Yesterday/7 days/This month/Last month × totals, uniques, averages,
+  dashboard (748 KB single bundle → code-split pages, cache directory); red mic icon STAYS (owner) — add a hover
+  tooltip with the reason, from that rep's device_status (folder not chosen / phone app doesn't record /
+  files found but none matched / not uploaded yet); comparison reports (Today/Yesterday/7 days/This month/Last month × totals, uniques, averages,
   percentages, ▲▼ vs previous); sync right after every call end + battery/autostart required + "not synced
   for N h" on dashboard Team page; Firebase push later.

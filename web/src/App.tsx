@@ -1,25 +1,26 @@
+import { lazy } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useSession } from './lib/session'
 import { Spinner } from './components/ui'
 import Layout from './components/Layout'
 import AuthPage from './pages/AuthPage'
 import Onboarding from './pages/Onboarding'
-import Overview from './pages/Overview'
-import Leads from './pages/Leads'
-import Reports from './pages/Reports'
-import Batches from './pages/Batches'
-import LeadSources from './pages/LeadSources'
-import Playbook from './pages/Playbook'
-import Announcements from './pages/Announcements'
-import Reviews from './pages/Reviews'
-import Desk from './pages/Desk'
-import Billing from './pages/Billing'
-import SuperAdmin from './pages/SuperAdmin'
-import BatchDetail from './pages/BatchDetail'
-import Calls from './pages/Calls'
-import FollowUps from './pages/FollowUps'
-import Team from './pages/Team'
-import Settings from './pages/Settings'
+const Overview = lazy(() => import('./pages/Overview'))
+const Leads = lazy(() => import('./pages/Leads'))
+const Reports = lazy(() => import('./pages/Reports'))
+const Batches = lazy(() => import('./pages/Batches'))
+const LeadSources = lazy(() => import('./pages/LeadSources'))
+const Playbook = lazy(() => import('./pages/Playbook'))
+const Announcements = lazy(() => import('./pages/Announcements'))
+const Reviews = lazy(() => import('./pages/Reviews'))
+const Desk = lazy(() => import('./pages/Desk'))
+const Billing = lazy(() => import('./pages/Billing'))
+const SuperAdmin = lazy(() => import('./pages/SuperAdmin'))
+const BatchDetail = lazy(() => import('./pages/BatchDetail'))
+const Calls = lazy(() => import('./pages/Calls'))
+const FollowUps = lazy(() => import('./pages/FollowUps'))
+const Team = lazy(() => import('./pages/Team'))
+const Settings = lazy(() => import('./pages/Settings'))
 import SetPassword, { useRecoveryMode } from './pages/SetPassword'
 
 export default function App() {

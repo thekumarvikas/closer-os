@@ -67,7 +67,7 @@ export default function Announcements() {
           footer={<>{!open.closed_at && <Button variant="ghost" onClick={() => { run(supabase.rpc('remind_announcement', { p_id: open.id, p_close: true })); setOpen(null) }}>Close announcement</Button>}<Button onClick={() => setOpen(null)}>Done</Button></>}>
           <p className="mb-4 whitespace-pre-wrap text-sm text-slate-700">{open.body}</p>
           <table className="w-full table-fixed text-sm">
-            <thead className="bg-slate-50"><tr><th className="th">Person</th><th className="th">Seen</th><th className="th">Acknowledged</th></tr></thead>
+            <thead className="bg-slate-50"><tr><th className="th">Team member</th><th className="th">Seen</th><th className="th">Acknowledged</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
               {[...open.people].sort((x, y) => (x.acked_at ? 1 : 0) - (y.acked_at ? 1 : 0)).map(p => (
                 <tr key={p.user_id}>

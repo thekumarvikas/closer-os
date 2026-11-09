@@ -92,10 +92,10 @@ export default function ResponseTime({ dir, from, to }: { dir: Directory; from: 
       {isManager && data.people.length > 0 && (
         <Card className="overflow-x-auto p-4">
           <div className="mb-2 flex items-center justify-between"><h3 className="font-semibold">By person</h3>
-            <Button variant="secondary" className="!py-1" onClick={() => downloadCsv('response-time.csv', ['Person', 'New leads', 'Called', 'Median min', `Within ${tg} min`, 'Waiting', 'Oldest waiting min'],
+            <Button variant="secondary" className="!py-1" onClick={() => downloadCsv('response-time.csv', ['Team member', 'New leads', 'Called', 'Median min', `Within ${tg} min`, 'Waiting', 'Oldest waiting min'],
               data.people.map(p => [dir.nameOf(p.user_id), p.arrived, p.responded, p.median_min ?? '', p.within, p.waiting, p.oldest_wait_min ?? '']))}><Download className="h-4 w-4" /> CSV</Button></div>
           <table className="w-full table-fixed text-sm">
-            <thead><tr><th className="th w-[28%]">Person</th><th className="th">Median</th><th className="th">Within {tg} min</th><th className="th">New leads</th><th className="th">Waiting now</th></tr></thead>
+            <thead><tr><th className="th w-[28%]">Team member</th><th className="th">Median</th><th className="th">Within {tg} min</th><th className="th">New leads</th><th className="th">Waiting now</th></tr></thead>
             <tbody className="divide-y divide-slate-100">{data.people.map(p => (
               <tr key={p.user_id}>
                 <td className="td font-medium">{dir.nameOf(p.user_id)}</td>

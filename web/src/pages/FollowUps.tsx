@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { usePersisted } from '../lib/persist'
 import { CalendarClock, Download } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
@@ -24,8 +25,8 @@ function timing(f: { due_at: string; dialled_at: string | null }): { kind: 'on_t
 export default function FollowUps() {
   const { org, isManager } = useOrg()
   const dir = useDirectory(org.id)
-  const [tab, setTab] = useState<Tab>('today')
-  const [user, setUser] = useState('')
+  const [tab, setTab] = usePersisted<Tab>('followups.tab', 'today')
+  const [user, setUser] = usePersisted('followups.user', '')
   const [rows, setRows] = useState<(FollowUp & { dialled_at: string | null; lead: { name: string; phone: string } | null })[] | null>(null)
   const [counts, setCounts] = useState<Partial<Record<Tab, number>>>({})
   const [error, setError] = useState<string | null>(null)
@@ -69,7 +70,7 @@ export default function FollowUps() {
     <>
       <PageHeader title="Follow-ups" actions={<>
         <Button variant="secondary" disabled={!rows?.length} onClick={() => rows && dir && downloadCsv(`closer-os-follow-ups_${tab}.csv`,
-          ['Due', 'Lead', 'Lead phone', 'Person', 'Reason', 'Notes', 'Status', 'Dialled at', 'Timing'],
+          ['Due', 'Lead', 'Lead phone', 'Team member', 'Reason', 'Notes', 'Status', 'Dialled at', 'Timing'],
           rows.map(f => [new Date(f.due_at).toLocaleString('en-IN', { timeZone: org.timezone }), f.lead?.name ?? '', f.lead?.phone ?? '', dir.nameOf(f.assigned_to),
             f.reason ?? '', f.notes ?? '', f.status, f.dialled_at ? new Date(f.dialled_at).toLocaleString('en-IN', { timeZone: org.timezone }) : '', timing(f).text]))}>
           <Download className="h-4 w-4" /> Export CSV</Button>

@@ -94,6 +94,7 @@ fun CallHistoryScreen(vm: AppViewModel) {
                 FilterChip(selected = filter == k, onClick = { filter = k }, label = { Text(l, fontSize = 13.sp) })
             }
         }
+        CallColorKey(Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
         if (items == null) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }; return }
         val shown = items.distinctBy { it.log.id }.filter {
             when (filter) {

@@ -104,11 +104,11 @@ object PhoneSetup {
                 store.confirmed("miuipopup"), Kind.Confirm, intent = it,
                 steps = "Turn on \"Display pop-up windows while running in the background\" and \"Display pop-up window\" (set to Always allow). Then come back and tap \"Done\".") }
         }
-        list += Item("battery", "Keep running in background", "So calls and reminders are never missed, even when the app is closed.",
+        list += Item("battery", "Keep running in background", "Required: so every call reaches your manager within a minute and reminders ring on time, even when the app is closed.",
             pm.isIgnoringBatteryOptimizations(ctx.packageName), Kind.Special,
             intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${ctx.packageName}")),
             steps = "Tap Allow on the pop-up.")
-        autostartIntent(ctx)?.let { list += Item("autostart", "Autostart", "Your phone (${Build.MANUFACTURER}) stops apps from starting by themselves unless this is on.",
+        autostartIntent(ctx)?.let { list += Item("autostart", "Autostart", "Required: your phone (${Build.MANUFACTURER}) stops apps from syncing in the background unless this is on.",
             store.confirmed("autostart"), Kind.Confirm, intent = it, steps = "Find Closer OS in the list and turn its switch on, then come back and tap \"Done\".") }
         list += Item("dialer", "Phone app that records calls", when {
                 google -> "This phone uses Google's Phone app, which keeps recordings private."

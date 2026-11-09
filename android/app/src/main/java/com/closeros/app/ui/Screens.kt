@@ -208,12 +208,17 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
                 }
             }
             item { NotesTimeline(vm, l.id) }
-            item { Text("Calls", fontWeight = FontWeight.SemiBold) }
+            item { Text("Calls", fontWeight = FontWeight.SemiBold); if (calls.isNotEmpty()) CallColorKey(Modifier.padding(top = 2.dp)) }
             if (calls.isEmpty()) item { Text("No calls yet.", color = Brand.muted) }
             items(calls) { c ->
                 Row(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(10.dp)).padding(12.dp)) {
                     Column(Modifier.weight(1f)) {
-                        Text((if (c.channel == "whatsapp") "WhatsApp · " else c.sim_slot?.let { "SIM $it · " } ?: "") + "${when (c.direction) { "outgoing" -> "Dialled"; "incoming" -> "Received"; "missed" -> "Missed"; else -> "Declined" }} · ${if (c.duration_sec > 0) fmtDur(c.duration_sec) else "not connected"}", fontSize = 14.sp)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(CallColors.arrow(c.direction) + " ", color = CallColors.of(c.direction, c.duration_sec), fontWeight = FontWeight.Black)
+                            Text((if (c.channel == "whatsapp") "" else c.sim_slot?.let { "SIM $it · " } ?: "") + "${CallColors.label(c.direction, c.duration_sec)}${if (c.duration_sec > 0) " · " + fmtDur(c.duration_sec) else ""}",
+                                fontSize = 14.sp, color = CallColors.of(c.direction, c.duration_sec), fontWeight = FontWeight.Medium)
+                            if (c.channel == "whatsapp") WaBadge(Modifier.padding(start = 6.dp))
+                        }
                         Text(fmtWhen(c.started_at), fontSize = 12.sp, color = Brand.muted)
                     }
                     Column(horizontalAlignment = Alignment.End) {

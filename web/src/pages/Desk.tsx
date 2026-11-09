@@ -7,6 +7,7 @@ import { fmtDateTime, fmtPhone } from '../lib/format'
 import type { Lead, Outcome } from '../lib/types'
 import { Badge, Button, Card, ErrorBox, PageHeader, Spinner } from '../components/ui'
 import { dur } from '../components/terms'
+import { CallType } from '../components/CallColors'
 import LeadDrawer from './LeadDrawer'
 
 interface NeedCall { id: string; lead_id: string; lead_name: string | null; phone: string; direction: string; started_at: string; duration_sec: number; purpose: string; batch_id: string | null }
@@ -104,7 +105,7 @@ export default function Desk() {
             {tab === 'outcome' && (need.length === 0 ? <p className="p-4 text-sm text-slate-500">All your lead calls have outcomes. 👍</p> : need.map(c => (
               <button key={c.id} onClick={() => { pickLead(c.lead_id).then(() => setOutcomeFor(c)) }} className="block w-full px-4 py-3 text-left hover:bg-slate-50">
                 <div className="font-medium">{c.lead_name || fmtPhone(c.phone)}</div>
-                <div className="text-xs text-slate-500">{c.direction === 'incoming' ? 'Received' : 'Dialled'} · {c.duration_sec ? dur(c.duration_sec) : 'no answer'} · {fmtDateTime(c.started_at, org)}</div>
+                <div className="text-xs text-slate-500"><CallType direction={c.direction} duration={c.duration_sec} /> · {c.duration_sec ? dur(c.duration_sec) : 'no answer'} · {fmtDateTime(c.started_at, org)}</div>
               </button>
             )))}
             {tab === 'followups' && (fus.length === 0 ? <p className="p-4 text-sm text-slate-500">No follow-ups pending.</p> : fus.map(f => {
@@ -287,7 +288,7 @@ function OutcomePanel({ call, dir, onClose, onSaved }: { call: NeedCall; dir: Di
     <Card className="border-2 border-amber-300 p-5">
       <div className="mb-3 flex items-start justify-between">
         <div><h2 className="font-semibold">How did the call go? — {call.lead_name || fmtPhone(call.phone)}</h2>
-          <p className="text-sm text-slate-500">{call.direction === 'incoming' ? 'Received' : 'Dialled'} · {call.duration_sec ? `talked ${dur(call.duration_sec)}` : 'not answered'} · {fmtDateTime(call.started_at, org)}</p></div>
+          <p className="text-sm text-slate-500"><CallType direction={call.direction} duration={call.duration_sec} /> · {call.duration_sec ? `talked ${dur(call.duration_sec)}` : 'not answered'} · {fmtDateTime(call.started_at, org)}</p></div>
         <button onClick={onClose} className="text-slate-400 hover:text-slate-700"><X className="h-5 w-5" /></button>
       </div>
       <ErrorBox error={error} />

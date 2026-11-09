@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -121,8 +124,13 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
                 IconButton(onClick = onClose) { Icon(Icons.Default.Close, "Close", tint = Color.White) }
             }
             Text(lead?.name?.ifBlank { null } ?: info.contactName ?: number.ifBlank { null }?.let(::fmtPhone) ?: "Call ended", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(listOfNotNull(if ((lead?.name.isNullOrBlank() && info.contactName == null) || number.isBlank()) null else fmtPhone(number), c?.let(::callLine) ?: "Call ended", c?.simLabel).joinToString(" · "),
-                color = Color.White.copy(alpha = 0.9f), fontSize = 14.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Same call colour as the call lists, as a dot on a white ring (the header is coloured).
+                if (c != null) Box(Modifier.padding(end = 6.dp).size(14.dp).background(Color.White, CircleShape).padding(2.dp)
+                    .background(CallColors.of(c.direction, c.durationSec), CircleShape))
+                Text(listOfNotNull(if ((lead?.name.isNullOrBlank() && info.contactName == null) || number.isBlank()) null else fmtPhone(number), c?.let(::callLine) ?: "Call ended", c?.simLabel).joinToString(" · "),
+                    color = Color.White.copy(alpha = 0.9f), fontSize = 14.sp)
+            }
             if (notInList) Text(if (info.lookupFailed) "Couldn't check the lead list (no internet)" else "Not in lead list",
                 color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)
                     .background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 3.dp))

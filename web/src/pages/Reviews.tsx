@@ -52,7 +52,7 @@ export default function Reviews() {
       <ErrorBox error={error} />
       <Card className="mb-4 flex flex-wrap items-end gap-3 p-4">
         <label><span className="label">Period</span><select className="input" value={days} onChange={e => setDays(+e.target.value)}>{[1, 7, 30, 90].map(d => <option key={d} value={d}>{d === 1 ? 'Today' : `Last ${d} days`}</option>)}</select></label>
-        <label><span className="label">Person</span><select className="input" value={rep} onChange={e => setRep(e.target.value)}><option value="">Everyone</option>{reps.map(m => <option key={m.user_id} value={m.user_id}>{dir.nameOf(m.user_id)}</option>)}</select></label>
+        <label><span className="label">Team member</span><select className="input" value={rep} onChange={e => setRep(e.target.value)}><option value="">Everyone</option>{reps.map(m => <option key={m.user_id} value={m.user_id}>{dir.nameOf(m.user_id)}</option>)}</select></label>
         <label><span className="label">Calls longer than</span><select className="input" value={minSec} onChange={e => setMinSec(+e.target.value)}>{[30, 60, 120, 300, 600].map(s => <option key={s} value={s}>{s < 60 ? `${s} sec` : `${s / 60} min`}</option>)}</select></label>
         <label className="flex items-center gap-2 pb-2 text-sm"><input type="checkbox" checked={recordedOnly} onChange={e => setRecordedOnly(e.target.checked)} /> Only calls with a recording</label>
       </Card>
@@ -66,7 +66,7 @@ export default function Reviews() {
           <div className="mb-2"><Button variant="secondary" onClick={() => setOpen({ call: todo[Math.floor(Math.random() * todo.length)] })}><Shuffle className="h-4 w-4" /> Review a random call</Button></div>
           <Card className="overflow-hidden">
             <table className="w-full table-fixed text-sm">
-              <thead className="bg-slate-50"><tr><th className="th w-[18%]">When</th><th className="th w-[20%]">Person</th><th className="th w-[24%]">Lead</th><th className="th w-[10%]">Length</th><th className="th">Outcome</th><th className="th w-[12%]"></th></tr></thead>
+              <thead className="bg-slate-50"><tr><th className="th w-[18%]">When</th><th className="th w-[20%]">Team member</th><th className="th w-[24%]">Lead</th><th className="th w-[10%]">Length</th><th className="th">Outcome</th><th className="th w-[12%]"></th></tr></thead>
               <tbody className="divide-y divide-slate-100">
                 {todo.map(c => (
                   <tr key={c.id} className="align-top hover:bg-slate-50">
@@ -87,7 +87,7 @@ export default function Reviews() {
       {tab === 'done' && (!done ? <Spinner /> : done.length === 0 ? <Card><Empty icon={<ClipboardCheck className="h-6 w-6" />} title="No reviews yet" text="Reviewed calls appear here." /></Card> : (
         <Card className="overflow-hidden">
           <table className="w-full table-fixed text-sm">
-            <thead className="bg-slate-50"><tr><th className="th w-[16%]">Reviewed</th><th className="th w-[16%]">Person</th><th className="th w-[18%]">Lead</th><th className="th w-[9%]">Score</th><th className="th">Coaching task</th><th className="th w-[12%]">Rep saw it</th></tr></thead>
+            <thead className="bg-slate-50"><tr><th className="th w-[16%]">Reviewed</th><th className="th w-[16%]">Team member</th><th className="th w-[18%]">Lead</th><th className="th w-[9%]">Score</th><th className="th">Coaching task</th><th className="th w-[12%]">Rep saw it</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
               {done.map(r => (
                 <tr key={r.id} className="cursor-pointer align-top hover:bg-slate-50" onClick={() => setOpen({ call: r, review: r })}>
@@ -107,10 +107,10 @@ export default function Reviews() {
 
       {tab === 'scores' && (!scores ? <Spinner /> : scores.length === 0 ? <Card><Empty icon={<ClipboardCheck className="h-6 w-6" />} title="No reviews in this period" text="Review a few calls to see team scores." /></Card> : (
         <Card className="overflow-hidden">
-          <div className="flex justify-end p-2"><Button variant="secondary" onClick={() => downloadCsv('closer-os-review-scores.csv', ['Person', 'Reviews', 'Average %', 'Open tasks', ...criteria],
+          <div className="flex justify-end p-2"><Button variant="secondary" onClick={() => downloadCsv('closer-os-review-scores.csv', ['Team member', 'Reviews', 'Average %', 'Open tasks', ...criteria],
             scores.map(s => [dir.nameOf(s.rep_id), s.reviews, s.avg_pct, s.tasks_open, ...criteria.map(c => s.by_item[c] ?? '')]))}>CSV</Button></div>
           <table className="w-full table-fixed text-sm">
-            <thead className="bg-slate-50"><tr><th className="th w-[16%]">Person</th><th className="th w-[8%]">Reviews</th><th className="th w-[9%]">Average</th>{criteria.map(c => <th key={c} className="th">{c}</th>)}</tr></thead>
+            <thead className="bg-slate-50"><tr><th className="th w-[16%]">Team member</th><th className="th w-[8%]">Reviews</th><th className="th w-[9%]">Average</th>{criteria.map(c => <th key={c} className="th">{c}</th>)}</tr></thead>
             <tbody className="divide-y divide-slate-100">
               {[...scores].sort((a, b) => b.avg_pct - a.avg_pct).map(s => (
                 <tr key={s.rep_id}>

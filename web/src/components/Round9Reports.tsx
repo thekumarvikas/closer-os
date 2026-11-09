@@ -82,7 +82,7 @@ export function LeadWork({ dir, users, from, to }: { dir: Directory; users: stri
       {(r.people as J[]).length > 0 && <Card className="p-4">
         <h3 className="mb-2 font-semibold">Per person</h3>
         <table className="w-full table-fixed text-sm">
-          <thead className="text-left text-xs text-slate-500"><tr><th className="w-[24%]">Person</th><th>Assigned</th><th>Dialled</th><th>Never dialled</th><th>Conversation</th><th>Not reached</th><th>Junk</th><th>Dials to 1st talk</th></tr></thead>
+          <thead className="text-left text-xs text-slate-500"><tr><th className="w-[24%]">Team member</th><th>Assigned</th><th>Dialled</th><th>Never dialled</th><th>Conversation</th><th>Not reached</th><th>Junk</th><th>Dials to 1st talk</th></tr></thead>
           <tbody>{(r.people as J[]).map(p => (<tr key={p.user_id} className="border-t border-slate-100">
             <td className="truncate py-1.5 font-medium">{p.name}</td>
             {(['assigned', 'dialled', 'never', 'conversation', 'not_reached', 'junk'] as const).map(k =>
@@ -116,7 +116,7 @@ export function WhatWorks({ dir, users, from, to }: { dir: Directory; users: str
         </Card>
         {(r.people as J[]).length > 0 && <Card className="p-4">
           <h3 className="mb-2 font-semibold">Per person</h3>
-          <table className="w-full table-fixed text-sm"><thead className="text-left text-xs text-slate-500"><tr><th className="w-[26%]">Person</th><th>Sales</th><th>Talk min</th><th>Calls</th><th>WhatsApp</th><th>Follow-ups</th><th>Days</th></tr></thead>
+          <table className="w-full table-fixed text-sm"><thead className="text-left text-xs text-slate-500"><tr><th className="w-[26%]">Team member</th><th>Sales</th><th>Talk min</th><th>Calls</th><th>WhatsApp</th><th>Follow-ups</th><th>Days</th></tr></thead>
             <tbody>{(r.people as J[]).map(p => <tr key={p.user_id} className="border-t border-slate-100"><td className="truncate py-1.5 font-medium">{p.name}</td><td>{p.sales}</td><td>{n1(p.talk_min)}</td><td>{n1(p.calls)}</td><td>{n1(p.wa)}</td><td>{n1(p.follow_ups)}</td><td>{n1(p.days)}</td></tr>)}</tbody></table>
         </Card>}
         <Card className="p-4">
@@ -158,7 +158,7 @@ export function Insights({ from, to }: { from: string; to: string }) {
               </div>))}
           </Card>) })}
         <Card className="p-4"><h3 className="mb-2 font-semibold">Time to first call, per person</h3>
-          <table className="w-full table-fixed text-sm"><thead className="text-left text-xs text-slate-500"><tr><th className="w-[40%]">Person</th><th>Average</th><th>Typical</th><th>Never called</th></tr></thead>
+          <table className="w-full table-fixed text-sm"><thead className="text-left text-xs text-slate-500"><tr><th className="w-[40%]">Team member</th><th>Average</th><th>Typical</th><th>Never called</th></tr></thead>
             <tbody>{(r.speed_by_rep as J[]).map(p => <tr key={p.user_id} className="border-t border-slate-100"><td className="truncate py-1.5">{p.name}</td>
               <td>{p.avg_min == null ? '–' : p.avg_min < 60 ? `${p.avg_min} min` : `${Math.round(p.avg_min / 60)} h`}</td>
               <td>{p.median_min == null ? '–' : p.median_min < 60 ? `${p.median_min} min` : `${Math.round(p.median_min / 60)} h`}</td><td>{p.never}</td></tr>)}</tbody></table>

@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.13.0
+## Android app (`android/`) — v0.17.0
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -1057,6 +1057,29 @@ intelligence → Play Store launch.
   "Recording deleted" for expired; also in the LeadDrawer call list ("No recording uploaded" when missing).
 - Recording facts (Nov 7): only 6 uploaded vs 113 missing — Samsung S24 FE never chose the folder,
   11T Pro uses a third-party dialer (no recorder), K20 Pro finds 8 files but matched 0 (diagnostic added).
+
+## Round 11: static dashboard, speed, wording, call colours, compare, auto-sync (v0.17.0, migration 0063, Nov 9 2026)
+- Dashboard no longer reloads on tab switch: session.tsx reloads only on SIGNED_OUT / SIGNED_IN of a
+  DIFFERENT user (supabase fires SIGNED_IN on focus). lib/persist.ts usePersisted(key, init, {session?})
+  keeps filters (localStorage; date ranges sessionStorage) on Reports, Calls, Follow-ups, Leads.
+- Speed: pages lazy-loaded (React.lazy in App.tsx, Suspense around Outlet in Layout) → first load
+  308 KB (was 748 KB); useDirectory cached across pages (refresh if > 60 s old).
+- Wording: "Person" → "Team member" everywhere on the dashboard (tables, filters, CSV); call log
+  "Contact" → "Lead" (CSV "Lead" / "Lead number"). Lead stays "Lead"; lead stages unchanged.
+- Call colours (web components/CallColors.tsx, app ui/CallColors.kt; colour key on call lists):
+  dialled answered dark green · dialled not picked up light green · received blue · missed red ·
+  declined dark red · WhatsApp = same colour + "WA" badge. Pop-up header shows a coloured dot.
+- Red mic (no recording) stays; hover explains why from that team member's device_status
+  (missingReason: Google Phone app, third-party phone app, folder not chosen, no files, files but no match…).
+- period_summary(org, from, to, users) (migration 0063, ~10 ms/month): totals, uniques, counts for
+  averages/percentages + per team member. Dashboard Reports → "Compare periods" (5 periods side by
+  side, ▲▼ vs the period before; "This month" vs same days last month; by team member; CSV).
+  App Reports → "⇅ Compare periods" (CompareScreen, server + saved copy offline).
+- Auto-sync: CallEndReceiver → CallSync.syncAfterCall (unique work, 30 s delay, online) after EVERY
+  call. Battery/Autostart setup texts say "Required". Home sync line warns after 1 h ("Not synced for
+  N h — turn on Battery 'No restrictions'"). Dashboard Team → phones not synced for > 1 h banner +
+  "Last synced" column (device_status.updated_at).
+- Still pending: Firebase push (needs owner's Firebase project); Cloudflare Pages move (optional).
 
 ## Owner decisions — wording + call colours (Nov 9, 2026; NOT built yet — owner said "don't build right now")
 - REVISED: keep "Lead" everywhere (owner withdrew the "Client" rename). Only change: the call log's

@@ -82,9 +82,9 @@ fun DialerScreen(vm: AppViewModel) {
                 Row(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(10.dp)).combinedClickable(onClick = { number = h.phone }).padding(12.dp)) {
                     Column(Modifier.weight(1f)) {
                         Text(h.name ?: fmtPhone(h.phone), fontWeight = FontWeight.Medium)
-                        Text((h.simSlot?.let { "SIM $it · " } ?: "") + when (h.direction) { "outgoing" -> "Dialled"; "incoming" -> "Received"; "missed" -> "Missed"; else -> "Declined" } +
+                        Text((h.simSlot?.let { "SIM $it · " } ?: "") + CallColors.label(h.direction, h.durationSec) +
                             " · ${if (h.durationSec > 0) fmtDur(h.durationSec) else "no talk"} · ${fmtWhen(Instant.ofEpochMilli(h.startedAtMs).toString())}", fontSize = 12.sp,
-                            color = if (h.direction == "missed" || h.direction == "rejected") Brand.red else Brand.muted)
+                            color = CallColors.of(h.direction, h.durationSec))
                     }
                 }
             }

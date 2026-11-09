@@ -128,7 +128,7 @@ export default function Overview() {
             {periods[0].report.byUser.length === 0 ? <p className="p-6 text-center text-sm text-slate-500">No calls yet today.</p> : (
               <table className="w-full text-sm">
                 <thead className="bg-slate-50"><tr>
-                  <th className="th">Person</th><th className="th !text-right">{T.calls}</th><th className="th !text-right">{T.conversations}</th>
+                  <th className="th">Team member</th><th className="th !text-right">{T.calls}</th><th className="th !text-right">{T.conversations}</th>
                   <th className="th !text-right">{T.talk}</th><th className="th !text-right">{T.noAnswer}</th><th className="th !text-right">{T.active}</th>
                 </tr></thead>
                 <tbody className="divide-y divide-slate-100">

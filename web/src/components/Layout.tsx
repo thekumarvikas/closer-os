@@ -1,8 +1,8 @@
 import { NavLink, Outlet, Link, useLocation } from 'react-router-dom'
-import { useState, type FormEvent } from 'react'
+import { Suspense, useState, type FormEvent } from 'react'
 import { LayoutDashboard, Headphones, BarChart3, Video, Plug, BookOpen, Megaphone, ClipboardCheck, CreditCard, ShieldCheck, Users, PhoneCall, CalendarClock, UserCog, Settings, LogOut, Menu, X } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
-import { Button, ErrorBox, Field, Modal } from './ui'
+import { Button, ErrorBox, Field, Modal, Spinner } from './ui'
 import { useSession } from '../lib/session'
 import { roleLabel } from '../lib/format'
 
@@ -91,7 +91,7 @@ export default function Layout() {
             <p className="mt-2 text-slate-600">Nothing is deleted — all your leads, calls and reports are kept. {isAdmin ? 'Renew to continue.' : 'Ask your company owner to renew the plan.'}</p>
             {isAdmin && <Link to="/billing" className="mt-4 inline-block rounded-lg bg-brand-600 px-4 py-2 font-medium text-white">Go to Plan & billing</Link>}
           </div>
-        ) : <Outlet />}
+        ) : <Suspense fallback={<Spinner />}><Outlet /></Suspense>}
       </main>
       {profileOpen && <MyProfile onClose={() => setProfileOpen(false)} />}
     </div>

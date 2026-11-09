@@ -185,7 +185,7 @@ export default function LeadImport({ orgId, dir, onClose, onDone, batchId }:
             </select>
           </Field>
           {assignMode === 'user' && (
-            <Field label="Person">
+            <Field label="Team member">
               <select className="input" value={assignTo} onChange={e => setAssignTo(e.target.value)}>
                 <option value="">Choose…</option>
                 {people.map(m => <option key={m.user_id} value={m.user_id}>{dir.nameOf(m.user_id)}</option>)}

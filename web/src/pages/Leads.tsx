@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { usePersisted } from '../lib/persist'
 import { Plus, Upload, Search, Users, ChevronLeft, ChevronRight, UserPlus, Download } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
@@ -30,12 +31,12 @@ export default function Leads() {
   const [leads, setLeads] = useState<Lead[] | null>(null)
   const [count, setCount] = useState(0)
   const [page, setPage] = useState(0)
-  const [q, setQ] = useState('')
-  const [assignee, setAssignee] = useState('')
-  const [stage, setStage] = useState('')
-  const [source, setSource] = useState('')
-  const [talk, setTalk] = useState('')
-  const [util, setUtil] = useState<'' | 'used' | 'unused'>('')
+  const [q, setQ] = usePersisted('leads.q', '')
+  const [assignee, setAssignee] = usePersisted('leads.assignee', '')
+  const [stage, setStage] = usePersisted('leads.stage', '')
+  const [source, setSource] = usePersisted('leads.source', '')
+  const [talk, setTalk] = usePersisted('leads.talk', '')
+  const [util, setUtil] = usePersisted<'' | 'used' | 'unused'>('leads.util', '')
   const [bands, setBands] = useState<Record<string, number> | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [showImport, setShowImport] = useState(false)

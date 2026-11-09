@@ -103,7 +103,7 @@ export function WorkingCalendar() {
         <div>
           <p className="label">Leave (per person)</p>
           <div className="mb-2 flex flex-wrap gap-2">
-            <select className="input !w-44" value={lUser} onChange={e => setLUser(e.target.value)}><option value="">Person…</option>
+            <select className="input !w-44" value={lUser} onChange={e => setLUser(e.target.value)}><option value="">Team member…</option>
               {(dir?.members ?? []).filter(m => m.status === 'active').map(m => <option key={m.user_id} value={m.user_id}>{m.profile?.full_name ?? m.profile?.email}</option>)}</select>
             <input type="date" className="input !w-36" value={lFrom} onChange={e => setLFrom(e.target.value)} />
             <input type="date" className="input !w-36" value={lTo} onChange={e => setLTo(e.target.value)} title="Last day (optional)" />

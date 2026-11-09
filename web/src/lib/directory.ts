@@ -15,10 +15,18 @@ export interface Directory {
   outcomeOf: (id: string | null) => Outcome | undefined
 }
 
+// Shared across pages: opening another page shows the saved copy at once and refreshes it quietly
+// only when it is over a minute old (or a page asked for a fresh one with a new `version`).
+const cache = new Map<string, { at: number; dir: Directory }>()
+
 export function useDirectory(orgId: string | undefined, version = 0) {
-  const [dir, setDir] = useState<Directory | null>(null)
+  const key = `${orgId}:${version}`
+  const [dir, setDir] = useState<Directory | null>(() => (orgId ? cache.get(key)?.dir ?? null : null))
   useEffect(() => {
     if (!orgId) return
+    const hit = cache.get(key)
+    if (hit) setDir(hit.dir)
+    if (hit && Date.now() - hit.at < 60_000) return
     let alive = true
     ;(async () => {
       const [m, t, tm, s, o] = await Promise.all([
@@ -40,8 +48,7 @@ export function useDirectory(orgId: string | undefined, version = 0) {
         .sort((a, b) => (a.profile?.full_name ?? '').localeCompare(b.profile?.full_name ?? ''))
       const stages = (s.data ?? []) as Stage[]
       const outcomes = (o.data ?? []) as Outcome[]
-      if (!alive) return
-      setDir({
+      const d: Directory = {
         members, teams: (t.data ?? []) as Team[], teamMembers: (tm.data ?? []) as TeamMember[], stages, outcomes,
         nameOf: id => {
           if (!id) return 'Unassigned'
@@ -55,9 +62,12 @@ export function useDirectory(orgId: string | undefined, version = 0) {
         },
         stageOf: id => stages.find(x => x.id === id),
         outcomeOf: id => outcomes.find(x => x.id === id),
-      })
+      }
+      for (const k of cache.keys()) if (k.startsWith(orgId + ':')) cache.delete(k)
+      cache.set(key, { at: Date.now(), dir: d })
+      if (alive) setDir(d)
     })()
     return () => { alive = false }
-  }, [orgId, version])
+  }, [orgId, version, key])
   return dir
 }

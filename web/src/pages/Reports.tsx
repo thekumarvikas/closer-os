@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { usePersisted } from '../lib/persist'
 import { Download, ChevronDown, BarChart3 } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
@@ -14,18 +15,19 @@ import CallLog from '../components/CallLog'
 import OutcomeReportView from './OutcomeReport'
 import { LeadWork, WhatWorks, Insights } from '../components/Round9Reports'
 import ResponseTime from '../components/ResponseTime'
+import Compare from '../components/Compare'
 
-type Tab = 'overview' | 'outcomes' | 'targets' | 'team' | 'daily' | 'hourly' | 'followups' | 'log' | 'leadwork' | 'works' | 'insights' | 'response'
-const tabs: [Tab, string][] = [['overview', 'Overview'], ['outcomes', 'Outcomes'], ['targets', 'Targets'], ['team', 'Team'], ['daily', 'Daily'], ['hourly', 'By hour'], ['followups', 'Follow-ups'], ['response', 'Response time'], ['leadwork', 'Lead work'], ['works', 'What works'], ['insights', 'Insights'], ['log', 'Call log']]
+type Tab = 'compare' | 'overview' | 'outcomes' | 'targets' | 'team' | 'daily' | 'hourly' | 'followups' | 'log' | 'leadwork' | 'works' | 'insights' | 'response'
+const tabs: [Tab, string][] = [['overview', 'Overview'], ['compare', 'Compare periods'], ['outcomes', 'Outcomes'], ['targets', 'Targets'], ['team', 'Team'], ['daily', 'Daily'], ['hourly', 'By hour'], ['followups', 'Follow-ups'], ['response', 'Response time'], ['leadwork', 'Lead work'], ['works', 'What works'], ['insights', 'Insights'], ['log', 'Call log']]
 interface Filters { from: string; to: string; users: string[]; dir: Dir; ch: Channel }
 
 export default function Reports() {
   const { org, isManager } = useOrg()
   const dir = useDirectory(org.id)
   const today = zonedYmd(org)
-  const [draft, setDraft] = useState<Filters>({ from: addDays(today, -6), to: today, users: [], dir: 'all', ch: 'all' })
-  const [applied, setApplied] = useState<Filters>(draft)
-  const [tab, setTab] = useState<Tab>('overview')
+  const [draft, setDraft] = usePersisted<Filters>('reports.filters', { from: addDays(today, -6), to: today, users: [], dir: 'all', ch: 'all' }, { session: true })
+  const [applied, setApplied] = usePersisted<Filters>('reports.applied', draft, { session: true })
+  const [tab, setTab] = usePersisted<Tab>('reports.tab', 'overview')
   const [logOutcome, setLogOutcome] = useState('')
   const [report, setReport] = useState<Report | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -50,7 +52,7 @@ export default function Reports() {
       <PageHeader title="Reports" subtitle={period + (applied.dir === 'out' ? ' · dialled calls only' : applied.dir === 'in' ? ' · incoming calls only' : '') + (applied.ch === 'phone' ? ' · phone calls' : applied.ch === 'whatsapp' ? ' · WhatsApp calls' : '')} />
       <Card className="mb-4 p-4">
         <div className="flex flex-wrap items-end gap-3">
-          {isManager && dir && <div className="min-w-[220px]"><span className="label">People</span><PeopleSelect dir={dir} value={draft.users} onChange={users => setDraft({ ...draft, users })} /></div>}
+          {isManager && dir && <div className="min-w-[220px]"><span className="label">Team members</span><PeopleSelect dir={dir} value={draft.users} onChange={users => setDraft({ ...draft, users })} /></div>}
           <label><span className="label">From</span><input type="date" className="input" value={draft.from} max={draft.to} onChange={e => setDraft({ ...draft, from: e.target.value })} /></label>
           <label><span className="label">To</span><input type="date" className="input" value={draft.to} min={draft.from} max={today} onChange={e => setDraft({ ...draft, to: e.target.value })} /></label>
           <div><span className="label">Calls</span>
@@ -86,6 +88,7 @@ export default function Reports() {
 
       <ErrorBox error={error} />
       {!dir ? <Spinner /> :
+        tab === 'compare' ? <Compare dir={dir} users={applied.users} /> :
         tab === 'leadwork' ? (dir ? <LeadWork dir={dir} users={applied.users} from={applied.from} to={applied.to} /> : <Spinner />) :
         tab === 'works' ? (dir ? <WhatWorks dir={dir} users={applied.users} from={applied.from} to={applied.to} /> : <Spinner />) :
         tab === 'insights' ? <Insights from={applied.from} to={applied.to} /> :
@@ -243,12 +246,12 @@ function Team({ r, dir, fileTag }: { r: Report; dir: Directory; fileTag: string 
   return (
     <div className="space-y-3">
       {r.byUser.length > 1 && <TeamCompare r={r} dir={dir} />}
-      <div className="flex justify-end"><Csv onClick={() => downloadCsv(`closer-os-team_${fileTag}.csv`, ['Person', 'Phone', ...teamCols.flatMap(c => c.csvHead)],
+      <div className="flex justify-end"><Csv onClick={() => downloadCsv(`closer-os-team_${fileTag}.csv`, ['Team member', 'Phone', ...teamCols.flatMap(c => c.csvHead)],
         [...rows.map(u => [dir.nameOf(u.user_id), dir.phoneOf(u.user_id), ...teamCols.flatMap(c => c.csv(u.total))]), ['TOTAL', '', ...teamCols.flatMap(c => c.csv(r.total))]])} /></div>
       <Card className="overflow-hidden">
         <table className="w-full table-fixed text-sm">
           <thead className="bg-slate-50"><tr>
-            <th className="th w-[18%]">Person</th>
+            <th className="th w-[18%]">Team member</th>
             {teamCols.map((c, i) => <th key={c.label} onClick={() => setSort(i)} className={`th cursor-pointer !whitespace-normal hover:text-slate-800 ${sort === i ? 'text-brand-700' : ''}`}>{c.label}{sort === i ? ' ↓' : ''}</th>)}
           </tr></thead>
           <tbody className="divide-y divide-slate-100">
@@ -276,12 +279,12 @@ function Daily({ r, dir, fileTag }: { r: Report; dir: Directory; fileTag: string
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={split} onChange={e => setSplit(e.target.checked)} /> Show each person</label>
-        <Csv onClick={() => downloadCsv(`closer-os-daily_${fileTag}.csv`, ['Date', 'Person', ...teamCols.flatMap(c => c.csvHead)],
+        <Csv onClick={() => downloadCsv(`closer-os-daily_${fileTag}.csv`, ['Date', 'Team member', ...teamCols.flatMap(c => c.csvHead)],
           days.flatMap(d => split ? d.users.map(u => [d.day, dir.nameOf(u.user_id), ...teamCols.flatMap(c => c.csv(u.total))]) : [[d.day, 'Everyone', ...teamCols.flatMap(c => c.csv(d.total))]]))} />
       </div>
       <Card className="overflow-hidden">
         <table className="w-full table-fixed text-sm">
-          <thead className="bg-slate-50"><tr><th className="th w-[18%]">{split ? 'Date / person' : 'Date'}</th>{teamCols.map(c => <th key={c.label} className="th !whitespace-normal">{c.label}</th>)}</tr></thead>
+          <thead className="bg-slate-50"><tr><th className="th w-[18%]">{split ? 'Date / team member' : 'Date'}</th>{teamCols.map(c => <th key={c.label} className="th !whitespace-normal">{c.label}</th>)}</tr></thead>
           <tbody className="divide-y divide-slate-100">
             {days.map(d => split ? [
               <tr key={d.day} className="bg-brand-50/50"><td colSpan={teamCols.length + 1} className="px-3 py-1.5 text-xs font-semibold text-brand-700">{fmtYmd(d.day, true)}</td></tr>,
@@ -360,11 +363,11 @@ function FollowUpDiscipline({ org, dir, from, to, users, fileTag }: { org: Organ
   )
   return (
     <div className="space-y-3">
-      <div className="flex justify-end"><Csv onClick={() => downloadCsv(`closer-os-follow-up-discipline_${fileTag}.csv`, ['Person', 'Phone', 'Due', 'On time', 'Late (15+ min)', 'Not called', 'Upcoming', 'Avg delay (min)'],
+      <div className="flex justify-end"><Csv onClick={() => downloadCsv(`closer-os-follow-up-discipline_${fileTag}.csv`, ['Team member', 'Phone', 'Due', 'On time', 'Late (15+ min)', 'Not called', 'Upcoming', 'Avg delay (min)'],
         [...people.map(r => [dir.nameOf(r.assigned_to), dir.phoneOf(r.assigned_to), r.due, r.on_time, r.late, r.missed, r.upcoming, r.avg_delay_min]), ['TOTAL', '', total.due, total.on_time, total.late, total.missed, total.upcoming, total.avg_delay_min]])} /></div>
       <Card className="overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50"><tr><th className="th">Person</th><th className="th">Due</th><th className="th">On time</th><th className="th">Late (15+ min)</th><th className="th">Not called</th><th className="th">Upcoming</th><th className="th">Average timing</th></tr></thead>
+          <thead className="bg-slate-50"><tr><th className="th">Team member</th><th className="th">Due</th><th className="th">On time</th><th className="th">Late (15+ min)</th><th className="th">Not called</th><th className="th">Upcoming</th><th className="th">Average timing</th></tr></thead>
           <tbody className="divide-y divide-slate-100">
             {people.map(r => <Row key={r.assigned_to ?? 'x'} r={r} name={<><span className="font-medium">{dir.nameOf(r.assigned_to)}</span>{dir.phoneOf(r.assigned_to) && <span className="block text-xs text-slate-500">{dir.phoneOf(r.assigned_to)}</span>}</>} />)}
             <tr className="bg-slate-50 font-semibold"><td colSpan={7} className="p-0"><table className="w-full"><tbody><Row r={total} name="Total" /></tbody></table></td></tr>

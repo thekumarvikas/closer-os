@@ -52,7 +52,7 @@ export default function LeadUtilisation({ dir, version, onPick, onChanged }:
       {open && (
         <div className="overflow-x-auto">
           <table className="w-full table-fixed text-sm">
-            <thead><tr><th className="th w-[26%]">Person</th><th className="th">Assigned</th><th className="th">Utilised</th><th className="th">Not utilised</th><th className="th">Oldest waiting</th><th className="th w-[14%]"></th></tr></thead>
+            <thead><tr><th className="th w-[26%]">Team member</th><th className="th">Assigned</th><th className="th">Utilised</th><th className="th">Not utilised</th><th className="th">Oldest waiting</th><th className="th w-[14%]"></th></tr></thead>
             <tbody className="divide-y divide-slate-100">
               {data.people.map(r => (
                 <tr key={r.user_id}>

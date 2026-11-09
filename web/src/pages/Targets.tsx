@@ -54,7 +54,7 @@ export default function Targets({ dir, from, to, users, fileTag }: { dir: Direct
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-slate-500">{data.work_days} working day{data.work_days === 1 ? '' : 's'} in this period · targets are per day × working days. Green ≥ 100%, amber ≥ 70%, red below.</p>
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => downloadCsv(`closer-os-targets_${fileTag}.csv`, ['Person', ...metrics.flatMap(([, l]) => [`${l} actual`, `${l} target`, `${l} %`]), 'Overall %'],
+          <Button variant="secondary" onClick={() => downloadCsv(`closer-os-targets_${fileTag}.csv`, ['Team member', ...metrics.flatMap(([, l]) => [`${l} actual`, `${l} target`, `${l} %`]), 'Overall %'],
             rows.map(r => [dir.nameOf(r.user_id), ...metrics.flatMap(([k]) => [r.actual[k], r.target[k] ?? '', pctOf(r.actual[k], r.target[k]) ?? '']), overall(r) || '']))}>CSV</Button>
           {canEdit && <Button onClick={() => setEditing(true)}><Target className="h-4 w-4" /> Set targets</Button>}
         </div>
@@ -64,7 +64,7 @@ export default function Targets({ dir, from, to, users, fileTag }: { dir: Direct
       ) : (
         <Card className="overflow-hidden">
           <table className="w-full table-fixed text-sm">
-            <thead className="bg-slate-50"><tr><th className="th w-[20%]">Person</th>{metrics.map(([, l]) => <th key={l} className="th">{l}</th>)}<th className="th w-[10%]">Overall</th></tr></thead>
+            <thead className="bg-slate-50"><tr><th className="th w-[20%]">Team member</th>{metrics.map(([, l]) => <th key={l} className="th">{l}</th>)}<th className="th w-[10%]">Overall</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
               {rows.map(r => (
                 <tr key={r.user_id} className="align-top">

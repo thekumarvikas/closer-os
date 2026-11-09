@@ -22,6 +22,7 @@ class CallEndReceiver : BroadcastReceiver() {
         val endedAt = System.currentTimeMillis()
         val app = ctx.applicationContext
         AfterCall.dirHint = CallKind.atIdle(ctx, endedAt)
+        runCatching { CallSync.syncAfterCall(app) }   // every call reaches the dashboard within a minute, outcome or not
         val done = goAsync()   // keeps the app awake while the call log is read and the lead looked up
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             @Suppress("DEPRECATION") val number = intent.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER)

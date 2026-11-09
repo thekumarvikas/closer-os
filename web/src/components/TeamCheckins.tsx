@@ -35,7 +35,7 @@ export default function TeamCheckins() {
         {!rows ? <div className="p-4 text-sm text-slate-500">Loading…</div> : rows.length === 0 ? <div className="p-4 text-sm text-slate-500">No one yet.</div> : (
           <table className="min-w-full table-fixed divide-y divide-slate-100 text-sm">
             <thead className="bg-slate-50"><tr>
-              <th className="th w-[18%]">Person</th><th className="th">Last hour</th><th className="th">Today</th><th className="th">Best hour</th><th className="th">Check-in</th>
+              <th className="th w-[18%]">Team member</th><th className="th">Last hour</th><th className="th">Today</th><th className="th">Best hour</th><th className="th">Check-in</th>
             </tr></thead>
             <tbody className="divide-y divide-slate-100">
               {rows.map(r => {

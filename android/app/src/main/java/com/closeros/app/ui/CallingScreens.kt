@@ -246,7 +246,12 @@ fun SyncStatusLine(vm: AppViewModel, onlyProblems: Boolean = false, small: Boole
         when {
             waiting + waUnsent > 0 -> "⏳ ${waiting + waUnsent} waiting to upload" + (if (waiting > 0) " (${waiting} outcome${if (waiting > 1) "s" else ""})" else "") + " — will send when online" to true
             last == 0L -> "⏳ Not synced yet" to true
-            System.currentTimeMillis() - last > 3 * 3_600_000 -> "⚠ Last synced $ago — check internet" to true
+            // Calls upload within a minute of ending; over an hour quiet means something is holding the app back.
+            System.currentTimeMillis() - last > 3_600_000 -> {
+                val battery = (ctx.getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager).isIgnoringBatteryOptimizations(ctx.packageName)
+                "⚠ Not synced for ${(System.currentTimeMillis() - last) / 3_600_000} h — " +
+                    (if (!com.closeros.app.data.Net.isOnline) "no internet" else if (!battery) "turn on Battery \"No restrictions\" in Phone setup" else "tap Sync now") to true
+            }
             else -> "✓ All synced · $ago" to false
         }
     }
@@ -294,14 +299,13 @@ fun HistoryRow(vm: AppViewModel, h: HistoryItem, onAdd: (() -> Unit)? = null, co
     var wa by remember { mutableStateOf(false) }
     var open by remember { mutableStateOf(false) }
     val missed = h.log.direction == "missed" || h.log.direction == "rejected"
-    val (arrow, arrowColor) = when (h.log.direction) {
-        "outgoing" -> "↗" to Color(0xFF0E7490); "incoming" -> "↙" to Color(0xFF16A34A); else -> "✕" to Brand.red
-    }
+    val arrow = CallColors.arrow(h.log.direction)
+    val arrowColor = CallColors.of(h.log.direction, h.log.durationSec)
     val name = h.lead?.name?.ifBlank { null } ?: h.log.name ?: fmtPhone(h.phone)
     val twoSims = remember { vm.sims().size > 1 }
     val time = java.time.format.DateTimeFormatter.ofPattern("h:mm a").format(Instant.ofEpochMilli(h.log.startedAtMs).atZone(java.time.ZoneId.systemDefault()))
     val what = when (h.log.direction) {
-        "outgoing" -> if (h.log.durationSec > 0) fmtDur(h.log.durationSec) else "No answer"
+        "outgoing" -> if (h.log.durationSec > 0) "Dialled · ${fmtDur(h.log.durationSec)}" else "Not picked up"
         "incoming" -> "Received · ${fmtDur(h.log.durationSec)}"
         "missed" -> "Missed"; else -> "Declined"
     }
@@ -311,15 +315,16 @@ fun HistoryRow(vm: AppViewModel, h: HistoryItem, onAdd: (() -> Unit)? = null, co
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(name + if (count > 1) "  ($count)" else "", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        color = if (missed) Brand.red else Color(0xFF0F172A), modifier = Modifier.weight(1f, fill = false))
+                        color = if (missed) arrowColor else Color(0xFF0F172A), modifier = Modifier.weight(1f, fill = false))
+                    if (h.log.channel == "whatsapp") WaBadge(Modifier.padding(start = 6.dp))
                     // Leads are the normal case: no tag. Only numbers not in the lead list are tagged.
                     if (h.lead == null && h.phone.isNotBlank()) Text("Not in lead list", fontSize = 10.sp, color = Color(0xFF475569),
                         modifier = Modifier.padding(start = 6.dp).background(Color(0xFFE2E8F0), RoundedCornerShape(50)).padding(horizontal = 6.dp, vertical = 1.dp))
                 }
-                Text(listOfNotNull(if (h.log.channel == "whatsapp") "WhatsApp" else null, what, time,
+                Text(listOfNotNull(what, time,
                     h.lead?.let { "${it.call_count} calls · ${it.conversation_count} conv." },
                     h.log.simSlot?.takeIf { twoSims && h.log.channel == "phone" }?.let { "SIM $it" }).joinToString(" · "),
-                    fontSize = 12.sp, color = if (missed) Brand.red else Brand.muted, maxLines = 1)
+                    fontSize = 12.sp, color = arrowColor, maxLines = 1)
             }
             val rec = vm.recordingPaths[h.log.id]
             if (rec != null) IconButton(onClick = { open = true }, modifier = Modifier.size(36.dp)) { Text("▶", color = Brand.primary, fontSize = 16.sp, fontWeight = FontWeight.Bold) }

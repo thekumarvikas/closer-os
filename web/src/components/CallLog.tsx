@@ -7,6 +7,7 @@ import { fmtDateTime, fmtPhone } from '../lib/format'
 import type { Organization } from '../lib/types'
 import { Badge, Button, Card, Empty, ErrorBox, Spinner } from './ui'
 import { dur } from './terms'
+import { CallColorKey, CallType, missingReason, type RecDevice } from './CallColors'
 
 export interface CallLogFilters { from?: string; to?: string; users: string[]; dir?: 'all' | 'out' | 'in'; ch?: 'all' | 'phone' | 'whatsapp' } // ISO instants; empty = all time
 interface Row {
@@ -20,7 +21,6 @@ const durations: [string, string, number | null, number | null][] = [
   ['31-120', '30 sec – 2 min', 31, 120], ['121-300', '2–5 min', 121, 300], ['301+', 'Over 5 min', 301, null],
 ]
 const typeName: Record<string, string> = { outgoing: 'Dialled', incoming: 'Received', missed: 'Missed', rejected: 'Declined' }
-const typeColor: Record<string, string> = { incoming: 'text-emerald-700', outgoing: 'text-sky-700', missed: 'text-red-600', rejected: 'text-red-600' }
 const PAGE = 100
 const SELECT = 'id,user_id,phone,direction,started_at,duration_sec,notes,outcome_id,recording_status,recording_path,sim_number,sim_slot,sim_label,channel,contact_name,lead:leads(name)'
 
@@ -40,6 +40,13 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
   const setOc = setOutcome ?? setLocalOutcome
   const [error, setError] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
+  const [devices, setDevices] = useState<Map<string, RecDevice>>(new Map())
+  useEffect(() => {
+    // Each team member's latest phone report: explains the red mic (why a call has no recording).
+    supabase.from('device_status').select('user_id,default_dialer,rec_folder_set,rec_files_found,rec_matched,rec_uploaded_total,rec_last_error,updated_at')
+      .eq('org_id', org.id).order('updated_at', { ascending: true })
+      .then(({ data }) => setDevices(new Map(((data ?? []) as RecDevice[]).map(d => [d.user_id, d]))))
+  }, [org.id])
 
   const build = useCallback(() => {
     const term = q.trim(), digits = term.replace(/\D/g, ''), byName = term && digits.length < 4
@@ -81,7 +88,7 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
     const { data, error } = await build().limit(20000)
     setExporting(false)
     if (error) return setError(errorText(error))
-    downloadCsv(`closer-os-calls_${fileTag}.csv`, ['Date & time', 'Person', 'Person phone', 'Dialled from', 'Contact', 'Contact number', 'Via', 'Type', 'Duration (sec)', 'Outcome', 'Notes', 'Recording'],
+    downloadCsv(`closer-os-calls_${fileTag}.csv`, ['Date & time', 'Team member', 'Team member phone', 'Dialled from', 'Lead', 'Lead number', 'Via', 'Type', 'Duration (sec)', 'Outcome', 'Notes', 'Recording'],
       (data as unknown as Row[]).map(c => [fmtDateTime(c.started_at, org), dir.nameOf(c.user_id), dir.phoneOf(c.user_id), from(c), c.lead?.name || c.contact_name || '', c.phone, c.channel === 'whatsapp' ? 'WhatsApp' : 'Phone',
         typeName[c.direction] ?? c.direction, c.duration_sec, dir.outcomeOf(c.outcome_id)?.label ?? '', c.notes ?? '', c.recording_status === 'uploaded' ? 'Yes' : '']))
   }
@@ -110,12 +117,13 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
         <Button variant="secondary" onClick={exportCsv} loading={exporting}><Download className="h-4 w-4" /> CSV</Button>
       </div>
       <ErrorBox error={error} />
+      <CallColorKey />
       <Card className="overflow-hidden">
         {!rows ? <Spinner /> : rows.length === 0 ? <Empty icon={<PhoneCall className="h-6 w-6" />} title="No calls match" text="Calls from the Closer OS app appear here automatically." /> : (
           <table className="w-full table-fixed text-sm">
             <thead className="bg-slate-50"><tr>
-              <th className="th w-[15%]">When</th><th className="th w-[19%]">Contact</th><th className="th w-[10%]">Type</th><th className="th w-[8%] !text-right">Length</th>
-              <th className="th w-[18%]">Outcome</th><th className="th w-[17%]">Person</th><th className="th w-[13%]">Dialled from</th>
+              <th className="th w-[15%]">When</th><th className="th w-[19%]">Lead</th><th className="th w-[10%]">Type</th><th className="th w-[8%] !text-right">Length</th>
+              <th className="th w-[18%]">Outcome</th><th className="th w-[17%]">Team member</th><th className="th w-[13%]">Dialled from</th>
             </tr></thead>
             <tbody className="divide-y divide-slate-100">
               {rows.map(c => (
@@ -123,9 +131,8 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
                   <td className="px-3 py-2 text-slate-600">{fmtDateTime(c.started_at, org)}</td>
                   <td className="truncate px-3 py-2">{c.lead ? <span className="font-medium">{c.lead.name || 'No name'}</span> : c.contact_name ? <span className="font-medium">{c.contact_name}</span> : null}
                     <span className={`block truncate ${c.lead || c.contact_name ? 'text-xs text-slate-500' : ''}`}>{fmtPhone(c.phone)}</span></td>
-                  <td className={`px-3 py-2 font-medium ${typeColor[c.direction] ?? ''}`}>{typeName[c.direction] ?? c.direction}
-                    {c.channel === 'whatsapp' && <span className="ml-1 rounded bg-emerald-50 px-1 text-[10px] font-semibold text-emerald-700" title="WhatsApp call">WA</span>}
-                    {c.recording_status === 'missing' ? <MicOff className="ml-1 inline h-3 w-3 text-red-500" /> : null}
+                  <td className="px-3 py-2"><CallType direction={c.direction} duration={c.duration_sec} channel={c.channel} />
+                    {c.recording_status === 'missing' ? <span title={missingReason(devices.get(c.user_id))} className="ml-1 inline-block cursor-help"><MicOff className="inline h-3 w-3 text-red-500" /></span> : null}
                     {(c.recording_status === 'uploaded' || c.recording_status === 'expired') && <PlayButton call={c} status={c.recording_status} />}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{c.duration_sec ? dur(c.duration_sec) : '—'}</td>
                   <td className="px-3 py-2"><span className="block truncate">{dir.outcomeOf(c.outcome_id)?.label ?? <span className="text-slate-400">—</span>}</span>

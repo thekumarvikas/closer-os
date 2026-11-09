@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode, useRef } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import type { Access, Member, Organization, Profile, Role } from './types'
@@ -30,7 +30,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     try { return localStorage.getItem(ORG_KEY) } catch { return null }
   })
 
+  const loadedUser = useRef<string | null | undefined>(undefined)
   const load = useCallback(async (s: Session | null) => {
+    loadedUser.current = s?.user.id ?? null
     if (!s) { setProfile(null); setMemberships([]); setLoading(false); return }
     // Join any company that invited this email address.
     await supabase.rpc('accept_my_invitations')
@@ -46,8 +48,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => { setSession(data.session); load(data.session) })
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
-      setSession(s)
-      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') { setLoading(true); load(s) }
+      // Coming back to the browser tab makes the login library announce "signed in" again for the SAME person.
+      // Only a real change of person (or sign-out) reloads everything — otherwise pages, filters and choices stay.
+      const sameUser = (s?.user.id ?? null) === loadedUser.current
+      setSession(prev => (prev?.access_token === s?.access_token ? prev : s))
+      if (event === 'SIGNED_OUT' || (event === 'SIGNED_IN' && !sameUser)) { setLoading(true); load(s) }
+      else if (event === 'USER_UPDATED') load(s)   // name / email changed: refresh quietly, no loading screen
     })
     return () => sub.subscription.unsubscribe()
   }, [load])

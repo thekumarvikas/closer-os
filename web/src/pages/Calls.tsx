@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo } from 'react'
+import { usePersisted } from '../lib/persist'
 import { supabase } from '../lib/supabase'
 import { useOrg } from '../lib/session'
 import { useDirectory } from '../lib/directory'
@@ -10,9 +11,9 @@ import CallLog from '../components/CallLog'
 export default function Calls() {
   const { org, isManager } = useOrg()
   const dir = useDirectory(org.id)
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
-  const [user, setUser] = useState('')
+  const [from, setFrom] = usePersisted('calls.from', '', { session: true })
+  const [to, setTo] = usePersisted('calls.to', '', { session: true })
+  const [user, setUser] = usePersisted('calls.user', '')
   // Flag calls with talk time that never got a recording (from reps whose phones do upload recordings).
   useEffect(() => { if (isManager) supabase.rpc('mark_missing_recordings', { p_org: org.id }).then(() => undefined) }, [org.id, isManager])
   const f = useMemo(() => ({
@@ -26,7 +27,7 @@ export default function Calls() {
       <PageHeader title="Calls" subtitle="Complete call history from your team's phones" actions={
         <div className="flex flex-wrap items-end gap-2">
           {isManager && dir && (
-            <label><span className="label">Person</span>
+            <label><span className="label">Team member</span>
               <select className="input !w-auto" value={user} onChange={e => setUser(e.target.value)}>
                 <option value="">Everyone</option>
                 {dir.members.map(m => <option key={m.user_id} value={m.user_id}>{dir.nameOf(m.user_id)}</option>)}

@@ -59,7 +59,7 @@ export default function OutcomeReportView({ org, dir, from, to, users, fileTag, 
 
   function exportCsv() {
     if (view === 'employees') {
-      downloadCsv(`closer-os-outcomes-by-employee_${fileTag}.csv`, ['Person', 'Calls', ...cols.map(o => o.label), 'Not filled', 'Sales', 'Revenue'],
+      downloadCsv(`closer-os-outcomes-by-employee_${fileTag}.csv`, ['Team member', 'Calls', ...cols.map(o => o.label), 'Not filled', 'Sales', 'Revenue'],
         [...[...r!.byUser].map(([u, v]) => [dir.nameOf(u), v.total.calls, ...cols.map(o => get(v.outcomes, o.id).calls), get(v.outcomes, null).calls, sumCat(v.outcomes, ['won']), revenue(v.outcomes)]),
           ['TOTAL', r!.total.calls, ...cols.map(o => get(r!.byOutcome, o.id).calls), get(r!.byOutcome, null).calls, sumCat(r!.byOutcome, ['won']), revenue(r!.byOutcome)]])
     } else {
@@ -109,7 +109,7 @@ export default function OutcomeReportView({ org, dir, from, to, users, fileTag, 
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex rounded-lg bg-slate-100 p-1 text-sm">
-          {([['employees', 'By person'], ['days', 'By day']] as const).map(([k, l]) => (
+          {([['employees', 'By team member'], ['days', 'By day']] as const).map(([k, l]) => (
             <button key={k} onClick={() => setView(k)} className={`rounded-md px-3 py-1.5 font-medium ${view === k ? 'bg-white shadow-sm' : 'text-slate-600'}`}>{l}</button>
           ))}
         </div>
@@ -118,7 +118,7 @@ export default function OutcomeReportView({ org, dir, from, to, users, fileTag, 
       <Card className="overflow-x-auto">
         <table className="min-w-full divide-y divide-slate-100">
           <thead className="bg-slate-50"><tr>
-            <th className="th sticky left-0 bg-slate-50">{view === 'employees' ? 'Person' : 'Date'}</th>
+            <th className="th sticky left-0 bg-slate-50">{view === 'employees' ? 'Team member' : 'Date'}</th>
             <th className="th">Calls</th>
             {groups.map(([g]) => <th key={g} className="th">{g}</th>)}
             <th className="th">Not filled</th><th className="th">Interested %</th><th className="th">Sales</th><th className="th">Revenue</th>

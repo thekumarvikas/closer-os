@@ -248,14 +248,25 @@ function PhoneStatus({ orgId, nameOf, version }: { orgId: string; nameOf: (id: s
     return [`Working · ${d.rec_uploaded_total ?? 0} uploaded`, 'green']
   }
   const color = { green: 'text-emerald-700', amber: 'text-amber-700', red: 'text-red-700' }
+  // A phone syncs every 15 minutes and after each call; over an hour without a report = it is being held back.
+  const staleMin = (d: Device) => Math.round((Date.now() - new Date(d.updated_at).getTime()) / 60000)
+  const latest = new Map<string, Device>()
+  for (const d of rows) if (!latest.has(d.user_id)) latest.set(d.user_id, d)
+  const stale = [...latest.values()].filter(d => staleMin(d) > 60)
   return (
     <>
       <h2 className="mb-1 font-semibold">Phones &amp; call recordings</h2>
+      {stale.length > 0 && (
+        <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          ⚠ Not synced for over an hour: {stale.map(d => `${nameOf(d.user_id)} (${ago(d.updated_at)})`).join(', ')}.
+          <span className="block text-xs text-amber-700">Usually the phone is off, has no internet, or the phone is stopping Closer OS in the background. Ask them to open the app once and finish Settings → Open phone setup (Battery "No restrictions" + Autostart).</span>
+        </div>
+      )}
       <p className="mb-2 text-sm text-slate-500">Each phone reports here after it syncs (app 0.4.1 or newer). A phone that isn't listed hasn't updated the app yet. Reps fix anything "not done" in the app: Profile → Open phone setup.</p>
       <Card className="mb-6 overflow-x-auto">
         {rows.length === 0 ? <div className="p-4 text-sm text-slate-500">No phone has reported yet. Install app 0.4.1 or newer and open it once.</div> : (
           <table className="min-w-full table-fixed divide-y divide-slate-100 text-sm">
-            <thead className="bg-slate-50"><tr><th className="th w-[16%]">Person</th><th className="th w-[18%]">Phone</th><th className="th">Phone setup</th><th className="th">Recordings</th><th className="th w-32">Last check</th></tr></thead>
+            <thead className="bg-slate-50"><tr><th className="th w-[16%]">Team member</th><th className="th w-[18%]">Phone</th><th className="th">Phone setup</th><th className="th">Recordings</th><th className="th w-32">Last synced</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
               {rows.map(d => {
                 const [text, c] = status(d)
@@ -271,7 +282,7 @@ function PhoneStatus({ orgId, nameOf, version }: { orgId: string; nameOf: (id: s
                     })()}</td>
                     <td className="td"><div className={color[c]}>{text}</div>
                       {d.rec_folder_set && <div className="text-xs text-slate-500">Last check: {d.rec_files_found ?? 0} files, {d.rec_matched ?? 0} of {d.rec_calls_checked ?? 0} answered calls matched</div>}</td>
-                    <td className="td text-slate-500">{ago(d.rec_checked_at ?? d.updated_at)}</td>
+                    <td className={`td ${staleMin(d) > 60 ? 'font-medium text-red-700' : 'text-slate-500'}`}>{ago(d.updated_at)}</td>
                   </tr>
                 )
               })}

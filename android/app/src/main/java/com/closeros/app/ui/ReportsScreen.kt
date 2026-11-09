@@ -51,6 +51,7 @@ fun ReportsScreen(vm: AppViewModel) {
     var leadScope by remember { mutableStateOf("all") }   // all = every lead · period = leads assigned in this period
     var status by remember { mutableStateOf<JsonObject?>(null) }
     var onPhone by remember { mutableStateOf(false) }   // true = worked out on this phone
+    var compare by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { if (vm.isManager) team = runCatching { Repo.teamBrief(m.org_id) }.getOrDefault(emptyList()) }
     LaunchedEffect(from, to, who) {
         data = null; error = null
@@ -98,6 +99,11 @@ fun ReportsScreen(vm: AppViewModel) {
                 .apply { setTitle("Until"); datePicker.minDate = start.atStartOfDay(zone).toInstant().toEpochMilli(); datePicker.maxDate = System.currentTimeMillis() }.show()
         }, from.year, from.monthValue - 1, from.dayOfMonth).apply { setTitle("From"); datePicker.maxDate = System.currentTimeMillis() }.show()
     }
+    if (compare) {
+        val users = when (who) { "all" -> null; "me" -> listOfNotNull(com.closeros.app.data.Backend.uid); else -> listOf(who) }
+        CompareScreen(vm, users, when (who) { "all" -> "Everyone"; "me" -> "Me"; else -> team.firstOrNull { it.id == who }?.name ?: "" }) { compare = false }
+        return
+    }
     val presets = listOf("Today" to (today to today), "Yesterday" to (today.minusDays(1) to today.minusDays(1)), "Last 7 days" to (today.minusDays(6) to today),
         "This month" to (today.withDayOfMonth(1) to today), "Last month" to (today.minusMonths(1).withDayOfMonth(1) to today.withDayOfMonth(1).minusDays(1)))
     val df = DateTimeFormatter.ofPattern("dd MMM")
@@ -133,6 +139,7 @@ fun ReportsScreen(vm: AppViewModel) {
                     OutlinedButton(onClick = { vm.showLeadWork = true }, modifier = Modifier.weight(1f)) { Text("📈 Lead work") }
                     OutlinedButton(onClick = { vm.showRecipe = true }, modifier = Modifier.weight(1f)) { Text("💡 What works") }
                 }
+                Button(onClick = { compare = true }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) { Text("⇅ Compare periods (▲▼ vs before)") }
             }
             item {
                 val tiles = listOf(

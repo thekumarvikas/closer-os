@@ -48,7 +48,7 @@ export default function LeadStatus({ orgId, dir, users, from, to }: { orgId: str
       </div>
       {s.by_rep.length > 1 && (
         <table className="mt-4 w-full table-fixed text-sm">
-          <thead className="bg-slate-50"><tr><th className="th">Person</th><th className="th">Leads</th><th className="th">Called</th><th className="th">Reached</th><th className="th">Interested</th><th className="th">Won</th><th className="th">Conversion</th></tr></thead>
+          <thead className="bg-slate-50"><tr><th className="th">Team member</th><th className="th">Leads</th><th className="th">Called</th><th className="th">Reached</th><th className="th">Interested</th><th className="th">Won</th><th className="th">Conversion</th></tr></thead>
           <tbody className="divide-y divide-slate-100">
             {s.by_rep.map(r => { const p = (n: number) => r.total ? Math.round(n * 100 / r.total) : 0; return (
               <tr key={r.assigned_to}><td className="truncate px-3 py-2 font-medium">{dir.nameOf(r.assigned_to)}</td><td className="px-3 py-2">{r.total}</td>

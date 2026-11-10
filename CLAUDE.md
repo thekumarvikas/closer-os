@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.18.0
+## Android app (`android/`) — v0.18.1
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -1187,3 +1187,15 @@ intelligence → Play Store launch.
 - IndiaMART: owner has no key. Simulated a CRM v2 lead through ingest_lead (rolled back): name, mobile,
   email, company, city, state, product (campaign), message (notes) mapped; repeat enquiry = no duplicate.
   Needs the dashboard-set field_map (city/state/campaign); live API call itself still untested.
+
+## Call time on outcome screens + Calls search (v0.18.1, Nov 10 2026)
+- Owner: outcomes are often filled later (several calls with one person) → the outcome screen must say
+  WHEN the call was. fmtCallTime(ms) (Screens.kt): "Today, 5:33 PM · 12 min ago" / "Yesterday, 8:36 PM" /
+  "Mon 9 Nov, 4:00 PM"; shown on OutcomeScreen ("🕒 …", + "Dialled call · talked/not answered", "Missed
+  call") and in the after-call pop-up header.
+- Calls tab search box: vm.searchCalls(q) over the phone's last 3,000 calls (searchPool, reset by
+  loadHistory) — number, saved contact name, call type words ("missed", "not picked"), the lead's details
+  (name, company, profession, city, state, email, source, campaign, key facts, imported notes, tags, own
+  fields), notes via Repo.searchLeadIds (search_leads; phone copy offline), the lead's last outcome label
+  and the outcome saved for that call (LocalReports.outcomeOfCalls) → "interested" lists those calls.
+  Chips still filter the results. App tile/buttons "What works" renamed "Sales insights".

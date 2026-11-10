@@ -124,10 +124,13 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
                     when {
                         log == null -> "Call not found in the phone's call log yet"
                         log.direction == "incoming" -> "Received call · talked ${fmtDur(log.durationSec)}" + (log.simLabel?.let { " · $it" } ?: "")
-                        log.durationSec > 0 -> "Talked ${fmtDur(log.durationSec)}" + (log.simLabel?.let { " · $it" } ?: "")
-                        else -> "Not answered" + (log.simLabel?.let { " · $it" } ?: "")
+                        log.direction == "missed" || log.direction == "rejected" -> "Missed call" + (log.simLabel?.let { " · $it" } ?: "")
+                        log.durationSec > 0 -> "Dialled call · talked ${fmtDur(log.durationSec)}" + (log.simLabel?.let { " · $it" } ?: "")
+                        else -> "Dialled call · not answered" + (log.simLabel?.let { " · $it" } ?: "")
                     }, color = Brand.muted, fontSize = 14.sp,
                 )
+                // When the call happened: outcomes are often filled later, after other calls with the same person.
+                Text("🕒 " + fmtCallTime(log?.startedAtMs ?: p.startedAtMs), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Color(0xFF0F172A))
             }
         }
 

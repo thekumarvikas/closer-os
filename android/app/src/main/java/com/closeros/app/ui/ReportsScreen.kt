@@ -137,7 +137,7 @@ fun ReportsScreen(vm: AppViewModel) {
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { vm.showLeadWork = true }, modifier = Modifier.weight(1f)) { Text("📈 Lead work") }
-                    OutlinedButton(onClick = { vm.showRecipe = true }, modifier = Modifier.weight(1f)) { Text("💡 What works") }
+                    OutlinedButton(onClick = { vm.showRecipe = true }, modifier = Modifier.weight(1f)) { Text("💡 Sales insights") }
                 }
                 Button(onClick = { compare = true }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) { Text("⇅ Compare periods (▲▼ vs before)") }
             }

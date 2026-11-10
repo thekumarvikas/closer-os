@@ -396,6 +396,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Phone call history, with lead names where the number is a lead. */
     fun loadHistory() = viewModelScope.launch {
         val m = membership ?: return@launch
+        searchPool = null
         val all = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { PhoneCalls.history(ctx, historyLimit + 1) }
         historyHasMore = all.size > historyLimit
         val logs = all.take(historyLimit)
@@ -407,6 +408,36 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         runCatching { Repo.leadsByPhones(m.org_id, phones) }.onSuccess { server ->
             com.closeros.app.data.LeadIndex.remember(ctx, server.values)
             history = logs.mapIndexed { i, l -> HistoryItem(l, phones[i], server[phones[i]]) }
+        }
+    }
+
+    /** Calls search: the phone's last 3,000 calls, matched on number, saved name, the lead's details
+     *  (company, profession, city, source, key facts, tags, own fields), notes (server search), the lead's
+     *  last outcome and the outcome saved for that call — e.g. "interested" lists every such call. */
+    private var searchPool: List<HistoryItem>? = null
+    suspend fun searchCalls(query: String): List<HistoryItem> {
+        val m = membership ?: return emptyList()
+        val q = query.trim().lowercase()
+        if (q.length < 2) return emptyList()
+        val pool = searchPool ?: kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val logs = PhoneCalls.history(ctx, 3000)
+            val phones = logs.map { normalizePhone(it.phone, prefix) }
+            val local = phones.distinct().mapNotNull { p -> com.closeros.app.data.LeadIndex.find(ctx, p)?.let { p to it } }.toMap()
+            logs.mapIndexed { i, l -> HistoryItem(l, phones[i], local[phones[i]]) }
+        }.also { searchPool = it }
+        val digits = q.filter { it.isDigit() }
+        val label = outcomes.associate { it.id to it.label.lowercase() }
+        val ofCall = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.closeros.app.data.LocalReports.outcomeOfCalls(ctx) }
+        val ids = runCatching { Repo.searchLeadIds(m.org_id, query) }.getOrDefault(emptySet())
+        return pool.filter { h ->
+            val l = h.lead
+            (digits.length >= 3 && h.phone.contains(digits)) ||
+                h.log.name?.lowercase()?.contains(q) == true ||
+                label[ofCall[h.log.id]]?.contains(q) == true ||
+                CallColors.label(h.log.direction, h.log.durationSec).lowercase().contains(q) ||
+                (l != null && (l.id in ids || label[l.last_outcome_id]?.contains(q) == true ||
+                    listOfNotNull(l.name, l.company, l.profession, l.city, l.state, l.email, l.source, l.campaign, l.key_facts, l.notes,
+                        l.tags?.joinToString(" "), l.custom?.toString()).any { it.lowercase().contains(q) }))
         }
     }
 

@@ -52,6 +52,17 @@ private val zone: ZoneId = ZoneId.of("Asia/Kolkata")
 fun fmtWhen(iso: String?): String = iso?.let {
     runCatching { DateTimeFormatter.ofPattern("dd/MM, h:mm a").withZone(zone).format(com.closeros.app.data.parseInstant(it)) }.getOrNull()
 } ?: "—"
+/** When a call happened, for outcome screens: "Today, 5:33 PM · 12 min ago" / "Yesterday, 8:36 PM" / "Mon 9 Nov, 4:00 PM". */
+fun fmtCallTime(ms: Long): String {
+    val zone = java.time.ZoneId.systemDefault()
+    val t = java.time.Instant.ofEpochMilli(ms).atZone(zone)
+    val today = java.time.LocalDate.now(zone)
+    val day = when (t.toLocalDate()) { today -> "Today"; today.minusDays(1) -> "Yesterday"; else -> t.format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM")) }
+    val mins = (System.currentTimeMillis() - ms) / 60_000
+    val ago = when { mins < 1 -> " · just now"; mins < 60 -> " · $mins min ago"; mins < 24 * 60 -> " · ${mins / 60} h ago"; else -> "" }
+    return "$day, ${t.format(java.time.format.DateTimeFormatter.ofPattern("h:mm a"))}$ago"
+}
+
 fun fmtDur(sec: Int): String = when {
     sec >= 3600 -> "${sec / 3600}h ${sec % 3600 / 60}m"
     sec >= 60 -> "${sec / 60}m ${sec % 60}s"

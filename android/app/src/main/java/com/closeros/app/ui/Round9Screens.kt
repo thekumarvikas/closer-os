@@ -324,7 +324,7 @@ fun RecipeScreen(vm: AppViewModel) {
     val users = when (who) { "all" -> null; "me" -> listOfNotNull(com.closeros.app.data.Backend.uid); else -> listOf(who) }
     val (from, to) = range(period)
     LaunchedEffect(who, period) { data = null; data = runCatching { Repo.salesRecipe(m.org_id, users, from, to) as JsonObject }.getOrNull() ?: JsonObject(emptyMap()) }
-    Scaffold(topBar = { Bar(if (who == "me") "What works for me" else "What works", { vm.showRecipe = false }) }) { pad ->
+    Scaffold(topBar = { Bar(if (who == "me") "My sales insights" else "Sales insights", { vm.showRecipe = false }) }) { pad ->
         Column(Modifier.fillMaxSize().padding(pad).verticalScroll(rememberScrollState()).padding(16.dp, 0.dp, 16.dp, 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf("all" to "All time", "month" to "This month", "week" to "This week").forEach { (k, l) -> FilterChip(period == k, { period = k }, { Text(l) }) }

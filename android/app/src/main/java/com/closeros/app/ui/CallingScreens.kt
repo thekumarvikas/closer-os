@@ -214,7 +214,7 @@ fun HomeScreen(vm: AppViewModel) {
                 ToolTile("📊", if (vm.isManager) "Reports" else "My reports", Modifier.weight(1f)) { vm.showReports = true }
                 ToolTile("⚡", "Efficiency", Modifier.weight(1f)) { vm.showEfficiency = true }
                 ToolTile("📈", "Lead work", Modifier.weight(1f)) { vm.showLeadWork = true }
-                ToolTile("💡", "What works", Modifier.weight(1f)) { vm.showRecipe = true }
+                ToolTile("💡", "Sales insights", Modifier.weight(1f)) { vm.showRecipe = true }
                 if (vm.reviews.isNotEmpty()) ToolTile("🎯", "Feedback", Modifier.weight(1f)) { vm.showFeedback = true }
             }
         }

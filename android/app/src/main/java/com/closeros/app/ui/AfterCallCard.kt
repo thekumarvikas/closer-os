@@ -129,7 +129,7 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
                 // Same call colour as the call lists, as a dot on a white ring (the header is coloured).
                 if (c != null) Box(Modifier.padding(end = 6.dp).size(14.dp).background(Color.White, CircleShape).padding(2.dp)
                     .background(CallColors.of(c.direction, c.durationSec), CircleShape))
-                Text(listOfNotNull(if ((lead?.name.isNullOrBlank() && info.contactName == null) || number.isBlank()) null else fmtPhone(number), c?.let(::callLine) ?: "Call ended", c?.simLabel).joinToString(" · "),
+                Text(listOfNotNull(if ((lead?.name.isNullOrBlank() && info.contactName == null) || number.isBlank()) null else fmtPhone(number), c?.let(::callLine) ?: "Call ended", c?.let { fmtCallTime(it.startedAtMs).substringBefore(" · ") }, c?.simLabel).joinToString(" · "),
                     color = Color.White.copy(alpha = 0.9f), fontSize = 14.sp)
             }
             if (notInList) Text(if (info.lookupFailed) "Couldn't check the lead list (no internet)" else "Not in lead list",

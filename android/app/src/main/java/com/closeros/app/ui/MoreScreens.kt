@@ -82,6 +82,12 @@ fun CallHistoryScreen(vm: AppViewModel) {
     var adding by remember { mutableStateOf<HistoryItem?>(null) }
     var filter by remember { mutableStateOf("all") }
     LaunchedEffect(Unit) { vm.loadHistory() }
+    var q by remember { mutableStateOf("") }
+    var found by remember { mutableStateOf<List<HistoryItem>?>(null) }
+    LaunchedEffect(q) {
+        found = null
+        if (q.trim().length >= 2) { kotlinx.coroutines.delay(350); found = vm.searchCalls(q) }
+    }
     val items = vm.history
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(16.dp, 8.dp, 4.dp, 0.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -94,9 +100,15 @@ fun CallHistoryScreen(vm: AppViewModel) {
                 FilterChip(selected = filter == k, onClick = { filter = k }, label = { Text(l, fontSize = 13.sp) })
             }
         }
+        OutlinedTextField(q, { q = it }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+            placeholder = { Text("Search: name, number, city, notes, \"interested\"…", fontSize = 14.sp) },
+            trailingIcon = { if (q.isNotEmpty()) TextButton(onClick = { q = "" }) { Text("✕") } })
         CallColorKey(Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
         if (items == null) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }; return }
-        val shown = items.distinctBy { it.log.id }.filter {
+        val searching = q.trim().length >= 2
+        if (searching) Text(when { found == null -> "Searching…"; else -> "${found!!.size} call${if (found!!.size == 1) "" else "s"} found in your phone's call history" },
+            fontSize = 12.sp, color = Brand.muted, modifier = Modifier.padding(horizontal = 16.dp))
+        val shown = (if (searching) found.orEmpty() else items).distinctBy { it.log.id }.filter {
             when (filter) {
                 "whatsapp" -> it.log.channel == "whatsapp"; "unknown" -> it.lead == null
                 "dialled" -> it.log.direction == "outgoing"; "received" -> it.log.direction == "incoming"
@@ -106,7 +118,7 @@ fun CallHistoryScreen(vm: AppViewModel) {
                 else -> true }
         }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp, 0.dp, 8.dp, 88.dp)) {
-            if (shown.isEmpty()) item { Text("No calls here.", color = Brand.muted, modifier = Modifier.padding(8.dp)) }
+            if (shown.isEmpty() && !(searching && found == null)) item { Text(if (searching) "No calls match \"${q.trim()}\"." else "No calls here.", color = Brand.muted, modifier = Modifier.padding(8.dp)) }
             groupCalls(shown).forEach { (day, rows) ->
                 item(key = "d$day") { Text(day.uppercase(), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Brand.muted, modifier = Modifier.padding(start = 4.dp, top = 12.dp, bottom = 2.dp)) }
                 items(rows, key = { it.first.log.id }) { (h, n) ->
@@ -114,7 +126,7 @@ fun CallHistoryScreen(vm: AppViewModel) {
                     HorizontalDivider(color = Color(0xFFF1F5F9), modifier = Modifier.padding(start = 30.dp))
                 }
             }
-            if (vm.historyHasMore) item {
+            if (vm.historyHasMore && !searching) item {
                 OutlinedButton(onClick = { vm.historyLimit += 500; vm.loadHistory() }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("Load older calls") }
             }
         }

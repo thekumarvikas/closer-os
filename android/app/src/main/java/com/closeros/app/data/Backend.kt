@@ -348,6 +348,15 @@ object Repo {
         }
     }
 
+    /** Ids of leads matching a text search (name, number, details, key facts, notes); phone copy when offline. */
+    suspend fun searchLeadIds(orgId: String, query: String): Set<String> {
+        if (query.trim().length < 2) return emptySet()
+        val local = { LocalLeads.search(AppCtx.ctx, query, 0, false, LeadFilters()).map { it.id }.toSet() }
+        if (!Net.isOnline) return local()
+        return runCatching { json.decodeFromString<List<String>>(rpcR("search_leads", buildJsonObject { put("p_org", orgId); put("p_q", query.trim()) }).data).toSet() }
+            .getOrElse { local() }
+    }
+
     private suspend fun leadsOnline(orgId: String, query: String, page: Int, mineOnly: Boolean, f: LeadFilters): List<Lead> {
         // Text search covers name, phone, email, company, profession, city, own fields, key facts and all notes.
         val ids: List<String>? = if (query.trim().length >= 2) runCatching {

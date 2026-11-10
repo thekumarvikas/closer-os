@@ -34,6 +34,9 @@ object LocalReports {
     private fun outcomesMap(ctx: Context): Map<String, String> =
         LocalDb.get(ctx).get(KEY)?.let { runCatching { json.decodeFromString(mapSer, it) }.getOrNull() } ?: emptyMap()
 
+    /** Call id → outcome id, for outcomes saved from this phone (used by the Calls search). */
+    fun outcomeOfCalls(ctx: Context): Map<String, String> = outcomesMap(ctx).mapValues { it.value.substringBefore('|') }
+
     /** Remember an outcome saved on this phone ("outcomeId|leadId|savedAtMs"). */
     fun recordOutcome(ctx: Context, payload: JsonObject) {
         val id = payload["id"]?.jsonPrimitive?.content ?: return

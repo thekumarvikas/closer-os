@@ -1165,3 +1165,25 @@ intelligence → Play Store launch.
   pending (balance due → incentive waiting). Reps see only their own numbers.
 - App card name: "My Sales Revenue" (NOT "My earnings"). Motivating, never negative.
 - Later only if customers ask: credit splits, clawbacks, custom formulas.
+
+## Owner decisions — launch planning round (Nov 10, 2026; nothing built yet)
+- Sales: rep can add a lead + CLAIM a sale; manager VERIFIES (sees the rep↔lead engagement: calls, talk,
+  WhatsApp, recordings) and gives the credit; verified sales show in that rep's numbers. NO incentives for
+  now — revenue only; distinguish FULL vs PART payments. Product/course PRICE LIST in dashboard Settings
+  (management). Refunds deducted from revenue. Managers lock a month. Payments entered MANUALLY by the
+  team (UPI QR / bank / cash common) — no per-client Razorpay auto-verify.
+- Brainstorm first, then build: pipeline + forecast; tasks beyond calls; manager automation rules.
+- Later add-ons: Google Calendar, AI summaries, WhatsApp Business API. Cloud calling = separate business, drop.
+- Duplicates must not exist: same number again → one lead marked "Repeated", showing every place it came
+  from (sources / campaigns / batches); merge where possible.
+- BUILD: outcomes ordered by each rep's own usage. Firebase push: yes.
+- Domain ideas: closeros.in / .com (".os" is not a real domain ending). Owner wants a logo + international
+  look; current colours OK. Plan prices: owner deciding later. Trial 21 days. GST: owner may register;
+  clients usually have GST. Legal pages (privacy, terms): draft. Pilot with 1–3 businesses first.
+  Supabase upgrade: yes, owner wants details. Facebook direct: not needed (Pabbly/Zapier enough).
+  Sales pages: Flexifunnels. Owner has NOT tested anything since 0.17.x yet.
+- Play Store idea (owner): two apps like Callyzer / Callyzer Biz — a light app for individual reps, free
+  trial without card, then ~₹99/month; plus the full business app. Both distribution channels (Play + APK).
+- IndiaMART: owner has no key. Simulated a CRM v2 lead through ingest_lead (rolled back): name, mobile,
+  email, company, city, state, product (campaign), message (notes) mapped; repeat enquiry = no duplicate.
+  Needs the dashboard-set field_map (city/state/campaign); live API call itself still untested.

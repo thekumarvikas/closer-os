@@ -12,8 +12,8 @@ android {
         applicationId = "com.closeros.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 68
-        versionName = "0.18.3"
+        versionCode = 69
+        versionName = "0.19.0"
         // Public values: the publishable key is meant to be in apps; data is protected by database rules.
         buildConfigField("String", "SUPABASE_URL", "\"https://tdbqgoxxxfkfttdznzhb.supabase.co\"")
         buildConfigField("String", "SUPABASE_KEY", "\"sb_publishable_aXH8Wr7Lq1YeOWxhvxEdGQ_ePS1GYTY\"")
@@ -24,8 +24,23 @@ android {
     //          Google Play Protect blocks directly-installed apps that read notifications.
     flavorDimensions += "dist"
     productFlavors {
-        create("full") { dimension = "dist"; buildConfigField("boolean", "WA_TRACKING", "true") }
-        create("direct") { dimension = "dist"; buildConfigField("boolean", "WA_TRACKING", "false") }
+        create("full") { dimension = "dist"; buildConfigField("boolean", "WA_TRACKING", "true"); buildConfigField("boolean", "SOLO", "false") }
+        create("direct") { dimension = "dist"; buildConfigField("boolean", "WA_TRACKING", "false"); buildConfigField("boolean", "SOLO", "false") }
+        // solo = "Closer OS" for individuals on the Play Store: free with ads, "Remove ads" subscription.
+        // Ad IDs below are Google's TEST ids — replace with the real AdMob ids before publishing.
+        create("solo") {
+            dimension = "dist"
+            applicationId = "com.closeros.solo"
+            buildConfigField("boolean", "WA_TRACKING", "true"); buildConfigField("boolean", "SOLO", "true")
+            manifestPlaceholders["admobAppId"] = "ca-app-pub-3940256099942544~3347511713"
+            buildConfigField("String", "AD_BANNER", "\"ca-app-pub-3940256099942544/9214589741\"")
+            buildConfigField("String", "AD_REWARDED", "\"ca-app-pub-3940256099942544/5224354917\"")
+        }
+    }
+    // The company builds share one "no ads" version of Monetize.kt.
+    sourceSets {
+        getByName("full").java.srcDir("src/team/java")
+        getByName("direct").java.srcDir("src/team/java")
     }
     // Test-only signing key so every test build updates the previous one. Not the Play Store key.
     signingConfigs {
@@ -73,4 +88,8 @@ dependencies {
     implementation("androidx.documentfile:documentfile:1.0.1")
     implementation("io.ktor:ktor-client-okhttp:3.0.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+    // Individual app only: Google ads (with the privacy-consent form) and Google Play subscriptions.
+    "soloImplementation"("com.google.android.gms:play-services-ads:23.6.0")
+    "soloImplementation"("com.android.billingclient:billing-ktx:7.1.1")
+    "soloImplementation"("androidx.fragment:fragment-ktx:1.8.5")   // the ads library brings an old version
 }

@@ -185,6 +185,27 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var rowCategory: Map<String, String?> = emptyMap()
 
     val isManager get() = membership?.role in setOf("owner", "admin", "manager")
+    /** Individual (Play Store) app or a one-person account: no team features. */
+    val isSolo get() = com.closeros.app.BuildConfig.SOLO || membership?.organization?.is_individual == true
+
+    // ───── Individual app: "watch a short ad to unlock" ─────
+    /** Feature waiting for the rep's choice (ad / remove ads / not now) and what to do once open. */
+    var gate by mutableStateOf<Pair<com.closeros.app.data.Feature, () -> Unit>?>(null)
+    var showRemoveAds by mutableStateOf(false)
+    fun require(f: com.closeros.app.data.Feature, then: () -> Unit) {
+        val U = com.closeros.app.data.Unlocks
+        if (U.open(ctx, f)) { then(); return }
+        if (U.takeFreeToday(ctx)) { U.grant(ctx, f); message = "Today's first unlock is free 🎁"; then(); return }
+        // No internet (no ad possible) or an ad was asked less than 10 minutes ago: just open it.
+        if (!com.closeros.app.data.Net.isOnline || U.askedRecently(ctx)) { U.grant(ctx, f); then(); return }
+        gate = f to then
+    }
+    /** The ad was watched (or none was available): open the feature. */
+    fun gateGranted() {
+        val (f, then) = gate ?: return
+        gate = null
+        com.closeros.app.data.Unlocks.markAsked(ctx); com.closeros.app.data.Unlocks.grant(ctx, f); then()
+    }
 
     fun loadBatches(quiet: Boolean = false) = viewModelScope.launch {
         val m = membership ?: return@launch
@@ -264,7 +285,15 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         loadingOrg = membership == null
         runCatching {
-            membership = Repo.membership().also { save("membership", it) }
+            membership = Repo.membership()
+            // Individual app: the first sign-in creates the person's own free account (their country, currency, time zone).
+            if (membership == null && com.closeros.app.BuildConfig.SOLO) {
+                val c = com.closeros.app.data.Country.detect(ctx)
+                val name = runCatching { Repo.profile()?.full_name }.getOrNull().orEmpty()
+                Repo.createIndividualAccount(name, c.code, c.prefix, c.currency, c.timezone)
+                membership = Repo.membership()
+            }
+            save("membership", membership)
             membership?.let { store.trackWhatsapp = it.organization.trackWhatsapp }
             profile = Repo.profile().also { save("profile", it) }
             membership?.let { m ->
@@ -334,7 +363,15 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (list.isEmpty()) { message = "No leads to call"; return }
         queue = list; queuePos = 0; queueDone = 0; queueActive = true; queuePaused = false; countdown = null
         todayFilter = null; openLeadId = null
-        callRequest = list.first()
+        dialQueued(list.first())
+    }
+
+    /** Next call of the queue; in the individual app every 25 calls ask for a short ad first. */
+    private fun dialQueued(l: Lead) {
+        val q = com.closeros.app.data.Feature.QUEUE
+        if (com.closeros.app.data.Unlocks.open(ctx, q)) { com.closeros.app.data.Unlocks.use(ctx, q); callRequest = l; return }
+        queuePaused = true; countdown = null
+        require(q) { queuePaused = false; com.closeros.app.data.Unlocks.use(ctx, q); callRequest = l }
     }
 
     /** After an outcome is saved: count down, then call the next lead (unless paused). */
@@ -353,10 +390,10 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (!foreground || com.closeros.app.calls.AfterCall.Overlay.isShowing || AfterCallActivity.open) {
             countdown = null; queuePaused = true; return
         }
-        if (c <= 1) { countdown = null; queue.getOrNull(queuePos)?.let { callRequest = it } } else countdown = c - 1
+        if (c <= 1) { countdown = null; queue.getOrNull(queuePos)?.let { dialQueued(it) } } else countdown = c - 1
     }
 
-    fun queueCallNow() { countdown = null; queue.getOrNull(queuePos)?.let { callRequest = it } }
+    fun queueCallNow() { countdown = null; queue.getOrNull(queuePos)?.let { dialQueued(it) } }
     fun queueSkip() {
         countdown = null; queuePos++
         if (queuePos >= queue.size) { queueActive = false; message = "Queue finished" } else if (!queuePaused) countdown = store.countdownSec
@@ -501,6 +538,37 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         searchJob = viewModelScope.launch { delay(350); reloadLeads() }
     }
 
+    /** Individual app: create a login. onDone(null) = signed in; otherwise a message to show. */
+    fun signUp(name: String, email: String, password: String, onDone: (String?) -> Unit) = viewModelScope.launch {
+        runCatching { Repo.signUp(name, email, password) }.onSuccess { signedIn ->
+            if (signedIn) { com.closeros.app.calls.DeviceGuard.claim(ctx); onDone(null) }
+            else onDone("✉ Almost done — open the email we sent to $email, tap the link, then sign in here.")
+        }.onFailure {
+            val m = it.message.orEmpty()
+            onDone(when {
+                m.contains("already", true) -> "This email already has an account — sign in instead."
+                m.contains("password", true) -> "Choose a password with at least 6 characters."
+                m.contains("email", true) && m.contains("invalid", true) -> "Check the email address."
+                else -> "Couldn't create the account. Check your internet."
+            })
+        }
+    }
+
+    /** Settings → Delete my account: removes the account, its leads, calls and notes, then signs out. */
+    fun deleteAccount(onError: (String) -> Unit) = viewModelScope.launch {
+        runCatching { Repo.deleteMyAccount() }.onSuccess {
+            runCatching { Backend.auth.signOut(io.github.jan.supabase.auth.SignOutScope.LOCAL) }
+            FollowUpAlarms.scheduleAll(ctx, emptyList()); store.clear(); cache.clearCache(); leads.clear(); pending = null; needsSetup = true
+            membership = null; message = "Your account and all its data were deleted"
+        }.onFailure { onError(it.message?.substringAfter("ERROR:")?.substringBefore("\n")?.substringAfter(":")?.trim()?.take(160) ?: "Couldn't delete — check your internet") }
+    }
+
+    fun resetPassword(email: String) = viewModelScope.launch {
+        runCatching { Backend.auth.resetPasswordForEmail(email.trim()) }
+            .onSuccess { message = "Email sent — open the link to choose a new password" }
+            .onFailure { message = "Couldn't send the email. Check the address and your internet." }
+    }
+
     fun signIn(email: String, password: String, onError: (String) -> Unit) = viewModelScope.launch {
         runCatching { Repo.signIn(email, password) }.onSuccess { com.closeros.app.calls.DeviceGuard.claim(ctx) }.onFailure {
             onError(if (it.message?.contains("Invalid login", true) == true) "Wrong email or password"
@@ -551,7 +619,11 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun loadRecordings(ids: List<String>) = viewModelScope.launch {
-        runCatching { recordingPaths = Repo.recordingPaths(ids.take(500)) }
+        // Recordings found on this phone (the individual app only has these) + those uploaded to Closer OS.
+        val local = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.closeros.app.calls.LocalRecordings.known(ctx) }
+        val onPhone = ids.filter { it in local }.associateWith { "phone:$it" }
+        recordingPaths = onPhone
+        if (!com.closeros.app.BuildConfig.SOLO) runCatching { recordingPaths = onPhone + Repo.recordingPaths(ids.take(500)) }
     }
 
     /** Today's focus: every lead needing attention today, most important first, as a calling queue. */
@@ -597,14 +669,19 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         val already = runCatching { Repo.waSentToday(m.org_id, t.id, list.map { it.id }) }.getOrDefault(emptySet())
         if (already.isNotEmpty()) { list = list.filter { it.id !in already }; message = "${already.size} already got this message today — skipped" }
         if (list.isEmpty()) { message = "Everyone in this list already got this message today"; return@launch }
-        waQueue = list; waPos = 0; waTemplate = t; waSent = 0; waPaused = false; waCountdown = null; waCanUndo = false; waActive = true
-        genericList = null; selectMode = false
+        require(com.closeros.app.data.Feature.WA_QUEUE) {
+            waQueue = list; waPos = 0; waTemplate = t; waSent = 0; waPaused = false; waCountdown = null; waCanUndo = false; waActive = true
+            genericList = null; selectMode = false
+        }
     }
 
     /** Opens WhatsApp for the current lead with the message (and the message's file) ready. */
-    fun waOpenCurrent() = viewModelScope.launch {
+    fun waOpenCurrent(): kotlinx.coroutines.Job = viewModelScope.launch {
         val l = waQueue.getOrNull(waPos) ?: return@launch
         val t = waTemplate ?: return@launch
+        val wq = com.closeros.app.data.Feature.WA_QUEUE
+        if (!com.closeros.app.data.Unlocks.open(ctx, wq)) { waPaused = true; waCountdown = null; require(wq) { waPaused = false; waOpenCurrent() }; return@launch }
+        com.closeros.app.data.Unlocks.use(ctx, wq)
         val text = fillTemplate(t.body, l)
         waCountdown = null; waAwaiting = true
         val path = t.media_path

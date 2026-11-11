@@ -117,10 +117,10 @@ fun ReportsScreen(vm: AppViewModel) {
             }
         }
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(12.dp, 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            presets.forEach { (l, r) -> FilterChip(from == r.first && to == r.second, { from = r.first; to = r.second }, { Text(l) }) }
-            FilterChip(presets.none { from == it.second.first && to == it.second.second }, { pickDates() }, { Text("Pick dates") })
+            presets.forEach { (l, r) -> FilterChip(from == r.first && to == r.second, { if (l == "Today") { from = r.first; to = r.second } else vm.require(com.closeros.app.data.Feature.REPORTS) { from = r.first; to = r.second } }, { Text(l) }) }
+            FilterChip(presets.none { from == it.second.first && to == it.second.second }, { vm.require(com.closeros.app.data.Feature.REPORTS) { pickDates() } }, { Text("Pick dates") })
         }
-        if (vm.isManager) Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (vm.isManager && !vm.isSolo) Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             FilterChip(who == "all", { who = "all" }, { Text("Everyone") })
             FilterChip(who == "me", { who = "me" }, { Text("Me") })
             team.filter { it.id != com.closeros.app.data.Backend.uid }.forEach { p -> FilterChip(who == p.id, { who = p.id }, { Text(p.name.substringBefore(' ')) }) }
@@ -136,10 +136,10 @@ fun ReportsScreen(vm: AppViewModel) {
         LazyColumn(contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { vm.showLeadWork = true }, modifier = Modifier.weight(1f)) { Text("📈 Lead work") }
-                    OutlinedButton(onClick = { vm.showRecipe = true }, modifier = Modifier.weight(1f)) { Text("💡 Sales insights") }
+                    OutlinedButton(onClick = { vm.require(com.closeros.app.data.Feature.REPORTS) { vm.showLeadWork = true } }, modifier = Modifier.weight(1f)) { Text("📈 Lead work") }
+                    OutlinedButton(onClick = { vm.require(com.closeros.app.data.Feature.REPORTS) { vm.showRecipe = true } }, modifier = Modifier.weight(1f)) { Text("💡 Sales insights") }
                 }
-                Button(onClick = { compare = true }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) { Text("⇅ Compare periods (▲▼ vs before)") }
+                Button(onClick = { vm.require(com.closeros.app.data.Feature.REPORTS) { compare = true } }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) { Text("⇅ Compare periods (▲▼ vs before)") }
             }
             item {
                 val tiles = listOf(

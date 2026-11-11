@@ -58,6 +58,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent { CloserTheme { Root(vm) } }
+        Monetize.init(this)   // individual app: privacy consent, ads, Google Play subscription (no-op in company builds)
         handle(intent)
     }
 
@@ -116,7 +117,7 @@ fun Root(vm: AppViewModel) {
         vm.callRequest?.let { lead -> vm.callRequest = null; if (vm.pending == null) call(lead) else vm.message = "Save the outcome of your last call first" }
     }
     // Desk mode: while the app is on screen, check every 4 seconds if the laptop asked to call someone.
-    LaunchedEffect(vm.membership) { while (vm.membership != null) { kotlinx.coroutines.delay(4_000); if (vm.foreground && vm.pending == null) vm.checkCallRequests() } }
+    LaunchedEffect(vm.membership) { while (vm.membership != null && !vm.isSolo) { kotlinx.coroutines.delay(4_000); if (vm.foreground && vm.pending == null) vm.checkCallRequests() } }
     // While the app is on screen, check for announcements every 2 minutes (background sync covers the rest).
     LaunchedEffect(vm.membership) { while (vm.membership != null) { kotlinx.coroutines.delay(120_000); if (vm.foreground) vm.checkAlerts() } }
     vm.signOutWaiting?.let { n ->
@@ -135,6 +136,7 @@ fun Root(vm: AppViewModel) {
         vm.showLeaderboard || vm.openLeadId != null || vm.genericList != null || vm.openList != null || vm.showBatches || vm.todayFilter != null
     androidx.activity.compose.BackHandler(enabled = secondary && vm.pending == null) { vm.closeTop() }
     WaChooseDialog(vm)
+    UnlockDialog(vm)
     WaConfirmDialog(vm)
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         when {
@@ -149,16 +151,17 @@ fun Root(vm: AppViewModel) {
             vm.pending != null -> OutcomeScreen(vm)
             vm.announcements.isNotEmpty() -> AnnouncementScreen(vm, vm.announcements.first())
             vm.checkIn != null -> vm.checkIn?.let { CheckInScreen(vm, it) }
+            vm.showRemoveAds -> RemoveAdsScreen(vm)
             vm.waActive -> WaQueueScreen(vm)
-            vm.showPlaybook -> PlaybookScreen(vm)
+            vm.showPlaybook -> WithBanner { PlaybookScreen(vm) }
             vm.showFeedback -> FeedbackScreen(vm)
             vm.showDialer -> DialerScreen(vm)
             vm.openLeadId != null -> vm.openLeadId?.let { id -> LeadDetailScreen(vm, id) { call(it) } }
             vm.genericList != null -> LeadListScreen(vm) { call(it) }
-            vm.showLeadWork -> LeadWorkScreen(vm)
-            vm.showRecipe -> RecipeScreen(vm)
+            vm.showLeadWork -> WithBanner { LeadWorkScreen(vm) }
+            vm.showRecipe -> WithBanner { RecipeScreen(vm) }
             vm.showWaToday -> WaTodayScreen(vm)
-            vm.showReports -> ReportsScreen(vm)
+            vm.showReports -> WithBanner { ReportsScreen(vm) }
             vm.showLeaderboard -> LeaderboardScreen(vm)
             vm.queueActive -> QueueScreen(vm)
             vm.openList != null -> BatchListScreen(vm)
@@ -168,12 +171,14 @@ fun Root(vm: AppViewModel) {
                 // Dial pad is always one tap away, on every tab.
                 if (vm.tab != Tab.Profile && !vm.selectMode) SmallDialFab { vm.showDialer = true }
             }, bottomBar = {
+                // Individual app: one small ad above the tabs on list screens (never on Home).
+                Column { if (vm.tab != Tab.Home) Monetize.Banner()
                 NavigationBar {
                     listOf(Triple(Tab.Home, "Home", Icons.Default.Home), Triple(Tab.Leads, "Leads", Icons.Default.Person), Triple(Tab.Calls, "Calls", Icons.Default.Call),
                         Triple(Tab.FollowUps, "Follow-ups", Icons.Default.DateRange), Triple(Tab.Profile, "Settings", Icons.Default.Settings)).forEach { (t, label, icon) ->
                         NavigationBarItem(selected = vm.tab == t, onClick = { vm.tab = t }, icon = { Icon(icon, null) }, label = { Text(label) })
                     }
-                }
+                } }
             }) { pad ->
                 // Swipe left / right to move between the tabs.
                 val pager = androidx.compose.foundation.pager.rememberPagerState(initialPage = mainTabs.indexOf(vm.tab).coerceAtLeast(0)) { mainTabs.size }
@@ -250,4 +255,13 @@ fun OfflineBar(vm: AppViewModel) {
     Text("📴 No internet — keep working. " + (if (waiting > 0) "$waiting saved on this phone, sent automatically when you're back online." else "Everything you save is sent when you're back online."),
         Modifier.fillMaxWidth().background(androidx.compose.ui.graphics.Color(0xFFFEF3C7)).padding(horizontal = 12.dp, vertical = 8.dp),
         color = androidx.compose.ui.graphics.Color(0xFF92400E), fontSize = 13.sp)
+}
+
+/** A screen with the individual app's small ad fixed at the bottom (company builds: just the screen). */
+@Composable
+private fun WithBanner(content: @Composable () -> Unit) {
+    androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
+        Box(Modifier.weight(1f)) { content() }
+        Monetize.Banner()
+    }
 }

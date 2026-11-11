@@ -79,12 +79,15 @@ fun LoginScreen(vm: AppViewModel) {
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
-    Column(Modifier.fillMaxSize().background(Brand.primary).padding(24.dp), verticalArrangement = Arrangement.Center) {
+    // Individual app: new users create their account right here; others sign in.
+    var creating by remember { mutableStateOf(BuildConfig.SOLO) }
+    Column(Modifier.fillMaxSize().background(Brand.primary).verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.Center) {
         Text("Closer OS", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold)
         Text("Make more calls. Close more sales.", color = Color.White.copy(alpha = .8f))
         Spacer(Modifier.height(32.dp))
         Card(shape = RoundedCornerShape(16.dp)) {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (creating) Column(Modifier.padding(20.dp)) { SignUpForm(vm) { creating = false } }
+            else Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(email, { email = it }, label = { Text("Email") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
                 OutlinedTextField(password, { password = it }, label = { Text("Password") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
@@ -97,7 +100,9 @@ fun LoginScreen(vm: AppViewModel) {
                     enabled = !busy && email.isNotBlank() && password.isNotBlank(), modifier = Modifier.fillMaxWidth().height(50.dp)) {
                     if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp) else Text("Sign in", fontSize = 16.sp)
                 }
-                TextButton(onClick = { safeStart(ctx, Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.WEB_URL))) }, modifier = Modifier.fillMaxWidth()) {
+                TextButton(enabled = email.contains('@'), onClick = { vm.resetPassword(email) }, modifier = Modifier.fillMaxWidth()) { Text("Forgot password? Type your email above, then tap here") }
+                if (BuildConfig.SOLO) TextButton(onClick = { creating = true }, modifier = Modifier.fillMaxWidth()) { Text("New here? Create a free account") }
+                else TextButton(onClick = { safeStart(ctx, Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.WEB_URL))) }, modifier = Modifier.fillMaxWidth()) {
                     Text("No account? Ask your manager to invite you, then sign up on the website")
                 }
             }
@@ -107,6 +112,17 @@ fun LoginScreen(vm: AppViewModel) {
 
 @Composable
 fun NoCompanyScreen(vm: AppViewModel) {
+    if (BuildConfig.SOLO) {
+        // Individual app: the account is created at first sign-in; this shows only if that failed (no internet…).
+        Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("Setting up your account…", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            Text("It needs the internet once. Check your connection and try again.", color = Brand.muted)
+            Spacer(Modifier.height(20.dp))
+            Button(onClick = { vm.loadOrg() }) { Text("Try again") }
+            TextButton(onClick = { vm.signOut() }) { Text("Sign out") }
+        }
+        return
+    }
     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
         Text("You're not in a company yet", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(8.dp))
@@ -132,10 +148,10 @@ fun PermissionScreen(onDone: () -> Unit) {
         Text("Before you start", fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Text("Closer OS needs a few permissions to log your calls automatically:", color = Brand.muted)
         Perm(Icons.Default.Call, "Make calls", "Call leads with one tap, on the SIM you choose.")
-        Perm(Icons.Default.List, "Call history", "Your calls are uploaded to your company's Closer OS so no call needs to be typed in.")
+        Perm(Icons.Default.List, "Call history", if (BuildConfig.SOLO) "Calls with your leads are saved to your Closer OS account, so no call needs to be typed in. Personal calls stay on your phone." else "Your calls are uploaded to your company's Closer OS so no call needs to be typed in.")
         Perm(Icons.Default.Phone, "Phone & SIM", "To know which SIM each call used.")
         Perm(Icons.Default.Notifications, "Notifications", "Reminders 5 minutes before, at, and after each follow-up — with a Call button.")
-        Text("Your company has chosen to track all calls on this phone. Use a work phone/SIM for Closer OS.", fontSize = 13.sp, color = Brand.muted)
+        if (!BuildConfig.SOLO) Text("Your company has chosen to track all calls on this phone. Use a work phone/SIM for Closer OS.", fontSize = 13.sp, color = Brand.muted)
         Button(onClick = { launcher.launch(requiredPermissions.toTypedArray()) }, modifier = Modifier.fillMaxWidth().height(50.dp)) { Text("Allow and continue") }
     }
 }
@@ -195,7 +211,7 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
                 l.response_sec?.let { r -> Text("⚡ First call " + (if (r < 60) "within a minute" else "${r / 60} working min") + " after it came in", fontSize = 13.sp, color = Brand.muted) }
             }
             if (l.batch_leads.isNotEmpty()) item { LeadWebinarsCard(l) }
-            item { LeadShareCard(vm, l) { lead = it } }
+            if (!vm.isSolo) item { LeadShareCard(vm, l) { lead = it } }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Button(onClick = { onCall(l) }, modifier = Modifier.weight(1f).height(52.dp)) {
@@ -262,7 +278,8 @@ fun ProfileScreen(vm: AppViewModel) {
     val sims = remember { PhoneCalls.sims(ctx) }
     Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(vm.profile?.full_name ?: "", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Text("${vm.profile?.email ?: ""}\n${vm.membership?.organization?.name ?: ""} · ${vm.membership?.role?.replaceFirstChar { it.uppercase() } ?: ""}", color = Brand.muted)
+        if (vm.isSolo) { Text(vm.profile?.email ?: "", color = Brand.muted); SoloAccountCard(vm) }
+        else Text("${vm.profile?.email ?: ""}\n${vm.membership?.organization?.name ?: ""} · ${vm.membership?.role?.replaceFirstChar { it.uppercase() } ?: ""}", color = Brand.muted)
         HorizontalDivider()
         Text("My numbers", fontWeight = FontWeight.SemiBold)
         Text("Mobile: ${vm.profile?.phone?.let { fmtPhone(it) } ?: "not set"}")
@@ -317,6 +334,7 @@ fun ProfileScreen(vm: AppViewModel) {
             OutlinedButton(onClick = { scope.launch { vm.message = com.closeros.app.calls.AfterCall.test(ctx) } }) { Text("Test the pop-up") }
             vm.store.lastAfterCallTrace?.let { Text("Last call: $it", fontSize = 12.sp, color = Brand.muted) }
         }
+        if (!vm.isSolo) {
         HorizontalDivider()
         Text("Hourly check-in", fontWeight = FontWeight.SemiBold)
         Text("Every working hour: your last hour, today, your best hours and what to do next. Hours are set by your manager.", fontSize = 13.sp, color = Brand.muted)
@@ -327,12 +345,13 @@ fun ProfileScreen(vm: AppViewModel) {
                 if (s == null) vm.message = "Still loading your company — try again in a moment" else { com.closeros.app.calls.CheckIn.post(ctx, s); vm.checkIn = s }
             } }) { Text("Show my check-in now") }
         }
+        }
         HorizontalDivider()
         Text("Sync", fontWeight = FontWeight.SemiBold)
         Text(if (vm.store.lastSyncMs == 0L) "Not synced yet" else "Last sync ${fmtWhen(Instant.ofEpochMilli(vm.store.lastSyncMs).toString())}", color = Brand.muted)
         OutlinedButton(onClick = { com.closeros.app.calls.CallSync.syncNow(ctx); vm.message = "Syncing calls…" }) { Icon(Icons.Default.Refresh, null); Spacer(Modifier.width(6.dp)); Text("Sync calls now") }
         HorizontalDivider()
-        OutlinedButton(onClick = { safeStart(ctx, Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.WEB_URL))) }) { Text("Open dashboard website") }
+        if (!vm.isSolo) OutlinedButton(onClick = { safeStart(ctx, Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.WEB_URL))) }) { Text("Open dashboard website") }
         TextButton(onClick = { vm.signOut() }) { Text("Sign out", color = Brand.red) }
         Text("Closer OS ${BuildConfig.VERSION_NAME}", fontSize = 12.sp, color = Brand.muted)
     }

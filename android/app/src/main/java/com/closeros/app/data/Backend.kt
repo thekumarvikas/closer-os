@@ -78,6 +78,8 @@ object Backend {
     val id: String, val name: String, val phone_prefix: String = "+91", val currency: String = "INR",
     val timezone: String = "Asia/Kolkata",
     val settings: JsonObject? = null,
+    /** One-person account from the individual (Play Store) app. */
+    val is_individual: Boolean = false,
 ) {
     val trackWhatsapp get() = settings?.get("track_whatsapp")?.jsonPrimitive?.booleanOrNull ?: true
     /** Hourly check-ins (dashboard Settings → Hourly check-ins). */
@@ -307,6 +309,25 @@ object Repo {
 
     suspend fun signOut() = Backend.auth.signOut()
 
+    /** Individual app: new login (email + password). Returns true when signed in straight away,
+     *  false when the email must be confirmed first. */
+    suspend fun signUp(name: String, email: String, password: String): Boolean {
+        Backend.auth.signUpWith(Email) {
+            this.email = email.trim(); this.password = password
+            data = buildJsonObject { put("full_name", name.trim()) }
+        }
+        return Backend.auth.currentSessionOrNull() != null
+    }
+
+    /** Individual app: one-person account in the user's own country, currency and time zone. */
+    suspend fun createIndividualAccount(name: String, country: String, prefix: String, currency: String, timezone: String): String =
+        db.rpc("create_individual_account", buildJsonObject {
+            put("p_name", name); put("p_country_code", country); put("p_phone_prefix", prefix); put("p_currency", currency); put("p_timezone", timezone)
+        }).data.trim('"')
+
+    /** Deletes the personal account with all its data and the login (Play Store / App Store rule). */
+    suspend fun deleteMyAccount() { db.rpc("delete_my_account") }
+
     // Hourly check-ins
     @Serializable data class TalkHour(val hour: String, val talk_sec: Int)
     @Serializable data class TalkRecords(val top: List<TalkHour> = emptyList())
@@ -327,7 +348,7 @@ object Repo {
         val uid = Backend.uid ?: return null
         runCatching { db.rpc("accept_my_invitations") }
         return Backend.client.from("org_members")
-            .select(Columns.raw("org_id, role, organization:organizations(id, name, phone_prefix, currency, timezone, settings)")) {
+            .select(Columns.raw("org_id, role, organization:organizations(id, name, phone_prefix, currency, timezone, settings, is_individual)")) {
                 filter { eq("user_id", uid); eq("status", "active") }
             }.decodeList<Membership>().firstOrNull()
     }

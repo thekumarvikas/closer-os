@@ -143,7 +143,8 @@ object RecordingSync {
             }.minByOrNull { it.second }?.first ?: continue
             matched++
             LocalRecordings.put(ctx, c.id, best.uri)
-            if (c.id in done) { files.remove(best); continue }
+            // Individual app: recordings stay on the phone (played from there) — never uploaded.
+            if (c.id in done || com.closeros.app.BuildConfig.SOLO) { files.remove(best); continue }
             val ext = best.name.substringAfterLast('.', "m4a").lowercase()
             val path = "$orgId/$uid/${c.id}.$ext"
             runCatching {

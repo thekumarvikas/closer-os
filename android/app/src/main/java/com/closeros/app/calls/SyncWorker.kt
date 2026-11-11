@@ -49,8 +49,13 @@ object CallSync {
         val entries = PhoneCalls.readLog(ctx, since)
         var sent = 0
         val device = PhoneCalls.deviceId(ctx)
+        // Individual app: only calls with lead numbers leave the phone; personal calls are never sent.
+        val leadPhones = if (com.closeros.app.BuildConfig.SOLO) com.closeros.app.data.LocalDb.get(ctx).leadPhones() else null
+        val prefix = AfterCall.company(ctx)?.prefix ?: "+91"
+        fun isLead(phone: String) = leadPhones == null || com.closeros.app.ui.normalizePhone(phone, prefix) in leadPhones
         for (chunk in entries.chunked(200)) {
-            sent += Repo.syncCalls(orgId, phoneCallsJson(chunk, device))
+            val send = chunk.filter { isLead(it.phone) }
+            if (send.isNotEmpty()) sent += Repo.syncCalls(orgId, phoneCallsJson(send, device))
             store.callLogCursorMs = chunk.last().startedAtMs
         }
         // 2a) Older calls with lead numbers, from the phone's whole call history — so each lead's call count is complete.
@@ -63,7 +68,7 @@ object CallSync {
         val wa = WhatsAppCalls.since(ctx, store.waCursorMs).filter { it.phone.isNotBlank() || !it.name.isNullOrBlank() }
         for (chunk in wa.chunked(200)) {
             val arr = buildJsonArray {
-                chunk.forEach { c ->
+                chunk.filter { leadPhones == null || (it.phone.isNotBlank() && isLead(it.phone)) }.forEach { c ->
                     add(buildJsonObject {
                         put("id", c.id); put("phone", c.phone); put("direction", c.direction); put("channel", "whatsapp")
                         put("started_at", Instant.ofEpochMilli(c.startedAtMs).toString()); put("duration_sec", c.durationSec)
@@ -71,7 +76,7 @@ object CallSync {
                     })
                 }
             }
-            sent += Repo.syncCalls(orgId, arr)
+            if (arr.isNotEmpty()) sent += Repo.syncCalls(orgId, arr)
             store.waCursorMs = chunk.last().startedAtMs
         }
         store.lastSyncMs = System.currentTimeMillis()

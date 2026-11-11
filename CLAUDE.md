@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.18.3
+## Android app (`android/`) — v0.19.0
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -1254,3 +1254,40 @@ intelligence → Play Store launch.
   then). Individual app: no cloud upload of recordings, but recordings PLAYABLE inside Closer OS from the
   phone's own files (LocalRecordings matching on the phone; folder chosen once). Europe: possibly launch
   later under a different name (clash with French "CloseOS"); first launch may exclude EU countries.
+
+## Individual app built (v0.19.0, migration 0069, Nov 12 2026)
+- Flavor `solo` (dimension dist): applicationId com.closeros.solo, BuildConfig.SOLO, WA_TRACKING on, AdMob +
+  Play Billing (soloImplementation play-services-ads 23.6.0, billing-ktx 7.1.1, fragment-ktx 1.8.5 for lint).
+  Build ./gradlew assembleSoloRelease → downloads/CloserOS-Individual-<ver>-TEST.apk. Company builds full/direct
+  share src/team/java/Monetize.kt (no-op: no ads, everything open); solo has src/solo/java/Monetize.kt.
+  Package names to register in Play Console "Android developer verification": com.closeros.solo (individual,
+  Play Store) and com.closeros.app (company / Closer OS Teams).
+- Ads use Google TEST ids (build.gradle.kts solo: admobAppId, AD_BANNER, AD_REWARDED) — replace with the owner's
+  AdMob ids before publishing. UMP consent form before ads. Banner = Monetize.Banner(): above the tab bar on every
+  tab except Home, and under Reports / Playbook / Lead work / Sales insights (WithBanner in MainActivity). No ads in
+  the overlay pop-up or AfterCallActivity (policy: no obscured/overlay ads).
+- Rewarded unlocks (data/Unlocks.kt, Feature enum; vm.require(feature){…} + vm.gate → UnlockDialog in
+  ui/SoloScreens.kt): QUEUE 25 calls (vm.dialQueued before every queue call), WA_QUEUE 15 messages
+  (startWaQueue + waOpenCurrent), REPORTS 24 h (Reports presets beyond Today / Pick dates, Compare, Lead work,
+  Sales insights from Home + Reports). First unlock each day free; offline or ad asked < 10 min ago → opens;
+  no ad available → opens. Company builds: Unlocks.open always true.
+- Remove ads: Play subscription product "remove_ads", base plans "monthly" / "yearly" (₹99 / ₹999; create in Play
+  Console). RemoveAdsScreen (vm.showRemoveAds), Restore purchase; paid flag in prefs "monetize", refreshed from Play
+  on start. No server-side purchase check yet.
+- Sign-up in the app (SignUpForm; Repo.signUp with full_name) + "Forgot password?" (resetPasswordForEmail → web
+  SetPassword). First sign-in auto-creates the account: create_individual_account(name, country, prefix, currency,
+  tz) from data/Country.kt (SIM / network / locale country → calling code map + java Currency + device tz).
+  organizations.is_individual; subscription complimentary ("Individual (free app)"); settings show_leaderboard false,
+  call_tracking 'leads', checkin.enabled false. vm.isSolo hides team bits (Reports team picker, lead sharing, desk
+  polling, hourly check-in section, dashboard link); Settings → SoloAccountCard (Remove ads, Privacy, Terms, Delete
+  my account → delete_my_account(): deletes the individual org (cascade) + auth user; company members refused).
+- Individual app privacy: CallSync sends only calls whose number is in LeadIndex (phone + WhatsApp); recordings are
+  matched on the phone (LocalRecordings) and NEVER uploaded; vm.loadRecordings shows ▶ for phone files.
+- normalize_phone: trunk 0 (8–13 digits) → country code; 6–9 digit numbers get the prefix (UAE/UK/Indonesia ok).
+- FIXED (0069): t_bump_content read old.org_id on organizations → every company settings/name/time-zone save had
+  failed since migration 0062; also skips companies being deleted.
+- Web public pages (no login, main.tsx LEGAL_PATHS): /privacy, /terms, /delete-account (pages/Legal.tsx; contact
+  teamcloseros@gmail.com). Play Console needs the privacy URL + delete-account URL.
+- Launch blockers still open: Supabase built-in email sender (2/hour) — sign-up confirmation emails need SMTP
+  (Resend + domain) or "Confirm email" off; real AdMob ids; Play product remove_ads; call-log permission declaration
+  + video; store listing + screenshots; 12 testers × 14 days.

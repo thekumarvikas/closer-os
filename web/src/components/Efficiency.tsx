@@ -5,6 +5,7 @@ import { useOrg } from '../lib/session'
 import type { Directory } from '../lib/directory'
 import { downloadCsv } from '../lib/report'
 import { Button, Card, Empty, ErrorBox, Spinner } from './ui'
+import { useSort } from '../lib/sort'
 
 type T = Record<string, number>
 interface Person {
@@ -21,6 +22,10 @@ const BUCKETS: [string, string, string][] = [
   ['between', 'Between tasks', '#cbd5e1'], ['break', 'Break', '#f59e0b'], ['idle', 'Idle', '#ef4444'],
 ]
 const hm = (sec?: number | null) => { const m = Math.round((sec ?? 0) / 60); return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m` }
+const SORT_COLS = (dir: Directory): Record<string, (p: Person) => string | number | null> => ({
+  name: p => dir.nameOf(p.user_id), overall: p => p.scores.overall, time: p => p.scores.time, calling: p => p.scores.calling,
+  conversion: p => p.scores.conversion, discipline: p => p.scores.discipline, talk: p => p.time.talk ?? 0, leads: p => p.leads.unique,
+})
 const scoreCls = (s: number | null | undefined) => s == null ? 'text-slate-400' : s >= 75 ? 'text-emerald-700' : s >= 50 ? 'text-amber-600' : 'text-red-600'
 
 function TimeBar({ t, h = 'h-3' }: { t: T; h?: string }) {
@@ -46,6 +51,7 @@ export default function Efficiency({ dir, users, from, to }: { dir: Directory; u
   const [rows, setRows] = useState<Person[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [open, setOpen] = useState<string | null>(null)
+  const { sorted, th } = useSort(rows ?? [], SORT_COLS(dir))
   useEffect(() => {
     setRows(null); setError(null)
     supabase.rpc('efficiency_report', { p_org: org.id, p_from: from, p_to: to, p_users: users.length ? users : null })
@@ -83,12 +89,12 @@ export default function Efficiency({ dir, users, from, to }: { dir: Directory; u
       <Card className="overflow-x-auto">
         <table className="w-full table-fixed text-sm">
           <thead className="bg-slate-50"><tr>
-            <th className="th w-[18%]">Team member</th><th className="th w-[8%] !text-right">Overall</th><th className="th w-[6%] !text-right">Time</th>
-            <th className="th w-[7%] !text-right">Calling</th><th className="th w-[8%] !text-right">Conversion</th><th className="th w-[8%] !text-right">Discipline</th>
-            <th className="th">Working day</th><th className="th w-[16%]">Leads</th>
+            {th('name', 'Team member', 'w-[18%]')}{th('overall', 'Overall', 'w-[8%] !text-right')}{th('time', 'Time', 'w-[6%] !text-right')}
+            {th('calling', 'Calling', 'w-[7%] !text-right')}{th('conversion', 'Conversion', 'w-[8%] !text-right')}{th('discipline', 'Discipline', 'w-[8%] !text-right')}
+            {th('talk', 'Working day')}{th('leads', 'Leads', 'w-[16%]')}
           </tr></thead>
           <tbody className="divide-y divide-slate-100">
-            {rows.map(r => (
+            {sorted.map(r => (
               <Fragment key={r.user_id}>
                 <tr className="cursor-pointer align-top hover:bg-slate-50" onClick={() => setOpen(open === r.user_id ? null : r.user_id)}>
                   <td className="px-3 py-2"><div className="truncate font-medium">{dir.nameOf(r.user_id)}</div>
@@ -105,7 +111,7 @@ export default function Efficiency({ dir, users, from, to }: { dir: Directory; u
           </tbody>
         </table>
       </Card>
-      <p className="text-xs text-slate-500">Click a team member for day by day and hour by hour. Time in the app, updating leads and WhatsApp trips are measured by app 0.18 or newer.</p>
+      <p className="text-xs text-slate-500">Click a column name to sort. Click a team member for day by day and hour by hour. Time in the app, updating leads and WhatsApp trips are measured by app 0.18 or newer.</p>
     </div>
   )
 }

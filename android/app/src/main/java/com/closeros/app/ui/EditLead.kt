@@ -2,6 +2,7 @@ package com.closeros.app.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -12,6 +13,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -81,10 +83,10 @@ fun EditLeadScreen(vm: AppViewModel, lead: Lead, onClose: () -> Unit, onSaved: (
                     vm.categories.forEach { c -> FilterChip(category == c.id, { category = if (category == c.id) null else c.id }, { Text(c.name, fontSize = 13.sp) }) }
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.weight(1f)) { field("City", city, { city = it }) }
-                Box(Modifier.weight(1f)) { field("State", state, { state = it }) }
-            }
+            field("City", city, { city = it })
+            // India: pick from the list (no spelling differences); other countries: type it.
+            if ((vm.membership?.organization?.phone_prefix ?: "+91") == "+91") StatePicker(state) { state = it }
+            else field("State", state, { state = it })
             if (customKeys.isNotEmpty()) {
                 Text("Other details", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
                 customKeys.forEach { k ->
@@ -138,4 +140,33 @@ fun TrackCrm() {
         val start = com.closeros.app.data.WorkLog.crmStart(ctx)
         onDispose { com.closeros.app.data.WorkLog.crmEnd(ctx, start) }
     }
+}
+
+private val INDIA_STATES = listOf("Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat", "Haryana",
+    "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram", "Nagaland",
+    "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal",
+    "Andaman and Nicobar Islands", "Chandigarh", "Dadra and Nagar Haveli and Daman and Diu", "Delhi", "Jammu and Kashmir", "Ladakh",
+    "Lakshadweep", "Puducherry")
+
+/** State as a searchable list instead of free typing. */
+@Composable
+private fun StatePicker(value: String, onPick: (String) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    var q by remember { mutableStateOf("") }
+    OutlinedButton(onClick = { open = true; q = "" }, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+        Text(if (value.isBlank()) "State — tap to choose" else "State: $value", color = if (value.isBlank()) Brand.muted else Color(0xFF0F172A), modifier = Modifier.weight(1f))
+        Text("▾")
+    }
+    if (open) AlertDialog(onDismissRequest = { open = false }, title = { Text("Choose state") },
+        text = {
+            Column {
+                OutlinedTextField(q, { q = it }, singleLine = true, placeholder = { Text("Search…") }, modifier = Modifier.fillMaxWidth())
+                Column(Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState())) {
+                    INDIA_STATES.filter { it.contains(q.trim(), ignoreCase = true) }.forEach { st ->
+                        Text(st, fontSize = 16.sp, fontWeight = if (st == value) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier.fillMaxWidth().clickable { onPick(st); open = false }.padding(vertical = 10.dp))
+                    }
+                }
+            }
+        }, confirmButton = {}, dismissButton = { TextButton(onClick = { onPick(""); open = false }) { Text("Clear") } })
 }

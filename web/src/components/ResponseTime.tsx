@@ -8,6 +8,7 @@ import type { Directory } from '../lib/directory'
 import { Button, Card, Empty, ErrorBox, Spinner } from './ui'
 import LeadDrawer from '../pages/LeadDrawer'
 
+import { Sorted } from '../lib/sort'
 interface Person { user_id: string; arrived: number; responded: number; waiting: number; median_min: number | null; within: number; oldest_wait_min: number | null }
 interface Row { id: string; name: string; phone: string; assigned_to: string | null; created_at: string; wait_min?: number; min?: number }
 interface Data {
@@ -94,9 +95,10 @@ export default function ResponseTime({ dir, from, to }: { dir: Directory; from: 
           <div className="mb-2 flex items-center justify-between"><h3 className="font-semibold">By person</h3>
             <Button variant="secondary" className="!py-1" onClick={() => downloadCsv('response-time.csv', ['Team member', 'New leads', 'Called', 'Median min', `Within ${tg} min`, 'Waiting', 'Oldest waiting min'],
               data.people.map(p => [dir.nameOf(p.user_id), p.arrived, p.responded, p.median_min ?? '', p.within, p.waiting, p.oldest_wait_min ?? '']))}><Download className="h-4 w-4" /> CSV</Button></div>
+          <Sorted rows={data.people} cols={{ name: p => dir.nameOf(p.user_id), median: p => p.median_min, within: p => p.responded ? p.within / p.responded : null, arrived: p => p.arrived, waiting: p => p.waiting }}>{(people, th) => (
           <table className="w-full table-fixed text-sm">
-            <thead><tr><th className="th w-[28%]">Team member</th><th className="th">Median</th><th className="th">Within {tg} min</th><th className="th">New leads</th><th className="th">Waiting now</th></tr></thead>
-            <tbody className="divide-y divide-slate-100">{data.people.map(p => (
+            <thead><tr>{th('name', 'Team member', 'w-[28%]')}{th('median', 'Median')}{th('within', `Within ${tg} min`)}{th('arrived', 'New leads')}{th('waiting', 'Waiting now')}</tr></thead>
+            <tbody className="divide-y divide-slate-100">{people.map(p => (
               <tr key={p.user_id}>
                 <td className="td font-medium">{dir.nameOf(p.user_id)}</td>
                 <td className={`td tabular-nums font-semibold ${p.median_min != null && p.median_min <= tg ? 'text-emerald-700' : 'text-amber-700'}`}>{fmtMin(p.median_min)}</td>
@@ -106,6 +108,7 @@ export default function ResponseTime({ dir, from, to }: { dir: Directory; from: 
               </tr>))}
             </tbody>
           </table>
+          )}</Sorted>
         </Card>
       )}
 

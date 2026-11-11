@@ -382,22 +382,31 @@ fun EffortCard(vm: AppViewModel, lead: Lead) {
     LaunchedEffect(lead.id) { path = runCatching { Repo.leadPath(lead.id) as JsonObject }.getOrNull() }
     val e = path?.get("effort") as? JsonObject
     val won = lead.won_at != null
-    val interactions = lead.dial_count + (e?.i("received") ?: 0) + lead.wa_count
-    Column(Modifier.fillMaxWidth().background(if (won) Color(0xFFECFDF5) else Color.White, RoundedCornerShape(12.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(if (won) "💰 Path to sale" else "Effort so far", fontWeight = FontWeight.SemiBold)
-        Text("$interactions interactions · ${fmtDur(lead.total_talk_sec)} talk · ${lead.call_count} calls (${lead.dial_count} dialled, ${lead.pickup_count} picked up) · ${lead.wa_count} WhatsApp",
-            fontSize = 13.sp)
+    val received = e?.i("received") ?: 0
+    Column(Modifier.fillMaxWidth().background(if (won) Color(0xFFECFDF5) else Color.White, RoundedCornerShape(12.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(if (won) "💰 What it took to win this sale" else "Your work with this lead so far", fontWeight = FontWeight.SemiBold)
+        // Four plain numbers instead of one long line.
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            @Composable fun tile(v: String, l: String, sub: String? = null, m: Modifier) = Column(m.background(Color(0xFFF1F5F9), RoundedCornerShape(10.dp)).padding(8.dp)) {
+                Text(v, fontWeight = FontWeight.Bold, fontSize = 16.sp); Text(l, fontSize = 11.sp, color = Brand.muted)
+                sub?.let { Text(it, fontSize = 10.sp, color = Brand.muted) }
+            }
+            tile("${lead.call_count}", "Calls", "${lead.dial_count} dialled · $received received", Modifier.weight(1.3f))
+            tile("${lead.conversation_count}", "Conversations", null, Modifier.weight(1f))
+            tile(fmtDur(lead.total_talk_sec), "Talk time", null, Modifier.weight(1f))
+            tile("${lead.wa_count}", "WhatsApp", null, Modifier.weight(0.9f))
+        }
         if (e != null && won) Text(effortLine(e), fontSize = 12.sp, color = Brand.muted)
         // Neutral comparison with my usual sale (never a warning).
         val r = vm.recipe
         if (!won && r != null && (r.n("talk_min") ?: 0.0) > 0) {
             val tMin = r.n("talk_min") ?: 0.0; val c = r.n("calls") ?: 0.0
-            Text("Your usual sale: ${num(tMin)} min talk · ${num(c)} calls", fontSize = 12.sp, color = Brand.muted)
-            LinearProgressIndicator(progress = { ((lead.total_talk_sec / 60.0) / tMin).toFloat().coerceIn(0f, 1f) }, Modifier.fillMaxWidth().height(5.dp),
-                color = Brand.primary, trackColor = Color(0xFFE2E8F0))
+            val pct = (((lead.total_talk_sec / 60.0) / tMin) * 100).toInt().coerceAtMost(100)
+            Text("Your sales usually take about ${num(tMin)} min of talk and ${num(c)} calls. This lead: $pct% of that talk time.", fontSize = 12.sp, color = Brand.muted)
+            LinearProgressIndicator(progress = { pct / 100f }, Modifier.fillMaxWidth().height(5.dp), color = Brand.primary, trackColor = Color(0xFFE2E8F0))
         }
         val msgs = (path?.get("messages") as? JsonArray).orEmpty().map { it as JsonObject }
-        if (msgs.isNotEmpty()) Text("WhatsApp: " + msgs.take(3).joinToString(" · ") { "${it.s("template_name") ?: "message"} (${fmtWhen(it.s("sent_at") ?: "")})" } +
+        if (msgs.isNotEmpty()) Text("Last WhatsApp messages: " + msgs.take(3).joinToString(" · ") { "${it.s("template_name") ?: "message"} (${fmtWhen(it.s("sent_at") ?: "")})" } +
             if (msgs.size > 3) " · +${msgs.size - 3} more" else "", fontSize = 12.sp, color = Brand.muted)
     }
 }

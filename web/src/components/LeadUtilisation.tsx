@@ -6,6 +6,8 @@ import { pct } from '../lib/report'
 import type { Directory } from '../lib/directory'
 import { Button, Card, ErrorBox, Field, Modal } from './ui'
 
+import { Sorted } from '../lib/sort'
+const UCOLS: Record<string, (r: Row) => string | number | null> = { assigned: r => r.assigned, utilised: r => r.utilised, not: r => r.not_utilised, oldest: r => r.oldest_waiting ? -new Date(r.oldest_waiting).getTime() : null }
 interface Row { user_id: string; assigned: number; utilised: number; not_utilised: number; talked: number; oldest_waiting: string | null }
 interface Data { total: { assigned: number; utilised: number; not_utilised: number; unassigned: number }; people: Row[] }
 type Period = 'all' | '30' | 'month'
@@ -51,10 +53,11 @@ export default function LeadUtilisation({ dir, version, onPick, onChanged }:
       </div>
       {open && (
         <div className="overflow-x-auto">
+          <Sorted rows={data.people} cols={{ ...UCOLS, name: r => dir.nameOf(r.user_id) }}>{(people, th) => (
           <table className="w-full table-fixed text-sm">
-            <thead><tr><th className="th w-[26%]">Team member</th><th className="th">Assigned</th><th className="th">Utilised</th><th className="th">Not utilised</th><th className="th">Oldest waiting</th><th className="th w-[14%]"></th></tr></thead>
+            <thead><tr>{th('name', 'Team member', 'w-[26%]')}{th('assigned', 'Assigned')}{th('utilised', 'Utilised')}{th('not', 'Not utilised')}{th('oldest', 'Oldest waiting')}<th className="th w-[14%]"></th></tr></thead>
             <tbody className="divide-y divide-slate-100">
-              {data.people.map(r => (
+              {people.map(r => (
                 <tr key={r.user_id}>
                   <td className="td font-medium">{dir.nameOf(r.user_id)}</td>
                   <td className="td"><Num n={r.assigned} user={r.user_id} util="" /></td>
@@ -67,6 +70,7 @@ export default function LeadUtilisation({ dir, version, onPick, onChanged }:
               {data.people.length === 0 && <tr><td className="td text-slate-500" colSpan={6}>No assigned leads in this period.</td></tr>}
             </tbody>
           </table>
+          )}</Sorted>
           <p className="px-4 pb-3 pt-1 text-xs text-slate-500">Utilised = called at least once (by anyone). Not utilised = never called. Click a number to see those leads.</p>
         </div>
       )}

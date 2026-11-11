@@ -8,6 +8,8 @@ import type { Organization } from '../lib/types'
 import { Badge, Button, Card, Empty, ErrorBox, Spinner } from './ui'
 import { dur } from './terms'
 import AudioPlayer from './AudioPlayer'
+import { usePersisted } from '../lib/persist'
+import { SortTh, type SortDir } from '../lib/sort'
 import { CallColorKey, CallType, missingReason, type RecDevice } from './CallColors'
 
 export interface CallLogFilters { from?: string; to?: string; users: string[]; dir?: 'all' | 'out' | 'in'; ch?: 'all' | 'phone' | 'whatsapp' } // ISO instants; empty = all time
@@ -42,6 +44,7 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
   const [error, setError] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [playing, setPlaying] = useState<string | null>(null)
+  const [sort, setSort] = usePersisted<[string, SortDir]>('calls.sort', ['started_at', 'desc'])
   const [devices, setDevices] = useState<Map<string, RecDevice>>(new Map())
   useEffect(() => {
     // Each team member's latest phone report: explains the red mic (why a call has no recording).
@@ -53,7 +56,8 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
   const build = useCallback(() => {
     const term = q.trim(), digits = term.replace(/\D/g, ''), byName = term && digits.length < 4
     let query = supabase.from('calls').select(byName ? SELECT.replace('lead:leads(name)', 'lead:leads!inner(name)') : SELECT, { count: 'exact' })
-      .eq('org_id', org.id).order('started_at', { ascending: false })
+      .eq('org_id', org.id).order(sort[0], { ascending: sort[1] === 'asc' })
+    if (sort[0] !== 'started_at') query = query.order('started_at', { ascending: false })
     if (f.from) query = query.gte('started_at', f.from)
     if (f.to) query = query.lt('started_at', f.to)
     if (f.users.length) query = query.in('user_id', f.users)
@@ -70,9 +74,9 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
     if (digits.length >= 4) query = query.like('phone', `%${digits}%`)
     else if (byName) query = query.ilike('lead.name', `%${term.replace(/[%,()]/g, '')}%`)
     return query
-  }, [org.id, f, q, type, len, oc, via])
+  }, [org.id, f, q, type, len, oc, via, sort])
 
-  useEffect(() => { setPage(0) }, [f, q, type, len, oc, via])
+  useEffect(() => { setPage(0) }, [f, q, type, len, oc, via, sort])
   useEffect(() => {
     setRows(null)
     const t = setTimeout(() => {
@@ -124,8 +128,9 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
         {!rows ? <Spinner /> : rows.length === 0 ? <Empty icon={<PhoneCall className="h-6 w-6" />} title="No calls match" text="Calls from the Closer OS app appear here automatically." /> : (
           <table className="w-full table-fixed text-sm">
             <thead className="bg-slate-50"><tr>
-              <th className="th w-[15%]">When</th><th className="th w-[19%]">Lead</th><th className="th w-[10%]">Type</th><th className="th w-[8%] !text-right">Length</th>
-              <th className="th w-[18%]">Outcome</th><th className="th w-[17%]">Team member</th><th className="th w-[13%]">Dialled from</th>
+              <SortTh k="started_at" label="When" className="w-[15%]" sort={sort} onSort={setSort} /><th className="th w-[21%]">Lead</th><th className="th w-[11%]">Type</th>
+              <SortTh k="duration_sec" label="Length" className="w-[9%] !text-right" sort={sort} onSort={setSort} />
+              <th className="th w-[20%]">Outcome</th><th className="th w-[24%]" title="Who made / took the call, and the SIM number (or WhatsApp) it was on">Team member · dialled from</th>
             </tr></thead>
             <tbody className="divide-y divide-slate-100">
               {rows.map(c => (<Fragment key={c.id}>
@@ -139,10 +144,10 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
                   <td className="px-3 py-2 text-right tabular-nums">{c.duration_sec ? dur(c.duration_sec) : '—'}</td>
                   <td className="px-3 py-2"><span className="block truncate">{dir.outcomeOf(c.outcome_id)?.label ?? <span className="text-slate-400">—</span>}</span>
                     {c.notes && <span className="block truncate text-xs text-slate-500" title={c.notes}>{c.notes}</span>}</td>
-                  <td className="truncate px-3 py-2">{dir.nameOf(c.user_id)}{dir.phoneOf(c.user_id) && <span className="block truncate text-xs text-slate-500">{dir.phoneOf(c.user_id)}</span>}</td>
-                  <td className="truncate px-3 py-2 text-slate-600">{from(c)}</td>
+                  <td className="truncate px-3 py-2">{dir.nameOf(c.user_id)}
+                    <span className="block truncate text-xs text-slate-500" title="The number the call was on">{from(c) === '—' ? (dir.phoneOf(c.user_id) || '') : `via ${from(c)}`}</span></td>
                 </tr>
-                {playing === c.id && <tr><td colSpan={7} className="bg-emerald-50/50 px-3 py-2"><RecordingPlayer call={c} onClose={() => setPlaying(null)} /></td></tr>}
+                {playing === c.id && <tr><td colSpan={6} className="bg-emerald-50/50 px-3 py-2"><RecordingPlayer call={c} onClose={() => setPlaying(null)} /></td></tr>}
               </Fragment>))}
             </tbody>
           </table>
@@ -158,7 +163,7 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
         )}
         {rows && count > 0 && count <= PAGE && <p className="border-t border-slate-100 px-4 py-2 text-xs text-slate-500">{count.toLocaleString('en-IN')} calls</p>}
       </Card>
-      <p className="text-xs text-slate-500"><Badge color="gray">Tip</Badge> “Dialled from” shows the number of the SIM the call was made on (each rep confirms their SIM numbers once in the app).</p>
+      <p className="text-xs text-slate-500"><Badge color="gray">Tip</Badge> “via …” under the team member is the SIM number the call was made on (each rep confirms their SIM numbers once in the app). Click “When” or “Length” to sort.</p>
     </div>
   )
 }

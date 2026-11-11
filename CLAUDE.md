@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.18.1
+## Android app (`android/`) — v0.18.2
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -1199,3 +1199,19 @@ intelligence → Play Store launch.
   fields), notes via Repo.searchLeadIds (search_leads; phone copy offline), the lead's last outcome label
   and the outcome saved for that call (LocalReports.outcomeOfCalls) → "interested" lists those calls.
   Chips still filter the results. App tile/buttons "What works" renamed "Sales insights".
+
+## Feedback round 12 (v0.18.2, migration 0068, Nov 11 2026)
+- App Efficiency error "DELETE requires a WHERE clause" (PostgREST safeupdate): efficiency_report
+  re-created with `delete from _eff where true` (migration 0068).
+- Calls made during a break count as calling time (work), not break.
+- App: bottom nav icons Leads = person, Calls = phone. Lead page EffortCard = 4 tiles (Calls with
+  dialled/received, Conversations, Talk time, WhatsApp) + one plain line vs my usual sale.
+  Edit lead: State is a searchable list (INDIA_STATES) when the company prefix is +91.
+- Dashboard sorting: lib/sort.tsx (useSort / Sorted render-prop for in-memory tables, SortTh for
+  server-side). Leads: "Sort:" dropdown + clickable headers (name, calls, last call, next call,
+  added; persisted leads.sort; export follows it); columns simplified (Lead = name + phone · city,
+  Calls = count + talked + talk time, Last call = date + outcome, Next call, Stage (+deal), Source,
+  Added); filter selects carry their label ("Assigned to: everyone", "Called: any", "Stage: all").
+  Call log: sort by When / Length (calls.sort); "Team member · dialled from" merged into one column.
+  Also sortable: Efficiency, Lead utilisation, Response time by person, Compare periods by team member,
+  Reports → Team (already).

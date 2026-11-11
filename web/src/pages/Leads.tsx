@@ -11,8 +11,18 @@ import { Badge, Button, Card, Empty, ErrorBox, Field, Modal, PageHeader, Spinner
 import LeadImport from './LeadImport'
 import LeadDrawer from './LeadDrawer'
 import LeadUtilisation from '../components/LeadUtilisation'
+import { SortTh, type SortDir } from '../lib/sort'
+import { dur } from '../components/terms'
 
 const PAGE = 50
+
+/** "Sort by" choices (the same sorting happens when a column header is clicked). */
+const SORTS: [string, SortDir, string][] = [
+  ['created_at', 'desc', 'Newest added first'], ['created_at', 'asc', 'Oldest added first'],
+  ['next_follow_up_at', 'asc', 'Next call — soonest first'], ['last_call_at', 'desc', 'Last call — most recent first'],
+  ['last_call_at', 'asc', 'Last call — longest ago first'], ['call_count', 'desc', 'Most calls first'],
+  ['total_talk_sec', 'desc', 'Most talk time first'], ['name', 'asc', 'Name A → Z'],
+]
 
 /** Total talk time with the lead — same bands as the app and lead_talk_bands(). */
 const TALK_BANDS = [
@@ -37,6 +47,7 @@ export default function Leads() {
   const [source, setSource] = usePersisted('leads.source', '')
   const [talk, setTalk] = usePersisted('leads.talk', '')
   const [util, setUtil] = usePersisted<'' | 'used' | 'unused'>('leads.util', '')
+  const [sort, setSort] = usePersisted<[string, SortDir]>('leads.sort', ['created_at', 'desc'])
   const [bands, setBands] = useState<Record<string, number> | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [showImport, setShowImport] = useState(false)
@@ -70,13 +81,14 @@ export default function Leads() {
     const ids = await searchIds()
     const query = filtered(supabase.from('leads').select('*', { count: 'exact' })
       .eq('org_id', org.id).is('deleted_at', null)
-      .order('created_at', { ascending: false }).range(page * PAGE, page * PAGE + PAGE - 1), ids)
+      .order(sort[0], { ascending: sort[1] === 'asc', nullsFirst: false }).order('created_at', { ascending: false })
+      .range(page * PAGE, page * PAGE + PAGE - 1), ids)
     const { data, count, error } = await query
     if (error) { setError(errorText(error)); return }
     setError(null); setLeads(data as Lead[]); setCount(count ?? 0)
     const { data: tb } = await supabase.rpc('lead_talk_bands', { p_org: org.id, p_assignee: assignee || null })
     setBands(Object.fromEntries(((tb ?? []) as { band: string; leads: number }[]).map(r => [r.band, Number(r.leads)])))
-  }, [org.id, page, filtered, searchIds, assignee])
+  }, [org.id, page, filtered, searchIds, assignee, sort])
 
   const [exporting, setExporting] = useState(false)
   /** Every lead matching the current filters (in pages of 1,000), as a spreadsheet file. */
@@ -87,7 +99,7 @@ export default function Leads() {
     const ids = await searchIds()
     for (let from = 0; from < 50000; from += 1000) {
       const { data, error } = await filtered(supabase.from('leads').select('*').eq('org_id', org.id).is('deleted_at', null)
-        .order('created_at', { ascending: false }).range(from, from + 999), ids)
+        .order(sort[0], { ascending: sort[1] === 'asc', nullsFirst: false }).order('created_at', { ascending: false }).range(from, from + 999), ids)
       if (error) { setExporting(false); return setError(errorText(error)) }
       all.push(...(data as Lead[]))
       if ((data as Lead[]).length < 1000) break
@@ -103,7 +115,7 @@ export default function Leads() {
   }
 
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t) }, [load])
-  useEffect(() => { setPage(0) }, [q, assignee, stage, source, util])
+  useEffect(() => { setPage(0) }, [q, assignee, stage, source, util, sort])
 
   const refresh = () => { setSelected(new Set()); load(); setVersion(v => v + 1) }
   async function bulk(p: Record<string, unknown>) {
@@ -132,20 +144,25 @@ export default function Leads() {
             <input className="input pl-9" placeholder="Search name, phone, city, notes, any field…" value={q} onChange={e => setQ(e.target.value)} />
           </div>
           {isManager && (
-            <select className="input !w-auto" value={assignee} onChange={e => setAssignee(e.target.value)}>
-              <option value="">Everyone</option>
+            <select className="input !w-auto" value={assignee} onChange={e => setAssignee(e.target.value)} title="Whose leads">
+              <option value="">Assigned to: everyone</option>
               <option value="none">Unassigned</option>
               {dir?.members.map(m => <option key={m.user_id} value={m.user_id}>{dir.nameOf(m.user_id)}</option>)}
             </select>
           )}
           <select className="input !w-auto" value={util} onChange={e => setUtil(e.target.value as typeof util)}>
-            <option value="">Called or not</option><option value="used">Utilised (called)</option><option value="unused">Not utilised (never called)</option>
+            <option value="">Called: any</option><option value="used">Called at least once</option><option value="unused">Never called</option>
           </select>
           <select className="input !w-auto" value={stage} onChange={e => setStage(e.target.value)}>
-            <option value="">All stages</option>
+            <option value="">Stage: all</option>
             {dir?.stages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
-          <input className="input !w-36" placeholder="Source" value={source} onChange={e => setSource(e.target.value)} />
+          <input className="input !w-44" placeholder="Source (e.g. Facebook)" value={source} onChange={e => setSource(e.target.value)} />
+          <select className="input !w-auto font-medium" value={sort.join(':')} title="Order of the list"
+            onChange={e => { const [k, d] = e.target.value.split(':'); setSort([k, d as SortDir]) }}>
+            {SORTS.map(([k, d, l]) => <option key={k + d} value={`${k}:${d}`}>Sort: {l}</option>)}
+            {!SORTS.some(([k, d]) => k === sort[0] && d === sort[1]) && <option value={sort.join(':')}>Sort: {sort[0]} ({sort[1]})</option>}
+          </select>
         </div>
         <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-200 px-3 py-2 text-xs">
           <span className="mr-1 font-medium text-slate-500">Talk time with the lead:</span>
@@ -201,9 +218,13 @@ export default function Leads() {
                 <tr>
                   {isManager && <th className="th w-8"><input type="checkbox" checked={allOnPage}
                     onChange={() => setSelected(allOnPage ? new Set() : new Set(leads.map(l => l.id)))} /></th>}
-                  <th className="th">Name</th><th className="th">Phone</th><th className="th">Stage</th>
-                  <th className="th">Assigned to</th><th className="th">Calls</th><th className="th">Source</th><th className="th">Last outcome</th>
-                  <th className="th">Next follow-up</th><th className="th">Deal</th><th className="th">Added</th>
+                  <SortTh k="name" label="Lead" sort={sort} onSort={setSort} firstDir="asc" />
+                  <th className="th">Assigned to</th>
+                  <SortTh k="call_count" label="Calls" sort={sort} onSort={setSort} />
+                  <SortTh k="last_call_at" label="Last call" sort={sort} onSort={setSort} />
+                  <SortTh k="next_follow_up_at" label="Next call" sort={sort} onSort={setSort} firstDir="asc" />
+                  <th className="th">Stage</th><th className="th">Source</th>
+                  <SortTh k="created_at" label="Added" sort={sort} onSort={setSort} />
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -216,17 +237,20 @@ export default function Leads() {
                         <input type="checkbox" checked={selected.has(l.id)} onChange={() => {
                           const s = new Set(selected); if (s.has(l.id)) s.delete(l.id); else s.add(l.id); setSelected(s)
                         }} /></td>}
-                      <td className="td font-medium text-slate-900">{l.name || <span className="text-slate-400">No name</span>}
-                        {l.do_not_call && <Badge color="red">DNC</Badge>}</td>
-                      <td className="td tabular-nums">{fmtPhone(l.phone)}</td>
-                      <td className="td">{st ? <Badge color={st.is_won ? 'green' : st.is_lost ? 'red' : 'brand'}>{st.name}</Badge> : <Badge>New</Badge>}</td>
+                      <td className="td"><div className="font-medium text-slate-900">{l.name || <span className="text-slate-400">No name</span>}
+                        {l.do_not_call && <Badge color="red">DNC</Badge>}</div>
+                        <div className="text-xs tabular-nums text-slate-500">{[fmtPhone(l.phone), l.city].filter(Boolean).join(' · ')}</div></td>
                       <td className="td">{l.assigned_to ? dir.nameOf(l.assigned_to) : <span className="text-amber-700">Unassigned</span>}</td>
-                      <td className="td text-slate-600 whitespace-nowrap">{(l.call_count ?? 0) === 0 ? '—' : <>{l.call_count} <span className="text-xs text-slate-400">({l.conversation_count ?? 0} talked)</span></>}</td>
+                      <td className="td whitespace-nowrap text-slate-600">{(l.call_count ?? 0) === 0 ? <span className="text-slate-400">Not called</span> : <>
+                        <div>{l.call_count} call{l.call_count === 1 ? '' : 's'}</div>
+                        <div className="text-xs text-slate-500">{l.conversation_count ?? 0} talked{l.total_talk_sec ? ` · ${dur(l.total_talk_sec)}` : ''}</div></>}</td>
+                      <td className="td text-slate-600">{l.last_call_at ? <><div className="whitespace-nowrap">{fmtDate(l.last_call_at, org)}</div>
+                        <div className="text-xs text-slate-500">{dir.outcomeOf(l.last_outcome_id)?.label ?? 'No outcome'}</div></> : '—'}</td>
+                      <td className={`td whitespace-nowrap ${overdue ? 'font-medium text-red-600' : 'text-slate-600'}`}>{l.next_follow_up_at ? <>{fmtDate(l.next_follow_up_at, org)}{overdue && <div className="text-xs">overdue</div>}</> : '—'}</td>
+                      <td className="td">{st ? <Badge color={st.is_won ? 'green' : st.is_lost ? 'red' : 'brand'}>{st.name}</Badge> : <Badge>New</Badge>}
+                        {l.deal_value ? <div className="mt-0.5 text-xs text-slate-500">{fmtMoney(l.deal_value, org)}</div> : null}</td>
                       <td className="td text-slate-600">{l.source || '—'}</td>
-                      <td className="td text-slate-600">{dir.outcomeOf(l.last_outcome_id)?.label ?? '—'}</td>
-                      <td className={`td ${overdue ? 'font-medium text-red-600' : 'text-slate-600'}`}>{fmtDate(l.next_follow_up_at, org)}</td>
-                      <td className="td text-slate-600">{fmtMoney(l.deal_value, org)}</td>
-                      <td className="td text-slate-500">{fmtDate(l.created_at, org)}</td>
+                      <td className="td whitespace-nowrap text-slate-500">{fmtDate(l.created_at, org)}</td>
                     </tr>
                   )
                 })}

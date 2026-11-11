@@ -28,6 +28,7 @@ export function comparePeriods(today: string): { key: string; label: string; fro
   ]
 }
 
+import { Sorted } from '../lib/sort'
 const n = (s: Sum, k: string) => Number(s[k] ?? 0)
 const ratio = (a: number, b: number) => (b > 0 ? a / b : null)
 type Kind = 'Totals' | 'Uniques' | 'Averages' | 'Percentages'
@@ -154,10 +155,11 @@ export default function Compare({ dir, users }: { dir: Directory; users: string[
           </div>
           <Card className="overflow-x-auto">
             {people.length === 0 ? <p className="p-4 text-sm text-slate-500">No calls in this period.</p> : (
+              <Sorted rows={people} cols={{ name: p => dir.nameOf(p.user_id), ...Object.fromEntries(personCols.map(m => [m.key, (p: typeof people[number]) => m.val(p)])) }}>{(sortedPeople, th) => (
               <table className="w-full table-fixed text-sm">
-                <thead className="bg-slate-50"><tr><th className="th w-[22%]">Team member</th>{personCols.map(m => <th key={m.key} className="th !text-right !whitespace-normal">{m.label}</th>)}</tr></thead>
+                <thead className="bg-slate-50"><tr>{th('name', 'Team member', 'w-[22%]')}{personCols.map(m => th(m.key, m.label, '!text-right !whitespace-normal'))}</tr></thead>
                 <tbody className="divide-y divide-slate-100">
-                  {people.map(p => {
+                  {sortedPeople.map(p => {
                     const prev = prevOf(p.user_id)
                     return (
                       <tr key={p.user_id}>
@@ -170,6 +172,7 @@ export default function Compare({ dir, users }: { dir: Directory; users: string[
                   })}
                 </tbody>
               </table>
+              )}</Sorted>
             )}
           </Card>
           <p className="text-xs text-slate-500">Compared with {sel.prevLabel}.</p>

@@ -39,7 +39,6 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
     val p = vm.pending ?: return
-    TrackCrm()
     val log = vm.pendingLog
     val ctx = LocalContext.current
     val zone = ZoneId.of(vm.membership?.organization?.timezone ?: "Asia/Kolkata")

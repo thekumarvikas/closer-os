@@ -16,10 +16,9 @@ import OutcomeReportView from './OutcomeReport'
 import { LeadWork, WhatWorks, Insights } from '../components/Round9Reports'
 import ResponseTime from '../components/ResponseTime'
 import Compare from '../components/Compare'
-import Efficiency from '../components/Efficiency'
 
-type Tab = 'efficiency' | 'compare' | 'overview' | 'outcomes' | 'targets' | 'team' | 'daily' | 'hourly' | 'followups' | 'log' | 'leadwork' | 'sales' | 'response'
-const tabs: [Tab, string][] = [['overview', 'Overview'], ['compare', 'Compare periods'], ['efficiency', 'Efficiency'], ['outcomes', 'Outcomes'], ['targets', 'Targets'], ['team', 'Team'], ['daily', 'Daily'], ['hourly', 'By hour'], ['followups', 'Follow-ups'], ['response', 'Response time'], ['leadwork', 'Lead work'], ['sales', 'Sales insights'], ['log', 'Call log']]
+type Tab = 'compare' | 'overview' | 'outcomes' | 'targets' | 'team' | 'daily' | 'hourly' | 'followups' | 'log' | 'leadwork' | 'sales' | 'response'
+const tabs: [Tab, string][] = [['overview', 'Overview'], ['compare', 'Compare periods'], ['outcomes', 'Outcomes'], ['targets', 'Targets'], ['team', 'Team'], ['daily', 'Daily'], ['hourly', 'By hour'], ['followups', 'Follow-ups'], ['response', 'Response time'], ['leadwork', 'Lead work'], ['sales', 'Sales insights'], ['log', 'Call log']]
 interface Filters { from: string; to: string; users: string[]; dir: Dir; ch: Channel }
 
 export default function Reports() {
@@ -29,7 +28,7 @@ export default function Reports() {
   const [draft, setDraft] = usePersisted<Filters>('reports.filters', { from: addDays(today, -6), to: today, users: [], dir: 'all', ch: 'all' }, { session: true })
   const [applied, setApplied] = usePersisted<Filters>('reports.applied', draft, { session: true })
   const [tabRaw, setTab] = usePersisted<Tab>('reports.tab', 'overview')
-  const tab: Tab = (tabRaw as string) === 'works' || (tabRaw as string) === 'insights' ? 'sales' : tabRaw
+  const tab: Tab = (tabRaw as string) === 'works' || (tabRaw as string) === 'insights' ? 'sales' : (tabRaw as string) === 'efficiency' ? 'overview' : tabRaw
   const [logOutcome, setLogOutcome] = useState('')
   const [report, setReport] = useState<Report | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -91,7 +90,6 @@ export default function Reports() {
       <ErrorBox error={error} />
       {!dir ? <Spinner /> :
         tab === 'compare' ? <Compare dir={dir} users={applied.users} /> :
-        tab === 'efficiency' ? <Efficiency dir={dir} users={applied.users} from={applied.from} to={applied.to} /> :
         tab === 'leadwork' ? (dir ? <LeadWork dir={dir} users={applied.users} from={applied.from} to={applied.to} /> : <Spinner />) :
         tab === 'sales' ? <div className="space-y-8">
           <section><h2 className="mb-1 text-lg font-semibold">1 · Who buys — and how much revenue each kind of lead brings</h2><Insights from={applied.from} to={applied.to} /></section>
@@ -153,7 +151,7 @@ function Overview({ r, fileTag }: { r: Report; fileTag: string }) {
   const stats: [string, string, Parameters<typeof Hint>[0]['k'] | null][] = [
     [T.conversations, `${num(t.conn)} (${pct(t.conn, t.calls)}%)`, 'conversations'], [T.noAnswer, num(t.not_picked), 'noAnswer'],
     [T.neverCalledBack, num(t.never_attended), 'neverCalledBack'], [T.contacts, num(t.uniq), 'contacts'], [T.reached, num(t.uniq_conn), null],
-    [T.avgConv, dur(t.conn ? t.conn_dur / t.conn : 0), null], [T.active, dur(t.work), 'active'], [T.gap, dur(Math.max(0, t.work - t.conn_dur)), 'gap'],
+    [T.avgConv, dur(t.conn ? t.conn_dur / t.conn : 0), null],
   ]
   return (
     <div className="space-y-4">
@@ -179,7 +177,7 @@ function Overview({ r, fileTag }: { r: Report; fileTag: string }) {
               <li key={n} className="flex items-center justify-between px-4 py-2.5 text-sm"><span className="flex items-center gap-1.5 text-slate-600">{n}{k && <Hint k={k} />}</span><b className="tabular-nums">{v}</b></li>
             ))}
           </ul>
-          <div className="border-t border-slate-100 p-4"><Meter label="Share of active time spent talking" value={t.conn_dur} max={t.work} valueText={dur(t.conn_dur)} maxText={dur(t.work)} /></div>
+          <div className="border-t border-slate-100 p-4"><Meter label="Calls that became conversations" value={t.conn} max={t.calls} valueText={num(t.conn)} maxText={`${num(t.calls)} calls`} /></div>
         </Card>
       </div>
       {r.byDay.length > 1 && (
@@ -199,7 +197,6 @@ const teamCols: { label: string; sort: (b: Bucket) => number; cell: (b: Bucket) 
   { label: T.noAnswer, sort: b => b.not_picked, cell: b => <Two a={num(b.not_picked)} />, csv: b => [b.not_picked], csvHead: [T.noAnswer] },
   { label: `${T.missed} / ${T.declined}`, sort: b => b.missed + b.rejected, cell: b => <Two a={`${b.missed} / ${b.rejected}`} b={b.never_attended ? `${b.never_attended} never called back` : undefined} />, csv: b => [b.missed, b.rejected, b.never_attended], csvHead: [T.missed, T.declined, T.neverCalledBack] },
   { label: T.contacts, sort: b => b.uniq, cell: b => <Two a={num(b.uniq)} b={`${b.uniq_conn} reached`} />, csv: b => [b.uniq, b.uniq_conn], csvHead: [T.contacts, T.reached] },
-  { label: T.active, sort: b => b.work, cell: b => <Two a={dur(b.work)} b={`gap ${dur(Math.max(0, b.work - b.conn_dur))}`} />, csv: b => [dur(b.work), dur(Math.max(0, b.work - b.conn_dur))], csvHead: [T.active, T.gap] },
 ]
 
 const compareMetrics: { label: string; value: (b: Bucket) => number; show: (n: number) => string }[] = [
@@ -209,7 +206,6 @@ const compareMetrics: { label: string; value: (b: Bucket) => number; show: (n: n
   { label: T.talk, value: b => b.conn_dur, show: n => dur(n) },
   { label: T.avgConv, value: b => b.conn ? b.conn_dur / b.conn : 0, show: n => dur(n) },
   { label: T.contacts, value: b => b.uniq, show: n => num(n) },
-  { label: T.active, value: b => b.work, show: n => dur(n) },
 ]
 
 /** Side-by-side bars of one measure for every person, with the team average. */

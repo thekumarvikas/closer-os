@@ -225,7 +225,6 @@ export function CheckinSettings() {
   )
 }
 
-/** Efficiency report rules: shift, break allowance, idle gap, WhatsApp time per message, score weights. */
 export function EfficiencySettings() {
   const { org, save, error, saved } = useSaveSettings()
   type E = { shift_start?: string; shift_end?: string; break_min?: number; idle_min?: number; wa_sec?: number; weights?: Record<string, number> }

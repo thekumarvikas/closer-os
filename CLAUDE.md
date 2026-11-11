@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.18.2
+## Android app (`android/`) — v0.18.3
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -1105,7 +1105,7 @@ intelligence → Play Store launch.
   tiles, "Compare groups by: Conversion % · Revenue · Revenue per lead" (sorts + bars), revenue columns.
 - Still pending: Firebase push (needs owner's Firebase project); Cloudflare Pages move (optional).
 
-## Efficiency system (v0.18.0, migration 0065, Nov 2026)
+## Efficiency system (v0.18.0, migration 0065, Nov 2026) — REMOVED in v0.18.3 (see below)
 - Owner decisions: Start/End Day button (forgot → first/last call, only inside shift −2 h … +3 h so
   late-night personal calls don't stretch the day); Break button (Lunch/Tea/Personal) + auto idle
   (gap ≥ idle_min, default 15, with no activity; shorter gaps = "between tasks" = work); WhatsApp =
@@ -1215,3 +1215,13 @@ intelligence → Play Store launch.
   Call log: sort by When / Length (calls.sort); "Team member · dialled from" merged into one column.
   Also sortable: Efficiency, Lead utilisation, Response time by person, Compare periods by team member,
   Reports → Team (already).
+
+## Efficiency + active time removed (v0.18.3, Nov 11 2026)
+- Owner: working hours, breaks, idle, "share of active time spent talking" don't show the true
+  activity → no such measures until there is a credible method. REMOVED: dashboard Reports →
+  Efficiency tab (components/Efficiency.tsx deleted), Settings → Efficiency report, "Active time" /
+  "Gap time" in Reports Overview, Team table, Compare-the-team metric and Dashboard tiles/table; the
+  overview meter is now "Calls that became conversations". App: Start my day / Break bar, ⚡ Efficiency
+  tile + screen, all activity tracking (data/WorkLog.kt, ui/WorkDay.kt, TrackCrm deleted; nothing is
+  measured or uploaded). Server tables/RPCs from migration 0065 stay unused (no data added).
+  Don't bring back time/productivity scores unless the owner asks with a credible method.

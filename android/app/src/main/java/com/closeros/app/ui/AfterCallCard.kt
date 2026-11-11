@@ -52,7 +52,6 @@ import java.time.format.DateTimeFormatter
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
-    TrackCrm()
     val c = info.call; val lead = info.lead; val co = info.co
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()

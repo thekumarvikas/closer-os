@@ -83,7 +83,6 @@ class MainActivity : ComponentActivity() {
         visible = true
         com.closeros.app.calls.AfterCall.Overlay.hide(applicationContext)
         vm.foreground = true
-        com.closeros.app.data.WorkLog.appResumed(applicationContext)
         vm.onResume()
     }
 
@@ -91,7 +90,6 @@ class MainActivity : ComponentActivity() {
         super.onPause()
         visible = false
         vm.foreground = false
-        com.closeros.app.data.WorkLog.appPaused(applicationContext)
     }
 
     companion object {
@@ -133,7 +131,7 @@ fun Root(vm: AppViewModel) {
     }
 
     // Back always closes the screen on top (inner screens with their own Back handling still go first).
-    val secondary = vm.showEfficiency || vm.showWaToday || vm.showLeadWork || vm.showRecipe || vm.showPlaybook || vm.showFeedback || vm.showDialer || vm.showReports ||
+    val secondary = vm.showWaToday || vm.showLeadWork || vm.showRecipe || vm.showPlaybook || vm.showFeedback || vm.showDialer || vm.showReports ||
         vm.showLeaderboard || vm.openLeadId != null || vm.genericList != null || vm.openList != null || vm.showBatches || vm.todayFilter != null
     androidx.activity.compose.BackHandler(enabled = secondary && vm.pending == null) { vm.closeTop() }
     WaChooseDialog(vm)
@@ -160,7 +158,6 @@ fun Root(vm: AppViewModel) {
             vm.showLeadWork -> LeadWorkScreen(vm)
             vm.showRecipe -> RecipeScreen(vm)
             vm.showWaToday -> WaTodayScreen(vm)
-            vm.showEfficiency -> EfficiencyScreen(vm)
             vm.showReports -> ReportsScreen(vm)
             vm.showLeaderboard -> LeaderboardScreen(vm)
             vm.queueActive -> QueueScreen(vm)

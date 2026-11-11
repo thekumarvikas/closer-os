@@ -108,7 +108,6 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     var showLeaderboard by mutableStateOf(false)
     var showDialer by mutableStateOf(false)
     var showReports by mutableStateOf(false)
-    var showEfficiency by mutableStateOf(false)
     var access by mutableStateOf<com.closeros.app.data.OrgAccess?>(null)
     var showFeedback by mutableStateOf(false)
 
@@ -670,7 +669,6 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Back closes the screen on top (so Back never leaves the app from an inner screen). Returns false on the main tabs. */
     fun closeTop(): Boolean {
         when {
-            showEfficiency -> showEfficiency = false
             showWaToday -> showWaToday = false
             showLeadWork && genericList == null && openLeadId == null -> showLeadWork = false
             showRecipe && genericList == null && openLeadId == null -> showRecipe = false

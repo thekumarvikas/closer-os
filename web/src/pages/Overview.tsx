@@ -22,7 +22,6 @@ const rows: { label: string; hint?: keyof typeof definitions; value: (b: Bucket)
   { label: T.declined, value: b => b.rejected.toLocaleString('en-IN'), bad: 'rejected' },
   { label: T.neverCalledBack, hint: 'neverCalledBack', value: b => b.never_attended.toLocaleString('en-IN'), bad: 'never_attended' },
   { label: T.contacts, hint: 'contacts', value: b => b.uniq.toLocaleString('en-IN') },
-  { label: T.active, hint: 'active', value: b => dur(b.work) },
 ]
 
 export default function Overview() {
@@ -129,7 +128,7 @@ export default function Overview() {
               <table className="w-full text-sm">
                 <thead className="bg-slate-50"><tr>
                   <th className="th">Team member</th><th className="th !text-right">{T.calls}</th><th className="th !text-right">{T.conversations}</th>
-                  <th className="th !text-right">{T.talk}</th><th className="th !text-right">{T.noAnswer}</th><th className="th !text-right">{T.active}</th>
+                  <th className="th !text-right">{T.talk}</th><th className="th !text-right">{T.noAnswer}</th>
                 </tr></thead>
                 <tbody className="divide-y divide-slate-100">
                   {periods[0].report.byUser.map(u => (
@@ -139,7 +138,6 @@ export default function Overview() {
                       <td className="px-3 py-2 text-right tabular-nums">{u.total.conn} <span className="text-xs text-slate-500">{pct(u.total.conn, u.total.calls)}%</span></td>
                       <td className="px-3 py-2 text-right tabular-nums">{dur(u.total.conn_dur)}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{u.total.not_picked}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{dur(u.total.work)}</td>
                     </tr>
                   ))}
                 </tbody>

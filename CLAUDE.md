@@ -1225,3 +1225,18 @@ intelligence → Play Store launch.
   tile + screen, all activity tracking (data/WorkLog.kt, ui/WorkDay.kt, TrackCrm deleted; nothing is
   measured or uploaded). Server tables/RPCs from migration 0065 stay unused (no data added).
   Don't bring back time/productivity scores unless the owner asks with a credible method.
+
+## Individual Play Store app with ads — owner decisions (Nov 11 2026; NOT built yet — waiting for "go")
+- Free app for individuals (in-app sign-up, one-person account, manager features hidden). Personal
+  Play developer account (owner not GST registered → no D-U-N-S; 12 testers × 14 days before public).
+- Ads (Google AdMob) for FREE INDIVIDUALS ONLY; paying companies' reps NEVER see ads.
+  Small banner on the after-call screen only inside a real app screen (step 2 / AfterCallActivity),
+  never in the overlay card; clearly labelled, spaced away from buttons (accidental-click bans).
+- Rewarded "watch an ad to unlock": calling queue 25 calls per ad (asked before start + after every
+  25th saved outcome), WhatsApp queue ~15 messages, reports beyond today / Sales insights / Lead work
+  24 h, cloud recording download, exports, imports, best-time/focus sorting, media attachments.
+  NEVER gated: calling, saving outcomes, follow-up reminders, own leads/calls/notes, after-call pop-up.
+  Rules: ads only at natural pauses; every prompt also offers "Remove ads"; first unlock each day free;
+  offline / no ad available → unlock anyway; max ~1 ad prompt per 10 min.
+- "Remove ads" for individuals: ₹99/month or ₹999/year, via Google Play Billing (in-app digital
+  purchase; Google keeps ~15%). Company plans still sold on the website only.

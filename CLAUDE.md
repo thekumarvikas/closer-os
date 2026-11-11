@@ -1240,3 +1240,13 @@ intelligence → Play Store launch.
   offline / no ad available → unlock anyway; max ~1 ad prompt per 10 min.
 - "Remove ads" for individuals: ₹99/month or ₹999/year, via Google Play Billing (in-app digital
   purchase; Google keeps ~15%). Company plans still sold on the website only.
+- Nov 11 (later): names = "Closer OS" (individuals) + "Closer OS Teams" (companies). FIRST: Closer OS for
+  individuals only, Play Store + iOS App Store, INTERNATIONAL (English first; country/currency/time zone/
+  phone format from sign-up; no India-only defaults; local store prices; in-app account deletion; GDPR-style
+  privacy policy). Company product stays India-centric for now. NO call recording in the individual app
+  (no upload, no folder setup). Name-clash research: closeros.com taken (sales training), "CloseOS" (France)
+  = CRM for high-ticket closers with solo + team versions; owner kept "Closer OS" so far.
+- iOS limits: no app can read the iPhone call history or show an after-call pop-up over other apps;
+  CXCallObserver gives call start/end/connected but NOT the number → iOS can only track calls started from
+  Closer OS (number known) + duration; incoming calls can't be matched to leads. Needs Apple Developer
+  Program ($99/yr) and a Mac with Xcode to build (owner has a Mac).

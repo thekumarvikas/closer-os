@@ -1250,3 +1250,7 @@ intelligence → Play Store launch.
   CXCallObserver gives call start/end/connected but NOT the number → iOS can only track calls started from
   Closer OS (number known) + duration; incoming calls can't be matched to leads. Needs Apple Developer
   Program ($99/yr) and a Mac with Xcode to build (owner has a Mac).
+- Owner agreed (Nov 11): Android individual app first, iPhone later (discuss extra iPhone sales features
+  then). Individual app: no cloud upload of recordings, but recordings PLAYABLE inside Closer OS from the
+  phone's own files (LocalRecordings matching on the phone; folder chosen once). Europe: possibly launch
+  later under a different name (clash with French "CloseOS"); first launch may exclude EU countries.

@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.19.1
+## Android app (`android/`) — v0.19.2
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -1308,3 +1308,9 @@ intelligence → Play Store launch.
 - Calls tab "Select" mode: tick numbers (by phone) → "📞 Call N" (startQueue) / "WhatsApp N" (waChooseFor);
   vm.queueFromCalls adds numbers not in the lead list as leads first (contact name, source 'Phone call'; offline →
   left out). HistoryRow(selected, onSelect) shows a checkbox and hides row actions.
+- v0.19.2: Google sign-in LIVE for the individual app. Google Cloud project "Closer OS" (closer-os-514506, owner
+  teamcloseros@gmail.com): Web client "Closer OS server" id 811258088396-rl27f63od6ho2q8oo3aflkjrm5g6j1ab
+  (public; in android/gradle.properties googleWebClientId; secret only in Supabase), Android client for
+  com.closeros.solo + dev-test SHA-1. Consent screen still "Testing" (only listed test users) — Branding
+  (home/privacy/terms URLs) must be filled before "Publish app". Company builds hide the Google button until an
+  Android client for com.closeros.app is added. Google shows a client secret only once ("+ Add secret" for a new one).

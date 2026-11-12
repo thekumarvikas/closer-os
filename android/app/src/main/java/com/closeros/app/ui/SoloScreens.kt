@@ -165,7 +165,8 @@ fun SignUpForm(vm: AppViewModel, onSignIn: () -> Unit) {
 /** "Continue with Google" — one tap, no password, no confirmation email. Hidden until Google sign-in is set up. */
 @Composable
 fun GoogleButton(vm: AppViewModel) {
-    if (BuildConfig.GOOGLE_WEB_CLIENT_ID.isBlank()) return
+    // Google only knows the individual app's package so far (Android client com.closeros.solo); company builds keep email login.
+    if (BuildConfig.GOOGLE_WEB_CLIENT_ID.isBlank() || !BuildConfig.SOLO) return
     val ctx = LocalContext.current
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }

@@ -1292,3 +1292,10 @@ intelligence → Play Store launch.
 - Launch blockers still open: Supabase built-in email sender (2/hour) — sign-up confirmation emails need SMTP
   (Resend + domain) or "Confirm email" off; real AdMob ids; Play product remove_ads; call-log permission declaration
   + video; store listing + screenshots; 12 testers × 14 days.
+- Google sign-in (Nov 12): Credential Manager (credentials 1.3.0 + googleid 1.1.1) → GetSignInWithGoogleOption
+  (nonce) → supabase signInWith(IDToken, Google). Button GoogleButton (ui/SoloScreens.kt) on sign-up + sign-in,
+  hidden while gradle.properties googleWebClientId is empty. Owner must create in Google Cloud (teamcloseros@gmail.com):
+  consent screen, WEB OAuth client (redirect https://tdbqgoxxxfkfttdznzhb.supabase.co/auth/v1/callback) → client id +
+  secret into Supabase Auth → Google provider; ANDROID OAuth clients for com.closeros.solo (and com.closeros.app) with
+  SHA-1 of keystore/dev-test.jks 57:21:D3:C8:B0:79:28:BF:9F:70:EB:4E:B3:C2:01:7B:1E:6F:6A:1E (later also the Play
+  app-signing SHA-1).

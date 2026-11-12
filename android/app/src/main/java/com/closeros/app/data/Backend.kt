@@ -309,6 +309,20 @@ object Repo {
 
     suspend fun signOut() = Backend.auth.signOut()
 
+    /** "Continue with Google": Google's account picker → ID token → Closer OS login (new account if first time). */
+    suspend fun signInWithGoogle(activity: android.app.Activity) {
+        val raw = java.util.UUID.randomUUID().toString()
+        val hashed = java.security.MessageDigest.getInstance("SHA-256").digest(raw.toByteArray()).joinToString("") { "%02x".format(it) }
+        val option = com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption.Builder(com.closeros.app.BuildConfig.GOOGLE_WEB_CLIENT_ID)
+            .setNonce(hashed).build()
+        val res = androidx.credentials.CredentialManager.create(activity).getCredential(activity,
+            androidx.credentials.GetCredentialRequest.Builder().addCredentialOption(option).build())
+        val token = com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.createFrom(res.credential.data).idToken
+        Backend.auth.signInWith(io.github.jan.supabase.auth.providers.builtin.IDToken) {
+            idToken = token; provider = io.github.jan.supabase.auth.providers.Google; nonce = raw
+        }
+    }
+
     /** Individual app: new login (email + password). Returns true when signed in straight away,
      *  false when the email must be confirmed first. */
     suspend fun signUp(name: String, email: String, password: String): Boolean {

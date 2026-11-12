@@ -563,6 +563,15 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         }.onFailure { onError(it.message?.substringAfter("ERROR:")?.substringBefore("\n")?.substringAfter(":")?.trim()?.take(160) ?: "Couldn't delete — check your internet") }
     }
 
+    fun signInWithGoogle(activity: android.app.Activity, onError: (String) -> Unit) = viewModelScope.launch {
+        runCatching { Repo.signInWithGoogle(activity) }.onSuccess { com.closeros.app.calls.DeviceGuard.claim(ctx) }.onFailure {
+            if (it is androidx.credentials.exceptions.GetCredentialCancellationException) return@onFailure onError("")
+            com.closeros.app.data.AppLog.error(ctx, "google sign-in", it)
+            onError(if (it is androidx.credentials.exceptions.NoCredentialException) "No Google account found on this phone — add one in Settings → Accounts"
+                    else "Couldn't sign in with Google. Check your internet and try again.")
+        }
+    }
+
     fun resetPassword(email: String) = viewModelScope.launch {
         runCatching { Backend.auth.resetPasswordForEmail(email.trim()) }
             .onSuccess { message = "Email sent — open the link to choose a new password" }

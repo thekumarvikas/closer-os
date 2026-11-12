@@ -24,3 +24,7 @@
 
 # Android components declared in the manifest are kept automatically; keep WorkManager workers' constructors.
 -keep class * extends androidx.work.ListenableWorker { <init>(...); }
+
+# Sign in with Google: Credential Manager finds its Play Services provider by reflection.
+-if class androidx.credentials.CredentialManager
+-keep class androidx.credentials.playservices.** { *; }

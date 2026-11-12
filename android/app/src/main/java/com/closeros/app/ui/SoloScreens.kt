@@ -143,6 +143,7 @@ fun SignUpForm(vm: AppViewModel, onSignIn: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Create your free account", fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+        GoogleButton(vm)
         OutlinedTextField(name, { name = it }, label = { Text("Your name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(email, { email = it }, label = { Text("Email") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
@@ -158,5 +159,29 @@ fun SignUpForm(vm: AppViewModel, onSignIn: () -> Unit) {
             TextButton(onClick = { open(ctx, "/privacy") }) { Text("Privacy policy", fontSize = 12.sp) }
         }
         TextButton(onClick = onSignIn, modifier = Modifier.fillMaxWidth()) { Text("Already have an account? Sign in") }
+    }
+}
+
+/** "Continue with Google" — one tap, no password, no confirmation email. Hidden until Google sign-in is set up. */
+@Composable
+fun GoogleButton(vm: AppViewModel) {
+    if (BuildConfig.GOOGLE_WEB_CLIENT_ID.isBlank()) return
+    val ctx = LocalContext.current
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(enabled = !busy, modifier = Modifier.fillMaxWidth().height(50.dp), onClick = {
+            val a = ctx as? Activity ?: return@OutlinedButton
+            busy = true; error = null
+            vm.signInWithGoogle(a) { busy = false; error = it.ifBlank { null } }
+        }) {
+            Text("G", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF4285F4))
+            Spacer(Modifier.width(10.dp))
+            Text(if (busy) "Opening Google…" else "Continue with Google", fontSize = 16.sp)
+        }
+        error?.let { Text(it, color = Brand.red, fontSize = 13.sp) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            HorizontalDivider(Modifier.weight(1f)); Text("  or with email  ", fontSize = 12.sp, color = Brand.muted); HorizontalDivider(Modifier.weight(1f))
+        }
     }
 }

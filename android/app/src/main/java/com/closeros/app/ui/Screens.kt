@@ -88,6 +88,7 @@ fun LoginScreen(vm: AppViewModel) {
         Card(shape = RoundedCornerShape(16.dp)) {
             if (creating) Column(Modifier.padding(20.dp)) { SignUpForm(vm) { creating = false } }
             else Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                GoogleButton(vm)
                 OutlinedTextField(email, { email = it }, label = { Text("Email") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
                 OutlinedTextField(password, { password = it }, label = { Text("Password") }, singleLine = true, modifier = Modifier.fillMaxWidth(),

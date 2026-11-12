@@ -18,6 +18,8 @@ android {
         buildConfigField("String", "SUPABASE_URL", "\"https://tdbqgoxxxfkfttdznzhb.supabase.co\"")
         buildConfigField("String", "SUPABASE_KEY", "\"sb_publishable_aXH8Wr7Lq1YeOWxhvxEdGQ_ePS1GYTY\"")
         buildConfigField("String", "WEB_URL", "\"https://closer-os-liard.vercel.app\"")
+        // "Continue with Google": the WEB OAuth client id from Google Cloud (public). Empty = button hidden.
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${project.findProperty("googleWebClientId") ?: ""}\"")
     }
     // full   = everything, for the Play Store (installs from Play are never blocked).
     // direct = APK shared directly (WhatsApp, dashboard download): no WhatsApp-call tracking, because
@@ -91,6 +93,10 @@ dependencies {
     implementation("androidx.documentfile:documentfile:1.0.1")
     implementation("io.ktor:ktor-client-okhttp:3.0.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+    // Sign in with Google (Android Credential Manager).
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     // Individual app only: Google ads (with the privacy-consent form) and Google Play subscriptions.
     "soloImplementation"("com.google.android.gms:play-services-ads:23.6.0")
     "soloImplementation"("com.android.billingclient:billing-ktx:7.1.1")

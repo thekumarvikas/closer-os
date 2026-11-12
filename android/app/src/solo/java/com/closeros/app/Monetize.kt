@@ -175,6 +175,6 @@ object Monetize {
     /** "Restore purchase": asks Google Play again (new phone, reinstall). */
     fun restore(ctx: Context, onResult: (String) -> Unit) {
         connectBilling(ctx.applicationContext)
-        refresh(ctx.applicationContext) { onResult(if (it) "Ads removed ✓" else "No \"Remove ads\" purchase found on this Google account") }
+        refresh(ctx.applicationContext) { onResult(if (it) "Closer OS Pro is on ✓" else "No Closer OS Pro purchase found on this Google account") }
     }
 }

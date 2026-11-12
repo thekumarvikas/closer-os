@@ -1,3 +1,4 @@
+import { SequenceReport } from '../components/Sequences'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { usePersisted } from '../lib/persist'
 import { Download, ChevronDown, BarChart3 } from 'lucide-react'
@@ -17,8 +18,8 @@ import { LeadWork, WhatWorks, Insights } from '../components/Round9Reports'
 import ResponseTime from '../components/ResponseTime'
 import Compare from '../components/Compare'
 
-type Tab = 'compare' | 'overview' | 'outcomes' | 'targets' | 'team' | 'daily' | 'hourly' | 'followups' | 'log' | 'leadwork' | 'sales' | 'response'
-const tabs: [Tab, string][] = [['overview', 'Overview'], ['compare', 'Compare periods'], ['outcomes', 'Outcomes'], ['targets', 'Targets'], ['team', 'Team'], ['daily', 'Daily'], ['hourly', 'By hour'], ['followups', 'Follow-ups'], ['response', 'Response time'], ['leadwork', 'Lead work'], ['sales', 'Sales insights'], ['log', 'Call log']]
+type Tab = 'compare' | 'overview' | 'outcomes' | 'targets' | 'team' | 'daily' | 'hourly' | 'followups' | 'log' | 'leadwork' | 'sales' | 'response' | 'sequences'
+const tabs: [Tab, string][] = [['overview', 'Overview'], ['compare', 'Compare periods'], ['outcomes', 'Outcomes'], ['targets', 'Targets'], ['team', 'Team'], ['daily', 'Daily'], ['hourly', 'By hour'], ['followups', 'Follow-ups'], ['response', 'Response time'], ['leadwork', 'Lead work'], ['sales', 'Sales insights'], ['sequences', 'WhatsApp sequences'], ['log', 'Call log']]
 interface Filters { from: string; to: string; users: string[]; dir: Dir; ch: Channel }
 
 export default function Reports() {
@@ -95,6 +96,7 @@ export default function Reports() {
           <section><h2 className="mb-1 text-lg font-semibold">1 · Who buys — and how much revenue each kind of lead brings</h2><Insights from={applied.from} to={applied.to} /></section>
           <section><h2 className="mb-1 text-lg font-semibold">2 · What it takes to close a sale — effort and revenue per team member</h2><WhatWorks dir={dir} users={applied.users} from={applied.from} to={applied.to} /></section>
         </div> :
+        tab === 'sequences' ? <SequenceReport from={applied.from} to={applied.to} /> :
         tab === 'response' ? <ResponseTime dir={dir} from={applied.from} to={applied.to} /> :
         tab === 'log' ? <CallLog org={org} dir={dir} f={logFilters} fileTag={fileTag} outcome={logOutcome} setOutcome={setLogOutcome} /> :
         tab === 'outcomes' ? <><LeadStatus orgId={org.id} dir={dir} users={applied.users} from={range.from} to={range.to} /><OutcomeReportView org={org} dir={dir} from={applied.from} to={applied.to} users={applied.users} callDir={applied.dir} channel={applied.ch} fileTag={fileTag} onOpenOutcome={id => { setLogOutcome(id); setTab('log') }} /></> :

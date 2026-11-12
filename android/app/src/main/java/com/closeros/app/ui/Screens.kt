@@ -231,6 +231,7 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
                     TextButton(onClick = { vm.setDoNotCall(l, false) { u -> lead = u } }) { Text("Remove") }
                 }
                 TextButton(onClick = { vm.openPlaybook(l) }) { Text("📖 Script, objection answers & links") }
+                LeadSequencesCard(vm, l)
             }
             item { EffortCard(vm, l) }
             item { KeyFactsCard(l) { t -> lead = l.copy(key_facts = t) } }
@@ -321,6 +322,15 @@ fun ProfileScreen(vm: AppViewModel) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(3, 5, 10).forEach { n -> FilterChip(selected = cd == n, onClick = { vm.store.countdownSec = n; cd = n }, label = { Text("$n sec") }) }
         }
+        HorizontalDivider()
+        Text("WhatsApp sequences", fontWeight = FontWeight.SemiBold)
+        Text("A daily reminder when messages are due", color = Brand.muted, fontSize = 14.sp)
+        var sh by remember { mutableStateOf(com.closeros.app.data.SeqAlerts.hour(ctx)) }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf(-1 to "Off", 9 to "9 AM", 10 to "10 AM", 11 to "11 AM", 12 to "12 PM").forEach { (h, l) ->
+                FilterChip(selected = sh == h, onClick = { com.closeros.app.data.SeqAlerts.setHour(ctx, h); sh = h }, label = { Text(l) }) }
+        }
+        TextButton(onClick = { vm.showSequences = true }) { Text("📨 Open WhatsApp sequences") }
         HorizontalDivider()
         Text("After-call pop-up", fontWeight = FontWeight.SemiBold)
         Text("A card over any app when a call ends, to save the outcome straight away", color = Brand.muted, fontSize = 14.sp)

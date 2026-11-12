@@ -55,6 +55,7 @@ fun LeadsTab(vm: AppViewModel, onCall: (Lead) -> Unit) {
             Text(if (vm.selected.isEmpty()) "Tap leads to pick them" else "${vm.selected.size} selected", modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
             TextButton(onClick = { vm.leads.forEach { if (!it.do_not_call) vm.selected[it.id] = it } }) { Text("All") }
             if (vm.isSolo) { IconButton(onClick = { vm.eventPickFor = vm.selected.values.toList() }, enabled = vm.selected.isNotEmpty()) { Text("📅", fontSize = 18.sp) } }
+            IconButton(onClick = { vm.seqPick = AppViewModel.SeqPick(vm.selected.keys.toList(), "${vm.selected.size} lead${if (vm.selected.size == 1) "" else "s"}") }, enabled = vm.selected.isNotEmpty()) { Text("📨", fontSize = 18.sp) }
             OutlinedButton(onClick = { vm.waChooseFor = vm.selected.values.toList() }, enabled = vm.selected.isNotEmpty(), contentPadding = PaddingValues(horizontal = 10.dp)) {
                 Icon(Icons.Default.Send, null, Modifier.size(16.dp), tint = Color(0xFF16A34A)); Spacer(Modifier.width(4.dp)); Text("WA ${vm.selected.size}") }
             Spacer(Modifier.width(6.dp))

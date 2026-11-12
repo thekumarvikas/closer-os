@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.20.0
+## Android app (`android/`) — v0.21.0
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -1344,20 +1344,28 @@ intelligence → Play Store launch.
   lead ids ∩ search ids; offline: lead.batch_leads) — "Event" section in the filter sheet (company app shows it as
   "Webinar / event" from my_batches). Repo: myEvents, createEvent, renameEvent, archiveEvent, eventSetLeads, eventLeadIds.
 
-## WhatsApp sequences + Closer OS Pro — owner decisions (Nov 12 2026; NOT built yet — waiting for "go")
-- "Remove ads" becomes "Closer OS Pro" (same ₹99/₹999, Play product id remove_ads unchanged): no ads, queues
-  without breaks, unlimited WhatsApp sequences, auto-start from outcomes, all reports open.
-- Name in the UI: "WhatsApp sequence"; inside the editor "Message 1, 2, 3…" (not "steps").
-- A sequence = messages at Day 0 / Day +N (+ time of day; or relative to an event date, e.g. 1 day / 2 h before),
-  each using a message template (files, {{leadName}}…). Holidays/off days → next working day.
-- Limits: Free = 2 sequences × 3 messages, last message up to Day 7. Pro + Teams = up to 20 messages per
-  sequence, up to Day 365.
-- Leads join by: outcome rule (Pro / Teams only), Leads tab select, an event ("start for all"), lead page.
-  Stops on Won / Lost / Not interested / DNC or the rep's Stop (replies can't be detected). Lead page shows
-  "📨 After webinar · message 2 of 3 · next Fri · Pause / Stop".
-- Sending = assisted WhatsApp queue (one tap per lead, "Did it go?"), never auto-send. Home card "📨 N messages
-  due today" + daily notification. Free: rewarded ad per 15 queued messages (first unlock each day free).
-  Single sends from the lead page and follow-up reminders are never locked. Unsent messages stay due ("2 days late").
-- Teams: managers make company sequences (dashboard) + company outcome rules; reps make personal ones in the
-  app; Reports → Sequences (due, on time, late, not sent, converted while on a sequence).
-- Also: "⏰ Remind me" on the lead page (reminder + note without a call, quick times), free for everyone.
+## WhatsApp sequences + Closer OS Pro (v0.21.0, migration 0071, Nov 12 2026)
+- "Remove ads" renamed "Closer OS Pro" (same ₹99/₹999, Play product id remove_ads unchanged): no ads, queues without
+  breaks, unlimited sequences (50 messages, Day 365), auto-start from outcomes, reports open. Legal pages updated.
+- UI name "WhatsApp sequence"; editor says "Message 1, 2…". Free individual limits (data/Sequences.kt SeqLimits, app-side):
+  2 own sequences × 3 messages, last message by Day 7, no auto-start. Pro + Teams: 50 messages, Day 365 (server caps 50/365).
+- Migration 0071: wa_sequences (owner_id null = company, managers; else personal), wa_sequence_messages (anchor start:
+  day_offset + send_time in company tz, later days skip non-working days via working_days; anchor event: minutes_before
+  the enrollment's batch webinar_at, negative = after; event messages > 12 h past are skipped), wa_sequence_leads
+  (enrollment: user_id = sender, batch_id, status active|paused|stopped|done, next_pos/next_due_at; one live per
+  sequence+lead), wa_sequence_sends (sent|skipped, due_at, wa_message_id). RPCs save_sequence, archive_sequence,
+  sequences(org), start_sequence(seq, leads, batch?, how) (manager + company sequence → lead's assignee sends),
+  set_sequence_lead(pause|resume|stop), lead_sequences, my_sequence_due (due now + later_today, lead json with the
+  enrollment's batch), sequence_mark(id, sent) (sent → wa_messages source 'sequence'), sequence_report(org, from, to).
+  Triggers: outcome saved on a call → stops live sequences on won/lost (except ones this outcome starts) and starts
+  sequences whose start_outcomes include it (company + caller's own); leads.do_not_call → stop.
+- Unsent messages stay due (one pending message per lead at a time); queue Skip leaves it due.
+- App: ui/SequenceScreens.kt — SequencesScreen (Home tool "📨 Sequences", Settings link), SequenceEditor (days/time or
+  around the event, saved messages, attach file = managers/individuals upload to template-media <org>/seq/…, auto-start
+  outcomes), SequencePickerDialog (Leads select bar 📨, lead page, event card "Start for everyone", outcome screen chips),
+  SeqDueCard on Home → vm.startSeqQueue (WhatsApp queue with per-lead messages: vm.waSeqItems / waCurrentTemplate; free =
+  rewarded ad per 15), LeadSequencesCard (Pause/Resume/Stop) + "⏰ Remind me" (follow_ups row, reason "Reminder", quick
+  times + note). Daily notification SeqAlerts (SyncWorker, Settings hour Off/9–12, default 10 AM).
+- Dashboard: Settings → "WhatsApp sequences" (components/Sequences.tsx CompanySequences: company sequences editor, outcome
+  rules; lists reps' own); Reports → "WhatsApp sequences" tab (due, on time, late, not sent, leads started, bought after;
+  per team member + per sequence).

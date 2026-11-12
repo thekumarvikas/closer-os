@@ -76,7 +76,7 @@ class MainActivity : ComponentActivity() {
         i?.getStringExtra("open_lead")?.let { vm.openLeadId = it; i.removeExtra("open_lead") }
         // Hourly check-in notification: open the card, or "start calling" straight away.
         i?.getStringExtra("checkin")?.let { if (it == "go") vm.checkInGo() else vm.openCheckIn(); i.removeExtra("checkin") }
-        i?.getStringExtra("open_tab")?.let { if (it == "leads") { vm.tab = Tab.Leads; vm.reloadLeads() }; i.removeExtra("open_tab") }
+        i?.getStringExtra("open_tab")?.let { if (it == "leads") { vm.tab = Tab.Leads; vm.reloadLeads() }; if (it == "sequences") { vm.showSequences = true; vm.loadSequences(); vm.loadSeqDue() }; i.removeExtra("open_tab") }
     }
 
     override fun onResume() {
@@ -133,10 +133,12 @@ fun Root(vm: AppViewModel) {
 
     // Back always closes the screen on top (inner screens with their own Back handling still go first).
     val secondary = vm.showWaToday || vm.showLeadWork || vm.showRecipe || vm.showPlaybook || vm.showFeedback || vm.showDialer || vm.showReports ||
-        vm.showLeaderboard || vm.openLeadId != null || vm.genericList != null || vm.openList != null || vm.showBatches || vm.todayFilter != null
+        vm.showLeaderboard || vm.showSequences || vm.editSequence != null || vm.openLeadId != null || vm.genericList != null || vm.openList != null || vm.showBatches || vm.todayFilter != null
     androidx.activity.compose.BackHandler(enabled = secondary && vm.pending == null) { vm.closeTop() }
     WaChooseDialog(vm)
     EventPickerDialog(vm)
+    SequencePickerDialog(vm)
+    ProAskDialog(vm)
     UnlockDialog(vm)
     WaConfirmDialog(vm)
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -154,6 +156,7 @@ fun Root(vm: AppViewModel) {
             vm.checkIn != null -> vm.checkIn?.let { CheckInScreen(vm, it) }
             vm.showRemoveAds -> RemoveAdsScreen(vm)
             vm.waActive -> WaQueueScreen(vm)
+            vm.editSequence != null -> vm.editSequence?.let { s -> androidx.compose.runtime.key(s.id) { SequenceEditor(vm, s) } }
             vm.showPlaybook -> WithBanner { PlaybookScreen(vm) }
             vm.showFeedback -> FeedbackScreen(vm)
             vm.showDialer -> DialerScreen(vm)
@@ -164,6 +167,7 @@ fun Root(vm: AppViewModel) {
             vm.showWaToday -> WaTodayScreen(vm)
             vm.showReports -> WithBanner { ReportsScreen(vm) }
             vm.showLeaderboard -> LeaderboardScreen(vm)
+            vm.showSequences -> WithBanner { SequencesScreen(vm) }
             vm.queueActive -> QueueScreen(vm)
             vm.openList != null -> BatchListScreen(vm)
             vm.showBatches -> BatchesScreen(vm)

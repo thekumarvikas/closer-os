@@ -88,7 +88,7 @@ fun WaChooseDialog(vm: AppViewModel) {
 fun WaQueueScreen(vm: AppViewModel) {
     BackHandler { vm.waPaused = true; vm.waCountdown = null }
     val l = vm.waQueue.getOrNull(vm.waPos)
-    val t = vm.waTemplate
+    val t = vm.waCurrentTemplate()
     LaunchedEffect(vm.waCountdown) {
         val c = vm.waCountdown ?: return@LaunchedEffect
         if (c <= 0) { vm.waOpenCurrent(); return@LaunchedEffect }
@@ -96,7 +96,7 @@ fun WaQueueScreen(vm: AppViewModel) {
     }
     Column(Modifier.fillMaxSize().background(Brand.bg).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("WhatsApp queue", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text(if (vm.waSeqItems != null) "WhatsApp sequences" else "WhatsApp queue", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             TextButton(onClick = { vm.waStop() }) { Text("Stop") }
         }
         LinearProgressIndicator(progress = { vm.waPos.toFloat() / vm.waQueue.size.coerceAtLeast(1) }, Modifier.fillMaxWidth().height(6.dp))

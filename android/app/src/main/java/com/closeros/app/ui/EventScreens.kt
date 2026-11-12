@@ -108,6 +108,7 @@ fun EventCard(vm: AppViewModel, e: BatchSummary) {
             Text(e.name, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
             Text(eventWhen(e), color = Brand.muted, fontSize = 13.sp)
             Text("${e.leads} leads · ${e.called} called · ${e.talked} talked", fontSize = 14.sp)
+            if (e.leads > 0) TextButton(onClick = { vm.pickSequenceForEvent(e) }, contentPadding = PaddingValues(0.dp)) { Text("📨 Start a WhatsApp sequence for everyone") }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Button(onClick = { vm.openBatchList(e, "sales") }, enabled = e.leads > 0) { Text("Open list") }
                 Spacer(Modifier.width(6.dp))

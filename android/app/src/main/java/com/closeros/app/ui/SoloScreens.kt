@@ -37,7 +37,7 @@ fun UnlockDialog(vm: AppViewModel) {
     var busy by remember { mutableStateOf(false) }
     AlertDialog(onDismissRequest = { if (!busy) vm.gate = null },
         title = { Text("Unlock ${f.title}") },
-        text = { Text("Watch a short ad to unlock ${f.gives}. Or remove all ads for good.") },
+        text = { Text("Watch a short ad to unlock ${f.gives}. Or get Closer OS Pro: no ads, no breaks.") },
         confirmButton = {
             Button(enabled = !busy, onClick = {
                 val a = ctx as? Activity ?: return@Button vm.gateGranted()
@@ -47,13 +47,13 @@ fun UnlockDialog(vm: AppViewModel) {
         },
         dismissButton = {
             Row {
-                TextButton(onClick = { vm.gate = null; vm.showRemoveAds = true }) { Text("Remove ads") }
+                TextButton(onClick = { vm.gate = null; vm.showRemoveAds = true }) { Text("Get Pro") }
                 TextButton(onClick = { vm.gate = null }) { Text("Not now") }
             }
         })
 }
 
-/** Remove ads: monthly or yearly subscription through Google Play (prices in the user's own currency). */
+/** Closer OS Pro (Play product "remove_ads"): monthly or yearly subscription through Google Play (prices in the user's own currency). */
 @Composable
 fun RemoveAdsScreen(vm: AppViewModel) {
     BackHandler { vm.showRemoveAds = false }
@@ -62,17 +62,17 @@ fun RemoveAdsScreen(vm: AppViewModel) {
     Column(Modifier.fillMaxSize().background(Brand.bg).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { vm.showRemoveAds = false }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
-            Text("Remove ads", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text("Closer OS Pro", fontSize = 22.sp, fontWeight = FontWeight.Bold)
         }
         if (paid) {
             Card { Column(Modifier.padding(16.dp)) {
-                Text("✓ Ads are removed", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Brand.primary)
+                Text("✓ You have Closer OS Pro", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Brand.primary)
                 Text("Thank you for supporting Closer OS. Manage or cancel the subscription in Google Play → Payments & subscriptions.", color = Brand.muted)
             } }
             return@Column
         }
-        Text("Closer OS is free. Ads keep it free. Remove them to get:", color = Brand.muted)
-        listOf("No ads anywhere", "Calling queue without breaks", "WhatsApp queue without breaks", "All reports, Compare, Lead work and Sales insights — always open")
+        Text("Closer OS is free, with ads. Closer OS Pro gives you:", color = Brand.muted)
+        listOf("No ads anywhere", "Calling queue without breaks", "WhatsApp queue and sequences without breaks", "Unlimited WhatsApp sequences — up to 50 messages each, up to a year", "Sequences that start by themselves after an outcome (e.g. Interested)", "All reports, Compare, Lead work and Sales insights — always open")
             .forEach { Text("✓ $it", fontSize = 16.sp) }
         @Composable fun Plan(title: String, price: String, note: String, yearly: Boolean, best: Boolean) {
             Card(colors = CardDefaults.cardColors(containerColor = if (best) Brand.light else Color.White), modifier = Modifier.fillMaxWidth()) {
@@ -94,7 +94,7 @@ fun RemoveAdsScreen(vm: AppViewModel) {
     }
 }
 
-/** Settings → for the individual app: remove ads, privacy, terms (delete account sits at the bottom of Settings). */
+/** Settings → for the individual app: Closer OS Pro, privacy, terms (delete account sits at the bottom of Settings). */
 @Composable
 fun SoloAccountCard(vm: AppViewModel) {
     val ctx = LocalContext.current
@@ -102,8 +102,8 @@ fun SoloAccountCard(vm: AppViewModel) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Your account", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
             if (Monetize.ENABLED) {
-                if (Monetize.adFree(ctx)) Text("✓ Ads removed", color = Brand.primary)
-                else Button(onClick = { vm.showRemoveAds = true }, modifier = Modifier.fillMaxWidth()) { Text("Remove ads") }
+                if (Monetize.adFree(ctx)) Text("✓ Closer OS Pro", color = Brand.primary)
+                else Button(onClick = { vm.showRemoveAds = true }, modifier = Modifier.fillMaxWidth()) { Text("Get Closer OS Pro") }
             }
             Row {
                 TextButton(onClick = { open(ctx, "/privacy") }) { Text("Privacy policy") }
@@ -127,7 +127,7 @@ fun DeleteAccountButton(vm: AppViewModel) {
             title = { Text("Delete your account?") },
             text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("This deletes your Closer OS account with all its leads, call history, notes and follow-ups. It can't be undone. Your phone's own call history and recordings are not touched.")
-                if (Monetize.ENABLED && Monetize.adFree(ctx)) Text("Also cancel your \"Remove ads\" subscription in Google Play, or it keeps renewing.", color = Brand.red, fontSize = 13.sp)
+                if (Monetize.ENABLED && Monetize.adFree(ctx)) Text("Also cancel your Closer OS Pro subscription in Google Play, or it keeps renewing.", color = Brand.red, fontSize = 13.sp)
                 OutlinedTextField(typed, { typed = it }, singleLine = true, label = { Text("Type DELETE") })
                 error?.let { Text(it, color = Brand.red, fontSize = 13.sp) }
             } },

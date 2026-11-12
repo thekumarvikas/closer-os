@@ -55,6 +55,7 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
     var followAt by remember { mutableStateOf<ZonedDateTime?>(null) }
     var noFollow by remember { mutableStateOf(false) }
     var notes by remember { mutableStateOf("") }
+    var startSeq by remember { mutableStateOf<String?>(null) }
     var noteTags by remember { mutableStateOf(emptyList<String>()) }
     var factValues by remember { mutableStateOf(emptyMap<String, String>()) }
     var lead by remember { mutableStateOf<com.closeros.app.data.Lead?>(null) }
@@ -207,6 +208,7 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
         }
         NoteEditor(notes, { notes = it }, noteTags, { noteTags = it }, emptyList(), "Notes from this call",
             groups = vm.membership?.organization?.tagGroups.orEmpty())
+        if (p.leadId.isNotBlank()) OutcomeSeqChips(vm, startSeq) { startSeq = it }
 
         Button(onClick = {
             val o = outcome ?: return@Button
@@ -237,7 +239,12 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
                 if (categoryId != null && categoryId != p.categoryId) put("profession_category_id", categoryId)
                 if (noFollow) put("no_follow_up", true) else at?.let { put("follow_up_at", it.toInstant().toString()) }
             }
-            vm.saveOutcome(payload) { busy = false }
+            val seqToStart = startSeq?.let { id -> vm.sequences?.firstOrNull { it.id == id } }
+            val leadId = p.leadId; val leadName = p.leadName; val batch = p.batchId
+            vm.saveOutcome(payload) {
+                busy = false
+                seqToStart?.let { vm.startSequence(it, AppViewModel.SeqPick(listOf(leadId), leadName.ifBlank { "this lead" }, batch)) }
+            }
         }, enabled = canSave, modifier = Modifier.fillMaxWidth().height(54.dp)) { Text(if (busy) "Saving…" else "Save", fontSize = 17.sp) }
 
         if (outcome == null || (!noFollow && followAt == null)) {

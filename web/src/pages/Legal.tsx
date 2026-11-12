@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 
 /** Public pages (no login): privacy policy, terms, how to delete an account. Linked from the app and the Play Store. */
 const CONTACT = 'teamcloseros@gmail.com'
-const UPDATED = '11 November 2026'
+const UPDATED = '12 November 2026'
 
 export const LEGAL_PATHS = ['/privacy', '/terms', '/delete-account']
 
@@ -46,7 +46,7 @@ function Privacy() {
         <><b>Contacts:</b> read on your phone to show saved names next to numbers. Your contact list is not uploaded.</>,
         <><b>Call recordings:</b> in the individual app, recordings made by your phone stay on your phone. Closer OS only finds the matching file in the folder you choose so you can play it inside the app. Recordings are never uploaded. (Company accounts may choose to upload recordings to their private company storage.)</>,
         <><b>Device and app information:</b> phone model, Android version, app version, setup status and error reports, used to keep the app working.</>,
-        <><b>Purchases:</b> if you buy “Remove ads”, Google Play handles the payment. We only learn whether your subscription is active. We never see your card or bank details.</>,
+        <><b>Purchases:</b> if you buy Closer OS Pro, Google Play handles the payment. We only learn whether your subscription is active. We never see your card or bank details.</>,
       ]} />
 
       <H>Advertising</H>
@@ -89,9 +89,9 @@ function Terms() {
     <Page title="Terms of use">
       <p>By creating an account or using Closer OS you agree to these terms. If you don't agree, please don't use the app.</p>
       <H>The service</H>
-      <p>Closer OS helps you manage leads, make calls, record call outcomes, plan follow-ups and see reports. The individual app is free and shows ads; some extra features open after watching a short ad. You can remove ads with a paid subscription.</p>
+      <p>Closer OS helps you manage leads, make calls, record call outcomes, plan follow-ups and see reports. The individual app is free and shows ads; some extra features open after watching a short ad. Closer OS Pro, a paid subscription, removes the ads and opens the extra features (such as more WhatsApp sequences).</p>
       <H>Subscriptions</H>
-      <L items={['“Remove ads” is sold through Google Play as a monthly or yearly subscription, in your local currency, shown before you pay.',
+      <L items={['Closer OS Pro is sold through Google Play as a monthly or yearly subscription, in your local currency, shown before you pay.',
         'It renews automatically until you cancel. Cancel any time in Google Play → Payments & subscriptions; it stays active until the end of the period already paid.',
         'Refunds follow Google Play\'s refund policy.',
         'Company plans are sold separately on our website under their own terms.']} />
@@ -124,7 +124,7 @@ function DeleteAccount() {
       <H>By email</H>
       <p>If you can't open the app, email <a className="text-brand-700" href={`mailto:${CONTACT}?subject=Delete%20my%20Closer%20OS%20account`}>{CONTACT}</a> from the email address of your account with the subject “Delete my Closer OS account”. We delete it within 7 days and confirm by email.</p>
       <H>What is deleted</H>
-      <p>Your login, your leads, call history, outcomes, notes, follow-ups and settings. Nothing on your phone itself is touched (your phone's call history and recordings stay). Backup copies are overwritten within 30 days. If you have a “Remove ads” subscription, also cancel it in Google Play → Payments & subscriptions.</p>
+      <p>Your login, your leads, call history, outcomes, notes, follow-ups and settings. Nothing on your phone itself is touched (your phone's call history and recordings stay). Backup copies are overwritten within 30 days. If you have a Closer OS Pro subscription, also cancel it in Google Play → Payments & subscriptions.</p>
       <H>Company accounts</H>
       <p>If your login belongs to your employer's Closer OS account, ask your company admin to remove you; the company's data stays with the company.</p>
     </Page>

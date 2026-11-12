@@ -98,6 +98,7 @@ Everything from the original product prompt plus the owner's feedback, with stat
 - ✅ After-call pop-up over any app with quick outcome + next call (v0.9.11)
 - ✅ WhatsApp step right after the outcome (pop-up and app) (v0.9.12)
 - ✅ Company file library for WhatsApp (dashboard upload, app send) (v0.9.12)
+- ✅ WhatsApp sequences (Day 0 / +N or around an event, company + personal, auto-start from outcomes, daily send queue, report) + ⏰ Remind me + Closer OS Pro (v0.21.0)
 - ✅ All calls treated alike, "Not in lead list" tag; outcome on a new number adds the lead (v0.9.16)
 - ✅ Round 8: DNC remove with warning, real pick-up counting, outcomes by call type, minimalist Home + Calls, start tab (v0.9.19)
 - ✅ Round 9 (v0.10.0): WhatsApp assisted queue + send log, interactions, talk time per lead, path to sale,

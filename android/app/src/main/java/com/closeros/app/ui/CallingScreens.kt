@@ -139,6 +139,9 @@ fun HomeScreen(vm: AppViewModel) {
             }
         }
 
+        // WhatsApp sequence messages due now → one tap to send them all in the queue.
+        if ((vm.seqDue?.due?.size ?: 0) > 0) item { SeqDueCard(vm) }
+
         // Today: 4 key numbers (with target bars when targets are set); the rest on "More".
         item {
             val p = vm.progress
@@ -211,6 +214,7 @@ fun HomeScreen(vm: AppViewModel) {
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ToolTile("📖", "Playbook", Modifier.weight(1f)) { vm.openPlaybook(null) }
+                ToolTile("📨", "Sequences", Modifier.weight(1f)) { vm.showSequences = true }
                 ToolTile("📊", if (vm.isManager && !vm.isSolo) "Reports" else "My reports", Modifier.weight(1f)) { vm.showReports = true }
                 ToolTile("📈", "Lead work", Modifier.weight(1f)) { vm.require(com.closeros.app.data.Feature.REPORTS) { vm.showLeadWork = true } }
                 ToolTile("💡", "Sales insights", Modifier.weight(1f)) { vm.require(com.closeros.app.data.Feature.REPORTS) { vm.showRecipe = true } }

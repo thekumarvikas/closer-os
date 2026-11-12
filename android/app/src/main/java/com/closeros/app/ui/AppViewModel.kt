@@ -31,6 +31,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
+import io.github.jan.supabase.postgrest.from
+import kotlinx.serialization.json.put
 import java.util.UUID
 
 enum class Tab { Home, Leads, Calls, FollowUps, Profile }
@@ -356,6 +358,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         loadToday()
         loadBatches(quiet = true)
         loadRound9()
+        loadSeqDue()
     }
 
     fun loadToday() = viewModelScope.launch {
@@ -724,7 +727,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (already.isNotEmpty()) { list = list.filter { it.id !in already }; message = "${already.size} already got this message today — skipped" }
         if (list.isEmpty()) { message = "Everyone in this list already got this message today"; return@launch }
         require(com.closeros.app.data.Feature.WA_QUEUE) {
-            waQueue = list; waPos = 0; waTemplate = t; waSent = 0; waPaused = false; waCountdown = null; waCanUndo = false; waActive = true
+            waQueue = list; waSeqItems = null; waPos = 0; waTemplate = t; waSent = 0; waPaused = false; waCountdown = null; waCanUndo = false; waActive = true
             genericList = null; selectMode = false
         }
     }
@@ -732,7 +735,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Opens WhatsApp for the current lead with the message (and the message's file) ready. */
     fun waOpenCurrent(): kotlinx.coroutines.Job = viewModelScope.launch {
         val l = waQueue.getOrNull(waPos) ?: return@launch
-        val t = waTemplate ?: return@launch
+        val t = waCurrentTemplate() ?: return@launch
         val wq = com.closeros.app.data.Feature.WA_QUEUE
         if (!com.closeros.app.data.Unlocks.open(ctx, wq)) { waPaused = true; waCountdown = null; require(wq) { waPaused = false; waOpenCurrent() }; return@launch }
         com.closeros.app.data.Unlocks.use(ctx, wq)
@@ -756,10 +759,18 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (!sent) { message = "Not counted — tap Send on WhatsApp to try again, or Skip"; return@launch }
         val m = membership ?: return@launch
         val l = waQueue.getOrNull(waPos) ?: return@launch
-        waLastId = Repo.logWa(m.org_id, l.id, l.phone, waTemplate?.id, waTemplate?.name, "queue")
-        waCanUndo = true; waSent++
+        val seq = waSeqItems?.getOrNull(waPos)
+        if (seq != null) {
+            // Sequence message: the server counts it and moves the lead to its next message.
+            runCatching { com.closeros.app.data.Seqs.mark(seq.id, true) }.onFailure { message = com.closeros.app.data.Seqs.friendly(it) + " — not marked yet"; return@launch }
+            waCanUndo = false
+        } else {
+            waLastId = Repo.logWa(m.org_id, l.id, l.phone, waTemplate?.id, waTemplate?.name, "queue")
+            waCanUndo = true
+        }
+        waSent++
         waPos++
-        if (waPos >= waQueue.size) { waActive = false; message = "WhatsApp queue finished — $waSent sent"; com.closeros.app.data.AppEvents.bumpLeads(); return@launch }
+        if (waPos >= waQueue.size) { waActive = false; message = "WhatsApp queue finished — $waSent sent"; com.closeros.app.data.AppEvents.bumpLeads(); loadSeqDue(); return@launch }
         if (!waPaused) waCountdown = 3
     }
 
@@ -767,8 +778,98 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         val id = waLastId ?: return@launch
         runCatching { Repo.undoWa(id) }.onSuccess { waLastId = null; waCanUndo = false; waSent = (waSent - 1).coerceAtLeast(0); waPos = (waPos - 1).coerceAtLeast(0); waCountdown = null; message = "Undone — not counted as sent" }
     }
-    fun waSkip() { waCountdown = null; waCanUndo = false; waPos++; if (waPos >= waQueue.size) { waActive = false; message = "WhatsApp queue finished — $waSent sent" } }
-    fun waStop() { waActive = false; waCountdown = null; waAwaiting = false; message = "Stopped — $waSent sent"; com.closeros.app.data.AppEvents.bumpLeads() }
+    fun waSkip() { waCountdown = null; waCanUndo = false; waPos++; if (waPos >= waQueue.size) { waActive = false; message = "WhatsApp queue finished — $waSent sent"; loadSeqDue() } }
+    fun waStop() { waActive = false; waCountdown = null; waAwaiting = false; message = "Stopped — $waSent sent"; com.closeros.app.data.AppEvents.bumpLeads(); loadSeqDue() }
+
+    // ───── WhatsApp sequences ─────
+    /** Queue items when the WhatsApp queue sends sequence messages (one per lead, each with its own message). */
+    var waSeqItems by mutableStateOf<List<com.closeros.app.data.SeqDue>?>(null)
+    fun waCurrentTemplate(): Template? = waSeqItems?.getOrNull(waPos)?.template() ?: waTemplate
+    var showSequences by mutableStateOf(false)
+    /** Sequence being edited (id "" = new). */
+    var editSequence by mutableStateOf<com.closeros.app.data.Sequence?>(null)
+    var sequences by mutableStateOf<List<com.closeros.app.data.Sequence>?>(null)
+    var seqDue by mutableStateOf<com.closeros.app.data.SeqDueList?>(null)
+    /** "Start a WhatsApp sequence" for these leads (optionally following an event). */
+    class SeqPick(val leadIds: List<String>, val label: String, val batchId: String? = null)
+    var seqPick by mutableStateOf<SeqPick?>(null)
+    /** Free plan limit reached: explains it and offers Closer OS Pro. */
+    var proAsk by mutableStateOf<String?>(null)
+
+    fun loadSequences() = viewModelScope.launch {
+        val m = membership ?: return@launch
+        runCatching { com.closeros.app.data.Seqs.list(m.org_id) }.onSuccess { sequences = it }
+            .onFailure { if (sequences == null) { sequences = emptyList(); message = com.closeros.app.data.Seqs.friendly(it) } }
+    }
+    fun loadSeqDue() = viewModelScope.launch {
+        val m = membership ?: return@launch
+        runCatching { com.closeros.app.data.Seqs.due(m.org_id) }.onSuccess { seqDue = it }
+    }
+    fun mySequenceCount() = sequences.orEmpty().count { it.mine }
+    /** New sequence, or the Pro explanation when the free plan already has its 2. */
+    fun newSequence() {
+        if (mySequenceCount() >= com.closeros.app.data.SeqLimits.maxSequences(ctx)) {
+            proAsk = "The free plan has ${com.closeros.app.data.SeqLimits.maxSequences(ctx)} WhatsApp sequences. Get Closer OS Pro for unlimited sequences with up to 50 messages each."; return }
+        editSequence = com.closeros.app.data.Sequence(messages = listOf(com.closeros.app.data.SeqMessage()))
+    }
+    fun saveSequence(p: JsonObject, done: (String?) -> Unit) = viewModelScope.launch {
+        val m = membership ?: return@launch done("Still loading — try again")
+        runCatching { com.closeros.app.data.Seqs.save(m.org_id, p) }
+            .onSuccess { editSequence = null; message = "Saved ✓"; loadSequences(); loadSeqDue(); done(null) }
+            .onFailure { done(com.closeros.app.data.Seqs.friendly(it)) }
+    }
+    fun archiveSequence(id: String) = viewModelScope.launch {
+        runCatching { com.closeros.app.data.Seqs.archive(id) }.onSuccess { message = "Deleted"; loadSequences(); loadSeqDue() }
+            .onFailure { message = com.closeros.app.data.Seqs.friendly(it) }
+    }
+    fun startSequence(seq: com.closeros.app.data.Sequence, pick: SeqPick, how: String = "manual") = viewModelScope.launch {
+        runCatching { com.closeros.app.data.Seqs.start(seq.id, pick.leadIds, pick.batchId, how) }
+            .onSuccess { (ok, skip) ->
+                seqPick = null
+                message = (if (ok > 0) "📨 ${seq.name} started for $ok lead${if (ok == 1) "" else "s"}" else "Nobody new was added") +
+                    (if (skip > 0) " · $skip already on it or Do not call" else "")
+                leadRefresh++; loadSequences(); loadSeqDue()
+            }.onFailure { message = com.closeros.app.data.Seqs.friendly(it) }
+    }
+    fun setSeqLead(id: String, action: String) = viewModelScope.launch {
+        runCatching { com.closeros.app.data.Seqs.setLead(id, action) }.onSuccess { leadRefresh++; loadSeqDue() }
+            .onFailure { message = com.closeros.app.data.Seqs.friendly(it) }
+    }
+    /** "Send now": every message due now goes into the WhatsApp queue, each lead with its own message. */
+    fun startSeqQueue() = viewModelScope.launch {
+        val m = membership ?: return@launch
+        val d = runCatching { com.closeros.app.data.Seqs.due(m.org_id) }.getOrElse { message = com.closeros.app.data.Seqs.friendly(it); return@launch }
+        seqDue = d
+        val items = d.due.filter { it.lead.phone.isNotBlank() }
+        if (items.isEmpty()) { message = "No WhatsApp messages due right now"; return@launch }
+        require(com.closeros.app.data.Feature.WA_QUEUE) {
+            waQueue = items.map { it.lead }; waSeqItems = items; waTemplate = items.first().template()
+            waPos = 0; waSent = 0; waPaused = false; waCountdown = null; waCanUndo = false; waActive = true
+            showSequences = false; genericList = null; selectMode = false
+        }
+    }
+    /** Starts lead ids of an event on a sequence (event list → "WhatsApp sequence"). */
+    fun pickSequenceForEvent(e: BatchSummary) = viewModelScope.launch {
+        val ids = runCatching { Repo.eventLeadIds(listOf(e.id)) }.getOrElse { message = com.closeros.app.data.Seqs.friendly(it); return@launch }
+        if (ids.isEmpty()) { message = "Add leads to ${e.name} first"; return@launch }
+        seqPick = SeqPick(ids, "${ids.size} leads in ${e.name}", e.id)
+    }
+
+    /** "⏰ Remind me": a reminder with a note, without a call. */
+    fun addReminder(lead: Lead, at: java.time.Instant, note: String, done: (Boolean) -> Unit) = viewModelScope.launch {
+        val m = membership ?: return@launch done(false)
+        runCatching {
+            com.closeros.app.data.Backend.client.from("follow_ups").insert(kotlinx.serialization.json.buildJsonObject {
+                put("org_id", m.org_id); put("lead_id", lead.id); put("assigned_to", com.closeros.app.data.Backend.uid)
+                put("due_at", at.toString()); put("reason", "Reminder"); if (note.isNotBlank()) put("notes", note.trim())
+                put("created_by", com.closeros.app.data.Backend.uid); put("purpose", "sales")
+            })
+        }.onSuccess {
+            message = "⏰ Reminder set"; done(true)
+            runCatching { followUps = Repo.followUps(m.org_id).also { save("followUps", it) }; FollowUpAlarms.scheduleAll(ctx, followUps) }
+            leadRefresh++
+        }.onFailure { message = com.closeros.app.data.Seqs.friendly(it); done(false) }
+    }
 
     /** A single WhatsApp sent from a lead / call row / pop-up: counted as an interaction. */
     /** A single WhatsApp opened from Closer OS: counted only after the rep confirms it went (back in the app). */
@@ -816,6 +917,8 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
             showReports -> showReports = false
             openList != null -> openList = null
             showBatches -> showBatches = false
+            editSequence != null -> editSequence = null
+            showSequences -> showSequences = false
             todayFilter != null -> todayFilter = null
             else -> return false
         }

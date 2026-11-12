@@ -1343,3 +1343,21 @@ intelligence → Play Store launch.
   an event the single lead is already in removes it). Lead page LeadEventsRow. LeadFilters.events (online: batch_leads
   lead ids ∩ search ids; offline: lead.batch_leads) — "Event" section in the filter sheet (company app shows it as
   "Webinar / event" from my_batches). Repo: myEvents, createEvent, renameEvent, archiveEvent, eventSetLeads, eventLeadIds.
+
+## WhatsApp sequences + Closer OS Pro — owner decisions (Nov 12 2026; NOT built yet — waiting for "go")
+- "Remove ads" becomes "Closer OS Pro" (same ₹99/₹999, Play product id remove_ads unchanged): no ads, queues
+  without breaks, unlimited WhatsApp sequences, auto-start from outcomes, all reports open.
+- Name in the UI: "WhatsApp sequence"; inside the editor "Message 1, 2, 3…" (not "steps").
+- A sequence = messages at Day 0 / Day +N (+ time of day; or relative to an event date, e.g. 1 day / 2 h before),
+  each using a message template (files, {{leadName}}…). Holidays/off days → next working day.
+- Limits: Free = 2 sequences × 3 messages, last message up to Day 7. Pro + Teams = up to 20 messages per
+  sequence, up to Day 365.
+- Leads join by: outcome rule (Pro / Teams only), Leads tab select, an event ("start for all"), lead page.
+  Stops on Won / Lost / Not interested / DNC or the rep's Stop (replies can't be detected). Lead page shows
+  "📨 After webinar · message 2 of 3 · next Fri · Pause / Stop".
+- Sending = assisted WhatsApp queue (one tap per lead, "Did it go?"), never auto-send. Home card "📨 N messages
+  due today" + daily notification. Free: rewarded ad per 15 queued messages (first unlock each day free).
+  Single sends from the lead page and follow-up reminders are never locked. Unsent messages stay due ("2 days late").
+- Teams: managers make company sequences (dashboard) + company outcome rules; reps make personal ones in the
+  app; Reports → Sequences (due, on time, late, not sent, converted while on a sequence).
+- Also: "⏰ Remind me" on the lead page (reminder + note without a call, quick times), free for everyone.

@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.19.2
+## Android app (`android/`) — v0.19.3
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -1314,3 +1314,17 @@ intelligence → Play Store launch.
   com.closeros.solo + dev-test SHA-1. Consent screen still "Testing" (only listed test users) — Branding
   (home/privacy/terms URLs) must be filled before "Publish app". Company builds hide the Google button until an
   Android client for com.closeros.app is added. Google shows a client secret only once ("+ Add secret" for a new one).
+
+## Individual app feedback (v0.19.3, Nov 12 2026)
+- No team choices in the individual app (vm.isSolo): WhoPicker (Lead work, Sales insights) hidden + default "me";
+  Sales insights hides the Team column; webinar list "whole team" switch hidden; Reports default "Me" ("My reports").
+- Lead page counts from the phone's WHOLE history: PhoneCalls.statsFor(ctx, phone) (call-log rows LIKE last 7 digits,
+  exact last-10 match + WhatsApp calls) → EffortCard shows max(server, phone) for calls / dialled / received /
+  conversations (dialled ≥ 20 s + received with talk) / talk; BestTimeLine(leadId, phone) = 2 lines ("⏰ Best time…" /
+  "📞 Picked up X of Y dialled calls"; solo wording "your best hour across all leads").
+- Server counts: LeadIndex.remember records numbers new to this phone in prefs "history_pending" → CallSync uploads
+  their whole call history (uploadLeadHistory); one-time "history_v2" reset of leadHistoryDone resends everything
+  (stable ids, no duplicates).
+- Banner on every tab incl. Home. Settings: "Delete my account" moved to the bottom (DeleteAccountButton after Sign out).
+- Playbook (individual): "+ Add" saves directly as published (Repo.savePlaybook), Edit / "Delete this" (status archived)
+  on expanded cards; company app keeps "Suggest" → manager approval.

@@ -94,11 +94,10 @@ fun RemoveAdsScreen(vm: AppViewModel) {
     }
 }
 
-/** Settings → for the individual app: remove ads, privacy, terms, delete account. */
+/** Settings → for the individual app: remove ads, privacy, terms (delete account sits at the bottom of Settings). */
 @Composable
 fun SoloAccountCard(vm: AppViewModel) {
     val ctx = LocalContext.current
-    var askDelete by remember { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Your account", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
@@ -110,9 +109,16 @@ fun SoloAccountCard(vm: AppViewModel) {
                 TextButton(onClick = { open(ctx, "/privacy") }) { Text("Privacy policy") }
                 TextButton(onClick = { open(ctx, "/terms") }) { Text("Terms") }
             }
-            TextButton(onClick = { askDelete = true }) { Text("Delete my account", color = Brand.red) }
         }
     }
+}
+
+/** Bottom of Settings (individual app): delete the account and all its data. */
+@Composable
+fun DeleteAccountButton(vm: AppViewModel) {
+    val ctx = LocalContext.current
+    var askDelete by remember { mutableStateOf(false) }
+    TextButton(onClick = { askDelete = true }) { Text("Delete my account", color = Brand.red) }
     if (askDelete) {
         var typed by remember { mutableStateOf("") }
         var busy by remember { mutableStateOf(false) }

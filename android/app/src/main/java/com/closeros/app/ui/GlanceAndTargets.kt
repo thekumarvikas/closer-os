@@ -62,7 +62,7 @@ fun GlanceCard(vm: AppViewModel, base: Lead) {
             l.latestBatch?.let { b ->
                 Text("🎥 ${b.batch?.name ?: "Webinar"}: " + when { b.watch_minutes == null -> "attendance not uploaded"; b.watch_minutes > 0 -> "watched ${b.watch_minutes} min"; else -> "didn't join" } + (b.warm_reason?.let { " · $it" } ?: ""), fontSize = 14.sp)
             }
-            BestTimeLine(l.id)
+            BestTimeLine(l.id, l.phone)
             l.key_facts?.takeIf { it.isNotBlank() }?.let {
                 Text("📌 $it", fontSize = 14.sp, modifier = Modifier.fillMaxWidth().background(Color(0xFFFFFBEB), RoundedCornerShape(8.dp)).padding(10.dp))
             }

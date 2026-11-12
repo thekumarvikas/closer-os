@@ -46,7 +46,7 @@ fun BatchesScreen(vm: AppViewModel) {
             Text("Webinars / Sales Events", fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             IconButton(onClick = { vm.loadBatches() }) { Icon(Icons.Default.Refresh, "Refresh") }
         }
-        if (vm.isManager) Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (vm.isManager && !vm.isSolo) Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Switch(vm.listEveryone, { vm.listEveryone = it })
             Spacer(Modifier.width(8.dp)); Text(if (vm.listEveryone) "Showing my whole team's leads" else "Showing only my leads", fontSize = 14.sp)
         }

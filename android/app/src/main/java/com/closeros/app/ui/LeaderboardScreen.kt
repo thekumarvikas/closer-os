@@ -80,18 +80,27 @@ fun LeaderboardScreen(vm: AppViewModel) {
 
 /** "Best time to call" hint for a lead (their usual pick-up hour, or the team's best hour). */
 @Composable
-fun BestTimeLine(leadId: String) {
+fun BestTimeLine(leadId: String, phone: String? = null) {
     var bt by remember(leadId) { mutableStateOf<com.closeros.app.data.BestTime?>(null) }
-    LaunchedEffect(leadId) { bt = Repo.bestTime(leadId) }
-    val b = bt ?: return
-    // Pick-ups = dialled calls where the person really talked (not operator messages).
-    val total = b.total_tries?.takeIf { it > 0 }?.let { "Picked up ${b.total_picked ?: 0} of $it calls" }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var ph by remember(leadId) { mutableStateOf<com.closeros.app.calls.PhoneCalls.NumberStats?>(null) }
+    LaunchedEffect(leadId) {
+        phone?.let { p -> ph = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.closeros.app.calls.PhoneCalls.statsFor(ctx, p) } }
+        bt = Repo.bestTime(leadId)
+    }
+    val b = bt
+    // Pick-ups = dialled calls where the person really talked (not operator messages). Whole phone history counts too.
+    val tries = maxOf(b?.total_tries ?: 0, ph?.dialled ?: 0)
+    val picked = maxOf(b?.total_picked ?: 0, ph?.pickedUp ?: 0)
+    val total = tries.takeIf { it > 0 }?.let { "📞 Picked up $picked of $it dialled calls" }
+    if (b == null) { total?.let { Text(it, fontSize = 13.sp, color = Color(0xFF92400E)) }; return }
     val h = b.hour
     val label = h?.let { "${if (it % 12 == 0) 12 else it % 12} ${if (it < 12) "AM" else "PM"}" }
     val best = when {
         label == null -> null
         b.source == "lead" -> "⏰ Best time: around $label (picked up ${b.picked} of ${b.tries} then)"
-        else -> "⏰ Best time: around $label (team's best hour — ${b.rate}% pick up)"
+        else -> "⏰ Best time: around $label (${if (com.closeros.app.BuildConfig.SOLO) "your best hour across all leads" else "team's best hour"} — ${b.rate}% pick up)"
     }
-    Text(listOfNotNull(best, total).joinToString(" · "), fontSize = 13.sp, color = Color(0xFF92400E))
+    // Two short lines read easier than one long one.
+    androidx.compose.foundation.layout.Column { listOfNotNull(best, total).forEach { Text(it, fontSize = 13.sp, color = Color(0xFF92400E)) } }
 }

@@ -22,6 +22,13 @@ object LeadIndex {
 
     /** Remembers leads the app has just loaded (lists, lookups), so they're known offline too. */
     fun remember(ctx: Context, leads: Collection<Lead>) = runCatching {
+        // Numbers this phone didn't know as leads yet (e.g. just added from a call): their older calls still need uploading.
+        val db = LocalDb.get(ctx)
+        val fresh = leads.map { it.phone }.filter { it.isNotBlank() && db.leadJsonByPhone(it) == null }
+        if (fresh.isNotEmpty()) synchronized(this) {
+            val p = ctx.getSharedPreferences("closeros", Context.MODE_PRIVATE)
+            p.edit().putStringSet("history_pending", (p.getStringSet("history_pending", emptySet()).orEmpty() + fresh).toSet()).apply()
+        }
         LocalDb.get(ctx).putLeads(leads.filter { it.phone.isNotBlank() }.map { Triple(it.phone, it.id, json.encodeToString(Lead.serializer(), it)) })
     }
 

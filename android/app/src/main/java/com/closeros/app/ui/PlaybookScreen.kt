@@ -43,6 +43,7 @@ fun PlaybookScreen(vm: AppViewModel) {
     var q by remember { mutableStateOf("") }
     var open by remember { mutableStateOf<String?>(null) }
     var suggesting by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<PlaybookItem?>(null) }   // individual app: change own items
     val all = vm.playbook
     fun fill(t: String) = if (lead != null) vm.fillTemplate(t, lead) else t
 
@@ -53,7 +54,7 @@ fun PlaybookScreen(vm: AppViewModel) {
                 Text("Playbook", fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 lead?.let { Text("For ${it.name.ifBlank { fmtPhone(it.phone) }}", fontSize = 13.sp, color = Brand.muted) }
             }
-            TextButton(onClick = { suggesting = true }) { Text("Suggest") }
+            TextButton(onClick = { suggesting = true }) { Text(if (vm.isSolo) "+ Add" else "Suggest") }
         }
         OutlinedTextField(q, { q = it }, singleLine = true, placeholder = { Text("Search, e.g. price, EMI, link") }, leadingIcon = { Icon(Icons.Default.Search, null) },
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
@@ -64,21 +65,24 @@ fun PlaybookScreen(vm: AppViewModel) {
         val shown = all.filter { it.status == "published" || it.created_by == com.closeros.app.data.Backend.uid }
             .filter { if (q.isBlank()) it.kind == kind else listOfNotNull(it.title, it.body, it.section, it.url).any { s -> s.contains(q.trim(), true) } }
         LazyColumn(contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (shown.isEmpty()) item { Text(if (q.isBlank()) "Nothing here yet. Your manager adds these on the dashboard (Playbook)." else "Nothing matches “$q”.", color = Brand.muted) }
+            if (shown.isEmpty()) item { Text(if (q.isNotBlank()) "Nothing matches “$q”." else if (vm.isSolo) "Nothing here yet. Tap “+ Add” to save your own scripts, objection answers, links and documents."
+                else "Nothing here yet. Your manager adds these on the dashboard (Playbook).", color = Brand.muted) }
             var lastSection: String? = "\u0000"
             shown.forEach { item ->
                 if (q.isBlank() && item.section != lastSection) { lastSection = item.section; item.section?.takeIf { it.isNotBlank() }?.let { s -> item(key = "s-$s-${item.id}") { Text(s.uppercase(), fontSize = 12.sp, color = Brand.muted, fontWeight = FontWeight.SemiBold) } } }
                 item(key = item.id) {
-                    PlaybookCard(item, open == item.id, { open = if (open == item.id) null else item.id }, ::fill, onWhatsApp = lead?.let { l -> { text: String -> PhoneCalls.whatsapp(ctx, l.phone, text) } })
+                    PlaybookCard(item, open == item.id, { open = if (open == item.id) null else item.id }, ::fill, onWhatsApp = lead?.let { l -> { text: String -> PhoneCalls.whatsapp(ctx, l.phone, text) } },
+                        onEdit = if (vm.isSolo) ({ editing = item }) else null)
                 }
             }
         }
     }
-    if (suggesting) SuggestDialog(vm) { suggesting = false }
+    if (suggesting) SuggestDialog(vm, null) { suggesting = false }
+    editing?.let { e -> SuggestDialog(vm, e) { editing = null } }
 }
 
 @Composable
-private fun PlaybookCard(item: PlaybookItem, expanded: Boolean, toggle: () -> Unit, fill: (String) -> String, onWhatsApp: ((String) -> Unit)?) {
+private fun PlaybookCard(item: PlaybookItem, expanded: Boolean, toggle: () -> Unit, fill: (String) -> String, onWhatsApp: ((String) -> Unit)?, onEdit: (() -> Unit)? = null) {
     val ctx = LocalContext.current
     val body = item.body?.let(fill)
     Card(Modifier.fillMaxWidth().clickable(onClick = toggle), colors = CardDefaults.cardColors(containerColor = Color.White)) {
@@ -99,19 +103,22 @@ private fun PlaybookCard(item: PlaybookItem, expanded: Boolean, toggle: () -> Un
                     android.widget.Toast.makeText(ctx, "Copied", android.widget.Toast.LENGTH_SHORT).show()
                 }) { Text("Copy") }
                 if (onWhatsApp != null && (item.kind == "link" || item.kind == "doc")) Button(onClick = { onWhatsApp(share) }) { Text("Send on WhatsApp") }
+                if (onEdit != null) TextButton(onClick = onEdit) { Text("Edit") }
             }
         }
     }
 }
 
 @Composable
-private fun SuggestDialog(vm: AppViewModel, onClose: () -> Unit) {
-    var kind by remember { mutableStateOf("objection") }
-    var title by remember { mutableStateOf("") }
-    var body by remember { mutableStateOf("") }
-    var url by remember { mutableStateOf("") }
+private fun SuggestDialog(vm: AppViewModel, existing: PlaybookItem?, onClose: () -> Unit) {
+    // Individual app: the person's own playbook — saved straight away, no approval. Company app: a suggestion to the manager.
+    val direct = vm.isSolo
+    var kind by remember { mutableStateOf(existing?.kind ?: "objection") }
+    var title by remember { mutableStateOf(existing?.title ?: "") }
+    var body by remember { mutableStateOf(existing?.body ?: "") }
+    var url by remember { mutableStateOf(existing?.url ?: "") }
     val scope = rememberCoroutineScope()
-    AlertDialog(onDismissRequest = onClose, title = { Text("Suggest for the playbook") },
+    AlertDialog(onDismissRequest = onClose, title = { Text(if (!direct) "Suggest for the playbook" else if (existing != null) "Edit" else "Add to my playbook") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -121,18 +128,24 @@ private fun SuggestDialog(vm: AppViewModel, onClose: () -> Unit) {
                 OutlinedTextField(body, { body = it }, label = { Text(if (kind == "objection") "How to answer" else "Text") }, minLines = 3,
                     trailingIcon = { VoiceButton { s -> body = if (body.isBlank()) s else "$body $s" } })
                 if (kind == "link" || kind == "doc") OutlinedTextField(url, { url = it }, label = { Text("Link (https://…)") }, singleLine = true)
-                Text("Your manager approves it before the team sees it.", fontSize = 12.sp, color = Brand.muted)
+                if (!direct) Text("Your manager approves it before the team sees it.", fontSize = 12.sp, color = Brand.muted)
+                if (direct && existing != null) TextButton(onClick = {
+                    scope.launch { runCatching { Repo.deletePlaybook(existing.id) }.onSuccess { vm.message = "Deleted"; vm.loadPlaybook(); onClose() }
+                        .onFailure { vm.message = "Couldn't delete — check your internet" } }
+                }) { Text("Delete this", color = Brand.red) }
             }
         },
         confirmButton = {
             Button(enabled = title.isNotBlank() && (body.isNotBlank() || url.isNotBlank()), onClick = {
                 val m = vm.membership ?: return@Button
                 scope.launch {
-                    runCatching { Repo.suggestPlaybook(m.org_id, kind, title.trim(), body.trim(), url.trim().ifBlank { null }) }
-                        .onSuccess { vm.message = "Sent to your manager for approval"; vm.loadPlaybook(); onClose() }
-                        .onFailure { vm.message = "Couldn't send: ${it.message?.take(60)}" }
+                    runCatching {
+                        if (direct) Repo.savePlaybook(m.org_id, existing?.id, kind, title.trim(), body.trim(), url.trim().ifBlank { null })
+                        else Repo.suggestPlaybook(m.org_id, kind, title.trim(), body.trim(), url.trim().ifBlank { null })
+                    }.onSuccess { vm.message = if (direct) "Saved ✓" else "Sent to your manager for approval"; vm.loadPlaybook(); onClose() }
+                        .onFailure { vm.message = "Couldn't save: ${it.message?.take(60)}" }
                 }
-            }) { Text("Send") }
+            }) { Text(if (direct) "Save" else "Send") }
         },
         dismissButton = { TextButton(onClick = onClose) { Text("Cancel") } })
 }

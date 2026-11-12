@@ -189,6 +189,34 @@ object PhoneCalls {
         return out
     }
 
+    /** Everything this phone knows about calls with one number, from the oldest call to the newest
+     *  (phone call log + WhatsApp calls noted on this phone). Cheap: only the matching rows are read. */
+    data class NumberStats(val calls: Int, val dialled: Int, val received: Int, val missed: Int, val conversations: Int, val talkSec: Int, val pickedUp: Int)
+    @SuppressLint("MissingPermission")
+    fun statsFor(ctx: Context, phone: String): NumberStats? {
+        val last10 = phone.filter { it.isDigit() }.takeLast(10)
+        if (last10.length < 6 || !has(ctx, android.Manifest.permission.READ_CALL_LOG)) return null
+        val rows = mutableListOf<Pair<String, Int>>()   // direction to talk seconds
+        runCatching {
+            ctx.contentResolver.query(CallLog.Calls.CONTENT_URI, arrayOf(CallLog.Calls.NUMBER, CallLog.Calls.TYPE, CallLog.Calls.DURATION),
+                "${CallLog.Calls.NUMBER} LIKE ?", arrayOf("%" + last10.takeLast(7)), null)?.use { c ->
+                while (c.moveToNext()) {
+                    if ((c.getString(0) ?: "").filter { it.isDigit() }.takeLast(10) != last10) continue
+                    val dir = when (c.getInt(1)) {
+                        CallLog.Calls.INCOMING_TYPE -> "incoming"; CallLog.Calls.OUTGOING_TYPE -> "outgoing"
+                        CallLog.Calls.MISSED_TYPE -> "missed"; CallLog.Calls.REJECTED_TYPE, CallLog.Calls.BLOCKED_TYPE -> "rejected"; else -> null
+                    } ?: continue
+                    rows += dir to (if (dir == "incoming" || dir == "outgoing") c.getInt(2) else 0)
+                }
+            }
+        }
+        runCatching { WhatsAppCalls.asLog(ctx, 0).filter { it.phone.filter { d -> d.isDigit() }.takeLast(10) == last10 }.forEach { rows += it.direction to it.durationSec } }
+        // Same rule as the server: a dialled call counts as picked up after 20 s of talk; a received call with any talk is a conversation.
+        val picked = rows.count { it.first == "outgoing" && it.second >= 20 }
+        return NumberStats(rows.size, rows.count { it.first == "outgoing" }, rows.count { it.first == "incoming" }, rows.count { it.first == "missed" || it.first == "rejected" },
+            picked + rows.count { it.first == "incoming" && it.second > 0 }, rows.sumOf { it.second }, picked)
+    }
+
     /** The call-log entry for a call Closer OS just started (same number, after the start time). */
     fun findCall(ctx: Context, phone: String, afterMs: Long): LogCall? {
         val last10 = phone.filter { it.isDigit() }.takeLast(10)

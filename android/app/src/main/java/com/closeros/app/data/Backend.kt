@@ -519,6 +519,16 @@ object Repo {
         })
     }
 
+    /** Individual app (owner of a one-person account): add or change own playbook items directly (no approval). */
+    suspend fun savePlaybook(orgId: String, id: String?, kind: String, title: String, body: String, url: String?) {
+        val row = buildJsonObject {
+            put("kind", kind); put("title", title); put("body", body); put("url", url?.let { kotlinx.serialization.json.JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull); put("status", "published")
+        }
+        if (id == null) Backend.client.from("playbook_items").insert(buildJsonObject { row.forEach { (k, v) -> put(k, v) }; put("org_id", orgId); put("created_by", Backend.uid) })
+        else Backend.client.from("playbook_items").update(row) { filter { eq("id", id) } }
+    }
+    suspend fun deletePlaybook(id: String) { Backend.client.from("playbook_items").update(buildJsonObject { put("status", "archived") }) { filter { eq("id", id) } } }
+
     suspend fun myAnnouncements(orgId: String): List<Announcement> =
         json.decodeFromString(db.rpc("my_announcements", buildJsonObject { put("p_org", orgId) }).data)
 

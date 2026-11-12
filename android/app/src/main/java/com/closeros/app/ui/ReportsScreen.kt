@@ -44,7 +44,7 @@ fun ReportsScreen(vm: AppViewModel) {
     val today = LocalDate.now(zone)
     var from by remember { mutableStateOf(today) }
     var to by remember { mutableStateOf(today) }
-    var who by remember { mutableStateOf(if (vm.isManager) "all" else "me") }
+    var who by remember { mutableStateOf(if (vm.isManager && !vm.isSolo) "all" else "me") }
     var team by remember { mutableStateOf<List<IdName>>(emptyList()) }
     var data by remember { mutableStateOf<Rep?>(null) }
     var error by remember { mutableStateOf<String?>(null) }

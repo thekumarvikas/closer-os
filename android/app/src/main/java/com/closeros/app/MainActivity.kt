@@ -171,8 +171,8 @@ fun Root(vm: AppViewModel) {
                 // Dial pad is always one tap away, on every tab.
                 if (vm.tab != Tab.Profile && !vm.selectMode) SmallDialFab { vm.showDialer = true }
             }, bottomBar = {
-                // Individual app: one small ad above the tabs on list screens (never on Home).
-                Column { if (vm.tab != Tab.Home) Monetize.Banner()
+                // Individual app: one small ad above the tabs, on every tab.
+                Column { Monetize.Banner()
                 NavigationBar {
                     listOf(Triple(Tab.Home, "Home", Icons.Default.Home), Triple(Tab.Leads, "Leads", Icons.Default.Person), Triple(Tab.Calls, "Calls", Icons.Default.Call),
                         Triple(Tab.FollowUps, "Follow-ups", Icons.Default.DateRange), Triple(Tab.Profile, "Settings", Icons.Default.Settings)).forEach { (t, label, icon) ->

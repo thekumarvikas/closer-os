@@ -206,7 +206,7 @@ internal fun range(key: String): Pair<LocalDate?, LocalDate?> {
 
 @Composable
 private fun WhoPicker(vm: AppViewModel, who: String, onWho: (String) -> Unit) {
-    if (!vm.isManager) return
+    if (!vm.isManager || vm.isSolo) return   // the individual app has no team to pick from
     var team by remember { mutableStateOf(emptyList<com.closeros.app.data.IdName>()) }
     LaunchedEffect(Unit) { team = runCatching { Repo.teamBrief(vm.membership!!.org_id) }.getOrDefault(emptyList()) }
     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -223,7 +223,7 @@ fun LeadWorkScreen(vm: AppViewModel) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val m = vm.membership ?: return
     var period by remember { mutableStateOf("month") }
-    var who by remember { mutableStateOf(if (vm.isManager) "all" else "me") }
+    var who by remember { mutableStateOf(if (vm.isManager && !vm.isSolo) "all" else "me") }
     var data by remember { mutableStateOf<JsonObject?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val users = when (who) { "all" -> null; "me" -> listOfNotNull(com.closeros.app.data.Backend.uid); else -> listOf(who) }
@@ -338,15 +338,15 @@ fun RecipeScreen(vm: AppViewModel) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row { Text("Average per sale", Modifier.weight(1.6f), fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                         Text(if (who == "me") "Me" else "Selected", Modifier.weight(1f), fontSize = 12.sp, color = Brand.muted, textAlign = TextAlign.Center)
-                        Text("Team", Modifier.weight(1f), fontSize = 12.sp, color = Brand.muted, textAlign = TextAlign.Center) }
+                        if (!vm.isSolo) Text("Team", Modifier.weight(1f), fontSize = 12.sp, color = Brand.muted, textAlign = TextAlign.Center) }
                     listOf("Talk time (min)" to "talk_min", "Calls dialled" to "calls", "Picked up" to "picked", "WhatsApp sent" to "wa",
                         "Interactions" to "interactions", "Follow-ups made" to "follow_ups", "Days to close" to "days").forEach { (label, k) ->
                         HorizontalDivider(color = Color(0xFFF1F5F9))
                         Row { Text(label, Modifier.weight(1.6f), fontSize = 13.sp)
                             Text(num(mine?.n(k)), Modifier.weight(1f), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                            Text(num(team?.n(k)), Modifier.weight(1f), color = Brand.muted, textAlign = TextAlign.Center) }
+                            if (!vm.isSolo) Text(num(team?.n(k)), Modifier.weight(1f), color = Brand.muted, textAlign = TextAlign.Center) }
                     }
-                    Text("Based on ${mine?.i("n") ?: 0} sale(s) · team ${team?.i("n") ?: 0}. A follow-up = a planned next call that was actually made.", fontSize = 11.sp, color = Brand.muted)
+                    Text("Based on ${mine?.i("n") ?: 0} sale(s)" + (if (vm.isSolo) "" else " · team ${team?.i("n") ?: 0}") + ". A follow-up = a planned next call that was actually made.", fontSize = 11.sp, color = Brand.muted)
                 }
             }
             mine?.let { r -> Text("💡 Your sales usually take about ${num(r.n("talk_min"))} min of talk over ${num(r.n("calls"))} calls and ${num(r.n("wa"))} WhatsApp messages. " +
@@ -383,6 +383,16 @@ fun EffortCard(vm: AppViewModel, lead: Lead) {
     val e = path?.get("effort") as? JsonObject
     val won = lead.won_at != null
     val received = e?.i("received") ?: 0
+    // The phone's own call history with this number, oldest to newest. The server may know more (other team
+    // members' calls), the phone may know more (calls not yet synced, or before the lead was added): show the larger.
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var ph by remember(lead.id) { mutableStateOf<com.closeros.app.calls.PhoneCalls.NumberStats?>(null) }
+    LaunchedEffect(lead.id) { ph = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.closeros.app.calls.PhoneCalls.statsFor(ctx, lead.phone) } }
+    val nCalls = maxOf(lead.call_count, ph?.calls ?: 0)
+    val nDialled = maxOf(lead.dial_count, ph?.dialled ?: 0)
+    val nReceived = maxOf(received, ph?.received ?: 0)
+    val nConv = maxOf(lead.conversation_count, ph?.conversations ?: 0)
+    val nTalk = maxOf(lead.total_talk_sec, ph?.talkSec ?: 0)
     Column(Modifier.fillMaxWidth().background(if (won) Color(0xFFECFDF5) else Color.White, RoundedCornerShape(12.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(if (won) "💰 What it took to win this sale" else "Your work with this lead so far", fontWeight = FontWeight.SemiBold)
         // Four plain numbers instead of one long line.
@@ -391,9 +401,9 @@ fun EffortCard(vm: AppViewModel, lead: Lead) {
                 Text(v, fontWeight = FontWeight.Bold, fontSize = 16.sp); Text(l, fontSize = 11.sp, color = Brand.muted)
                 sub?.let { Text(it, fontSize = 10.sp, color = Brand.muted) }
             }
-            tile("${lead.call_count}", "Calls", "${lead.dial_count} dialled · $received received", Modifier.weight(1.3f))
-            tile("${lead.conversation_count}", "Conversations", null, Modifier.weight(1f))
-            tile(fmtDur(lead.total_talk_sec), "Talk time", null, Modifier.weight(1f))
+            tile("$nCalls", "Calls", "$nDialled dialled · $nReceived received", Modifier.weight(1.3f))
+            tile("$nConv", "Conversations", null, Modifier.weight(1f))
+            tile(fmtDur(nTalk), "Talk time", null, Modifier.weight(1f))
             tile("${lead.wa_count}", "WhatsApp", null, Modifier.weight(0.9f))
         }
         if (e != null && won) Text(effortLine(e), fontSize = 12.sp, color = Brand.muted)
@@ -401,7 +411,7 @@ fun EffortCard(vm: AppViewModel, lead: Lead) {
         val r = vm.recipe
         if (!won && r != null && (r.n("talk_min") ?: 0.0) > 0) {
             val tMin = r.n("talk_min") ?: 0.0; val c = r.n("calls") ?: 0.0
-            val pct = (((lead.total_talk_sec / 60.0) / tMin) * 100).toInt().coerceAtMost(100)
+            val pct = (((nTalk / 60.0) / tMin) * 100).toInt().coerceAtMost(100)
             Text("Your sales usually take about ${num(tMin)} min of talk and ${num(c)} calls. This lead: $pct% of that talk time.", fontSize = 12.sp, color = Brand.muted)
             LinearProgressIndicator(progress = { pct / 100f }, Modifier.fillMaxWidth().height(5.dp), color = Brand.primary, trackColor = Color(0xFFE2E8F0))
         }

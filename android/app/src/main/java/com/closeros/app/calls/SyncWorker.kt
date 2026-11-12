@@ -60,9 +60,17 @@ object CallSync {
         }
         // 2a) Older calls with lead numbers, from the phone's whole call history — so each lead's call count is complete.
         //     Once for all leads, then again only for numbers that just became leads. Personal calls stay on the phone.
+        // Once after this update: send the whole history again (leads added on the phone were missed before; no duplicates).
+        ctx.getSharedPreferences("closeros", Context.MODE_PRIVATE).let { p -> if (!p.getBoolean("history_v2", false)) { store.leadHistoryDone = false; p.edit().putBoolean("history_v2", true).apply() } }
         runCatching {
             if (!store.leadHistoryDone && com.closeros.app.data.LocalDb.get(ctx).leadIndexCount() > 0) { sent += uploadLeadHistory(ctx, orgId, device, null); store.leadHistoryDone = true }
-            else if (newLeadPhones.isNotEmpty()) sent += uploadLeadHistory(ctx, orgId, device, newLeadPhones)
+            else {
+                // New leads from the server + numbers added on this phone: send their whole call history once.
+                val prefs = ctx.getSharedPreferences("closeros", Context.MODE_PRIVATE)
+                val pending = prefs.getStringSet("history_pending", emptySet()).orEmpty()
+                val todo = newLeadPhones + pending
+                if (todo.isNotEmpty()) { sent += uploadLeadHistory(ctx, orgId, device, todo); prefs.edit().remove("history_pending").apply() }
+            }
         }.onFailure { com.closeros.app.data.AppLog.error(ctx, "lead call history", it) }
         // 2b) WhatsApp calls noted from WhatsApp's call notifications (if the rep allowed it).
         val wa = WhatsAppCalls.since(ctx, store.waCursorMs).filter { it.phone.isNotBlank() || !it.name.isNullOrBlank() }

@@ -208,7 +208,7 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
                 listOfNotNull(l.profession, l.company, l.city).joinToString(" · ").takeIf { it.isNotEmpty() }?.let { Text(it, color = Brand.muted) }
                 listOfNotNull(l.source, l.campaign).joinToString(" · ").takeIf { it.isNotEmpty() }?.let { Text("Source: $it", color = Brand.muted, fontSize = 14.sp) }
                 l.next_follow_up_at?.let { Text("Next follow-up: ${fmtWhen(it)}", color = Brand.primary, fontSize = 14.sp) }
-                BestTimeLine(l.id)
+                BestTimeLine(l.id, l.phone)
                 l.response_sec?.let { r -> Text("⚡ First call " + (if (r < 60) "within a minute" else "${r / 60} working min") + " after it came in", fontSize = 13.sp, color = Brand.muted) }
             }
             if (l.batch_leads.isNotEmpty()) item { LeadWebinarsCard(l) }
@@ -354,6 +354,7 @@ fun ProfileScreen(vm: AppViewModel) {
         HorizontalDivider()
         if (!vm.isSolo) OutlinedButton(onClick = { safeStart(ctx, Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.WEB_URL))) }) { Text("Open dashboard website") }
         TextButton(onClick = { vm.signOut() }) { Text("Sign out", color = Brand.red) }
+        if (vm.isSolo) DeleteAccountButton(vm)
         Text("Closer OS ${BuildConfig.VERSION_NAME}", fontSize = 12.sp, color = Brand.muted)
     }
 }

@@ -136,6 +136,7 @@ fun Root(vm: AppViewModel) {
         vm.showLeaderboard || vm.openLeadId != null || vm.genericList != null || vm.openList != null || vm.showBatches || vm.todayFilter != null
     androidx.activity.compose.BackHandler(enabled = secondary && vm.pending == null) { vm.closeTop() }
     WaChooseDialog(vm)
+    EventPickerDialog(vm)
     UnlockDialog(vm)
     WaConfirmDialog(vm)
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {

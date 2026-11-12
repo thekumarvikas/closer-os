@@ -72,7 +72,7 @@ fun HomeScreen(vm: AppViewModel) {
     // A webinar in the next 18 h with reminder calls of mine still to make.
     val upcoming = vm.batches.orEmpty().filter { b -> (ms(b.webinar_at) ?: 0) in (now - 3_600_000)..(now + 18 * 3_600_000) && b.reminder_mine > 0 }
         .minByOrNull { ms(it.webinar_at) ?: 0 }
-    LaunchedEffect(Unit) { vm.loadToday(); if (vm.batches == null && !vm.isSolo) vm.loadBatches(quiet = true) }
+    LaunchedEffect(Unit) { vm.loadToday(); if (vm.batches == null) vm.loadBatches(quiet = true) }
     var moreTiles by remember { mutableStateOf(false) }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp, 12.dp, 16.dp, 88.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -133,8 +133,8 @@ fun HomeScreen(vm: AppViewModel) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     HeroLink("📋 Pick leads", Modifier.weight(1f)) { vm.selectMode = true; vm.tab = Tab.Leads }
                     HeroLink("📅 Follow-ups${if (dueToday.isNotEmpty()) " (${dueToday.size})" else ""}", Modifier.weight(1f)) { vm.tab = Tab.FollowUps }
-                    // Webinars are set up by a company on the dashboard: not part of the individual app.
-                    if (!vm.isSolo) HeroLink("🎓 Webinars", Modifier.weight(1f)) { vm.showBatches = true }
+                    // Company: webinars set up on the dashboard. Individual app: the person's own events.
+                    HeroLink(if (vm.isSolo) "📅 Events" else "🎓 Webinars", Modifier.weight(1f)) { vm.showBatches = true }
                 }
             }
         }

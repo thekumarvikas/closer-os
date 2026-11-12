@@ -124,7 +124,8 @@ object LocalLeads {
             when (f.messaged) { "yes" -> l.wa_count > 0; "no" -> l.wa_count == 0; else -> true } &&
             (!f.hot || l.score >= 40) &&
             (f.talk.isEmpty() || TalkBands.of(l.total_talk_sec) in f.talk) &&
-            (f.tags.isEmpty() || l.tags.orEmpty().any { it in f.tags })
+            (f.tags.isEmpty() || l.tags.orEmpty().any { it in f.tags }) &&
+            (f.events.isEmpty() || l.batch_leads.any { it.batch_id in f.events })
         }.sortedWith(compareBy<Lead> { t(it.next_follow_up_at) ?: Instant.MAX }.thenByDescending { it.created_at ?: "" })
             .drop(page * 50).take(50).toList()
     }

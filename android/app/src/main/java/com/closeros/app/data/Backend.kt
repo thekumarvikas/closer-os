@@ -169,6 +169,8 @@ data class LeadFact(val key: String, val label: String, val options: List<String
     val pitch_minute: Int? = null,
     val zoom_uploaded: Boolean = false, val reminder_mine: Int = 0, val sales_mine: Int = 0,
     val reminder_all: Int = 0, val sales_all: Int = 0, val attended: Int = 0,
+    /** Events (individual app): leads in it, called at least once, talked. */
+    val leads: Int = 0, val called: Int = 0, val talked: Int = 0,
 )
 
 /** One lead in a webinar's calling list, with what's needed to filter and sort. */
@@ -241,11 +243,15 @@ data class LeadFilters(
     val hot: Boolean = false, val tags: Set<String> = emptySet(),
     /** Total talk time with the lead, as TalkBands keys. */
     val talk: Set<String> = emptySet(),
+    /** In any of these events (batch ids). */
+    val events: Set<String> = emptySet(),
 ) {
     val count get() = (if (followup != "all") 1 else 0) + listOf(stages, outcomes, sources, campaigns, cities, categories, tags).count { it.isNotEmpty() } +
         (if (neverCalled) 1 else 0) + custom.count { it.value.isNotEmpty() } + (if (lastCall != "any") 1 else 0) + (if (messaged != "any") 1 else 0) + (if (hot) 1 else 0) +
-        (if (talk.isNotEmpty()) 1 else 0)
+        (if (talk.isNotEmpty()) 1 else 0) + (if (events.isNotEmpty()) 1 else 0)
 }
+@Serializable data class IdOnly(val id: String)
+@Serializable data class LeadIdOnly(val lead_id: String)
 
 /** Leads grouped by total talk time with them (same bands as the dashboard, lead_talk_bands). */
 object TalkBands {
@@ -398,6 +404,9 @@ object Repo {
             json.decodeFromString<List<String>>(rpcR("search_leads", buildJsonObject { put("p_org", orgId); put("p_q", query.trim()) }).data)
         }.getOrNull() else null
         if (ids != null && ids.isEmpty()) return emptyList()
+        // Event filter: the leads in the chosen events (combined with the text search, if any).
+        val evIds = if (f.events.isEmpty()) null else eventLeadIds(f.events).toSet().let { e -> if (ids != null) e.intersect(ids.toSet()) else e }
+        if (evIds != null && evIds.isEmpty()) return emptyList()
         fun inList(v: Collection<String>) = "(" + v.joinToString(",") { "\"" + it.replace("\"", "") + "\"" } + ")"
         val q = query.trim()
         val digits = q.filter { it.isDigit() }
@@ -407,6 +416,7 @@ object Repo {
                 filter("deleted_at", FilterOperator.IS, "null")
                 if (mineOnly) Backend.uid?.let { u -> or { eq("assigned_to", u); filter("shared_with", FilterOperator.CS, "{$u}") } }
                 when {
+                    evIds != null -> filter("id", FilterOperator.IN, inList(evIds))
                     ids != null -> filter("id", FilterOperator.IN, inList(ids))
                     digits.length >= 4 -> ilike("phone", "%$digits%")
                     q.isNotEmpty() -> ilike("name", "%${q.replace("%", "")}%")
@@ -639,6 +649,24 @@ object Repo {
         json.parseToJsonElement(rpcR("team_brief", buildJsonObject { put("p_org", orgId) }).data).jsonArray.map {
             IdName(it.jsonObject["user_id"]!!.jsonPrimitive.content, it.jsonObject["name"]?.jsonPrimitive?.content ?: "")
         }
+
+    /** Every event of the account (also empty ones, any date), newest first. */
+    suspend fun myEvents(orgId: String): List<BatchSummary> =
+        json.decodeFromString(rpcR("my_events", buildJsonObject { put("p_org", orgId) }).data)
+    suspend fun createEvent(orgId: String, name: String, at: Instant): String =
+        Backend.client.from("batches").insert(buildJsonObject {
+            put("org_id", orgId); put("name", name); put("kind", "event"); put("webinar_at", at.toString()); put("created_by", Backend.uid)
+        }) { select(Columns.raw("id")) }.decodeSingle<IdOnly>().id
+    suspend fun renameEvent(id: String, name: String, at: Instant) {
+        Backend.client.from("batches").update(buildJsonObject { put("name", name); put("webinar_at", at.toString()) }) { filter { eq("id", id) } }
+    }
+    suspend fun archiveEvent(id: String) { Backend.client.from("batches").update(buildJsonObject { put("is_archived", true) }) { filter { eq("id", id) } } }
+    /** Adds (or removes) leads to an event; returns how many changed. */
+    suspend fun eventSetLeads(batchId: String, leadIds: Collection<String>, add: Boolean = true): Int =
+        db.rpc("event_set_leads", buildJsonObject { put("p_batch", batchId); put("p_leads", uuids(leadIds.toList())); put("p_add", add) }).data.trim().toIntOrNull() ?: 0
+    /** Lead ids in any of these events (for the Leads filter). */
+    suspend fun eventLeadIds(eventIds: Collection<String>): List<String> =
+        Backend.client.from("batch_leads").select(Columns.raw("lead_id")) { filter { isIn("batch_id", eventIds.toList()) } }.decodeList<LeadIdOnly>().map { it.lead_id }
 
     suspend fun myBatches(orgId: String): List<BatchSummary> =
         json.decodeFromString(rpcR("my_batches", buildJsonObject { put("p_org", orgId) }).data)

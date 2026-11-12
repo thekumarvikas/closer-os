@@ -177,7 +177,7 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
     var lead by remember { mutableStateOf<Lead?>(vm.leads.firstOrNull { it.id == leadId } ?: vm.queue.firstOrNull { it.id == leadId }) }
     var calls by remember { mutableStateOf<List<CallRow>>(emptyList()) }
     val ctx = LocalContext.current
-    LaunchedEffect(leadId) {
+    LaunchedEffect(leadId, vm.leadRefresh) {
         runCatching { Repo.lead(leadId) }.getOrNull()?.let { lead = it }
         calls = runCatching { Repo.leadCalls(leadId) }.getOrElse {
             // No internet: this number's calls from the phone's own call history.
@@ -211,7 +211,8 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
                 BestTimeLine(l.id, l.phone)
                 l.response_sec?.let { r -> Text("⚡ First call " + (if (r < 60) "within a minute" else "${r / 60} working min") + " after it came in", fontSize = 13.sp, color = Brand.muted) }
             }
-            if (l.batch_leads.isNotEmpty()) item { LeadWebinarsCard(l) }
+            if (vm.isSolo) item { LeadEventsRow(vm, l) }
+            else if (l.batch_leads.isNotEmpty()) item { LeadWebinarsCard(l) }
             if (!vm.isSolo) item { LeadShareCard(vm, l) { lead = it } }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

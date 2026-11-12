@@ -54,6 +54,7 @@ fun LeadsTab(vm: AppViewModel, onCall: (Lead) -> Unit) {
         if (vm.selectMode) Row(Modifier.fillMaxWidth().background(Brand.light).padding(12.dp, 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(if (vm.selected.isEmpty()) "Tap leads to pick them" else "${vm.selected.size} selected", modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
             TextButton(onClick = { vm.leads.forEach { if (!it.do_not_call) vm.selected[it.id] = it } }) { Text("All") }
+            if (vm.isSolo) { IconButton(onClick = { vm.eventPickFor = vm.selected.values.toList() }, enabled = vm.selected.isNotEmpty()) { Text("📅", fontSize = 18.sp) } }
             OutlinedButton(onClick = { vm.waChooseFor = vm.selected.values.toList() }, enabled = vm.selected.isNotEmpty(), contentPadding = PaddingValues(horizontal = 10.dp)) {
                 Icon(Icons.Default.Send, null, Modifier.size(16.dp), tint = Color(0xFF16A34A)); Spacer(Modifier.width(4.dp)); Text("WA ${vm.selected.size}") }
             Spacer(Modifier.width(6.dp))
@@ -114,6 +115,12 @@ private fun FilterSheet(vm: AppViewModel, onClose: () -> Unit) {
                     val n = counts[b.key]
                     FilterChip(b.key in f.talk, { f = f.copy(talk = f.talk.flip(b.key)) }, { Text(b.label + (n?.let { " · $it" } ?: "")) })
                 }
+            }
+            // Events (individual app: own events; company: webinars / sales events).
+            val events = vm.batches.orEmpty()
+            LaunchedEffect(Unit) { if (vm.batches == null) vm.loadBatches(quiet = true) }
+            if (events.isNotEmpty()) Section(if (vm.isSolo) "Event" else "Webinar / event") {
+                events.forEach { e -> FilterChip(e.id in f.events, { f = f.copy(events = f.events.flip(e.id)) }, { Text(e.name) }) }
             }
             Section("WhatsApp") {
                 listOf("any" to "Any", "yes" to "Messaged", "no" to "Not messaged").forEach { (k, l) -> FilterChip(f.messaged == k, { f = f.copy(messaged = k) }, { Text(l) }) }

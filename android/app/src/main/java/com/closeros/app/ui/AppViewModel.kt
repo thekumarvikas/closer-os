@@ -209,17 +209,43 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun loadBatches(quiet: Boolean = false) = viewModelScope.launch {
         val m = membership ?: return@launch
-        batches = runCatching { Repo.myBatches(m.org_id).also { save("batches", it) } }
+        // Individual app: every event of the account (also empty ones); company: webinars with leads for me.
+        batches = runCatching { (if (isSolo) Repo.myEvents(m.org_id) else Repo.myBatches(m.org_id)).also { save("batches", it) } }
             .getOrElse { e -> cached<List<BatchSummary>>("batches") ?: run { if (!quiet) message = "Couldn't load webinars: ${e.message}"; emptyList() } }
     }
 
     fun openBatchList(b: BatchSummary, purpose: String) { openList = b to purpose; loadList() }
 
+    // ───── Events (individual app) ─────
+    /** Leads waiting to be put into an event (from the Leads tab selection or one lead page). */
+    var eventPickFor by mutableStateOf<List<Lead>?>(null)
+    /** Bumped after a lead changed here, so an open lead page reloads it. */
+    var leadRefresh by mutableStateOf(0)
+    fun createEvent(name: String, at: java.time.Instant, thenAdd: List<Lead>? = null) = viewModelScope.launch {
+        val m = membership ?: return@launch
+        runCatching { Repo.createEvent(m.org_id, name.trim(), at) }
+            .onSuccess { id -> if (thenAdd.isNullOrEmpty()) { message = "Event created"; loadBatches() } else addToEvent(id, name, thenAdd) }
+            .onFailure { message = if (com.closeros.app.data.Net.isNetworkError(it)) "No internet — try again when you're online" else "Couldn't create the event" }
+    }
+    fun addToEvent(eventId: String, name: String, leads: List<Lead>, add: Boolean = true) = viewModelScope.launch {
+        runCatching { Repo.eventSetLeads(eventId, leads.map { it.id }, add) }
+            .onSuccess { n -> message = if (add) (if (n == 0) "Already in $name" else "$n added to $name") else "Removed from $name"
+                eventPickFor = null; selectMode = false; selected.clear(); leadRefresh++; loadBatches(quiet = true); reloadLeads(); CallSync.syncNow(ctx) }
+            .onFailure { message = if (com.closeros.app.data.Net.isNetworkError(it)) "No internet — try again when you're online" else "Couldn't update the event" }
+    }
+    fun renameEvent(id: String, name: String, at: java.time.Instant) = viewModelScope.launch {
+        runCatching { Repo.renameEvent(id, name.trim(), at) }.onSuccess { message = "Saved"; loadBatches() }.onFailure { message = "Couldn't save — check your internet" }
+    }
+    fun deleteEvent(id: String) = viewModelScope.launch {
+        runCatching { Repo.archiveEvent(id) }.onSuccess { message = "Event deleted (the leads stay)"; loadBatches() }.onFailure { message = "Couldn't delete — check your internet" }
+    }
+
     fun loadList() = viewModelScope.launch {
         val (b, purpose) = openList ?: return@launch
         listRows = null
-        val key = "bl_${b.id}_${purpose}_${listEveryone && isManager}"
-        runCatching { Repo.batchCallList(b.id, purpose, listEveryone && isManager).also { save(key, it) } }
+        val everyone = (listEveryone && isManager) || isSolo
+        val key = "bl_${b.id}_${purpose}_$everyone"
+        runCatching { Repo.batchCallList(b.id, purpose, everyone).also { save(key, it) } }
             .recoverCatching { e -> cached<com.closeros.app.data.BatchList>(key)?.also { message = "No internet — showing the list saved on this phone" } ?: throw e }
             .onSuccess { r -> listRows = r.leads; rowCategory = r.leads.associate { it.id to it.category_id } }
             .onFailure { message = "Couldn't load the list: ${it.message}"; listRows = emptyList() }

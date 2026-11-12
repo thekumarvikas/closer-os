@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.19.4
+## Android app (`android/`) — v0.20.0
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -1330,3 +1330,16 @@ intelligence → Play Store launch.
   on expanded cards; company app keeps "Suggest" → manager approval.
 - v0.19.4: webinars hidden in the individual app (Home "🎓 Webinars" link + batch loading off when isSolo). Owner's
   alternative for later: let individuals add leads to their own webinar/event (not built).
+
+## Events in the individual app (v0.20.0, migration 0070, Nov 12 2026)
+- Owner: individuals create their own events, tag leads to them, and filter by them. Events = batches (kind 'event')
+  + batch_leads, so the existing list screen (sort & filter, call / WhatsApp all) works unchanged.
+- Migration 0070: event_set_leads(batch, leads[], add) (managers incl. individual owners; skips duplicates; remove when
+  add = false; bumps leads.updated_at so phones refresh) and my_events(org) (all non-archived events incl. empty ones,
+  any date; leads / called / talked counts; also fills *_mine/*_all so BatchSummary works).
+- App (ui/EventScreens.kt): Home "📅 Events" (solo) → BatchesScreen "My events" with "+ New event" (EventEditDialog:
+  name + date/time) and EventCard (counts, Open list = openBatchList(e, "sales") with everyone = true for solo, + Leads,
+  Edit, Delete = is_archived). Leads tab select bar 📅 → EventPickerDialog (pick / "+ New event" = create & add; tapping
+  an event the single lead is already in removes it). Lead page LeadEventsRow. LeadFilters.events (online: batch_leads
+  lead ids ∩ search ids; offline: lead.batch_leads) — "Event" section in the filter sheet (company app shows it as
+  "Webinar / event" from my_batches). Repo: myEvents, createEvent, renameEvent, archiveEvent, eventSetLeads, eventLeadIds.

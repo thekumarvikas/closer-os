@@ -40,10 +40,13 @@ fun BatchesScreen(vm: AppViewModel) {
     LaunchedEffect(Unit) { vm.loadBatches() }
     val zone = ZoneId.of(vm.membership?.organization?.timezone ?: "Asia/Kolkata")
     val list = vm.batches
+    var newEvent by remember { mutableStateOf(false) }
+    if (newEvent) EventEditDialog(vm) { newEvent = false }
     Column(Modifier.fillMaxSize().background(Brand.bg)) {
         Row(Modifier.fillMaxWidth().padding(8.dp, 8.dp, 8.dp, 0.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { vm.showBatches = false }) { Icon(Icons.Default.ArrowBack, "Back") }
-            Text("Webinars / Sales Events", fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text(if (vm.isSolo) "My events" else "Webinars / Sales Events", fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            if (vm.isSolo) TextButton(onClick = { newEvent = true }) { Text("+ New event") }
             IconButton(onClick = { vm.loadBatches() }) { Icon(Icons.Default.Refresh, "Refresh") }
         }
         if (vm.isManager && !vm.isSolo) Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -52,7 +55,9 @@ fun BatchesScreen(vm: AppViewModel) {
         }
         if (list == null) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }; return }
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (list.isEmpty()) item { Text("No webinars or sales events with leads for you in the last 4 months. They're created on the dashboard (Webinars / Sales Events).", color = Brand.muted) }
+            if (list.isEmpty()) item { Text(if (vm.isSolo) "No events yet. Tap “+ New event” — for example a webinar, an offer or an exhibition — then add leads to it from the Leads tab (tick leads → 📅)."
+                else "No webinars or sales events with leads for you in the last 4 months. They're created on the dashboard (Webinars / Sales Events).", color = Brand.muted) }
+            if (vm.isSolo) { items(list.distinctBy { it.id }, key = { it.id }) { e -> EventCard(vm, e) }; return@LazyColumn }
             items(list.distinctBy { it.id }, key = { it.id }) { b ->
                 val at = runCatching { com.closeros.app.data.parseInstant(b.webinar_at).atZone(zone) }.getOrNull()
                 val upcoming = at?.toInstant()?.isAfter(Instant.now()) == true
@@ -174,7 +179,7 @@ fun BatchListScreen(vm: AppViewModel) {
         Row(Modifier.fillMaxWidth().padding(8.dp, 8.dp, 8.dp, 0.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { vm.openList = null }) { Icon(Icons.Default.ArrowBack, "Back") }
             Column(Modifier.weight(1f)) {
-                Text(if (purpose == "sales") "Sales calls" else "Reminder calls", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(if (vm.isSolo) "Event leads" else if (purpose == "sales") "Sales calls" else "Reminder calls", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Text(batch.name, fontSize = 13.sp, color = Brand.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             IconButton(onClick = { vm.loadList() }) { Icon(Icons.Default.Refresh, "Refresh") }

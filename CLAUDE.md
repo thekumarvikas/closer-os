@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.19.0
+## Android app (`android/`) — v0.19.1
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -1299,3 +1299,12 @@ intelligence → Play Store launch.
   secret into Supabase Auth → Google provider; ANDROID OAuth clients for com.closeros.solo (and com.closeros.app) with
   SHA-1 of keystore/dev-test.jks 57:21:D3:C8:B0:79:28:BF:9F:70:EB:4E:B3:C2:01:7B:1E:6F:6A:1E (later also the Play
   app-signing SHA-1).
+
+## Owner feedback on 0.19.0 (v0.19.1, Nov 12 2026) — both apps
+- Number setup (SetupScreen) no longer asks "Your mobile number": profile phone = first SIM number (only when the
+  profile has none); Continue needs one SIM number (or no SIM found).
+- Phone setup: done items show "Open setting again" (intent / recordings folder) and, for tap-Done steps
+  (Kind.Confirm: autostart, MIUI pop-ups, auto-record), "Not done yet? Undo" (LocalStore.unconfirm).
+- Calls tab "Select" mode: tick numbers (by phone) → "📞 Call N" (startQueue) / "WhatsApp N" (waChooseFor);
+  vm.queueFromCalls adds numbers not in the lead list as leads first (contact name, source 'Phone call'; offline →
+  left out). HistoryRow(selected, onSelect) shows a checkbox and hides row actions.

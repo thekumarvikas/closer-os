@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.*
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,23 +41,24 @@ import java.time.Instant
 fun SetupScreen(vm: AppViewModel) {
     val ctx = LocalContext.current
     val sims = remember { PhoneCalls.sims(ctx) }
-    var me by remember { mutableStateOf(vm.profile?.phone ?: "") }
     val simNums = remember { mutableStateMapOf<Int, String>().apply { sims.forEach { put(it.slot, vm.store.simNumber(it.slot) ?: PhoneCalls.simOwnNumber(ctx, it.slot) ?: "") } } }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Spacer(Modifier.height(16.dp))
         Text("Your numbers", fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        Text("Your manager sees these next to your calls. Android doesn't always tell apps a SIM's number, so please confirm them once.", color = Brand.muted)
-        OutlinedTextField(me, { me = it }, label = { Text("Your mobile number") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone))
+        Text(if (vm.isSolo) "Shown next to each call, so you know which SIM you used. Android doesn't always tell apps a SIM's number, so please check them once."
+             else "Your manager sees these next to your calls. Android doesn't always tell apps a SIM's number, so please check them once.", color = Brand.muted)
         if (sims.isEmpty()) Text("No SIM found. You can add SIM numbers later in Profile.", color = Brand.muted)
         sims.forEach { s ->
             OutlinedTextField(simNums[s.slot] ?: "", { simNums[s.slot] = it }, label = { Text("Number of ${s.label}") }, singleLine = true,
                 modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone))
         }
         error?.let { Text(it, color = Brand.red) }
-        Button(onClick = { busy = true; vm.saveSetup(me, simNums.toMap()) { error = it; busy = false } }, enabled = !busy && me.filter { it.isDigit() }.length >= 10,
+        // Your own number = SIM 1's number (or the first SIM that has one); no separate question.
+        val first = sims.sortedBy { it.slot }.firstNotNullOfOrNull { s -> simNums[s.slot]?.takeIf { n -> n.filter { c -> c.isDigit() }.length >= 7 } }.orEmpty()
+        Button(onClick = { busy = true; vm.saveSetup(if (vm.profile?.phone.isNullOrBlank()) first else "", simNums.toMap()) { error = it; busy = false } },
+            enabled = !busy && (sims.isEmpty() || first.isNotBlank()),
             modifier = Modifier.fillMaxWidth().height(50.dp)) { Text(if (busy) "Saving…" else "Continue") }
         if (Build.VERSION.SDK_INT >= 31 && !FollowUpAlarms.canExact(ctx)) ExactAlarmHint()
     }
@@ -89,11 +91,27 @@ fun CallHistoryScreen(vm: AppViewModel) {
         if (q.trim().length >= 2) { kotlinx.coroutines.delay(350); found = vm.searchCalls(q) }
     }
     val items = vm.history
+    // Select mode: tick numbers, then call them one after another or send them a WhatsApp message.
+    var selecting by remember { mutableStateOf(false) }
+    val picked = remember { mutableStateMapOf<String, HistoryItem>() }   // by phone number
+    BackHandler(enabled = selecting) { selecting = false; picked.clear() }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(16.dp, 8.dp, 4.dp, 0.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Calls", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            IconButton(onClick = { vm.loadHistory() }) { Icon(Icons.Default.Refresh, "Refresh") }
+            Text(if (selecting) "${picked.size} selected" else "Calls", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            if (selecting) TextButton(onClick = { selecting = false; picked.clear() }) { Text("Cancel") }
+            else {
+                TextButton(onClick = { selecting = true }) { Text("Select") }
+                IconButton(onClick = { vm.loadHistory() }) { Icon(Icons.Default.Refresh, "Refresh") }
+            }
         }
+        if (selecting) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(enabled = picked.isNotEmpty(), onClick = { vm.queueFromCalls(picked.values.toList(), whatsapp = false); selecting = false; picked.clear() },
+                modifier = Modifier.weight(1f)) { Text("📞 Call ${picked.size}") }
+            Button(enabled = picked.isNotEmpty(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
+                onClick = { vm.queueFromCalls(picked.values.toList(), whatsapp = true); selecting = false; picked.clear() },
+                modifier = Modifier.weight(1f)) { Text("WhatsApp ${picked.size}") }
+        }
+        if (selecting && picked.values.any { it.lead == null }) Text("Numbers not in your lead list will be added as leads.", fontSize = 12.sp, color = Brand.muted, modifier = Modifier.padding(horizontal = 16.dp))
         Row(Modifier.padding(horizontal = 12.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             (listOf("all" to "All", "dialled" to "Dialled", "received" to "Received", "missed" to "Missed", "notpicked" to "Not picked up", "unknown" to "Not in lead list") +
                 (if (com.closeros.app.BuildConfig.WA_TRACKING) listOf("whatsapp" to "WhatsApp") else emptyList())).forEach { (k, l) ->
@@ -122,7 +140,9 @@ fun CallHistoryScreen(vm: AppViewModel) {
             groupCalls(shown).forEach { (day, rows) ->
                 item(key = "d$day") { Text(day.uppercase(), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Brand.muted, modifier = Modifier.padding(start = 4.dp, top = 12.dp, bottom = 2.dp)) }
                 items(rows, key = { it.first.log.id }) { (h, n) ->
-                    HistoryRow(vm, h, onAdd = { adding = h }, count = n)
+                    HistoryRow(vm, h, onAdd = { adding = h }, count = n,
+                        selected = if (selecting) h.phone in picked else null,
+                        onSelect = { if (h.phone.isNotBlank()) { if (h.phone in picked) picked.remove(h.phone) else picked[h.phone] = h } })
                     HorizontalDivider(color = Color(0xFFF1F5F9), modifier = Modifier.padding(start = 30.dp))
                 }
             }

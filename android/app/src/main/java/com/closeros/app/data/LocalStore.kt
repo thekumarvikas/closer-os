@@ -83,6 +83,8 @@ class LocalStore(ctx: Context) {
     /** Setup steps Android can't check (e.g. Autostart): the rep ticks them as done. */
     fun confirmed(key: String) = p.getBoolean("confirm_$key", false)
     fun confirm(key: String) { p.edit().putBoolean("confirm_$key", true).apply() }
+    /** Tapped "Done" by mistake: mark the step as not done again. */
+    fun unconfirm(key: String) { p.edit().putBoolean("confirm_$key", false).apply() }
 
     /** Last filters/sort the rep used on a webinar list (per reminder / sales). */
     fun listPrefs(purpose: String): String? = p.getString("list_prefs_$purpose", null)

@@ -296,7 +296,7 @@ fun TodayListScreen(vm: AppViewModel, key: String) {
 
 /** One slim call row: direction arrow · name · one detail line · WhatsApp + Call. Tap for SMS / lead actions. */
 @Composable
-fun HistoryRow(vm: AppViewModel, h: HistoryItem, onAdd: (() -> Unit)? = null, count: Int = 1) {
+fun HistoryRow(vm: AppViewModel, h: HistoryItem, onAdd: (() -> Unit)? = null, count: Int = 1, selected: Boolean? = null, onSelect: (() -> Unit)? = null) {
     val ctx = LocalContext.current
     var wa by remember { mutableStateOf(false) }
     var open by remember { mutableStateOf(false) }
@@ -311,9 +311,12 @@ fun HistoryRow(vm: AppViewModel, h: HistoryItem, onAdd: (() -> Unit)? = null, co
         "incoming" -> "Received · ${fmtDur(h.log.durationSec)}"
         "missed" -> "Missed"; else -> "Declined"
     }
-    Column(Modifier.fillMaxWidth().clickable { open = !open }.padding(start = 4.dp, top = 6.dp, bottom = 6.dp)) {
+    // Select mode (Calls tab): a tick box instead of the arrow; tapping the row ticks it.
+    val selecting = selected != null && onSelect != null
+    Column(Modifier.fillMaxWidth().clickable { if (selecting) onSelect!!() else open = !open }.padding(start = 4.dp, top = 6.dp, bottom = 6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(arrow, color = arrowColor, fontSize = 21.sp, fontWeight = FontWeight.Black, modifier = Modifier.width(28.dp))
+            if (selecting) Checkbox(selected!!, { onSelect!!() }, enabled = h.phone.isNotBlank(), modifier = Modifier.size(28.dp))
+            else Text(arrow, color = arrowColor, fontSize = 21.sp, fontWeight = FontWeight.Black, modifier = Modifier.width(28.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(name + if (count > 1) "  ($count)" else "", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -329,6 +332,7 @@ fun HistoryRow(vm: AppViewModel, h: HistoryItem, onAdd: (() -> Unit)? = null, co
                     fontSize = 12.sp, color = arrowColor, maxLines = 1)
             }
             val rec = vm.recordingPaths[h.log.id]
+            if (!selecting) {
             if (rec != null) IconButton(onClick = { open = true }, modifier = Modifier.size(36.dp)) { Text("▶", color = Brand.primary, fontSize = 16.sp, fontWeight = FontWeight.Bold) }
             if (h.phone.isNotBlank()) {
                 IconButton(onClick = { wa = true }, modifier = Modifier.size(40.dp)) { Icon(Icons.Default.Send, "WhatsApp", tint = Color(0xFF16A34A), modifier = Modifier.size(20.dp)) }
@@ -336,6 +340,7 @@ fun HistoryRow(vm: AppViewModel, h: HistoryItem, onAdd: (() -> Unit)? = null, co
                     if (h.lead != null) vm.callRequest = h.lead
                     else PhoneCalls.call(ctx, h.phone, vm.sims().firstOrNull { it.slot == vm.store.preferredSim } ?: vm.sims().firstOrNull())
                 }, modifier = Modifier.size(40.dp)) { Icon(Icons.Default.Call, "Call", tint = Brand.primary, modifier = Modifier.size(22.dp)) }
+            }
             }
         }
         if (open) vm.recordingPaths[h.log.id]?.let { p -> Box(Modifier.padding(start = 28.dp)) { RecordingPlayer(h.log.id, p) } }

@@ -72,6 +72,17 @@ private fun Section(title: String, list: List<PhoneSetup.Item>, vm: AppViewModel
                     Text(it.title, fontWeight = FontWeight.SemiBold)
                     Text(it.why, fontSize = 14.sp, color = Brand.muted)
                     it.warning?.let { w -> Text(w, fontSize = 13.sp, color = Brand.red) }
+                    // Already done (or marked done by mistake): open the setting again, or undo a "Done" tap.
+                    if (it.done && (it.kind == PhoneSetup.Kind.Confirm || it.intent != null || it.key == "recfolder")) Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(onClick = {
+                            when {
+                                it.key == "recfolder" -> PhoneSetup.pickRecordingsFolder(ctx)
+                                it.intent != null -> runCatching { safeStart(ctx, it.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                            }
+                        }, contentPadding = PaddingValues(horizontal = 4.dp)) { Text(if (it.key == "recfolder") "Change folder" else "Open setting again", fontSize = 13.sp) }
+                        if (it.kind == PhoneSetup.Kind.Confirm) TextButton(onClick = { vm.store.unconfirm(it.key); refresh() }, contentPadding = PaddingValues(horizontal = 4.dp)) {
+                            Text("Not done yet? Undo", fontSize = 13.sp, color = Brand.muted) }
+                    }
                     if (!it.done) {
                         it.steps?.let { s -> Text(s, fontSize = 13.sp, color = Brand.primaryDark) }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -492,6 +492,25 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
             .onFailure { message = if (it.message?.contains("leads_org_phone_uq") == true) "This number is already a lead" else "Couldn't add the lead: ${it.message?.take(80)}" }
     }
 
+    /** Calls tab "Select": call or WhatsApp the chosen numbers in a queue. Numbers not in the lead list
+     *  are added as leads first (named as saved in the phone's contacts). */
+    fun queueFromCalls(items: List<HistoryItem>, whatsapp: Boolean) = viewModelScope.launch {
+        val m = membership ?: return@launch
+        val picked = items.filter { it.phone.isNotBlank() }.distinctBy { it.phone }
+        val known = picked.mapNotNull { it.lead }
+        val newOnes = picked.filter { it.lead == null }
+        val added = if (newOnes.isEmpty()) emptyList() else if (!com.closeros.app.data.Net.isOnline) {
+            message = "No internet — ${newOnes.size} number${if (newOnes.size > 1) "s" else ""} not in your lead list were left out"; emptyList()
+        } else {
+            newOnes.forEach { h -> runCatching { Repo.createLead(m.org_id, h.log.name.orEmpty(), h.phone, null, null) } }
+            runCatching { Repo.leadsByPhones(m.org_id, newOnes.map { it.phone }).values.toList() }.getOrDefault(emptyList())
+                .also { if (it.isNotEmpty()) { message = "${it.size} added to your leads"; reloadLeads(); loadHistory() } }
+        }
+        val list = (known + added).distinctBy { it.id }
+        if (list.isEmpty()) { message = "Nothing to ${if (whatsapp) "message" else "call"}"; return@launch }
+        if (whatsapp) waChooseFor = list else startQueue(list)
+    }
+
     /** From a notification's Call button. */
     fun callLeadById(id: String, purpose: String? = null) = viewModelScope.launch {
         runCatching { Repo.lead(id) }.getOrNull()?.let { l ->

@@ -1258,7 +1258,8 @@ intelligence → Play Store launch.
 ## Individual app built (v0.19.0, migration 0069, Nov 12 2026)
 - Flavor `solo` (dimension dist): applicationId com.closeros.solo, BuildConfig.SOLO, WA_TRACKING on, AdMob +
   Play Billing (soloImplementation play-services-ads 23.6.0, billing-ktx 7.1.1, fragment-ktx 1.8.5 for lint).
-  Build ./gradlew assembleSoloRelease → downloads/CloserOS-Individual-<ver>-TEST.apk. Company builds full/direct
+  Build ./gradlew assembleSoloRelease (Play Store) ; owner test APK: add -Psideload (no WhatsApp listener, WA_TRACKING
+  false, manifest src/soloSideload — Play Protect blocks sideloaded apps with notification access). Company builds full/direct
   share src/team/java/Monetize.kt (no-op: no ads, everything open); solo has src/solo/java/Monetize.kt.
   Package names to register in Play Console "Android developer verification": com.closeros.solo (individual,
   Play Store) and com.closeros.app (company / Closer OS Teams).

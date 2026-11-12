@@ -31,7 +31,9 @@ android {
         create("solo") {
             dimension = "dist"
             applicationId = "com.closeros.solo"
-            buildConfigField("boolean", "WA_TRACKING", "true"); buildConfigField("boolean", "SOLO", "true")
+            // -Psideload: test copy shared as an APK file (no WhatsApp-call tracking, so Play Protect doesn't block it).
+            val sideload = project.hasProperty("sideload")
+            buildConfigField("boolean", "WA_TRACKING", if (sideload) "false" else "true"); buildConfigField("boolean", "SOLO", "true")
             manifestPlaceholders["admobAppId"] = "ca-app-pub-3940256099942544~3347511713"
             buildConfigField("String", "AD_BANNER", "\"ca-app-pub-3940256099942544/9214589741\"")
             buildConfigField("String", "AD_REWARDED", "\"ca-app-pub-3940256099942544/5224354917\"")
@@ -41,6 +43,7 @@ android {
     sourceSets {
         getByName("full").java.srcDir("src/team/java")
         getByName("direct").java.srcDir("src/team/java")
+        if (project.hasProperty("sideload")) getByName("solo").manifest.srcFile("src/soloSideload/AndroidManifest.xml")
     }
     // Test-only signing key so every test build updates the previous one. Not the Play Store key.
     signingConfigs {

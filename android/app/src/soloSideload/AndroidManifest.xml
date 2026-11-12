@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Individual app, TEST copy shared as an APK file: no notification reading (Play Protect blocks it outside the Play Store). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <application>
+        <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="${admobAppId}" />
+        <service android:name=".calls.WhatsAppCallListener" tools:node="remove" />
+    </application>
+</manifest>

@@ -133,7 +133,7 @@ object Monetize {
                 if (r.responseCode != BillingClient.BillingResponseCode.OK) return
                 c.queryProductDetailsAsync(QueryProductDetailsParams.newBuilder().setProductList(listOf(
                     QueryProductDetailsParams.Product.newBuilder().setProductId(PRODUCT).setProductType(BillingClient.ProductType.SUBS).build())).build()
-                ) { _, list -> product = list.firstOrNull() }
+                ) { _, result -> product = result.productDetailsList.firstOrNull() }
                 refresh(ctx) {}
             }
             override fun onBillingServiceDisconnected() { billing = null }

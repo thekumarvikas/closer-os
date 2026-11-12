@@ -7,13 +7,13 @@ plugins {
 
 android {
     namespace = "com.closeros.app"
-    compileSdk = 35
+    compileSdk = 36
     defaultConfig {
         applicationId = "com.closeros.app"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 75
-        versionName = "0.21.0"
+        targetSdk = 36
+        versionCode = 76
+        versionName = "0.21.1"
         // Public values: the publishable key is meant to be in apps; data is protected by database rules.
         buildConfigField("String", "SUPABASE_URL", "\"https://tdbqgoxxxfkfttdznzhb.supabase.co\"")
         buildConfigField("String", "SUPABASE_KEY", "\"sb_publishable_aXH8Wr7Lq1YeOWxhvxEdGQ_ePS1GYTY\"")
@@ -63,6 +63,8 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("devTest")
+            // Native-code symbols for readable crash reports in Play Console.
+            ndk { debugSymbolLevel = "SYMBOL_TABLE" }
         }
     }
     compileOptions {
@@ -99,6 +101,6 @@ dependencies {
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     // Individual app only: Google ads (with the privacy-consent form) and Google Play subscriptions.
     "soloImplementation"("com.google.android.gms:play-services-ads:23.6.0")
-    "soloImplementation"("com.android.billingclient:billing-ktx:7.1.1")
+    "soloImplementation"("com.android.billingclient:billing-ktx:8.0.0")
     "soloImplementation"("androidx.fragment:fragment-ktx:1.8.5")   // the ads library brings an old version
 }

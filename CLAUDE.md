@@ -1435,9 +1435,12 @@ intelligence → Play Store launch.
 - v0.22.1 bundle uploaded to the Alpha closed test and sent for review (Nov 13 2026). Play release notes must be
   wrapped in a language tag: <en-US> … </en-US> (else "text outside language tags").
 
-## Owner decision — SIM-based subscriptions (Nov 13 2026; NOT built yet — waiting for "go")
-- One login = one phone (already built, DeviceGuard). A phone may use two SIMs; if two SIMs are used, that counts as
-  TWO subscriptions. Today seats = org members (org_access seats_used); calls already carry sim_number / sim_slot.
-- Open details (owner hasn't chosen): count a SIM only if it made calls in the billing month vs any SIM set up;
-  over the limit → warn + "Add 1 more SIM" vs stop uploading that SIM; company app only vs also individual Pro;
-  extra SIM price = user price vs a lower add-on price (Super Admin).
+## Owner decision — SIM-based subscriptions (Nov 13 2026; DECIDED, NOT built — owner said "do not make it now")
+- Company app: subscription = per SIM. At sign-up / phone setup the rep picks the ONE SIM used for work calls; only
+  that SIM's calls are tracked (app + dashboard). The other SIM's calls never appear anywhere in Closer OS. To track a
+  second SIM the company buys one more subscription (add-on); then that SIM is tracked exactly like the first.
+  Same price for every SIM; volume discount for 10+ subscriptions to be planned later.
+- Individual app (Pro): unchanged — one subscription covers both SIMs.
+- One login = one phone (already built, DeviceGuard). Today seats = org members (org_access seats_used); calls already
+  carry sim_number / sim_slot. Open points raised with owner: lead calls made from the untracked SIM (dodging tracking),
+  SIM change approval, WhatsApp calls (not tied to a SIM), dashboard-only managers needing a subscription or not.

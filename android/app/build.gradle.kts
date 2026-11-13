@@ -12,8 +12,8 @@ android {
         applicationId = "com.closeros.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 76
-        versionName = "0.21.1"
+        versionCode = 77
+        versionName = "0.21.2"
         // Public values: the publishable key is meant to be in apps; data is protected by database rules.
         buildConfigField("String", "SUPABASE_URL", "\"https://tdbqgoxxxfkfttdznzhb.supabase.co\"")
         buildConfigField("String", "SUPABASE_KEY", "\"sb_publishable_aXH8Wr7Lq1YeOWxhvxEdGQ_ePS1GYTY\"")
@@ -36,9 +36,11 @@ android {
             // -Psideload: test copy shared as an APK file (no WhatsApp-call tracking, so Play Protect doesn't block it).
             val sideload = project.hasProperty("sideload")
             buildConfigField("boolean", "WA_TRACKING", if (sideload) "false" else "true"); buildConfigField("boolean", "SOLO", "true")
-            manifestPlaceholders["admobAppId"] = "ca-app-pub-3940256099942544~3347511713"
-            buildConfigField("String", "AD_BANNER", "\"ca-app-pub-3940256099942544/9214589741\"")
-            buildConfigField("String", "AD_REWARDED", "\"ca-app-pub-3940256099942544/5224354917\"")
+            // Real AdMob ids only in the Play Store build; test APKs (-Psideload) show Google's test ads
+            // (tapping real ads on our own phones could get the AdMob account suspended).
+            manifestPlaceholders["admobAppId"] = if (sideload) "ca-app-pub-3940256099942544~3347511713" else "ca-app-pub-6664812467343206~1199765432"
+            buildConfigField("String", "AD_BANNER", if (sideload) "\"ca-app-pub-3940256099942544/9214589741\"" else "\"ca-app-pub-6664812467343206/2772526542\"")
+            buildConfigField("String", "AD_REWARDED", if (sideload) "\"ca-app-pub-3940256099942544/5224354917\"" else "\"ca-app-pub-6664812467343206/3558994602\"")
         }
     }
     // The company builds share one "no ads" version of Monetize.kt.

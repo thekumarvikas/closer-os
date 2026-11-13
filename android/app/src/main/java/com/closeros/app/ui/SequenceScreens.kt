@@ -7,6 +7,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -79,7 +81,7 @@ val FILL_INS = listOf("First name" to "{{leadName}}", "Full name" to "{{leadFull
  * A message box with tappable fill-ins under it: tap one to insert it where the cursor is. Typing "{" highlights the
  * list; picking one then replaces that "{".
  */
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun MessageField(value: String, onChange: (String) -> Unit, label: String, modifier: Modifier = Modifier, minLines: Int = 3,
                  trailing: (@Composable () -> Unit)? = null) {
@@ -94,10 +96,15 @@ fun MessageField(value: String, onChange: (String) -> Unit, label: String, modif
         else if (value !in sent) { sent.clear(); tf = TextFieldValue(value, TextRange(value.length)) }
     }
     val braceBefore = tf.selection.start > 0 && tf.text.getOrNull(tf.selection.start - 1) == '{' && tf.text.getOrNull(tf.selection.start - 2) != '{'
+    // Keep the fill-in chips in sight above the keyboard (in small pop-ups they ended up hidden under it).
+    val chipsInView = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+    var focused by remember { mutableStateOf(false) }
+    LaunchedEffect(focused, braceBefore) { if (focused) { kotlinx.coroutines.delay(350); chipsInView.bringIntoView() } }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        OutlinedTextField(tf, { val changed = it.text != tf.text; tf = it; if (changed) emit(it.text) }, label = { Text(label) }, modifier = Modifier.fillMaxWidth(), minLines = minLines, trailingIcon = trailing)
+        OutlinedTextField(tf, { val changed = it.text != tf.text; tf = it; if (changed) emit(it.text) }, label = { Text(label) },
+            modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused }, minLines = minLines, trailingIcon = trailing)
         Text(if (braceBefore) "Pick a fill-in:" else "Tap to insert:", fontSize = 11.sp, color = if (braceBefore) Brand.primary else Brand.muted)
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.bringIntoViewRequester(chipsInView).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             FILL_INS.forEach { (l, v) ->
                 Text(l, fontSize = 12.sp, color = Brand.primaryDark,
                     modifier = Modifier.background(if (braceBefore) Color(0xFFD1FAE5) else Brand.light, RoundedCornerShape(50)).clickable {
@@ -421,6 +428,7 @@ fun SequenceDetailScreen(vm: AppViewModel, id: String) {
     var reload by remember { mutableStateOf(0) }
     var filter by remember { mutableStateOf("active") }
     val selected = remember { mutableStateListOf<String>() }
+    var askRemove by remember { mutableStateOf<List<String>?>(null) }
     val seq = vm.sequences.orEmpty().firstOrNull { it.id == id }
     LaunchedEffect(id, reload) { runCatching { Seqs.detail(id) }.onSuccess { data = it; error = null }.onFailure { error = Seqs.friendly(it) } }
     fun act(ids: List<String>, action: String) = scope.launch {
@@ -428,6 +436,13 @@ fun SequenceDetailScreen(vm: AppViewModel, id: String) {
             vm.message = when (action) { "stop" -> "Removed $n from the sequence"; "pause" -> "Paused $n"; else -> "Resumed $n" }
             selected.clear(); reload++; vm.loadSequences(); vm.loadSeqDue()
         }.onFailure { vm.message = Seqs.friendly(it) }
+    }
+    askRemove?.let { ids ->
+        AlertDialog(onDismissRequest = { askRemove = null },
+            title = { Text(if (ids.size == 1) "Remove this lead from the sequence?" else "Remove ${ids.size} leads from the sequence?") },
+            text = { Text("They stop getting this sequence's messages. Messages already sent stay counted.") },
+            confirmButton = { TextButton(onClick = { askRemove = null; act(ids, "stop") }) { Text("Remove", color = Brand.red) } },
+            dismissButton = { TextButton(onClick = { askRemove = null }) { Text("Keep") } })
     }
     Scaffold(topBar = {
         TopAppBar(title = { Text(seq?.name ?: "WhatsApp sequence", maxLines = 1, overflow = TextOverflow.Ellipsis) },
@@ -472,7 +487,7 @@ fun SequenceDetailScreen(vm: AppViewModel, id: String) {
                     Text("${selected.size} selected", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                     TextButton(onClick = { act(selected.toList(), "pause") }) { Text("Pause") }
                     TextButton(onClick = { act(selected.toList(), "resume") }) { Text("Resume") }
-                    TextButton(onClick = { act(selected.toList(), "stop") }) { Text("Remove", color = Brand.red) }
+                    TextButton(onClick = { askRemove = selected.toList() }) { Text("Remove", color = Brand.red) }
                 }
             }
             val rows = d.leads.filter { filter == "all" || it.status == filter }
@@ -493,7 +508,7 @@ fun SequenceDetailScreen(vm: AppViewModel, id: String) {
                     }
                     if (r.status == "active") TextButton(onClick = { act(listOf(r.id), "pause") }) { Text("Pause") }
                     if (r.status == "paused") TextButton(onClick = { act(listOf(r.id), "resume") }) { Text("Resume") }
-                    if (live) TextButton(onClick = { act(listOf(r.id), "stop") }) { Text("Remove", color = Brand.muted) }
+                    if (live) TextButton(onClick = { askRemove = listOf(r.id) }) { Text("Remove", color = Brand.muted) }
                 }
             }
         }

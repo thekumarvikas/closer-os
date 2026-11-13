@@ -1428,6 +1428,7 @@ intelligence → Play Store launch.
   MessageBox (templates, sequences, playbook), Sequences.tsx SequenceDetail modal (click a sequence name).
 - v0.22.0 phone test (Redmi K20 Pro, Nov 13 2026): all items pass. Fixed MessageField (ui/SequenceScreens.kt) dropping
   letters when typing fast — it re-adopted a stale `value`; now it ignores values it sent itself (keep this pattern).
-  Open: fill-in chips hidden behind the keyboard in Schedule WhatsApp; "N selected" wraps in Leads select bar; sequence
-  detail Remove has no confirm; no city suggestions seen. adb testing: DocumentsUI file picker ignores injected taps on
-  files (owner taps the file).
+- v0.22.1 (versionCode 79): MessageField brings the fill-in chips into view on focus / after "{" (BringIntoViewRequester);
+  Leads select bar shows "✓ 4" (one line); sequence detail Remove asks first; Add-lead city suggestions
+  come from LocalLeads.all (all my leads, read on IO). Play bundle: downloads/play/CloserOS-<ver>.aab. adb testing:
+  DocumentsUI file picker ignores injected taps on files (owner taps the file); phone locks itself — owner unlocks.

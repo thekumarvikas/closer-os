@@ -53,14 +53,16 @@ fun LeadsTab(vm: AppViewModel, onCall: (Lead) -> Unit) {
                 label = { Text(if (vm.selectMode) "Selecting" else "Select to call / WhatsApp") })
         }
         if (vm.selectMode) Row(Modifier.fillMaxWidth().background(Brand.light).padding(12.dp, 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (vm.selected.isEmpty()) "Tap leads to pick them" else "${vm.selected.size} selected", modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+            // Narrow phones: just "✓ 4" on one line, so "4 selected" never breaks mid-word.
+            if (vm.selected.isEmpty()) Text("Tap leads to pick them", modifier = Modifier.weight(1f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            else { Text("✓ ${vm.selected.size}", fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false); Spacer(Modifier.weight(1f)) }
             TextButton(onClick = { vm.leads.forEach { if (!it.do_not_call) vm.selected[it.id] = it } }) { Text("All") }
             if (vm.isSolo) { IconButton(onClick = { vm.eventPickFor = vm.selected.values.toList() }, enabled = vm.selected.isNotEmpty()) { Text("📅", fontSize = 18.sp) } }
             IconButton(onClick = { vm.seqPick = AppViewModel.SeqPick(vm.selected.keys.toList(), "${vm.selected.size} lead${if (vm.selected.size == 1) "" else "s"}") }, enabled = vm.selected.isNotEmpty()) { SeqIcon(24.dp) }
             OutlinedButton(onClick = { vm.waChooseFor = vm.selected.values.toList() }, enabled = vm.selected.isNotEmpty(), contentPadding = PaddingValues(horizontal = 10.dp)) {
-                Icon(Icons.Default.Send, null, Modifier.size(16.dp), tint = Color(0xFF16A34A)); Spacer(Modifier.width(4.dp)); Text("WA ${vm.selected.size}") }
+                Icon(Icons.Default.Send, null, Modifier.size(16.dp), tint = Color(0xFF16A34A)); Spacer(Modifier.width(4.dp)); Text("WA") }
             Spacer(Modifier.width(6.dp))
-            Button(onClick = { vm.callSelected() }, enabled = vm.selected.isNotEmpty(), contentPadding = PaddingValues(horizontal = 12.dp)) { Icon(Icons.Default.Call, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Call ${vm.selected.size}") }
+            Button(onClick = { vm.callSelected() }, enabled = vm.selected.isNotEmpty(), contentPadding = PaddingValues(horizontal = 12.dp)) { Icon(Icons.Default.Call, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Call") }
         } else if (vm.leads.isNotEmpty()) TextButton(onClick = { vm.startQueue(vm.leads.toList()) }, modifier = Modifier.padding(horizontal = 4.dp)) {
             Icon(Icons.Default.Call, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Call all ${vm.leads.size}${if (vm.leadsEnd) "" else "+"} in a queue")
         }

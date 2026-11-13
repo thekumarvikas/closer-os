@@ -83,8 +83,16 @@ fun AddLeadDialog(vm: AppViewModel) {
     var event by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    // Cities already used, most common first (one tap instead of typing).
-    val cities = remember(vm.leads.size) { vm.leads.mapNotNull { it.city?.trim()?.ifBlank { null } }.groupingBy { it }.eachCount().entries.sortedByDescending { it.value }.map { it.key } }
+    // Cities already used, most common first (one tap instead of typing) — from the phone's copy of ALL my
+    // leads (the Leads tab may show only a page or a filtered list); read off the main thread.
+    val ctx = LocalContext.current
+    var cities by remember { mutableStateOf<List<String>>(emptyList()) }
+    LaunchedEffect(Unit) {
+        cities = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            (runCatching { com.closeros.app.data.LocalLeads.all(ctx) }.getOrNull()?.takeIf { it.isNotEmpty() } ?: vm.leads)
+                .mapNotNull { it.city?.trim()?.ifBlank { null } }.groupingBy { it }.eachCount().entries.sortedByDescending { it.value }.map { it.key }
+        }
+    }
     val citySuggest = cities.filter { city.isBlank() || (it.startsWith(city, true) && !it.equals(city, true)) }.take(6)
     AlertDialog(onDismissRequest = { if (!busy) vm.showAddLead = false }, title = { Text("Add a lead") },
         text = { Column(Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {

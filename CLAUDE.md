@@ -1396,7 +1396,10 @@ intelligence → Play Store launch.
    + pick from phone contacts. FREE individuals: max 50 leads per import file AND a rewarded ad for every import;
    Pro + Teams unlimited, no ads. Adding one lead by hand stays free.
 3. Lead page "📅 Next call": shows planned time + Change / Cancel, or "+ Schedule" (quick picks + date/time + note).
-   (Asked owner whether to merge with "⏰ Remind me" — pending.)
+   DECIDED: two buttons on the lead page — "📞 Schedule a call" (follow-up + reminder) and "💬 Schedule a WhatsApp
+   message" (time + message/saved template + file; at that time a notification "Send WhatsApp to X now" → opens WhatsApp
+   ready, one tap; shows in Follow-ups with a WA badge + Home "WhatsApp messages due"; counts as WA when sent).
+   "⏰ Remind me" is removed. Both free for everyone (no ads).
 4. Add-lead form: Name, Number, Profession, City (suggest used cities) + optional email/company/notes.
 5. Message editors: tappable fill-in chips (First name, Full name, My name, Company, Event, Event date, City,
    Profession) inserted at the cursor; typing "{" opens the list. App + dashboard editors.

@@ -1442,5 +1442,10 @@ intelligence → Play Store launch.
   Same price for every SIM; volume discount for 10+ subscriptions to be planned later.
 - Individual app (Pro): unchanged — one subscription covers both SIMs.
 - One login = one phone (already built, DeviceGuard). Today seats = org members (org_access seats_used); calls already
-  carry sim_number / sim_slot. Open points raised with owner: lead calls made from the untracked SIM (dodging tracking),
-  SIM change approval, WhatsApp calls (not tied to a SIM), dashboard-only managers needing a subscription or not.
+  carry sim_number / sim_slot.
+- Owner answers: untracked SIM = NOTHING shown, not even a count of lead calls (privacy for reps, and the reason a client
+  buys the 2nd SIM); same for leads calling the other SIM. Changing the work SIM = rep requests, manager approves.
+  WhatsApp calls count under the rep's first subscription. Dashboard-only managers (no calling SIM) are free.
+
+## Sign-in without emails (owner idea, Nov 13 2026; not decided/built yet)
+- Owner: skip verification emails; use Google sign-in directly, no email sender (Resend) needed.

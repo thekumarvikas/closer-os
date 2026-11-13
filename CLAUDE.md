@@ -1384,5 +1384,7 @@ intelligence → Play Store launch.
 - Monetization: merchant account (payments profile VIKAS KUMAR, INR; India-only + cross-border accounts), 15% fee enrolled,
   BillDesk PA-CB KYC submitted (application 2611133168; video KYC may follow). Subscription remove_ads "Closer OS Pro"
   active: base plans monthly (₹99/₹100, 7-day grace) and yearly (₹999, 14-day grace), auto-renewing, 175 countries.
-- Still open: real AdMob ids (owner's AdMob approval), SMTP (Resend + domain), Google OAuth consent Branding + publish,
+- AdMob (v0.21.2): app ca-app-pub-6664812467343206~1199765432, banner /2772526542, rewarded /3558994602 — real ids only
+  in the Play build (sideload = Google test ids); web/public/app-ads.txt (pub-6664812467343206).
+- Still open: SMTP (Resend + domain), Google OAuth consent Branding + publish,
   12 real testers, owner's list of app changes (pending).

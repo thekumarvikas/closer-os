@@ -1434,3 +1434,10 @@ intelligence → Play Store launch.
   DocumentsUI file picker ignores injected taps on files (owner taps the file); phone locks itself — owner unlocks.
 - v0.22.1 bundle uploaded to the Alpha closed test and sent for review (Nov 13 2026). Play release notes must be
   wrapped in a language tag: <en-US> … </en-US> (else "text outside language tags").
+
+## Owner decision — SIM-based subscriptions (Nov 13 2026; NOT built yet — waiting for "go")
+- One login = one phone (already built, DeviceGuard). A phone may use two SIMs; if two SIMs are used, that counts as
+  TWO subscriptions. Today seats = org members (org_access seats_used); calls already carry sim_number / sim_slot.
+- Open details (owner hasn't chosen): count a SIM only if it made calls in the billing month vs any SIM set up;
+  over the limit → warn + "Add 1 more SIM" vs stop uploading that SIM; company app only vs also individual Pro;
+  extra SIM price = user price vs a lower add-on price (Super Admin).

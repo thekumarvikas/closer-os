@@ -1432,3 +1432,5 @@ intelligence → Play Store launch.
   Leads select bar shows "✓ 4" (one line); sequence detail Remove asks first; Add-lead city suggestions
   come from LocalLeads.all (all my leads, read on IO). Play bundle: downloads/play/CloserOS-<ver>.aab. adb testing:
   DocumentsUI file picker ignores injected taps on files (owner taps the file); phone locks itself — owner unlocks.
+- v0.22.1 bundle uploaded to the Alpha closed test and sent for review (Nov 13 2026). Play release notes must be
+  wrapped in a language tag: <en-US> … </en-US> (else "text outside language tags").

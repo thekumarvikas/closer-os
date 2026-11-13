@@ -1369,3 +1369,20 @@ intelligence → Play Store launch.
 - Dashboard: Settings → "WhatsApp sequences" (components/Sequences.tsx CompanySequences: company sequences editor, outcome
   rules; lists reps' own); Reports → "WhatsApp sequences" tab (due, on time, late, not sent, leads started, bought after;
   per team member + per sequence).
+
+## Play Store setup (Nov 13 2026) — individual app com.closeros.solo
+- v0.21.1 (versionCode 76): targetSdk/compileSdk 36 (AGP 8.11.1, platform 36 installed in /opt/android-sdk), Play Billing
+  8.0.0 (queryProductDetailsAsync → result.productDetailsList), ndk debugSymbolLevel SYMBOL_TABLE (warning remains: native
+  libs come from the ads SDK — ignore). Bundle: ./gradlew bundleSoloRelease (signed with keystore/dev-test.jks = upload key;
+  Play App Signing holds the real key → add the Play app-signing SHA-1 to the Google OAuth Android client before launch).
+- Play Console: app "Closer OS" created (en-US, free, Business), store listing (texts/icon/feature graphic/7 screenshots in
+  downloads/store/, AI-asset label), app content done (privacy/terms URLs on closer-os-liard.vercel.app, ads yes, 18+,
+  data safety incl. photos/videos/files optional, no audio/calendar, advertising ID yes, trader yes), sign-in details =
+  reviewer account teamcloseros+review@gmail.com (owner set the password; never ask for it), call log declaration =
+  "Enterprise archive, CRM, and device management". Closed test track Alpha (India, email list "Closer OS testers", 7
+  accounts so far — need 12 real testers × 14 days) — submitted for review Nov 13.
+- Monetization: merchant account (payments profile VIKAS KUMAR, INR; India-only + cross-border accounts), 15% fee enrolled,
+  BillDesk PA-CB KYC submitted (application 2611133168; video KYC may follow). Subscription remove_ads "Closer OS Pro"
+  active: base plans monthly (₹99/₹100, 7-day grace) and yearly (₹999, 14-day grace), auto-renewing, 175 countries.
+- Still open: real AdMob ids (owner's AdMob approval), SMTP (Resend + domain), Google OAuth consent Branding + publish,
+  12 real testers, owner's list of app changes (pending).

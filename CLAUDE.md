@@ -1388,3 +1388,24 @@ intelligence → Play Store launch.
   in the Play build (sideload = Google test ids); web/public/app-ads.txt (pub-6664812467343206).
 - Still open: SMTP (Resend + domain), Google OAuth consent Branding + publish,
   12 real testers, owner's list of app changes (pending).
+
+## Owner's app change list (Nov 13 2026; NOT built — wait for "go")
+1. Sign-up → app switches to Sign in with email prefilled + "confirm the link, then sign in"; confirmation link
+   opened on the phone signs in directly (closeros:// redirect).
+2. "+ Add lead" in the app: one lead (form) + import CSV/Excel (column matching, duplicates → Repeated, optional event)
+   + pick from phone contacts. FREE individuals: max 50 leads per import file AND a rewarded ad for every import;
+   Pro + Teams unlimited, no ads. Adding one lead by hand stays free.
+3. Lead page "📅 Next call": shows planned time + Change / Cancel, or "+ Schedule" (quick picks + date/time + note).
+   (Asked owner whether to merge with "⏰ Remind me" — pending.)
+4. Add-lead form: Name, Number, Profession, City (suggest used cities) + optional email/company/notes.
+5. Message editors: tappable fill-in chips (First name, Full name, My name, Company, Event, Event date, City,
+   Profession) inserted at the cursor; typing "{" opens the list. App + dashboard editors.
+6. BUG: attaching a file in the sequence editor resets the screen and wipes typed text → keep the draft in the VM /
+   saved state, register the picker in MainActivity, then upload.
+7. Sequence icon: replace 📨 (looks like SMS) with a green WhatsApp-style bubble + clock everywhere.
+8. Sequence details page: stats (on it now, finished, stopped, sent on time/late/not sent, due today, bought after),
+   leads list with per-lead status + filters, remove one/many, pause/resume, + Add leads, Edit. Individual app: owner
+   only; Teams: managers see it too (app + dashboard).
+9. BUG/PRIVACY: after-call card showed the raw server error incl. the user's login token (AfterCallCard saveQuick returns
+   err.substringAfter("ERROR:") — supabase-kt exception text includes headers). Show friendly messages everywhere, log
+   details without tokens. Owner's phone had both apps installed (company 0.18.2 + solo) → two pop-ups per call.

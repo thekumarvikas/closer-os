@@ -84,10 +84,18 @@ val FILL_INS = listOf("First name" to "{{leadName}}", "Full name" to "{{leadFull
 fun MessageField(value: String, onChange: (String) -> Unit, label: String, modifier: Modifier = Modifier, minLines: Int = 3,
                  trailing: (@Composable () -> Unit)? = null) {
     var tf by remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
-    LaunchedEffect(value) { if (value != tf.text) tf = TextFieldValue(value, TextRange(value.length)) }
+    // Texts this field itself sent up. When typing is fast, [value] can arrive a step behind what is
+    // already in the box; adopting it would wipe the newest letters. Only a change made elsewhere
+    // (a saved message picked, a draft restored) replaces the text.
+    val sent = remember { ArrayDeque<String>() }
+    fun emit(t: String) { sent.addLast(t); while (sent.size > 64) sent.removeFirst(); onChange(t) }
+    LaunchedEffect(value) {
+        if (value == tf.text) sent.clear()
+        else if (value !in sent) { sent.clear(); tf = TextFieldValue(value, TextRange(value.length)) }
+    }
     val braceBefore = tf.selection.start > 0 && tf.text.getOrNull(tf.selection.start - 1) == '{' && tf.text.getOrNull(tf.selection.start - 2) != '{'
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        OutlinedTextField(tf, { tf = it; onChange(it.text) }, label = { Text(label) }, modifier = Modifier.fillMaxWidth(), minLines = minLines, trailingIcon = trailing)
+        OutlinedTextField(tf, { val changed = it.text != tf.text; tf = it; if (changed) emit(it.text) }, label = { Text(label) }, modifier = Modifier.fillMaxWidth(), minLines = minLines, trailingIcon = trailing)
         Text(if (braceBefore) "Pick a fill-in:" else "Tap to insert:", fontSize = 11.sp, color = if (braceBefore) Brand.primary else Brand.muted)
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             FILL_INS.forEach { (l, v) ->
@@ -95,7 +103,7 @@ fun MessageField(value: String, onChange: (String) -> Unit, label: String, modif
                     modifier = Modifier.background(if (braceBefore) Color(0xFFD1FAE5) else Brand.light, RoundedCornerShape(50)).clickable {
                         val start = if (braceBefore) tf.selection.start - 1 else tf.selection.start
                         val t = tf.text.substring(0, start) + v + tf.text.substring(tf.selection.end)
-                        tf = TextFieldValue(t, TextRange(start + v.length)); onChange(t)
+                        tf = TextFieldValue(t, TextRange(start + v.length)); emit(t)
                     }.padding(horizontal = 10.dp, vertical = 5.dp))
             }
         }

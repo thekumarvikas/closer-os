@@ -1426,3 +1426,8 @@ intelligence → Play Store launch.
   sequences; Follow-ups tab ScheduledWaList. Sign-up: redirectUrl closeros://<AUTH_HOST> (solo / app; manifest placeholder authHost),
   MainActivity handles closeros:// via handleDeeplinks; SignUpForm → sign-in with email prefilled. Dashboard: components/FillIns.tsx
   MessageBox (templates, sequences, playbook), Sequences.tsx SequenceDetail modal (click a sequence name).
+- v0.22.0 phone test (Redmi K20 Pro, Nov 13 2026): all items pass. Fixed MessageField (ui/SequenceScreens.kt) dropping
+  letters when typing fast — it re-adopted a stale `value`; now it ignores values it sent itself (keep this pattern).
+  Open: fill-in chips hidden behind the keyboard in Schedule WhatsApp; "N selected" wraps in Leads select bar; sequence
+  detail Remove has no confirm; no city suggestions seen. adb testing: DocumentsUI file picker ignores injected taps on
+  files (owner taps the file).

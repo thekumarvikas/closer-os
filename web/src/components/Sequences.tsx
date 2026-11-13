@@ -3,6 +3,7 @@ import { Plus, ArrowUp, ArrowDown, Trash2 } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
 import { Button, Card, ErrorBox, Modal, Spinner, Stat } from './ui'
+import { MessageBox } from './FillIns'
 
 /**
  * WhatsApp sequences: messages sent to a lead over days (Day 0, Day 2, Day 5…) or around an event.
@@ -31,6 +32,7 @@ export function CompanySequences() {
   const [rows, setRows] = useState<Seq[] | null>(null)
   const [outcomes, setOutcomes] = useState<Outcome[]>([])
   const [editing, setEditing] = useState<Seq | null>(null)
+  const [viewing, setViewing] = useState<Seq | null>(null)
   const [version, setVersion] = useState(0)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
@@ -54,7 +56,7 @@ export function CompanySequences() {
         {company.map(s => (
           <div key={s.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 p-3">
             <div className="min-w-0 flex-1">
-              <div className="font-medium">{s.name}</div>
+              <button className="font-medium text-brand-700 hover:underline" onClick={() => setViewing(s)}>{s.name}</button>
               <div className="text-xs text-slate-500">{s.messages.length} message{s.messages.length === 1 ? '' : 's'} · {s.messages.map(m => whenText(m).split(' · ')[0]).join(', ')}</div>
               {s.start_outcomes.length > 0 && <div className="text-xs text-brand-700">🔁 Starts by itself after: {s.start_outcomes.map(label).filter(Boolean).join(', ')}</div>}
               <div className="text-xs text-slate-500">{s.active_all} leads on it now{s.done_all ? ` · ${s.done_all} finished` : ''}</div>
@@ -63,11 +65,13 @@ export function CompanySequences() {
             <button className="text-slate-400 hover:text-red-600" aria-label="Delete" onClick={() => remove(s)}><Trash2 className="h-4 w-4" /></button>
           </div>
         ))}
-        {personal.length > 0 && <p className="pt-2 text-xs text-slate-500">Team members' own sequences: {personal.map(s => `${s.name} (${s.owner_name ?? 'rep'})`).join(' · ')}</p>}
+        {personal.length > 0 && <p className="pt-2 text-xs text-slate-500">Team members' own sequences: {personal.map((s, i) => (
+          <span key={s.id}>{i > 0 && ' · '}<button className="text-brand-700 hover:underline" onClick={() => setViewing(s)}>{s.name}</button> ({s.owner_name ?? 'rep'})</span>))}</p>}
       </div>}
       <Button variant="secondary" className="mt-3" onClick={() => setEditing({ id: '', name: '', company: true, mine: false, owner_name: null, start_outcomes: [], active_all: 0, done_all: 0,
         messages: [{ anchor: 'start', day_offset: 0, send_time: '10:00', minutes_before: null, body: 'Hi {{leadName}}, ' }] })}>
         <Plus className="h-4 w-4" /> New sequence</Button>
+      {viewing && <SequenceDetail seq={viewing} onClose={() => { setViewing(null); setVersion(v => v + 1) }} />}
       {editing && <SequenceEditor seq={editing} outcomes={outcomes} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); setVersion(v => v + 1) }} />}
     </Card>
   )
@@ -132,7 +136,7 @@ function SequenceEditor({ seq, outcomes, onClose, onSaved }: { seq: Seq; outcome
                 </>}
               </div>
               <p className="mb-2 text-xs text-slate-500">{m.anchor === 'event' ? `Sent ${whenText(m).toLowerCase()} the lead registered for.` : m.day_offset === 0 ? 'Day 0 = the day the lead joins the sequence.' : `${m.day_offset} day${m.day_offset > 1 ? 's' : ''} after the lead joins · holidays and days off move to the next working day.`}</p>
-              <textarea className="input min-h-[80px] text-sm" value={m.body} onChange={e => set(i, { body: e.target.value })} />
+              <MessageBox value={m.body} onChange={v => set(i, { body: v })} />
               <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
                 {m.media_path ? <span className="rounded bg-slate-100 px-2 py-0.5">📎 {m.media_name} <button className="ml-1 text-red-600 hover:underline" onClick={() => set(i, { media_path: null, media_type: null, media_name: null })}>Remove</button></span>
                   : <label className="cursor-pointer text-brand-700 hover:underline">📎 Attach photo, video or PDF<input type="file" className="hidden" accept="image/*,video/*,application/pdf" onChange={e => attach(i, e.target.files?.[0])} /></label>}
@@ -210,5 +214,70 @@ export function SequenceReport({ from, to }: { from: string; to: string }) {
       <section><h3 className="mb-2 font-semibold">By team member</h3><Table rows={r.people} first="Team member" /></section>
       <section><h3 className="mb-2 font-semibold">By sequence</h3><Table rows={r.sequences} first="Sequence" /></section>
     </div>
+  )
+}
+
+/* ───────────── Details: stats + the leads on a sequence ───────────── */
+
+interface DetailRow { id: string; lead_id: string; name: string; phone: string; status: string; stop_reason: string | null; next_pos: number | null
+  next_due_at: string | null; sent_count: number; user_name: string | null; bought: boolean }
+interface Detail { stats: Record<string, number>; leads: DetailRow[]; total: number }
+
+function SequenceDetail({ seq, onClose }: { seq: Seq; onClose: () => void }) {
+  const [d, setD] = useState<Detail | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [filter, setFilter] = useState('active')
+  const [sel, setSel] = useState<string[]>([])
+  const [v, setV] = useState(0)
+  useEffect(() => { supabase.rpc('sequence_detail', { p_seq: seq.id }).then(({ data, error }) => { if (error) setError(errorText(error)); else setD(data as Detail) }) }, [seq.id, v])
+  async function act(ids: string[], action: string) {
+    const { error } = await supabase.rpc('set_sequence_leads', { p_ids: ids, p_action: action })
+    if (error) setError(errorText(error)); setSel([]); setV(x => x + 1)
+  }
+  const when = (iso: string | null) => iso ? new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '—'
+  const rows = (d?.leads ?? []).filter(r => filter === 'all' || r.status === filter)
+  const st = d?.stats ?? {}
+  const tiles: [string, string][] = [['On it now', 'active'], ['Paused', 'paused'], ['Finished', 'done'], ['Stopped', 'stopped'], ['Due today', 'due_today'],
+    ['Sent on time', 'sent_on_time'], ['Sent late', 'sent_late'], ['Not sent', 'skipped'], ['Bought after', 'bought']]
+  return (
+    <Modal open onClose={onClose} wide title={seq.name} footer={<Button variant="secondary" onClick={onClose}>Close</Button>}>
+      <ErrorBox error={error} />
+      {!d ? <Spinner /> : <div className="space-y-4">
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">{tiles.map(([l, k]) => <Stat key={k} label={l} value={st[k] ?? 0} tone={k === 'bought' && st[k] ? 'green' : undefined} />)}</div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {[['active', 'On it'], ['paused', 'Paused'], ['done', 'Finished'], ['stopped', 'Stopped'], ['all', 'All']].map(([k, l]) => (
+            <button key={k} onClick={() => { setFilter(k); setSel([]) }}
+              className={`rounded-full border px-3 py-1 text-xs font-medium ${filter === k ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-slate-200 text-slate-600'}`}>
+              {l} ({k === 'all' ? d.leads.length : d.leads.filter(r => r.status === k).length})</button>))}
+          {sel.length > 0 && <span className="ml-auto flex items-center gap-2 text-sm">{sel.length} selected
+            <Button variant="secondary" onClick={() => act(sel, 'pause')}>Pause</Button>
+            <Button variant="secondary" onClick={() => act(sel, 'resume')}>Resume</Button>
+            <Button variant="danger" onClick={() => act(sel, 'stop')}>Remove</Button></span>}
+        </div>
+        <div className="max-h-[50vh] overflow-y-auto rounded-lg border border-slate-200">
+          <table className="w-full table-fixed text-sm">
+            <thead className="sticky top-0 bg-slate-50 text-left text-xs text-slate-500"><tr>
+              <th className="w-8 px-2 py-2" /><th className="px-3 py-2">Lead</th><th className="px-3 py-2">Where they are</th><th className="px-3 py-2">Sent by</th><th className="w-40 px-3 py-2" /></tr></thead>
+            <tbody>{rows.map(r => {
+              const live = r.status === 'active' || r.status === 'paused'
+              return (
+                <tr key={r.id} className="border-t border-slate-100">
+                  <td className="px-2 py-2">{live && <input type="checkbox" checked={sel.includes(r.id)} onChange={e => setSel(s => e.target.checked ? [...s, r.id] : s.filter(x => x !== r.id))} />}</td>
+                  <td className="truncate px-3 py-2"><div className="font-medium">{r.name || r.phone}{r.bought && ' 🎉'}</div><div className="text-xs text-slate-500">{r.phone}</div></td>
+                  <td className="px-3 py-2 text-xs">{r.status === 'active' ? `Message ${r.next_pos ?? '–'} of ${d.total} · next ${when(r.next_due_at)}` :
+                    r.status === 'paused' ? `Paused · ${r.sent_count} sent` : r.status === 'done' ? `Finished · ${r.sent_count} sent` : `${r.stop_reason ?? 'Stopped'} · ${r.sent_count} sent`}</td>
+                  <td className="truncate px-3 py-2 text-xs">{r.user_name ?? '—'}</td>
+                  <td className="px-3 py-2 text-right text-xs">
+                    {r.status === 'active' && <button className="mr-2 text-brand-700 hover:underline" onClick={() => act([r.id], 'pause')}>Pause</button>}
+                    {r.status === 'paused' && <button className="mr-2 text-brand-700 hover:underline" onClick={() => act([r.id], 'resume')}>Resume</button>}
+                    {live && <button className="text-red-600 hover:underline" onClick={() => act([r.id], 'stop')}>Remove</button>}
+                  </td>
+                </tr>)
+            })}
+            {rows.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-slate-500">Nobody here.</td></tr>}</tbody>
+          </table>
+        </div>
+      </div>}
+    </Modal>
   )
 }

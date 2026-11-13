@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { MessageBox } from '../components/FillIns'
 import Papa from 'papaparse'
 import readXlsxFile from 'read-excel-file'
 import { Plus, Trash2, Upload, CheckCircle2 } from 'lucide-react'
@@ -161,6 +162,11 @@ interface Template { id: string; name: string; body: string; position: number; i
 const variables = ['{{leadName}}', '{{repName}}', '{{companyName}}', '{{batchName}}', '{{batchDate}}', '{{followUpTime}}', '{{city}}', '{{profession}}']
 
 /** WhatsApp messages reps can pick in the app; variables are filled in for each lead. */
+function TemplateBody({ body, onSave }: { body: string; onSave: (v: string) => void }) {
+  const [v, setV] = useState(body)
+  return <MessageBox className="min-h-[70px]" value={v} onChange={setV} onBlur={onSave} />
+}
+
 export function WhatsAppTemplates() {
   const { org } = useOrg()
   const [rows, setRows] = useState<Template[]>([])
@@ -183,7 +189,7 @@ export function WhatsAppTemplates() {
               <button className="whitespace-nowrap text-xs text-brand-700 hover:underline" onClick={() => run(supabase.from('message_templates').update({ is_active: !t.is_active }).eq('id', t.id))}>{t.is_active ? 'Hide' : 'Show'}</button>
               <button className="text-slate-400 hover:text-red-600" aria-label="Delete" onClick={() => confirm(`Delete "${t.name}"?`) && run(supabase.from('message_templates').delete().eq('id', t.id))}><Trash2 className="h-4 w-4" /></button>
             </div>
-            <textarea className="input min-h-[70px] text-sm" defaultValue={t.body} onBlur={e => e.target.value !== t.body && run(supabase.from('message_templates').update({ body: e.target.value }).eq('id', t.id))} />
+            <TemplateBody body={t.body} onSave={v => v !== t.body && run(supabase.from('message_templates').update({ body: v }).eq('id', t.id))} />
             <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
               {t.media_path ? <>
                 <span className="rounded bg-slate-100 px-2 py-0.5">{t.media_type?.startsWith('image') ? '🖼️' : t.media_type?.startsWith('video') ? '🎬' : '📄'} {t.media_name}</span>

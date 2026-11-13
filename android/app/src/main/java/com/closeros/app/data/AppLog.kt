@@ -25,8 +25,8 @@ object AppLog {
             val store = LocalStore(ctx)
             val o = buildJsonObject {
                 put("kind", kind); put("place", place)
-                put("message", (message ?: t?.let { "${it::class.java.simpleName}: ${it.message}" } ?: "").take(500))
-                put("stack", t?.stackTraceToString()?.take(6000) ?: "")
+                put("message", SafeError.clean(message ?: t?.let { "${it::class.java.simpleName}: ${it.message}" } ?: "").take(500))
+                put("stack", SafeError.clean(t?.stackTraceToString()).take(6000))
                 put("at", Instant.now().toString()); put("org_id", store.orgId ?: "")
                 put("device_id", PhoneCalls.deviceId(ctx)); put("app_version", BuildConfig.VERSION_NAME)
                 put("model", "${Build.MANUFACTURER} ${Build.MODEL}"); put("android", Build.VERSION.RELEASE)

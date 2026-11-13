@@ -3,11 +3,10 @@ package com.closeros.app.ui
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -23,17 +22,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.closeros.app.MainActivity
+import com.closeros.app.R
 import com.closeros.app.data.Lead
 import com.closeros.app.data.LeadSeq
+import com.closeros.app.data.SeqDetail
 import com.closeros.app.data.SeqLimits
 import com.closeros.app.data.SeqMessage
 import com.closeros.app.data.Seqs
 import com.closeros.app.data.Sequence
+import com.closeros.app.data.WaScheduled
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
@@ -46,10 +53,56 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 /**
- * WhatsApp sequences: messages sent to a lead over days (Day 0, Day 2, Day 5…) or around an event.
- * Each day the messages that are due go into the WhatsApp queue — one tap per lead (never sent automatically).
+ * WhatsApp sequences: messages sent to a lead over days (Day 0, Day 2, Day 5…) or around an event, plus messages
+ * scheduled for one lead. Due messages go into the WhatsApp queue — one tap per lead (never sent automatically).
  */
 private val WA_GREEN = Color(0xFF16A34A)
+
+/** The WhatsApp-sequence icon: green chat bubble with a clock. */
+@Composable
+fun SeqIcon(size: Dp = 20.dp) = Icon(painterResource(R.drawable.ic_wa_sequence), null, Modifier.size(size), tint = Color.Unspecified)
+
+/** Opens the phone's file picker for [target] ("import", "seq:<key>", "wa"); the result arrives in vm.onFilePicked. */
+fun pickFile(ctx: android.content.Context, vm: AppViewModel, target: String) {
+    vm.filePickFor = target
+    if (target.startsWith("seq:")) vm.backupSeqDraft()
+    (ctx as? MainActivity)?.pickFile?.launch("*/*") ?: run { vm.filePickFor = null; vm.message = "Couldn't open the file picker" }
+}
+
+// ───────────── Fill-ins: tap to insert {{leadName}} etc. ─────────────
+
+val FILL_INS = listOf("First name" to "{{leadName}}", "Full name" to "{{leadFullName}}", "My name" to "{{repName}}",
+    "Company" to "{{companyName}}", "Event" to "{{batchName}}", "Event date" to "{{batchDate}}", "City" to "{{city}}",
+    "Profession" to "{{profession}}", "Next call" to "{{followUpTime}}")
+
+/**
+ * A message box with tappable fill-ins under it: tap one to insert it where the cursor is. Typing "{" highlights the
+ * list; picking one then replaces that "{".
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun MessageField(value: String, onChange: (String) -> Unit, label: String, modifier: Modifier = Modifier, minLines: Int = 3,
+                 trailing: (@Composable () -> Unit)? = null) {
+    var tf by remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
+    LaunchedEffect(value) { if (value != tf.text) tf = TextFieldValue(value, TextRange(value.length)) }
+    val braceBefore = tf.selection.start > 0 && tf.text.getOrNull(tf.selection.start - 1) == '{' && tf.text.getOrNull(tf.selection.start - 2) != '{'
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        OutlinedTextField(tf, { tf = it; onChange(it.text) }, label = { Text(label) }, modifier = Modifier.fillMaxWidth(), minLines = minLines, trailingIcon = trailing)
+        Text(if (braceBefore) "Pick a fill-in:" else "Tap to insert:", fontSize = 11.sp, color = if (braceBefore) Brand.primary else Brand.muted)
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FILL_INS.forEach { (l, v) ->
+                Text(l, fontSize = 12.sp, color = Brand.primaryDark,
+                    modifier = Modifier.background(if (braceBefore) Color(0xFFD1FAE5) else Brand.light, RoundedCornerShape(50)).clickable {
+                        val start = if (braceBefore) tf.selection.start - 1 else tf.selection.start
+                        val t = tf.text.substring(0, start) + v + tf.text.substring(tf.selection.end)
+                        tf = TextFieldValue(t, TextRange(start + v.length)); onChange(t)
+                    }.padding(horizontal = 10.dp, vertical = 5.dp))
+            }
+        }
+    }
+}
+
+// ───────────── Sequences list ─────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,7 +110,7 @@ fun SequencesScreen(vm: AppViewModel) {
     LaunchedEffect(Unit) { vm.loadSequences(); vm.loadSeqDue() }
     val list = vm.sequences
     Scaffold(topBar = {
-        TopAppBar(title = { Text("WhatsApp sequences") },
+        TopAppBar(title = { Row(verticalAlignment = Alignment.CenterVertically) { SeqIcon(24.dp); Spacer(Modifier.width(8.dp)); Text("WhatsApp sequences") } },
             navigationIcon = { IconButton(onClick = { vm.showSequences = false }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } })
     }) { pad ->
         LazyColumn(Modifier.fillMaxSize().padding(pad), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -83,9 +136,10 @@ private fun SequenceCard(vm: AppViewModel, s: Sequence) {
     var askDelete by remember { mutableStateOf(false) }
     val canEdit = s.mine || (s.company && vm.isManager)
     val outcomes = vm.outcomes.associateBy { it.id }
-    Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
+    Card(colors = CardDefaults.cardColors(containerColor = Color.White), modifier = Modifier.clickable { vm.openSequenceId = s.id }) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                SeqIcon(18.dp); Spacer(Modifier.width(6.dp))
                 Text(s.name, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, modifier = Modifier.weight(1f))
                 if (!vm.isSolo) Text(if (s.company) "Company" else if (s.mine) "Mine" else "By ${s.owner_name ?: "a teammate"}", fontSize = 11.sp, color = Brand.primaryDark,
                     modifier = Modifier.background(Brand.light, RoundedCornerShape(6.dp)).padding(6.dp, 2.dp))
@@ -93,14 +147,13 @@ private fun SequenceCard(vm: AppViewModel, s: Sequence) {
             Text("${s.messages.size} message${if (s.messages.size == 1) "" else "s"} · " + s.messages.joinToString(", ") { Seqs.whenText(it).substringBefore(" ·") },
                 fontSize = 13.sp, color = Brand.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (s.start_outcomes.isNotEmpty()) Text("🔁 Starts by itself after: " + s.start_outcomes.mapNotNull { outcomes[it]?.label }.joinToString(", "), fontSize = 13.sp, color = Brand.primaryDark)
-            Text("${if (vm.isManager && s.company && !vm.isSolo) s.active_all else s.active_mine} leads on it now" + if (s.done_all > 0) " · ${s.done_all} finished" else "", fontSize = 13.sp)
+            Text("${if (vm.isManager && s.company && !vm.isSolo) s.active_all else s.active_mine} leads on it now" + (if (s.done_all > 0) " · ${s.done_all} finished" else "") + " · See leads & stats ›",
+                fontSize = 13.sp, color = Brand.primary)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(onClick = {
-                    vm.showSequences = false; vm.selectMode = true; vm.tab = Tab.Leads; vm.message = "Tick leads, then tap 📨 to start a sequence"
-                }) { Text("+ Add leads") }
+                OutlinedButton(onClick = { vm.showSequences = false; vm.selectMode = true; vm.tab = Tab.Leads; vm.message = "Tick leads, then tap the sequence icon" }) { Text("+ Add leads") }
                 Spacer(Modifier.weight(1f))
                 if (canEdit) {
-                    TextButton(onClick = { vm.editSequence = s }) { Text("Edit") }
+                    TextButton(onClick = { vm.openSequenceEditor(s) }) { Text("Edit") }
                     TextButton(onClick = { askDelete = true }) { Text("Delete", color = Brand.muted) }
                 }
             }
@@ -112,7 +165,7 @@ private fun SequenceCard(vm: AppViewModel, s: Sequence) {
         dismissButton = { TextButton(onClick = { askDelete = false }) { Text("Cancel") } })
 }
 
-/** Home + sequences screen: messages due now → "Send now" (WhatsApp queue). */
+/** Home + sequences screen: messages due now (sequences + scheduled) → "Send now" (WhatsApp queue). */
 @Composable
 fun SeqDueCard(vm: AppViewModel, always: Boolean = false) {
     val d = vm.seqDue ?: return
@@ -121,8 +174,9 @@ fun SeqDueCard(vm: AppViewModel, always: Boolean = false) {
     val bySeq = d.due.groupingBy { it.sequence }.eachCount()
     Row(Modifier.fillMaxWidth().background(Color(0xFFECFDF5), RoundedCornerShape(12.dp)).clickable(enabled = !always) { vm.showSequences = true }.padding(12.dp),
         verticalAlignment = Alignment.CenterVertically) {
+        SeqIcon(26.dp); Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Text(if (n == 0) "📨 No WhatsApp messages due now" else "📨 $n WhatsApp message${if (n == 1) "" else "s"} due", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+            Text(if (n == 0) "No WhatsApp messages due now" else "$n WhatsApp message${if (n == 1) "" else "s"} due", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
             val sub = listOfNotNull(bySeq.entries.joinToString(" · ") { "${it.key} ${it.value}" }.ifBlank { null },
                 if (d.later_today > 0) "${d.later_today} more later today" else null).joinToString(" · ")
             if (sub.isNotBlank()) Text(sub, fontSize = 12.sp, color = Brand.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -147,7 +201,7 @@ fun SequencePickerDialog(vm: AppViewModel) {
     LaunchedEffect(Unit) { if (vm.sequences == null) vm.loadSequences() }
     val list = vm.sequences
     AlertDialog(onDismissRequest = { vm.seqPick = null },
-        title = { Text("📨 WhatsApp sequence for ${pick.label}") },
+        title = { Row(verticalAlignment = Alignment.CenterVertically) { SeqIcon(22.dp); Spacer(Modifier.width(8.dp)); Text("WhatsApp sequence for ${pick.label}") } },
         text = { Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Each lead gets the messages on their days. Leads already on the sequence or marked Do not call are skipped.", fontSize = 13.sp, color = Brand.muted)
             if (list == null) CircularProgressIndicator()
@@ -163,18 +217,55 @@ fun SequencePickerDialog(vm: AppViewModel) {
         confirmButton = {}, dismissButton = { TextButton(onClick = { vm.seqPick = null }) { Text("Cancel") } })
 }
 
-/** Lead page: this lead's sequences (Pause / Resume / Stop) + start one. */
+// ───────────── Lead page: sequences, scheduled call, scheduled WhatsApp ─────────────
+
+/** Lead page: "📞 Schedule a call" + "💬 Schedule a WhatsApp message", what's planned, and the lead's sequences. */
 @Composable
 fun LeadSequencesCard(vm: AppViewModel, l: Lead) {
     var rows by remember(l.id) { mutableStateOf<List<LeadSeq>?>(null) }
-    LaunchedEffect(l.id, vm.leadRefresh) { rows = runCatching { Seqs.forLead(l.id) }.getOrNull() ?: rows }
+    var scheduled by remember(l.id) { mutableStateOf<List<WaScheduled>>(emptyList()) }
+    LaunchedEffect(l.id, vm.leadRefresh) {
+        rows = runCatching { Seqs.forLead(l.id) }.getOrNull() ?: rows
+        scheduled = runCatching { Seqs.leadScheduled(l.id) }.getOrNull() ?: scheduled
+    }
+    var callOpen by remember { mutableStateOf(false) }
+    var waOpen by remember { mutableStateOf<WaScheduled?>(null) }
+    var waNew by remember { mutableStateOf(false) }
+    val planned = vm.followUps.firstOrNull { it.lead_id == l.id }
     val live = rows.orEmpty().filter { it.status == "active" || it.status == "paused" }
     val past = rows.orEmpty().filter { it.status != "active" && it.status != "paused" }.take(2)
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { callOpen = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 6.dp)) { Text("📞 Schedule a call", fontSize = 13.sp) }
+            OutlinedButton(onClick = { waNew = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 6.dp)) { Text("💬 Schedule WhatsApp", fontSize = 13.sp) }
+        }
+        // What's planned
+        (planned?.due_at ?: l.next_follow_up_at)?.let { due ->
+            Row(Modifier.fillMaxWidth().background(Brand.light, RoundedCornerShape(10.dp)).padding(10.dp, 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("📞 Next call: ${fmtWhen(due)}" + (planned?.notes?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""), fontSize = 13.sp, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (planned != null) {
+                    TextButton(onClick = { callOpen = true }) { Text("Change") }
+                    TextButton(onClick = { vm.cancelScheduledCall(l) }) { Text("Cancel", color = Brand.muted) }
+                }
+            }
+        }
+        scheduled.forEach { s ->
+            Row(Modifier.fillMaxWidth().background(Color(0xFFECFDF5), RoundedCornerShape(10.dp)).padding(10.dp, 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("💬 WhatsApp ${fmtWhen(s.due_at)}" + (s.media_name?.let { " · 📎" } ?: ""), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(s.body, fontSize = 12.sp, color = Brand.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                if (s.mine) {
+                    TextButton(onClick = { waOpen = s }) { Text("Change") }
+                    TextButton(onClick = { vm.cancelWa(s.id) }) { Text("Cancel", color = Brand.muted) }
+                }
+            }
+        }
         live.forEach { r ->
             Row(Modifier.fillMaxWidth().background(Color(0xFFECFDF5), RoundedCornerShape(10.dp)).padding(10.dp, 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                SeqIcon(18.dp); Spacer(Modifier.width(6.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("📨 ${r.name}", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    Text(r.name, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                     Text(if (r.status == "paused") "Paused · ${r.sent_count} of ${r.total} sent"
                         else "Message ${r.next_pos ?: "–"} of ${r.total} · " + (r.next_due_at?.let { "next ${fmtWhen(it)}" } ?: "nothing planned"),
                         fontSize = 12.sp, color = Brand.muted)
@@ -185,48 +276,116 @@ fun LeadSequencesCard(vm: AppViewModel, l: Lead) {
             }
         }
         past.forEach { r ->
-            Text("📨 ${r.name}: " + (if (r.status == "done") "all ${r.total} done" else "${r.stop_reason ?: "stopped"} · ${r.sent_count} sent"), fontSize = 12.sp, color = Brand.muted)
+            Text("${r.name}: " + (if (r.status == "done") "all ${r.total} done" else "${r.stop_reason ?: "stopped"} · ${r.sent_count} sent"), fontSize = 12.sp, color = Brand.muted)
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { vm.seqPick = AppViewModel.SeqPick(listOf(l.id), l.name.ifBlank { "this lead" }) }) { Text("📨 Start a WhatsApp sequence") }
-            Spacer(Modifier.weight(1f))
-            RemindMeButton(vm, l)
+        TextButton(onClick = { vm.seqPick = AppViewModel.SeqPick(listOf(l.id), l.name.ifBlank { "this lead" }) }) {
+            SeqIcon(18.dp); Spacer(Modifier.width(6.dp)); Text("Start a WhatsApp sequence")
         }
     }
+    if (callOpen) ScheduleCallDialog(vm, l, planned?.notes.orEmpty()) { callOpen = false }
+    if (waNew) ScheduleWaDialog(vm, l, null) { waNew = false }
+    waOpen?.let { s -> ScheduleWaDialog(vm, l, s) { waOpen = null } }
 }
 
-/** "⏰ Remind me": a reminder with a note, without a call (5 min … tomorrow, or any date & time). */
+/** Quick times + any date & time. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun RemindMeButton(vm: AppViewModel, l: Lead) {
-    var open by remember { mutableStateOf(false) }
-    TextButton(onClick = { open = true }) { Text("⏰ Remind me") }
-    if (!open) return
+private fun TimePicks(at: LocalDateTime?, onPick: (LocalDateTime) -> Unit) {
     val ctx = LocalContext.current
-    var note by remember { mutableStateOf("") }
+    val now = remember { LocalDateTime.now().withSecond(0).withNano(0) }
+    val quick = listOf("In 30 min" to now.plusMinutes(30), "1 hour" to now.plusHours(1), "3 hours" to now.plusHours(3),
+        "Today 6 PM" to now.withHour(18).withMinute(0), "Tomorrow 11 AM" to now.plusDays(1).withHour(11).withMinute(0),
+        "Tomorrow 6 PM" to now.plusDays(1).withHour(18).withMinute(0)).filter { it.second.isAfter(now) }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        quick.forEach { (label, t) -> FilterChip(selected = at == t, onClick = { onPick(t) }, label = { Text(label) }) }
+        FilterChip(selected = at != null && quick.none { it.second == at }, onClick = {
+            val b = at ?: now.plusHours(1)
+            DatePickerDialog(ctx, { _, y, m, d -> TimePickerDialog(ctx, { _, h, min -> onPick(LocalDateTime.of(y, m + 1, d, h, min)) }, b.hour, b.minute, false).show() },
+                b.year, b.monthValue - 1, b.dayOfMonth).show()
+        }, label = { Text("Pick date & time") })
+    }
+    at?.let { Text("⏰ " + it.format(DateTimeFormatter.ofPattern("EEE d MMM, h:mm a")), color = Brand.primaryDark, fontWeight = FontWeight.SemiBold) }
+}
+
+@Composable
+fun ScheduleCallDialog(vm: AppViewModel, l: Lead, oldNote: String, onClose: () -> Unit) {
     var at by remember { mutableStateOf<LocalDateTime?>(null) }
+    var note by remember { mutableStateOf(oldNote) }
     var busy by remember { mutableStateOf(false) }
-    val now = LocalDateTime.now().withSecond(0).withNano(0)
-    val quick = listOf("5 min" to now.plusMinutes(5), "15 min" to now.plusMinutes(15), "30 min" to now.plusMinutes(30),
-        "1 hour" to now.plusHours(1), "3 hours" to now.plusHours(3), "Tomorrow 10 AM" to now.plusDays(1).withHour(10).withMinute(0))
-    AlertDialog(onDismissRequest = { if (!busy) open = false }, title = { Text("Remind me about ${l.name.ifBlank { "this lead" }}") },
-        text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            @OptIn(ExperimentalLayoutApi::class)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                quick.forEach { (label, t) -> FilterChip(selected = at == t, onClick = { at = t }, label = { Text(label) }) }
-                FilterChip(selected = at != null && quick.none { it.second == at }, onClick = {
-                    val b = at ?: now.plusHours(1)
-                    DatePickerDialog(ctx, { _, y, m, d -> TimePickerDialog(ctx, { _, h, min -> at = LocalDateTime.of(y, m + 1, d, h, min) }, b.hour, b.minute, false).show() },
-                        b.year, b.monthValue - 1, b.dayOfMonth).show()
-                }, label = { Text("Pick date & time") })
-            }
-            at?.let { Text("⏰ " + it.format(DateTimeFormatter.ofPattern("EEE d MMM, h:mm a")), color = Brand.primaryDark, fontWeight = FontWeight.SemiBold) }
-            OutlinedTextField(note, { note = it }, label = { Text("Note (what to do)") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+    AlertDialog(onDismissRequest = { if (!busy) onClose() }, title = { Text("📞 Call ${l.name.ifBlank { "this lead" }}") },
+        text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            TimePicks(at) { at = it }
+            OutlinedTextField(note, { note = it }, label = { Text("Note (optional) — what to talk about") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+            Text("You get a reminder with a Call button at that time. It shows in Follow-ups.", fontSize = 12.sp, color = Brand.muted)
         } },
         confirmButton = { Button(enabled = at != null && !busy, onClick = {
-            busy = true
-            vm.addReminder(l, at!!.atZone(ZoneId.systemDefault()).toInstant(), note) { ok -> busy = false; if (ok) open = false }
-        }) { Text(if (busy) "Saving…" else "Set reminder") } },
-        dismissButton = { TextButton(onClick = { open = false }) { Text("Cancel") } })
+            busy = true; vm.scheduleCall(l, at!!.atZone(ZoneId.systemDefault()).toInstant(), note) { ok -> busy = false; if (ok) onClose() }
+        }) { Text(if (busy) "Saving…" else "Schedule call") } },
+        dismissButton = { TextButton(onClick = onClose) { Text("Cancel") } })
+}
+
+@Composable
+fun ScheduleWaDialog(vm: AppViewModel, l: Lead, existing: WaScheduled?, onClose: () -> Unit) {
+    val ctx = LocalContext.current
+    var at by remember { mutableStateOf(existing?.let { runCatching { com.closeros.app.data.parseInstant(it.due_at).atZone(ZoneId.systemDefault()).toLocalDateTime() }.getOrNull() }) }
+    var body by remember { mutableStateOf(existing?.body.orEmpty()) }
+    var busy by remember { mutableStateOf(false) }
+    var savedPick by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { vm.waPickedFile = existing?.media_path?.let { Triple(it, existing.media_type.orEmpty(), existing.media_name.orEmpty()) } }
+    val file = vm.waPickedFile
+    val canUpload = vm.isManager || vm.isSolo
+    AlertDialog(onDismissRequest = { if (!busy) onClose() }, title = { Text("💬 WhatsApp ${l.name.ifBlank { "this lead" }}") },
+        text = { Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            TimePicks(at) { at = it }
+            MessageField(body, { body = it }, "Message")
+            if (file != null) Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("📎 ${file.third}", fontSize = 13.sp, modifier = Modifier.weight(1f))
+                TextButton(onClick = { vm.waPickedFile = null }) { Text("Remove") }
+            }
+            Row {
+                if (vm.templates.isNotEmpty()) TextButton(onClick = { savedPick = true }) { Text("Use a saved message") }
+                if (canUpload) TextButton(onClick = { pickFile(ctx, vm, "wa") }) { Text("📎 Attach a file") }
+            }
+            Text("At that time you get a notification. Tap it and WhatsApp opens with the message ready — you just press Send.", fontSize = 12.sp, color = Brand.muted)
+        } },
+        confirmButton = { Button(enabled = at != null && (body.isNotBlank() || file != null) && !busy, onClick = {
+            busy = true; vm.scheduleWa(l, at!!.atZone(ZoneId.systemDefault()).toInstant(), body, file, existing?.id) { ok -> busy = false; if (ok) { vm.waPickedFile = null; onClose() } }
+        }) { Text(if (busy) "Saving…" else "Schedule") } },
+        dismissButton = { TextButton(onClick = { vm.waPickedFile = null; onClose() }) { Text("Cancel") } })
+    if (savedPick) AlertDialog(onDismissRequest = { savedPick = false }, title = { Text("Use a saved message") },
+        text = { Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            vm.templates.forEach { t ->
+                Column(Modifier.fillMaxWidth().border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(10.dp)).clickable {
+                    body = t.body; t.media_path?.let { vm.waPickedFile = Triple(it, t.media_type.orEmpty(), t.media_name.orEmpty()) }; savedPick = false
+                }.padding(10.dp)) {
+                    Text((if (t.media_path != null) "📎 " else "") + t.name, fontWeight = FontWeight.SemiBold)
+                    Text(t.body, fontSize = 12.sp, color = Brand.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        } }, confirmButton = {}, dismissButton = { TextButton(onClick = { savedPick = false }) { Text("Cancel") } })
+}
+
+/** Follow-ups tab: my scheduled WhatsApp messages. */
+@Composable
+fun ScheduledWaList(vm: AppViewModel) {
+    LaunchedEffect(Unit) { vm.loadWaScheduled() }
+    val list = vm.waScheduled
+    if (list.isEmpty()) return
+    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFECFDF5))) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("💬 Scheduled WhatsApp messages (${list.size})", fontWeight = FontWeight.SemiBold)
+            list.take(10).forEach { s ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f).clickable { s.lead_id?.let { vm.openLeadId = it } }) {
+                        Text("${fmtWhen(s.due_at)} · ${s.lead_name?.ifBlank { null } ?: fmtPhone(s.phone.orEmpty())}", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text(s.body, fontSize = 12.sp, color = Brand.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    TextButton(onClick = { vm.cancelWa(s.id) }) { Text("Cancel", color = Brand.muted) }
+                }
+            }
+            if (list.size > 10) Text("+ ${list.size - 10} more", fontSize = 12.sp, color = Brand.muted)
+        }
+    }
 }
 
 /** Outcome screen: optionally start a sequence for this lead when the outcome is saved. */
@@ -236,16 +395,107 @@ fun OutcomeSeqChips(vm: AppViewModel, selected: String?, onSelect: (String?) -> 
     LaunchedEffect(Unit) { if (vm.sequences == null) vm.loadSequences() }
     val list = vm.sequences.orEmpty()
     if (list.isEmpty()) return
-    Text("📨 Also start a WhatsApp sequence (optional)", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+    Row(verticalAlignment = Alignment.CenterVertically) { SeqIcon(18.dp); Spacer(Modifier.width(6.dp)); Text("Also start a WhatsApp sequence (optional)", fontWeight = FontWeight.SemiBold, fontSize = 14.sp) }
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         list.forEach { s -> FilterChip(selected = selected == s.id, onClick = { onSelect(if (selected == s.id) null else s.id) }, label = { Text(s.name) }) }
     }
 }
 
+// ───────────── Sequence details: stats + leads ─────────────
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+fun SequenceDetailScreen(vm: AppViewModel, id: String) {
+    BackHandler { vm.openSequenceId = null }
+    val scope = rememberCoroutineScope()
+    var data by remember(id) { mutableStateOf<SeqDetail?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var reload by remember { mutableStateOf(0) }
+    var filter by remember { mutableStateOf("active") }
+    val selected = remember { mutableStateListOf<String>() }
+    val seq = vm.sequences.orEmpty().firstOrNull { it.id == id }
+    LaunchedEffect(id, reload) { runCatching { Seqs.detail(id) }.onSuccess { data = it; error = null }.onFailure { error = Seqs.friendly(it) } }
+    fun act(ids: List<String>, action: String) = scope.launch {
+        runCatching { Seqs.setLeads(ids, action) }.onSuccess { n ->
+            vm.message = when (action) { "stop" -> "Removed $n from the sequence"; "pause" -> "Paused $n"; else -> "Resumed $n" }
+            selected.clear(); reload++; vm.loadSequences(); vm.loadSeqDue()
+        }.onFailure { vm.message = Seqs.friendly(it) }
+    }
+    Scaffold(topBar = {
+        TopAppBar(title = { Text(seq?.name ?: "WhatsApp sequence", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+            navigationIcon = { IconButton(onClick = { vm.openSequenceId = null }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+            actions = { if (seq != null && (seq.mine || (seq.company && vm.isManager))) TextButton(onClick = { vm.openSequenceEditor(seq) }) { Text("Edit") } })
+    }) { pad ->
+        val d = data
+        LazyColumn(Modifier.fillMaxSize().padding(pad), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            error?.let { item { Text(it, color = Brand.red) } }
+            if (d == null) { if (error == null) item { CircularProgressIndicator() }; return@LazyColumn }
+            item {
+                val st = d.stats
+                val tiles = listOf("On it now" to st.active, "Paused" to st.paused, "Finished" to st.done, "Stopped" to st.stopped,
+                    "Due today" to st.due_today, "Sent on time" to st.sent_on_time, "Sent late" to st.sent_late, "Not sent" to st.skipped, "Bought after" to st.bought)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), maxItemsInEachRow = 3) {
+                    tiles.forEach { (label, v) ->
+                        Column(Modifier.weight(1f).background(Color.White, RoundedCornerShape(10.dp)).padding(10.dp)) {
+                            Text("$v", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = if (label == "Bought after" && v > 0) Brand.green else Color(0xFF0F172A))
+                            Text(label, fontSize = 11.sp, color = Brand.muted)
+                        }
+                    }
+                }
+            }
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedButton(onClick = { vm.openSequenceId = null; vm.showSequences = false; vm.selectMode = true; vm.tab = Tab.Leads
+                        vm.message = "Tick leads, then tap the sequence icon" }) { Text("+ Add leads") }
+                    Spacer(Modifier.weight(1f))
+                    Text("${d.total} message${if (d.total == 1) "" else "s"}", fontSize = 13.sp, color = Brand.muted)
+                }
+            }
+            item {
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("active" to "On it", "paused" to "Paused", "done" to "Finished", "stopped" to "Stopped", "all" to "All").forEach { (k, l) ->
+                        val n = if (k == "all") d.leads.size else d.leads.count { it.status == k }
+                        FilterChip(selected = filter == k, onClick = { filter = k; selected.clear() }, label = { Text("$l ($n)") })
+                    }
+                }
+            }
+            if (selected.isNotEmpty()) item {
+                Row(Modifier.fillMaxWidth().background(Brand.light, RoundedCornerShape(10.dp)).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("${selected.size} selected", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { act(selected.toList(), "pause") }) { Text("Pause") }
+                    TextButton(onClick = { act(selected.toList(), "resume") }) { Text("Resume") }
+                    TextButton(onClick = { act(selected.toList(), "stop") }) { Text("Remove", color = Brand.red) }
+                }
+            }
+            val rows = d.leads.filter { filter == "all" || it.status == filter }
+            if (rows.isEmpty()) item { Text("Nobody here.", color = Brand.muted) }
+            items(rows, key = { it.id }) { r ->
+                val live = r.status == "active" || r.status == "paused"
+                Row(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(10.dp)).clickable { vm.openLeadId = r.lead_id }.padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    if (live) Checkbox(r.id in selected, { on -> if (on) selected.add(r.id) else selected.remove(r.id) })
+                    Column(Modifier.weight(1f)) {
+                        Text(r.name.ifBlank { fmtPhone(r.phone) } + if (r.bought) "  🎉" else "", fontWeight = FontWeight.SemiBold)
+                        Text(when (r.status) {
+                            "active" -> "Message ${r.next_pos ?: "–"} of ${d.total} · " + (r.next_due_at?.let { "next ${fmtWhen(it)}" } ?: "nothing planned")
+                            "paused" -> "Paused · ${r.sent_count} sent"
+                            "done" -> "Finished · ${r.sent_count} sent"
+                            else -> "${r.stop_reason ?: "Stopped"} · ${r.sent_count} sent"
+                        } + (if (!vm.isSolo && r.user_name != null) " · ${r.user_name}" else ""), fontSize = 12.sp, color = Brand.muted)
+                    }
+                    if (r.status == "active") TextButton(onClick = { act(listOf(r.id), "pause") }) { Text("Pause") }
+                    if (r.status == "paused") TextButton(onClick = { act(listOf(r.id), "resume") }) { Text("Resume") }
+                    if (live) TextButton(onClick = { act(listOf(r.id), "stop") }) { Text("Remove", color = Brand.muted) }
+                }
+            }
+        }
+    }
+}
+
 // ───────────── Editor ─────────────
 
-/** Editable copy of one message. */
-private class MsgDraft(m: SeqMessage) {
+/** Editable copy of one message (kept in the view model, so picking a file never loses the typing). */
+class MsgDraft(m: SeqMessage) {
     var anchor by mutableStateOf(m.anchor)
     var day by mutableStateOf(m.day_offset.toString())
     var time by mutableStateOf(runCatching { LocalTime.parse(m.send_time) }.getOrDefault(LocalTime.of(10, 0)))
@@ -255,48 +505,46 @@ private class MsgDraft(m: SeqMessage) {
     var mediaType by mutableStateOf(m.media_type)
     var mediaName by mutableStateOf(m.media_name)
     val key = java.util.UUID.randomUUID().toString()
+    fun toMessage(i: Int) = SeqMessage(position = i + 1, anchor = anchor, day_offset = day.toIntOrNull() ?: 0, send_time = time.toString(),
+        minutes_before = if (anchor == "event") minutes else null, body = body, media_path = mediaPath, media_type = mediaType, media_name = mediaName)
+}
+
+/** The whole sequence being edited. */
+class SeqDraft(seq: Sequence, val openedAt: Long) {
+    val seqId = seq.id
+    val original = seq
+    var name by mutableStateOf(seq.name)
+    var company by mutableStateOf(seq.id.isNotEmpty() && seq.company)
+    var outcomes by mutableStateOf(seq.start_outcomes.toSet())
+    val messages = mutableStateListOf<MsgDraft>().apply { addAll(seq.messages.ifEmpty { listOf(SeqMessage()) }.map { MsgDraft(it) }) }
+    fun toSequence() = original.copy(name = name, company = company, start_outcomes = outcomes.toList(), messages = messages.mapIndexed { i, m -> m.toMessage(i) })
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SequenceEditor(vm: AppViewModel, seq: Sequence) {
-    BackHandler { vm.editSequence = null }
+    BackHandler { vm.closeSequenceEditor() }
     val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
     val free = SeqLimits.free(ctx)
     val maxMsg = SeqLimits.maxMessages(ctx); val maxDay = SeqLimits.maxDay(ctx)
-    var name by remember { mutableStateOf(seq.name) }
-    var company by remember { mutableStateOf(seq.id.isNotEmpty() && seq.company) }
-    var outcomes by remember { mutableStateOf(seq.start_outcomes.toSet()) }
-    val msgs = remember { mutableStateListOf<MsgDraft>().apply { addAll(seq.messages.ifEmpty { listOf(SeqMessage()) }.map { MsgDraft(it) }) } }
+    val dr = vm.draftFor(seq)
+    val msgs = dr.messages
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
-    var attachFor by remember { mutableStateOf<MsgDraft?>(null) }
     var savedFor by remember { mutableStateOf<MsgDraft?>(null) }
     val canUpload = vm.isManager || vm.isSolo
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        val d = attachFor ?: return@rememberLauncherForActivityResult
-        val org = vm.membership?.org_id ?: return@rememberLauncherForActivityResult
-        if (uri == null) return@rememberLauncherForActivityResult
-        scope.launch {
-            vm.message = "Uploading the file…"
-            runCatching { Seqs.uploadMedia(ctx, org, uri) }
-                .onSuccess { (p, t, n) -> d.mediaPath = p; d.mediaType = t; d.mediaName = n; vm.message = "📎 $n attached" }
-                .onFailure { vm.message = Seqs.friendly(it) }
-        }
-    }
     Scaffold(topBar = {
         TopAppBar(title = { Text(if (seq.id.isEmpty()) "New WhatsApp sequence" else "Edit sequence") },
-            navigationIcon = { IconButton(onClick = { vm.editSequence = null }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } })
+            navigationIcon = { IconButton(onClick = { vm.closeSequenceEditor() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } })
     }) { pad ->
         Column(Modifier.fillMaxSize().padding(pad).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedTextField(name, { name = it }, label = { Text("Name, e.g. After webinar, Interested, New lead") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(dr.name, { dr.name = it }, label = { Text("Name, e.g. After webinar, Interested, New lead") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             if (seq.id.isEmpty() && vm.isManager && !vm.isSolo) Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("For the whole team", fontWeight = FontWeight.SemiBold)
-                    Text(if (company) "Everyone in the company can use it" else "Only you can use it", fontSize = 12.sp, color = Brand.muted)
+                    Text(if (dr.company) "Everyone in the company can use it" else "Only you can use it", fontSize = 12.sp, color = Brand.muted)
                 }
-                Switch(company, { company = it })
+                Switch(dr.company, { dr.company = it })
             }
             msgs.forEachIndexed { i, d ->
                 Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
@@ -325,16 +573,14 @@ fun SequenceEditor(vm: AppViewModel, seq: Sequence) {
                             else -> "$dayN day${if (dayN > 1) "s" else ""} after the lead joins · days off move to the next working day."
                         }, fontSize = 12.sp, color = Brand.muted)
                         if (d.anchor == "start" && dayN > maxDay) Text("Up to Day $maxDay" + if (free) " on the free plan — Closer OS Pro goes up to Day 365." else ".", fontSize = 12.sp, color = Brand.red)
-                        OutlinedTextField(d.body, { d.body = it }, label = { Text("Message") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
-                        Text("Fill-ins: {{leadName}} first name · {{repName}} your name · {{companyName}} · {{batchName}} / {{batchDate}} the event · {{city}}",
-                            fontSize = 11.sp, color = Brand.muted)
+                        MessageField(d.body, { d.body = it }, "Message")
                         if (d.mediaPath != null) Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("📎 ${d.mediaName ?: "File"}", fontSize = 13.sp, modifier = Modifier.weight(1f))
                             TextButton(onClick = { d.mediaPath = null; d.mediaType = null; d.mediaName = null }) { Text("Remove") }
                         }
                         Row {
                             if (vm.templates.isNotEmpty()) TextButton(onClick = { savedFor = d }) { Text("Use a saved message") }
-                            if (canUpload) TextButton(onClick = { attachFor = d; picker.launch("*/*") }) { Text("📎 Attach a file") }
+                            if (canUpload) TextButton(onClick = { pickFile(ctx, vm, "seq:${d.key}") }) { Text("📎 Attach a file") }
                         }
                     }
                 }
@@ -347,20 +593,19 @@ fun SequenceEditor(vm: AppViewModel, seq: Sequence) {
             else Text(if (free) "The free plan has up to $maxMsg messages per sequence. Closer OS Pro: up to 50." else "Up to 50 messages per sequence.",
                 fontSize = 13.sp, color = Brand.muted, modifier = if (free) Modifier.clickable { vm.showRemoveAds = true } else Modifier)
 
-            // Automatic start: saving one of these outcomes puts the lead on this sequence.
             Text("Start automatically when I save this outcome", fontWeight = FontWeight.SemiBold)
             if (free) {
                 Text("🔒 Closer OS Pro — e.g. save \"Interested\" and the lead goes on this sequence by itself.", fontSize = 13.sp, color = Brand.muted)
                 TextButton(onClick = { vm.showRemoveAds = true }) { Text("See Closer OS Pro") }
             } else FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 vm.outcomes.filter { it.is_active }.distinctBy { it.id }.forEach { o ->
-                    FilterChip(selected = o.id in outcomes, onClick = { outcomes = if (o.id in outcomes) outcomes - o.id else outcomes + o.id },
+                    FilterChip(selected = o.id in dr.outcomes, onClick = { dr.outcomes = if (o.id in dr.outcomes) dr.outcomes - o.id else dr.outcomes + o.id },
                         label = { Text(o.label + if (o.purpose == "reminder") " (reminder)" else "") })
                 }
             }
             Text("A lead stops getting messages when it is marked won, lost / not interested or Do not call — or when you tap Stop on the lead.", fontSize = 12.sp, color = Brand.muted)
             error?.let { Text(it, color = Brand.red) }
-            Button(enabled = !busy && name.isNotBlank(), modifier = Modifier.fillMaxWidth().height(52.dp), onClick = {
+            Button(enabled = !busy && dr.name.isNotBlank(), modifier = Modifier.fillMaxWidth().height(52.dp), onClick = {
                 val bad = msgs.indexOfFirst { it.body.isBlank() && it.mediaPath == null }
                 if (bad >= 0) { error = "Message ${bad + 1} is empty"; return@Button }
                 if (msgs.any { it.anchor == "start" && (it.day.toIntOrNull() ?: 0) > maxDay }) { error = "Days go up to $maxDay"; return@Button }
@@ -368,8 +613,8 @@ fun SequenceEditor(vm: AppViewModel, seq: Sequence) {
                 busy = true; error = null
                 val p = buildJsonObject {
                     if (seq.id.isNotEmpty()) put("id", seq.id)
-                    put("name", name.trim()); put("company", company)
-                    put("start_outcomes", if (free) JsonArray(emptyList()) else buildJsonArray { outcomes.forEach { add(JsonPrimitive(it)) } })
+                    put("name", dr.name.trim()); put("company", dr.company)
+                    put("start_outcomes", if (free) JsonArray(emptyList()) else buildJsonArray { dr.outcomes.forEach { add(JsonPrimitive(it)) } })
                     put("messages", buildJsonArray { msgs.forEach { d -> add(buildJsonObject {
                         put("anchor", d.anchor); put("day_offset", d.day.toIntOrNull() ?: 0); put("send_time", d.time.toString())
                         if (d.anchor == "event") put("minutes_before", d.minutes)

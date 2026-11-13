@@ -271,9 +271,9 @@ private suspend fun saveQuick(ctx: Context, info: AfterCall.Info, lead: Lead?, o
     com.closeros.app.data.LocalReports.recordOutcome(ctx, payload)   // my reports count it right away, even offline
     val sent = runCatching { Repo.logCall(payload) }
     if (sent.isFailure) {
-        val err = sent.exceptionOrNull()?.message.orEmpty()
+        val err = com.closeros.app.data.SafeError.reason(sent.exceptionOrNull())
         if (err.contains("next call time") || err.contains("Unknown outcome") || err.contains("Lead not found"))
-            return err.substringAfter("ERROR:").trim().ifEmpty { "Couldn't save — open the full form" }
+            return com.closeros.app.data.SafeError.forUser(sent.exceptionOrNull(), "Couldn't save — open the full form")
         store.addToOutbox(payload)   // no internet: sent automatically later
         com.closeros.app.data.LocalFollowUps.apply(ctx, payload)   // next call + its reminder set right now
     }

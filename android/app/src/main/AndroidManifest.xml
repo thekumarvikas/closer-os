@@ -42,6 +42,13 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- The sign-up confirmation link opened on the phone signs the person in (closeros://solo or closeros://app). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="closeros" android:host="${authHost}" />
+            </intent-filter>
         </activity>
         <activity
             android:name=".ui.AfterCallActivity"
@@ -65,6 +72,7 @@
         </receiver>
         <receiver android:name=".calls.FollowUpReceiver" android:exported="false" />
         <receiver android:name=".calls.CheckInReceiver" android:exported="false" />
+        <receiver android:name=".data.WaScheduledReceiver" android:exported="false" />
         <receiver android:name=".calls.BootReceiver" android:exported="false">
             <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter>
         </receiver>

@@ -214,7 +214,7 @@ fun HomeScreen(vm: AppViewModel) {
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ToolTile("📖", "Playbook", Modifier.weight(1f)) { vm.openPlaybook(null) }
-                ToolTile("📨", "Sequences", Modifier.weight(1f)) { vm.showSequences = true }
+                ToolTile("seq", "Sequences", Modifier.weight(1f)) { vm.showSequences = true }
                 ToolTile("📊", if (vm.isManager && !vm.isSolo) "Reports" else "My reports", Modifier.weight(1f)) { vm.showReports = true }
                 ToolTile("📈", "Lead work", Modifier.weight(1f)) { vm.require(com.closeros.app.data.Feature.REPORTS) { vm.showLeadWork = true } }
                 ToolTile("💡", "Sales insights", Modifier.weight(1f)) { vm.require(com.closeros.app.data.Feature.REPORTS) { vm.showRecipe = true } }
@@ -235,7 +235,8 @@ private fun HeroLink(text: String, modifier: Modifier, onClick: () -> Unit) {
 @Composable
 private fun ToolTile(icon: String, label: String, modifier: Modifier, onClick: () -> Unit) {
     Column(modifier.background(Color.White, RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(icon, fontSize = 20.sp); Text(label, fontSize = 12.sp, color = Color(0xFF334155))
+        if (icon == "seq") SeqIcon(24.dp) else Text(icon, fontSize = 20.sp)
+        Text(label, fontSize = 12.sp, color = Color(0xFF334155))
     }
 }
 

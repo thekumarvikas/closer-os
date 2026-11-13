@@ -37,6 +37,7 @@ import com.closeros.app.calls.Sim
 import com.closeros.app.data.Lead
 import com.closeros.app.ui.*
 import io.github.jan.supabase.auth.status.SessionStatus
+import io.github.jan.supabase.auth.handleDeeplinks
 
 class CloserApp : Application() {
     override fun onCreate() {
@@ -54,6 +55,9 @@ class MainActivity : ComponentActivity() {
     val pickRecordingsFolder = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()) { uri ->
         vm.onRecordingsFolderPicked(uri)
     }
+    /** Any file picked inside Closer OS (lead import, sequence / scheduled-message attachment) — owned by the activity so
+     *  the result is never lost, even if Android closed the app while the picker was open. */
+    val pickFile = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.GetContent()) { uri -> vm.onFilePicked(uri) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,6 +73,11 @@ class MainActivity : ComponentActivity() {
 
     /** Taps on follow-up notifications: open the lead, or start the call. */
     private fun handle(i: Intent?) {
+        // Email confirmation link tapped on this phone → signed in straight away.
+        if (i?.data?.scheme == "closeros") {
+            runCatching { com.closeros.app.data.Backend.client.handleDeeplinks(i) { vm.message = "✓ Email confirmed — you're signed in" } }
+            i.data = null
+        }
         i?.getStringExtra("call_lead")?.let {
             // From a follow-up reminder's Call button: close that reminder and call with the right purpose.
             i.getStringExtra("fu_id")?.let { fu -> androidx.core.app.NotificationManagerCompat.from(this).cancel(fu.hashCode()) }
@@ -76,7 +85,8 @@ class MainActivity : ComponentActivity() {
         i?.getStringExtra("open_lead")?.let { vm.openLeadId = it; i.removeExtra("open_lead") }
         // Hourly check-in notification: open the card, or "start calling" straight away.
         i?.getStringExtra("checkin")?.let { if (it == "go") vm.checkInGo() else vm.openCheckIn(); i.removeExtra("checkin") }
-        i?.getStringExtra("open_tab")?.let { if (it == "leads") { vm.tab = Tab.Leads; vm.reloadLeads() }; if (it == "sequences") { vm.showSequences = true; vm.loadSequences(); vm.loadSeqDue() }; i.removeExtra("open_tab") }
+        i?.getStringExtra("open_tab")?.let { if (it == "leads") { vm.tab = Tab.Leads; vm.reloadLeads() }; if (it == "sequences") { vm.showSequences = true; vm.loadSequences(); vm.loadSeqDue() }
+            if (it == "wa_due") vm.startSeqQueue(); i.removeExtra("open_tab") }
     }
 
     override fun onResume() {
@@ -133,11 +143,13 @@ fun Root(vm: AppViewModel) {
 
     // Back always closes the screen on top (inner screens with their own Back handling still go first).
     val secondary = vm.showWaToday || vm.showLeadWork || vm.showRecipe || vm.showPlaybook || vm.showFeedback || vm.showDialer || vm.showReports ||
-        vm.showLeaderboard || vm.showSequences || vm.editSequence != null || vm.openLeadId != null || vm.genericList != null || vm.openList != null || vm.showBatches || vm.todayFilter != null
+        vm.showLeaderboard || vm.showSequences || vm.editSequence != null || vm.openSequenceId != null || vm.showImport || vm.showContactsPick || vm.openLeadId != null || vm.genericList != null || vm.openList != null || vm.showBatches || vm.todayFilter != null
     androidx.activity.compose.BackHandler(enabled = secondary && vm.pending == null) { vm.closeTop() }
     WaChooseDialog(vm)
     EventPickerDialog(vm)
     SequencePickerDialog(vm)
+    AddMenuDialog(vm)
+    AddLeadDialog(vm)
     ProAskDialog(vm)
     UnlockDialog(vm)
     WaConfirmDialog(vm)
@@ -156,7 +168,9 @@ fun Root(vm: AppViewModel) {
             vm.checkIn != null -> vm.checkIn?.let { CheckInScreen(vm, it) }
             vm.showRemoveAds -> RemoveAdsScreen(vm)
             vm.waActive -> WaQueueScreen(vm)
-            vm.editSequence != null -> vm.editSequence?.let { s -> androidx.compose.runtime.key(s.id) { SequenceEditor(vm, s) } }
+            vm.editSequence != null -> vm.editSequence?.let { s -> SequenceEditor(vm, s) }
+            vm.showImport -> ImportScreen(vm)
+            vm.showContactsPick -> ContactsPickScreen(vm)
             vm.showPlaybook -> WithBanner { PlaybookScreen(vm) }
             vm.showFeedback -> FeedbackScreen(vm)
             vm.showDialer -> DialerScreen(vm)
@@ -167,6 +181,7 @@ fun Root(vm: AppViewModel) {
             vm.showWaToday -> WaTodayScreen(vm)
             vm.showReports -> WithBanner { ReportsScreen(vm) }
             vm.showLeaderboard -> LeaderboardScreen(vm)
+            vm.openSequenceId != null -> vm.openSequenceId?.let { SequenceDetailScreen(vm, it) }
             vm.showSequences -> WithBanner { SequencesScreen(vm) }
             vm.queueActive -> QueueScreen(vm)
             vm.openList != null -> BatchListScreen(vm)

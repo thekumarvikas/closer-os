@@ -40,7 +40,7 @@ val json = Json { ignoreUnknownKeys = true; explicitNulls = false; coerceInputVa
 object Backend {
     val client = createSupabaseClient(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_KEY) {
         defaultSerializer = KotlinXSerializer(json)
-        install(Auth)
+        install(Auth) { scheme = "closeros"; host = BuildConfig.AUTH_HOST }   // email links reopen the app signed in
         install(Postgrest)
         install(io.github.jan.supabase.storage.Storage)   // recordings + WhatsApp attachments / company files
     }
@@ -332,7 +332,7 @@ object Repo {
     /** Individual app: new login (email + password). Returns true when signed in straight away,
      *  false when the email must be confirmed first. */
     suspend fun signUp(name: String, email: String, password: String): Boolean {
-        Backend.auth.signUpWith(Email) {
+        Backend.auth.signUpWith(Email, redirectUrl = "closeros://${BuildConfig.AUTH_HOST}") {
             this.email = email.trim(); this.password = password
             data = buildJsonObject { put("full_name", name.trim()) }
         }
@@ -833,6 +833,14 @@ object Repo {
             profession?.takeIf { it.isNotBlank() }?.let { put("profession", it.trim()) }
             notes?.takeIf { it.isNotBlank() }?.let { put("notes", it.trim()) }
         }) { select() }.decodeSingle()
+
+    /** Moves a planned call to a new time (and note). */
+    suspend fun moveFollowUp(id: String, at: Instant, note: String?) {
+        Backend.client.from("follow_ups").update(buildJsonObject { put("due_at", at.toString()); note?.let { put("notes", it) } }) { filter { eq("id", id) } }
+    }
+    suspend fun cancelFollowUp(id: String) {
+        Backend.client.from("follow_ups").update(buildJsonObject { put("status", "cancelled") }) { filter { eq("id", id) } }
+    }
 
     /** Saves a call with its outcome (see log_call in the database). */
     suspend fun logCall(payload: JsonObject) {

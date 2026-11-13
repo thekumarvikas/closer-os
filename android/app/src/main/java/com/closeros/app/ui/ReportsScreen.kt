@@ -69,7 +69,7 @@ fun ReportsScreen(vm: AppViewModel) {
                         t.copy(rows = t.rows.map { r -> L.withMyActuals(ctx, r, from, to, zone, vm.outcomes) ?: r }) }
                     Rep(cr, or, fu, tg)
                 }
-            }.onSuccess { data = it; onPhone = true }.onFailure { error = it.message?.take(120) ?: "Couldn't work out the report" }
+            }.onSuccess { data = it; onPhone = true }.onFailure { error = com.closeros.app.data.SafeError.forUser(it, "Couldn't work out the report") }
             return@LaunchedEffect
         }
         onPhone = false
@@ -79,7 +79,7 @@ fun ReportsScreen(vm: AppViewModel) {
             val fu = runCatching { Repo.report("follow_up_report", m.org_id, a, b, users).jsonArray.map { it.jsonObject }.firstOrNull { it.i("g") == 1 } }.getOrNull()
             val tg = runCatching { Repo.targetsFor(m.org_id, from, to, users) }.getOrNull()
             Rep(cr, or, fu, tg)
-        }.onSuccess { data = it }.onFailure { error = it.message?.substringAfter("ERROR:")?.take(120) ?: "Couldn't load the report" }
+        }.onSuccess { data = it }.onFailure { error = com.closeros.app.data.SafeError.forUser(it, "Couldn't load the report") }
     }
     LaunchedEffect(from, to, who, leadScope) {
         status = null

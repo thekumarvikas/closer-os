@@ -14,6 +14,8 @@ enum class Feature(val title: String, val gives: String, val credits: Int = 0, v
     QUEUE("Calling queue", "the next 25 calls", credits = 25),
     WA_QUEUE("WhatsApp queue", "the next 15 messages", credits = 15),
     REPORTS("Reports & insights", "reports, Compare, Lead work and Sales insights for 24 hours", hours = 24),
+    /** Free plan: every import needs a short ad, up to 50 leads per file. */
+    IMPORT("Import leads", "this import (up to 50 leads)", credits = 1),
 }
 
 object Unlocks {

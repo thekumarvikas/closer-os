@@ -99,7 +99,7 @@ fun CompareScreen(vm: AppViewModel, users: List<String>?, whoLabel: String, onCl
             Repo.report("period_summary", m.org_id, a, b, users).jsonObject["total"]!!.jsonObject to
                 Repo.report("period_summary", m.org_id, c, d, users).jsonObject["total"]!!.jsonObject
         }.onSuccess { cur = it.first; prev = it.second }
-            .onFailure { error = if (!vm.online) "No internet — and no saved copy of this period yet." else it.message?.substringAfter("ERROR:")?.take(120) ?: "Couldn't load" }
+            .onFailure { error = if (!vm.online) "No internet — and no saved copy of this period yet." else com.closeros.app.data.SafeError.forUser(it, "Couldn't load") }
     }
     Column(Modifier.fillMaxSize().background(Brand.bg)) {
         Row(Modifier.fillMaxWidth().padding(8.dp, 8.dp, 8.dp, 0.dp), verticalAlignment = Alignment.CenterVertically) {

@@ -106,3 +106,4 @@ Everything from the original product prompt plus the owner's feedback, with stat
   report, today's focus (unlimited), outcomes v2 with next steps, quick picks 30 min–3 h, tag groups +
   facts, working calendar + monthly talk-time pace, recordings on call rows, Settings tab, Back fix
 - ✅ "New · waiting" timer on lead cards, best-time-now queue order, per-rep daily focus target, effort bar on cards (v0.10.1)
+- ✅ Add leads in the app (form with city, CSV/Excel import, phone contacts), schedule a call / a WhatsApp message from the lead page, sequence details page, tap-to-insert fill-ins, safe error messages (v0.22.0)

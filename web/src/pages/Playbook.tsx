@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { MessageBox } from '../components/FillIns'
 import { BookOpen, Check, ExternalLink, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
@@ -158,7 +159,7 @@ function EditItem({ item, isManager, onClose, sections }: { item: Partial<Item>;
         <div className="sm:col-span-2">
           <Field label={f.kind === 'link' ? 'Message to send with the link (optional)' : f.kind === 'objection' ? 'Answer' : 'Text'}
             hint={`Variables: ${variables.join(' ')}`}>
-            <textarea className="input min-h-[160px]" value={f.body ?? ''} onChange={e => setF({ ...f, body: e.target.value })} />
+            <MessageBox className="min-h-[160px]" value={f.body ?? ''} onChange={v => setF({ ...f, body: v })} />
           </Field>
         </div>
       </div>

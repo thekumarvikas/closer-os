@@ -81,13 +81,15 @@ fun LoginScreen(vm: AppViewModel) {
     val ctx = LocalContext.current
     // Individual app: new users create their account right here; others sign in.
     var creating by remember { mutableStateOf(BuildConfig.SOLO) }
+    var info by remember { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize().background(Brand.primary).verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.Center) {
         Text("Closer OS", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold)
         Text("Make more calls. Close more sales.", color = Color.White.copy(alpha = .8f))
         Spacer(Modifier.height(32.dp))
         Card(shape = RoundedCornerShape(16.dp)) {
-            if (creating) Column(Modifier.padding(20.dp)) { SignUpForm(vm) { creating = false } }
+            if (creating) Column(Modifier.padding(20.dp)) { SignUpForm(vm) { e, note -> creating = false; if (e != null) email = e; info = note } }
             else Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                info?.let { Text(it, fontSize = 14.sp, color = Brand.primaryDark, modifier = Modifier.background(Brand.light, RoundedCornerShape(8.dp)).padding(10.dp)) }
                 GoogleButton(vm)
                 OutlinedTextField(email, { email = it }, label = { Text("Email") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
@@ -102,7 +104,7 @@ fun LoginScreen(vm: AppViewModel) {
                     if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp) else Text("Sign in", fontSize = 16.sp)
                 }
                 TextButton(enabled = email.contains('@'), onClick = { vm.resetPassword(email) }, modifier = Modifier.fillMaxWidth()) { Text("Forgot password? Type your email above, then tap here") }
-                if (BuildConfig.SOLO) TextButton(onClick = { creating = true }, modifier = Modifier.fillMaxWidth()) { Text("New here? Create a free account") }
+                if (BuildConfig.SOLO) TextButton(onClick = { creating = true; info = null }, modifier = Modifier.fillMaxWidth()) { Text("New here? Create a free account") }
                 else TextButton(onClick = { safeStart(ctx, Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.WEB_URL))) }, modifier = Modifier.fillMaxWidth()) {
                     Text("No account? Ask your manager to invite you, then sign up on the website")
                 }
@@ -330,7 +332,7 @@ fun ProfileScreen(vm: AppViewModel) {
             listOf(-1 to "Off", 9 to "9 AM", 10 to "10 AM", 11 to "11 AM", 12 to "12 PM").forEach { (h, l) ->
                 FilterChip(selected = sh == h, onClick = { com.closeros.app.data.SeqAlerts.setHour(ctx, h); sh = h }, label = { Text(l) }) }
         }
-        TextButton(onClick = { vm.showSequences = true }) { Text("📨 Open WhatsApp sequences") }
+        TextButton(onClick = { vm.showSequences = true }) { SeqIcon(18.dp); Spacer(Modifier.width(6.dp)); Text("Open WhatsApp sequences") }
         HorizontalDivider()
         Text("After-call pop-up", fontWeight = FontWeight.SemiBold)
         Text("A card over any app when a call ends, to save the outcome straight away", color = Brand.muted, fontSize = 14.sp)

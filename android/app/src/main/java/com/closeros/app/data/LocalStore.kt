@@ -8,6 +8,8 @@ import kotlinx.serialization.json.JsonObject
 /** Small things kept on the phone: the call waiting for its outcome, unsent outcomes, sync time. */
 class LocalStore(ctx: Context) {
     private val p = ctx.getSharedPreferences("closeros", Context.MODE_PRIVATE)
+    /** Raw preferences (small app state such as a saved draft). */
+    val prefs get() = p
     private val db = LocalDb.get(ctx)
 
     /** A call the rep started from Closer OS; its outcome form must be filled before the next call. */

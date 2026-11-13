@@ -95,7 +95,8 @@ object CallSync {
         runCatching { com.closeros.app.data.LocalDb.get(ctx).pruneMarks() }
         // 4) Announcements from management + new leads assigned to me.
         runCatching { TeamAlerts.check(ctx, orgId) }
-        runCatching { com.closeros.app.data.SeqAlerts.check(ctx, orgId) }   // "📨 N WhatsApp messages due today" (once a day)
+        runCatching { com.closeros.app.data.SeqAlerts.check(ctx, orgId) }
+        runCatching { com.closeros.app.data.WaSchedAlarms.scheduleAll(ctx, com.closeros.app.data.Seqs.myScheduled(orgId)) }   // scheduled WhatsApp alarms
         runCatching { CheckIn.schedule(ctx) }   // hourly check-ins (settings may have changed)
         // 5) Refresh follow-up reminders.
         runCatching { FollowUpAlarms.scheduleAll(ctx, Repo.followUps(orgId)) }
@@ -137,7 +138,7 @@ object CallSync {
     suspend fun checkRecordings(ctx: Context, orgId: String): RecordingSync.Result {
         val store = LocalStore(ctx)
         val r = runCatching { RecordingSync.run(ctx, orgId) }.getOrElse {
-            com.closeros.app.data.AppLog.error(ctx, "recordings", it); RecordingSync.Result(error = it.message ?: "Recording check failed") }
+            com.closeros.app.data.AppLog.error(ctx, "recordings", it); RecordingSync.Result(error = com.closeros.app.data.SafeError.reason(it).ifBlank { "Recording check failed" }) }
         r.error?.takeIf { it.startsWith("Upload refused") || it.contains("Exception") }?.let { com.closeros.app.data.AppLog.error(ctx, "recording upload", null, message = it) }
         store.lastRecordingCheck = "${java.time.LocalTime.now().withNano(0)} · ${r.filesFound} files · ${r.matched}/${r.callsChecked} calls matched · ${r.uploaded} uploaded" +
             (r.error?.let { " · $it" } ?: "")

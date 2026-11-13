@@ -94,6 +94,7 @@ fun FollowUpsTabs(vm: AppViewModel) {
                 colors = if (k == "overdue" && overdue.isNotEmpty()) FilterChipDefaults.filterChipColors(labelColor = Brand.red) else FilterChipDefaults.filterChipColors()) }
         }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            item { ScheduledWaList(vm) }   // 💬 WhatsApp messages I scheduled for leads
             if (tab in setOf("overdue", "today") && shown.isNotEmpty()) item {
                 Button(onClick = { vm.startFollowUpQueue() }, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Default.Call, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Call due follow-ups in a queue")

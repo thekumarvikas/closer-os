@@ -12,13 +12,16 @@ android {
         applicationId = "com.closeros.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 77
-        versionName = "0.21.2"
+        versionCode = 78
+        versionName = "0.22.0"
         // Public values: the publishable key is meant to be in apps; data is protected by database rules.
         buildConfigField("String", "SUPABASE_URL", "\"https://tdbqgoxxxfkfttdznzhb.supabase.co\"")
         buildConfigField("String", "SUPABASE_KEY", "\"sb_publishable_aXH8Wr7Lq1YeOWxhvxEdGQ_ePS1GYTY\"")
         buildConfigField("String", "WEB_URL", "\"https://closer-os-liard.vercel.app\"")
         // "Continue with Google": the WEB OAuth client id from Google Cloud (public). Empty = button hidden.
+        // Email-confirmation links come back to the app as closeros://<authHost> (each app its own host).
+        manifestPlaceholders["authHost"] = "app"
+        buildConfigField("String", "AUTH_HOST", "\"app\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${project.findProperty("googleWebClientId") ?: ""}\"")
     }
     // full   = everything, for the Play Store (installs from Play are never blocked).
@@ -38,6 +41,8 @@ android {
             buildConfigField("boolean", "WA_TRACKING", if (sideload) "false" else "true"); buildConfigField("boolean", "SOLO", "true")
             // Real AdMob ids only in the Play Store build; test APKs (-Psideload) show Google's test ads
             // (tapping real ads on our own phones could get the AdMob account suspended).
+            manifestPlaceholders["authHost"] = "solo"
+            buildConfigField("String", "AUTH_HOST", "\"solo\"")
             manifestPlaceholders["admobAppId"] = if (sideload) "ca-app-pub-3940256099942544~3347511713" else "ca-app-pub-6664812467343206~1199765432"
             buildConfigField("String", "AD_BANNER", if (sideload) "\"ca-app-pub-3940256099942544/9214589741\"" else "\"ca-app-pub-6664812467343206/2772526542\"")
             buildConfigField("String", "AD_REWARDED", if (sideload) "\"ca-app-pub-3940256099942544/5224354917\"" else "\"ca-app-pub-6664812467343206/3558994602\"")

@@ -183,7 +183,7 @@ intelligence → Play Store launch.
   website form), field matching from the last payload, last 25 events.
 - Not yet: direct Facebook. (IndiaMART + new-lead alerts done in v0.9.1, see below.)
 
-## Android app (`android/`) — v0.21.0
+## Android app (`android/`) — v0.22.0
 - Kotlin + Compose + supabase-kt 3.0.3 (Kotlin 2.1.0, Ktor okhttp 3.0.2), WorkManager. Same
   test signing key as android-poc (keystore/dev-test.jks). APKs → downloads/CloserOS-<ver>.apk.
 - Screens: Login (email/password; sign-up happens on the web), Permissions, Home (today's stats
@@ -1389,7 +1389,7 @@ intelligence → Play Store launch.
 - Still open: SMTP (Resend + domain), Google OAuth consent Branding + publish,
   12 real testers, owner's list of app changes (pending).
 
-## Owner's app change list (Nov 13 2026; NOT built — wait for "go")
+## Owner's app change list — BUILT in v0.22.0 (Nov 13 2026, migrations 0072–0073)
 1. Sign-up → app switches to Sign in with email prefilled + "confirm the link, then sign in"; confirmation link
    opened on the phone signs in directly (closeros:// redirect).
 2. "+ Add lead" in the app: one lead (form) + import CSV/Excel (column matching, duplicates → Repeated, optional event)
@@ -1412,3 +1412,17 @@ intelligence → Play Store launch.
 9. BUG/PRIVACY: after-call card showed the raw server error incl. the user's login token (AfterCallCard saveQuick returns
    err.substringAfter("ERROR:") — supabase-kt exception text includes headers). Show friendly messages everywhere, log
    details without tokens. Owner's phone had both apps installed (company 0.18.2 + solo) → two pop-ups per call.
+- v0.22.0 build notes: migration 0072 add_lead(org, p) (any member, assigned to self, existing number → {existing}), import_my_leads
+  (org, rows, batch, source; any member; duplicates not added; joins event as repeat), wa_scheduled table + schedule_wa / wa_scheduled_mark /
+  my_wa_scheduled / lead_wa_scheduled, my_sequence_due now also returns kind 'scheduled' items, sequence_detail(seq) (stats + leads; reps see
+  their own enrollments, managers all), set_sequence_leads(ids, action). 0073: triggers scrub JWTs/keys from app_errors + device_status
+  (68 old rows cleaned). App: data/SafeError.kt (forUser/reason/clean — use it for EVERY error shown or logged), data/LeadImport.kt (CSV/TSV +
+  minimal .xlsx reader, LeadFields.guess, contacts), ui/AddLeadScreens.kt (AddMenuDialog, AddLeadDialog, ImportScreen, ContactsPickScreen),
+  Feature.IMPORT (vm.require(always = true) → ad every import; importLimit 50 when ads are on), MainActivity.pickFile (GetContent →
+  vm.onFilePicked; vm.filePickFor in prefs "pick": import | seq:<msgKey> | wa), SeqDraft/MsgDraft held in the VM (vm.draftFor, backupSeqDraft →
+  prefs seq_draft, restoreSeqDraft after loadOrg), MessageField + FILL_INS (sequence editor, schedule WA, Playbook), SeqIcon
+  (res/drawable/ic_wa_sequence.xml), SequenceDetailScreen (vm.openSequenceId), lead page LeadSequencesCard = 📞 Schedule a call (follow_ups
+  insert/move/cancel) + 💬 Schedule WhatsApp (WaSchedAlarms exact alarm → WaScheduledReceiver notification → open_tab wa_due → queue) +
+  sequences; Follow-ups tab ScheduledWaList. Sign-up: redirectUrl closeros://<AUTH_HOST> (solo / app; manifest placeholder authHost),
+  MainActivity handles closeros:// via handleDeeplinks; SignUpForm → sign-in with email prefilled. Dashboard: components/FillIns.tsx
+  MessageBox (templates, sequences, playbook), Sequences.tsx SequenceDetail modal (click a sequence name).

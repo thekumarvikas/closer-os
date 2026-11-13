@@ -140,7 +140,7 @@ fun DeleteAccountButton(vm: AppViewModel) {
 
 /** Individual app: create a login on the phone (name, email, password). */
 @Composable
-fun SignUpForm(vm: AppViewModel, onSignIn: () -> Unit) {
+fun SignUpForm(vm: AppViewModel, onSignIn: (email: String?, note: String?) -> Unit) {
     val ctx = LocalContext.current
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -157,14 +157,16 @@ fun SignUpForm(vm: AppViewModel, onSignIn: () -> Unit) {
             visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
         note?.let { Text(it, fontSize = 14.sp, color = if (it.startsWith("✉")) Brand.primary else Brand.red) }
         Button(enabled = !busy && name.isNotBlank() && email.contains('@') && password.length >= 6, modifier = Modifier.fillMaxWidth().height(50.dp), onClick = {
-            busy = true; note = null; vm.signUp(name, email, password) { busy = false; note = it }
+            busy = true; note = null
+            // Confirmation email sent → straight to Sign in with the email filled in.
+            vm.signUp(name, email, password) { busy = false; if (it?.startsWith("✉") == true) onSignIn(email.trim(), it) else note = it }
         }) { if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp) else Text("Create account", fontSize = 16.sp) }
         Text("By creating an account you agree to the Terms and the Privacy policy.", fontSize = 12.sp, color = Brand.muted)
         Row {
             TextButton(onClick = { open(ctx, "/terms") }) { Text("Terms", fontSize = 12.sp) }
             TextButton(onClick = { open(ctx, "/privacy") }) { Text("Privacy policy", fontSize = 12.sp) }
         }
-        TextButton(onClick = onSignIn, modifier = Modifier.fillMaxWidth()) { Text("Already have an account? Sign in") }
+        TextButton(onClick = { onSignIn(null, null) }, modifier = Modifier.fillMaxWidth()) { Text("Already have an account? Sign in") }
     }
 }
 

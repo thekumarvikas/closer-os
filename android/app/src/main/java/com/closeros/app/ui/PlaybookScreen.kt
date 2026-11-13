@@ -125,8 +125,8 @@ private fun SuggestDialog(vm: AppViewModel, existing: PlaybookItem?, onClose: ()
                     kinds.forEach { (k, l) -> FilterChip(selected = kind == k, onClick = { kind = k }, label = { Text(l) }) }
                 }
                 OutlinedTextField(title, { title = it }, label = { Text(if (kind == "objection") "What the lead says" else "Title") }, singleLine = true)
-                OutlinedTextField(body, { body = it }, label = { Text(if (kind == "objection") "How to answer" else "Text") }, minLines = 3,
-                    trailingIcon = { VoiceButton { s -> body = if (body.isBlank()) s else "$body $s" } })
+                MessageField(body, { body = it }, if (kind == "objection") "How to answer" else "Text",
+                    trailing = { VoiceButton { s -> body = if (body.isBlank()) s else "$body $s" } })
                 if (kind == "link" || kind == "doc") OutlinedTextField(url, { url = it }, label = { Text("Link (https://…)") }, singleLine = true)
                 if (!direct) Text("Your manager approves it before the team sees it.", fontSize = 12.sp, color = Brand.muted)
                 if (direct && existing != null) TextButton(onClick = {
@@ -143,7 +143,7 @@ private fun SuggestDialog(vm: AppViewModel, existing: PlaybookItem?, onClose: ()
                         if (direct) Repo.savePlaybook(m.org_id, existing?.id, kind, title.trim(), body.trim(), url.trim().ifBlank { null })
                         else Repo.suggestPlaybook(m.org_id, kind, title.trim(), body.trim(), url.trim().ifBlank { null })
                     }.onSuccess { vm.message = if (direct) "Saved ✓" else "Sent to your manager for approval"; vm.loadPlaybook(); onClose() }
-                        .onFailure { vm.message = "Couldn't save: ${it.message?.take(60)}" }
+                        .onFailure { vm.message = com.closeros.app.data.SafeError.forUser(it, "Couldn't save") }
                 }
             }) { Text(if (direct) "Save" else "Send") }
         },

@@ -128,7 +128,7 @@ object RecordingSync {
         val mapped = LocalRecordings.known(ctx)
         // Calls uploaded by older versions: also remember their phone file (no upload), so they play from the phone.
         val todo = calls.filter { it.id !in done || it.id !in mapped }
-        val files = try { listFiles(ctx, tree, since - 86_400_000L).toMutableList() } catch (e: Exception) { return Result(error = e.message) }
+        val files = try { listFiles(ctx, tree, since - 86_400_000L).toMutableList() } catch (e: Exception) { return Result(error = com.closeros.app.data.SafeError.reason(e)) }
         var matched = 0; var uploaded = 0; var lastError: String? = null
         for (c in todo) {
             val last10 = c.phone.filter { it.isDigit() }.takeLast(10)
@@ -151,7 +151,7 @@ object RecordingSync {
                 val size = streamUpload(ctx, best, path)
                 Backend.client.postgrest.rpc("set_call_recording", buildJsonObject { put("p_call", c.id); put("p_path", path); put("p_size", size) })
             }.onSuccess { store.markRecordingUploaded(c.id); files.remove(best); uploaded++ }
-             .onFailure { lastError = (it.message ?: it.toString()).take(200) }
+             .onFailure { lastError = com.closeros.app.data.SafeError.reason(it).ifBlank { "Upload failed" }.take(200) }
         }
         store.recordingsUploaded += uploaded
         // Nothing matched although there are files and calls: note what the names and times look like (for support).

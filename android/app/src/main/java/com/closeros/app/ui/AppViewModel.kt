@@ -194,9 +194,11 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Feature waiting for the rep's choice (ad / remove ads / not now) and what to do once open. */
     var gate by mutableStateOf<Pair<com.closeros.app.data.Feature, () -> Unit>?>(null)
     var showRemoveAds by mutableStateOf(false)
-    fun require(f: com.closeros.app.data.Feature, then: () -> Unit) {
+    fun require(f: com.closeros.app.data.Feature, always: Boolean = false, then: () -> Unit) {
         val U = com.closeros.app.data.Unlocks
         if (U.open(ctx, f)) { then(); return }
+        // Some features ask for an ad every single time (free plan imports): no free pass, no 10-minute skip.
+        if (always) { if (!com.closeros.app.data.Net.isOnline) { message = "This needs the internet"; return }; gate = f to then; return }
         if (U.takeFreeToday(ctx)) { U.grant(ctx, f); message = "Today's first unlock is free 🎁"; then(); return }
         // No internet (no ad possible) or an ad was asked less than 10 minutes ago: just open it.
         if (!com.closeros.app.data.Net.isOnline || U.askedRecently(ctx)) { U.grant(ctx, f); then(); return }
@@ -213,7 +215,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         val m = membership ?: return@launch
         // Individual app: every event of the account (also empty ones); company: webinars with leads for me.
         batches = runCatching { (if (isSolo) Repo.myEvents(m.org_id) else Repo.myBatches(m.org_id)).also { save("batches", it) } }
-            .getOrElse { e -> cached<List<BatchSummary>>("batches") ?: run { if (!quiet) message = "Couldn't load webinars: ${e.message}"; emptyList() } }
+            .getOrElse { e -> cached<List<BatchSummary>>("batches") ?: run { if (!quiet) message = com.closeros.app.data.SafeError.forUser(e, "Couldn't load the webinars"); emptyList() } }
     }
 
     fun openBatchList(b: BatchSummary, purpose: String) { openList = b to purpose; loadList() }
@@ -250,7 +252,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         runCatching { Repo.batchCallList(b.id, purpose, everyone).also { save(key, it) } }
             .recoverCatching { e -> cached<com.closeros.app.data.BatchList>(key)?.also { message = "No internet — showing the list saved on this phone" } ?: throw e }
             .onSuccess { r -> listRows = r.leads; rowCategory = r.leads.associate { it.id to it.category_id } }
-            .onFailure { message = "Couldn't load the list: ${it.message}"; listRows = emptyList() }
+            .onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't load the list"); listRows = emptyList() }
     }
 
     /** Call the filtered, sorted list one after another; every call is tagged with this webinar. */
@@ -332,11 +334,12 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
                 if (!lite) { refreshHome(); reloadLeads(); CallSync.schedule(ctx); CallSync.syncNow(ctx); com.closeros.app.calls.CheckIn.schedule(ctx) }
             }
         }.onFailure {
-            if (membership == null) { message = "Couldn't load your company: ${it.message}"; com.closeros.app.data.AppLog.error(ctx, "load company", it) }
+            if (membership == null) { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't load your company — check your internet"); com.closeros.app.data.AppLog.error(ctx, "load company", it) }
             else if (com.closeros.app.data.Net.isOnline) message = "Couldn't refresh — showing saved data"
         }
         launch { com.closeros.app.data.AppLog.flush(ctx) }
         loadingOrg = false
+        if (!lite && membership != null) restoreSeqDraft()   // Android closed the app while a file was being picked
     }
 
     fun refreshHome() = viewModelScope.launch {
@@ -518,7 +521,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         runCatching { Repo.createLead(m.org_id, name, phone, profession, notes) }
             .also { addingLead = false }
             .onSuccess { message = "Lead added"; onDone(); loadHistory(); reloadLeads(); CallSync.syncNow(ctx) }
-            .onFailure { message = if (it.message?.contains("leads_org_phone_uq") == true) "This number is already a lead" else "Couldn't add the lead: ${it.message?.take(80)}" }
+            .onFailure { message = if (it.message?.contains("leads_org_phone_uq") == true) "This number is already a lead" else com.closeros.app.data.SafeError.forUser(it, "Couldn't add the lead") }
     }
 
     /** Calls tab "Select": call or WhatsApp the chosen numbers in a queue. Numbers not in the lead list
@@ -590,7 +593,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun signUp(name: String, email: String, password: String, onDone: (String?) -> Unit) = viewModelScope.launch {
         runCatching { Repo.signUp(name, email, password) }.onSuccess { signedIn ->
             if (signedIn) { com.closeros.app.calls.DeviceGuard.claim(ctx); onDone(null) }
-            else onDone("✉ Almost done — open the email we sent to $email, tap the link, then sign in here.")
+            else onDone("✉ We sent a confirmation link to ${email.trim()}. Tap it on this phone and you're signed in — or tap it anywhere, then sign in here.")
         }.onFailure {
             val m = it.message.orEmpty()
             onDone(when {
@@ -608,7 +611,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
             runCatching { Backend.auth.signOut(io.github.jan.supabase.auth.SignOutScope.LOCAL) }
             FollowUpAlarms.scheduleAll(ctx, emptyList()); store.clear(); cache.clearCache(); leads.clear(); pending = null; needsSetup = true
             membership = null; message = "Your account and all its data were deleted"
-        }.onFailure { onError(it.message?.substringAfter("ERROR:")?.substringBefore("\n")?.substringAfter(":")?.trim()?.take(160) ?: "Couldn't delete — check your internet") }
+        }.onFailure { onError(com.closeros.app.data.SafeError.forUser(it, "Couldn't delete — check your internet")) }
     }
 
     fun signInWithGoogle(activity: android.app.Activity, onError: (String) -> Unit) = viewModelScope.launch {
@@ -762,7 +765,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         val seq = waSeqItems?.getOrNull(waPos)
         if (seq != null) {
             // Sequence message: the server counts it and moves the lead to its next message.
-            runCatching { com.closeros.app.data.Seqs.mark(seq.id, true) }.onFailure { message = com.closeros.app.data.Seqs.friendly(it) + " — not marked yet"; return@launch }
+            runCatching { if (seq.kind == "scheduled") com.closeros.app.data.Seqs.markScheduled(seq.id, true) else com.closeros.app.data.Seqs.mark(seq.id, true) }.onFailure { message = com.closeros.app.data.Seqs.friendly(it) + " — not marked yet"; return@launch }
             waCanUndo = false
         } else {
             waLastId = Repo.logWa(m.org_id, l.id, l.phone, waTemplate?.id, waTemplate?.name, "queue")
@@ -810,12 +813,12 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun newSequence() {
         if (mySequenceCount() >= com.closeros.app.data.SeqLimits.maxSequences(ctx)) {
             proAsk = "The free plan has ${com.closeros.app.data.SeqLimits.maxSequences(ctx)} WhatsApp sequences. Get Closer OS Pro for unlimited sequences with up to 50 messages each."; return }
-        editSequence = com.closeros.app.data.Sequence(messages = listOf(com.closeros.app.data.SeqMessage()))
+        openSequenceEditor(com.closeros.app.data.Sequence(messages = listOf(com.closeros.app.data.SeqMessage())))
     }
     fun saveSequence(p: JsonObject, done: (String?) -> Unit) = viewModelScope.launch {
         val m = membership ?: return@launch done("Still loading — try again")
         runCatching { com.closeros.app.data.Seqs.save(m.org_id, p) }
-            .onSuccess { editSequence = null; message = "Saved ✓"; loadSequences(); loadSeqDue(); done(null) }
+            .onSuccess { closeSequenceEditor(); message = "Saved ✓"; loadSequences(); loadSeqDue(); done(null) }
             .onFailure { done(com.closeros.app.data.Seqs.friendly(it)) }
     }
     fun archiveSequence(id: String) = viewModelScope.launch {
@@ -826,7 +829,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         runCatching { com.closeros.app.data.Seqs.start(seq.id, pick.leadIds, pick.batchId, how) }
             .onSuccess { (ok, skip) ->
                 seqPick = null
-                message = (if (ok > 0) "📨 ${seq.name} started for $ok lead${if (ok == 1) "" else "s"}" else "Nobody new was added") +
+                message = (if (ok > 0) "✓ ${seq.name} started for $ok lead${if (ok == 1) "" else "s"}" else "Nobody new was added") +
                     (if (skip > 0) " · $skip already on it or Do not call" else "")
                 leadRefresh++; loadSequences(); loadSeqDue()
             }.onFailure { message = com.closeros.app.data.Seqs.friendly(it) }
@@ -855,21 +858,162 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         seqPick = SeqPick(ids, "${ids.size} leads in ${e.name}", e.id)
     }
 
-    /** "⏰ Remind me": a reminder with a note, without a call. */
-    fun addReminder(lead: Lead, at: java.time.Instant, note: String, done: (Boolean) -> Unit) = viewModelScope.launch {
+    // ───── Schedule a call / a WhatsApp message (lead page) ─────
+    /** Schedules (or moves) my next call with this lead. */
+    fun scheduleCall(lead: Lead, at: java.time.Instant, note: String, done: (Boolean) -> Unit) = viewModelScope.launch {
         val m = membership ?: return@launch done(false)
+        val existing = followUps.firstOrNull { it.lead_id == lead.id }
         runCatching {
-            com.closeros.app.data.Backend.client.from("follow_ups").insert(kotlinx.serialization.json.buildJsonObject {
+            if (existing != null) Repo.moveFollowUp(existing.id, at, note.ifBlank { null })
+            else com.closeros.app.data.Backend.client.from("follow_ups").insert(kotlinx.serialization.json.buildJsonObject {
                 put("org_id", m.org_id); put("lead_id", lead.id); put("assigned_to", com.closeros.app.data.Backend.uid)
-                put("due_at", at.toString()); put("reason", "Reminder"); if (note.isNotBlank()) put("notes", note.trim())
-                put("created_by", com.closeros.app.data.Backend.uid); put("purpose", "sales")
+                put("due_at", at.toString()); put("reason", "Scheduled call"); if (note.isNotBlank()) put("notes", note.trim())
+                put("created_by", com.closeros.app.data.Backend.uid); put("purpose", com.closeros.app.data.CallPurpose.guess(lead, followUps).purpose)
             })
         }.onSuccess {
-            message = "⏰ Reminder set"; done(true)
+            message = "📞 Call scheduled"; done(true)
             runCatching { followUps = Repo.followUps(m.org_id).also { save("followUps", it) }; FollowUpAlarms.scheduleAll(ctx, followUps) }
-            leadRefresh++
-        }.onFailure { message = com.closeros.app.data.Seqs.friendly(it); done(false) }
+            leadRefresh++; reloadLeads()
+        }.onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't schedule the call"); done(false) }
     }
+    fun cancelScheduledCall(lead: Lead) = viewModelScope.launch {
+        val m = membership ?: return@launch
+        val f = followUps.firstOrNull { it.lead_id == lead.id } ?: run { message = "No call planned"; return@launch }
+        runCatching { Repo.cancelFollowUp(f.id) }.onSuccess {
+            FollowUpAlarms.cancelForLead(ctx, lead.id, followUps); message = "Planned call cancelled"
+            runCatching { followUps = Repo.followUps(m.org_id).also { save("followUps", it) } }
+            leadRefresh++; reloadLeads()
+        }.onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't cancel") }
+    }
+    var waScheduled by mutableStateOf<List<com.closeros.app.data.WaScheduled>>(emptyList())
+    fun loadWaScheduled() = viewModelScope.launch {
+        val m = membership ?: return@launch
+        runCatching { com.closeros.app.data.Seqs.myScheduled(m.org_id) }.onSuccess { waScheduled = it; com.closeros.app.data.WaSchedAlarms.scheduleAll(ctx, it) }
+    }
+    fun scheduleWa(lead: Lead, at: java.time.Instant, body: String, media: Triple<String, String, String>?, id: String?, done: (Boolean) -> Unit) = viewModelScope.launch {
+        runCatching { com.closeros.app.data.Seqs.scheduleWa(lead.id, at, body, media, id) }.onSuccess { newId ->
+            com.closeros.app.data.WaSchedAlarms.schedule(ctx, com.closeros.app.data.WaScheduled(newId, lead.id, lead.name, lead.phone, at.toString(), body))
+            message = "💬 WhatsApp message scheduled"; done(true); leadRefresh++; loadWaScheduled(); loadSeqDue()
+        }.onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't schedule the message"); done(false) }
+    }
+    fun cancelWa(id: String) = viewModelScope.launch {
+        runCatching { com.closeros.app.data.Seqs.markScheduled(id, false) }.onSuccess {
+            com.closeros.app.data.WaSchedAlarms.cancel(ctx, id); message = "Scheduled message cancelled"; leadRefresh++; loadWaScheduled(); loadSeqDue()
+        }.onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't cancel") }
+    }
+
+    // ───── Add leads in the app: one lead, a file, or phone contacts ─────
+    var showAddLead by mutableStateOf(false)
+    var showAddMenu by mutableStateOf(false)
+    var showImport by mutableStateOf(false)
+    var showContactsPick by mutableStateOf(false)
+    var importData by mutableStateOf<com.closeros.app.data.SheetData?>(null)
+    var importMap by mutableStateOf<List<String>>(emptyList())
+    var importBusy by mutableStateOf<String?>(null)
+    var importResult by mutableStateOf<com.closeros.app.data.ImportResult?>(null)
+    /** Free individual plan: 50 leads per file. */
+    val importLimit get() = if (com.closeros.app.data.Unlocks.adsOn(ctx)) 50 else 100_000
+    /** What the next picked file is for: "import", "seq:<message key>" or "wa". */
+    var filePickFor: String?
+        get() = ctx.getSharedPreferences("pick", android.content.Context.MODE_PRIVATE).getString("for", null)
+        set(v) { ctx.getSharedPreferences("pick", android.content.Context.MODE_PRIVATE).edit().putString("for", v).apply() }
+    /** A file picked for a scheduled WhatsApp message (path, type, name after upload). */
+    var waPickedFile by mutableStateOf<Triple<String, String, String>?>(null)
+
+    fun onFilePicked(uri: android.net.Uri?) {
+        val target = filePickFor; filePickFor = null
+        if (uri == null || target == null) return
+        when {
+            target == "import" -> viewModelScope.launch {
+                importBusy = "Reading the file…"
+                runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.closeros.app.data.LeadImport.read(ctx, uri) } }
+                    .onSuccess { d -> importData = d; importResult = null; importMap = d.headers.map { com.closeros.app.data.LeadFields.guess(it) }.let { g ->
+                        // only one column per field: keep the first guess
+                        val seen = mutableSetOf<String>(); g.map { f -> if (f.isNotEmpty() && !seen.add(f)) "" else f } } }
+                    .onFailure { message = it.message?.takeIf { m -> m.length < 160 && !m.contains("http") } ?: "Couldn't read this file — use a .csv or .xlsx file" }
+                importBusy = null; showImport = true
+            }
+            target.startsWith("seq:") -> uploadPicked(uri) { f -> seqDraft?.messages?.firstOrNull { it.key == target.removePrefix("seq:") }?.let { d ->
+                d.mediaPath = f.first; d.mediaType = f.second; d.mediaName = f.third } ?: run { seqDraft?.messages?.lastOrNull()?.let { d -> d.mediaPath = f.first; d.mediaType = f.second; d.mediaName = f.third } } }
+            target == "wa" -> uploadPicked(uri) { waPickedFile = it }
+        }
+    }
+    private fun uploadPicked(uri: android.net.Uri, then: (Triple<String, String, String>) -> Unit) = viewModelScope.launch {
+        val m = membership ?: return@launch
+        message = "Uploading the file…"
+        runCatching { com.closeros.app.data.Seqs.uploadMedia(ctx, m.org_id, uri) }
+            .onSuccess { then(it); message = "📎 ${it.third} attached" }
+            .onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't attach the file") }
+    }
+
+    /** Adds one lead (form). An existing number opens that lead instead of making a copy. */
+    fun addLeadManual(fields: Map<String, String>, batchId: String?, done: (String?) -> Unit) = viewModelScope.launch {
+        val m = membership ?: return@launch done("Still loading — try again")
+        if (!com.closeros.app.data.Net.isOnline) {
+            com.closeros.app.data.Ops.lead(ctx, m.org_id, fields["name"].orEmpty(), normalizePhone(fields["phone"].orEmpty(), prefix),
+                fields["profession"]?.ifBlank { null }, fields["notes"]?.ifBlank { null })
+            message = "No internet — the lead will be added when you're back online"; showAddLead = false; return@launch done(null)
+        }
+        runCatching { com.closeros.app.data.LeadImport.addLead(m.org_id, kotlinx.serialization.json.buildJsonObject {
+            fields.forEach { (k, v) -> if (v.isNotBlank()) put(k, v.trim()) }; batchId?.let { put("batch_id", it) } }) }
+            .onSuccess { r ->
+                showAddLead = false; done(null)
+                message = if (r.existing) "This number is already in your leads — opened it" else "✓ Lead added"
+                reloadLeads(); loadHistory(); CallSync.syncNow(ctx); openLeadId = r.id
+            }.onFailure { done(com.closeros.app.data.SafeError.forUser(it, "Couldn't add the lead")) }
+    }
+
+    /** Imports the chosen file with the column choices (free plan: 50 leads, a short ad each time). */
+    fun runImport(batchId: String?) {
+        val d = importData ?: return
+        val phoneCol = importMap.indexOf("phone")
+        if (phoneCol < 0) { message = "Choose which column has the phone number"; return }
+        val rows = d.rows.map { r -> importMap.mapIndexedNotNull { i, f -> if (f.isEmpty()) null else f to r.getOrElse(i) { "" } }.toMap() }
+            .filter { it["phone"].orEmpty().any(Char::isDigit) }
+        if (rows.isEmpty()) { message = "No phone numbers found in that column"; return }
+        importRows(rows.take(importLimit), batchId, rows.size)
+    }
+    /** Phone contacts picked in the app → leads (same rules as a file import). */
+    fun importContacts(picked: List<Pair<String, String>>, batchId: String?) =
+        importRows(picked.take(importLimit).map { (n, p) -> mapOf("name" to n, "phone" to p, "source" to "Phone contacts") }, batchId, picked.size)
+
+    private fun importRows(rows: List<Map<String, String>>, batchId: String?, asked: Int) {
+        val m = membership ?: return
+        require(com.closeros.app.data.Feature.IMPORT, always = true) {
+            viewModelScope.launch {
+                importBusy = "Adding ${rows.size} leads…"
+                runCatching { com.closeros.app.data.LeadImport.import(m.org_id, rows, batchId) { done -> importBusy = "Adding leads… $done of ${rows.size}" } }
+                    .onSuccess { r ->
+                        com.closeros.app.data.Unlocks.use(ctx, com.closeros.app.data.Feature.IMPORT)
+                        importResult = r; showContactsPick = false
+                        message = "✓ ${r.inserted} added" + (if (r.already > 0) " · ${r.already} already in your leads" else "") +
+                            (if (asked > rows.size) " · free plan: first ${rows.size} only" else "")
+                        reloadLeads(); CallSync.syncNow(ctx)
+                        if (batchId != null) loadBatches(quiet = true)
+                    }.onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't import — please try again") }
+                importBusy = null
+            }
+        }
+    }
+
+    // ───── WhatsApp sequence editor draft (kept here so picking a file never loses the typing) ─────
+    var seqDraft by mutableStateOf<SeqDraft?>(null)
+    fun draftFor(seq: com.closeros.app.data.Sequence): SeqDraft =
+        seqDraft?.takeIf { it.seqId == seq.id && it.openedAt == seqOpenedAt } ?: SeqDraft(seq, seqOpenedAt).also { seqDraft = it }
+    private var seqOpenedAt = 0L
+    fun openSequenceEditor(seq: com.closeros.app.data.Sequence) { seqOpenedAt = System.currentTimeMillis(); seqDraft = null; editSequence = seq }
+    fun closeSequenceEditor() { editSequence = null; seqDraft = null; store.prefs.edit().remove("seq_draft").apply() }
+    /** Saved to the phone before the file picker opens, in case Android closes Closer OS meanwhile. */
+    fun backupSeqDraft() { seqDraft?.let { store.prefs.edit().putString("seq_draft", com.closeros.app.data.json.encodeToString(com.closeros.app.data.Sequence.serializer(), it.toSequence())).apply() } }
+    fun restoreSeqDraft() {
+        if (editSequence != null) return
+        val raw = store.prefs.getString("seq_draft", null) ?: return
+        runCatching { com.closeros.app.data.json.decodeFromString(com.closeros.app.data.Sequence.serializer(), raw) }.onSuccess { openSequenceEditor(it); message = "Your sequence draft is back" }
+        store.prefs.edit().remove("seq_draft").apply()
+    }
+
+    // ───── WhatsApp sequence details ─────
+    var openSequenceId by mutableStateOf<String?>(null)
 
     /** A single WhatsApp sent from a lead / call row / pop-up: counted as an interaction. */
     /** A single WhatsApp opened from Closer OS: counted only after the rep confirms it went (back in the app). */
@@ -917,7 +1061,10 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
             showReports -> showReports = false
             openList != null -> openList = null
             showBatches -> showBatches = false
-            editSequence != null -> editSequence = null
+            editSequence != null -> closeSequenceEditor()
+            openSequenceId != null -> openSequenceId = null
+            showImport -> { showImport = false; importData = null; importResult = null }
+            showContactsPick -> showContactsPick = false
             showSequences -> showSequences = false
             todayFilter != null -> todayFilter = null
             else -> return false
@@ -1121,7 +1268,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
             val err = sent.exceptionOrNull()?.message.orEmpty()
             if (!err.contains("Unable to resolve host") && !err.contains("timeout", true)) com.closeros.app.data.AppLog.error(ctx, "save outcome", sent.exceptionOrNull())
             if (err.contains("next call time") || err.contains("Unknown outcome") || err.contains("Lead not found")) {
-                message = err.substringAfter("ERROR:").trim().ifEmpty { err }; onDone(); return@launch
+                message = com.closeros.app.data.SafeError.forUser(sent.exceptionOrNull(), "Couldn't save — please try again"); onDone(); return@launch
             }
             store.addToOutbox(payload)
             com.closeros.app.data.LocalFollowUps.apply(ctx, payload)   // next call shows in Follow-ups + reminder alarm set now

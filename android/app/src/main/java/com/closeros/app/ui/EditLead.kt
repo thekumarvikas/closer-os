@@ -123,7 +123,7 @@ fun EditLeadScreen(vm: AppViewModel, lead: Lead, onClose: () -> Unit, onSaved: (
                         onSaved(updated)
                     }.onFailure {
                         saving = false
-                        error = it.message?.substringAfter("ERROR:")?.substringBefore("\n")?.substringAfter(":")?.trim()?.take(140) ?: "Couldn't save"
+                        error = com.closeros.app.data.SafeError.forUser(it, "Couldn't save")
                     }
                 }
             }) { Text(if (saving) "Saving…" else "Save changes", fontSize = 16.sp) }

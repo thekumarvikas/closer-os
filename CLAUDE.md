@@ -3,6 +3,11 @@
 The owner (Vikas, GitHub `thekumarvikas`) is non-technical. Explain things in plain language,
 give step-by-step instructions, and never ask for secrets to be pasted in chat.
 
+## DESIGN RULE (owner, Nov 15 2026) — applies to every screen, app + dashboard
+- The app exists to make the salesperson faster. After-call and everyday screens must be COMPACT: fewest taps,
+  no long scrolling lists, no extra tabs/steps. Show the few most likely choices first (by call type + the rep's own
+  usage); everything else behind one "More" tap. Optional extras (notes, tags, profile, objections) collapsed by default.
+
 ## Product
 Sales operating system: Android app for sales reps + web dashboard for management +
 subscription/licensing backend, all on one backend. India first (INR, +91, Asia/Kolkata,

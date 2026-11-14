@@ -10,3 +10,4 @@ downloads/
 dist/
 *.tsbuildinfo
 android/local.properties
+android/.kotlin/

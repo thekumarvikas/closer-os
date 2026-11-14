@@ -1535,3 +1535,12 @@ intelligence → Play Store launch.
   first_dialled_at / response_sec exist). Split by sales vs reminder team members where relevant.
 - All questions answered (Nov 14). Build order when owner says "go": import + clean + dedupe (CSV, Sheet script) →
   matching (+ unmatched / please-check lists, auto Bought + verified) → effort table + timeline → pattern finder → gaps.
+- Smaller answers (Nov 14): "paid within N days" counted from sign-up; attendance = ALL webinars tagged (show the whole
+  journey, not just one); possible duplicate buyer rows (same phone + day + amount) shown for the admin to confirm, not
+  skipped; "closer" = everyone who called (assigned person marked); team managers see their own team, owners/admins all;
+  product names as typed, similar spellings grouped; pattern thresholds 10 min / 60 min / 7 days, editable.
+
+## Owner go-list (Nov 14 2026) — YES to build (order to be agreed): verified sales (rep claims → manager verifies, part
+## payments, price list), duplicate leads → one lead "Repeated", outcomes ordered by each rep's own usage, per-SIM
+## subscriptions (as decided above), Buyer Analysis. Google sign-in is "very important": NOT working in the Play Store app
+## (likely cause: Play app-signing SHA-1 missing on the Google OAuth Android client + consent screen still "Testing").

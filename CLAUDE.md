@@ -1511,3 +1511,16 @@ intelligence → Play Store launch.
   Desk outcome panel: tags + sentences filtered by outcome.
 - Voice = speech-to-text only; audio notes NOT built. Promise tracker dropped. Later: reports (why people don't buy, what buyers
   had in common) + dashboard tag/profile filters.
+
+## Buyer Analysis — owner decisions (Nov 14 2026; NOT built — owner answering questions one by one, "don't build yet")
+- Owner's prompt: admin-only "Buyer Analysis" = buyer import + dedupe → match buyers to leads → effort per sale (table,
+  timeline, averages/medians, filters) → pattern finder (3 thresholds: called ≤ 10 min, attended 60+ min, paid ≤ 7 days;
+  conversion of all leads meeting vs not) → gaps lists. Much already exists: customers table (buyers list, CSV upload in
+  Settings), response_report, lead_path / sales_recipe / conversion_insights, batch_leads watch minutes.
+- Answer 1: buyer sources = ONLY two: CSV upload (team uploads) and a connected Google Sheet (whatever the team puts in the
+  sheet = buyers). NO Razorpay pull. Closer OS finds which leads are buyers and marks them in the reps' app too.
+- Answer 2 (data cleaning, owner stresses it): people type emails/numbers badly (spaces before/after/inside, +91 / 91 / 0,
+  dashes, brackets). Clean BOTH sides — management's buyer data AND the reps' lead data — before matching; match on phone
+  AND email.
+- Still open: Google Sheet access method (link-shared vs service email), imported buyer = verified sale?, working vs clock
+  minutes for "called within 10 min", auto-mark lead as won.

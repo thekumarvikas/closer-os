@@ -1475,6 +1475,8 @@ intelligence → Play Store launch.
   call); follow-up reminders carry the last note; pinned notes (max 3 per lead; Key facts = first pin; managers can pin too).
 - Objections added by a rep: visible to that rep at once; visible to others only after a manager approves (company app).
   Individual app: saved directly.
+- Mic = VOICE TYPING (speech → text) on every notes box (pop-up quick note, outcome screen, lead page, objection/answer).
+  Audio notes (saving the voice recording itself) are NOT built.
 - DROPPED for now: promise tracker (too company-specific). Dropped profile fields: decision maker, timeline, main objection.
 - LATER (owner: "can be built, not now"): why-people-don't-buy report (objections/tags ranked + bought after), what buyers
   had in common, dashboard Leads filters by tag / profile fields.

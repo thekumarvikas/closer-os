@@ -1463,3 +1463,18 @@ intelligence → Play Store launch.
   (create_individual_account) — sign-up on the website no longer silently makes a company.
 - Not built: Super Admin switch to turn an existing company into a personal account (needs a migration; the
   SUPABASE_ACCESS_TOKEN was not loaded in that session). Node is now installed on the Mac via Homebrew (web builds locally).
+
+## Smarter notes — owner decisions (Nov 14 2026; DECIDED, not built — waiting for "go")
+- Build together: (1) quick note on the after-call pop-up card (one line + tag chips + mic); (2) note tags that match the
+  picked outcome; fill-in-the-blank note sentences per outcome (gaps = tap a suggestion or type; management edits them on the
+  dashboard, individuals their own in the app; a gap can fill a lead profile field); lead PROFILE card = Name, Profession,
+  City, Challenges (chips + text), Goals (chips + text), Budget (ranges to tap + optional exact amount) — chips/ranges set by
+  management (individuals: their own); replaces "Facts to capture" (existing facts move in as extra fields); objections with
+  answers (several answers each, "used in N calls · M bought", copy / send on WhatsApp); before-call brief (who + profile line,
+  last time, pinned notes, objection + best answer, suggested opening line, signals: webinar / WA / best time, reason for the
+  call); follow-up reminders carry the last note; pinned notes (max 3 per lead; Key facts = first pin; managers can pin too).
+- Objections added by a rep: visible to that rep at once; visible to others only after a manager approves (company app).
+  Individual app: saved directly.
+- DROPPED for now: promise tracker (too company-specific). Dropped profile fields: decision maker, timeline, main objection.
+- LATER (owner: "can be built, not now"): why-people-don't-buy report (objections/tags ranked + bought after), what buyers
+  had in common, dashboard Leads filters by tag / profile fields.

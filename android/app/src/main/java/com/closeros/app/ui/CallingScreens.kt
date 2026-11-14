@@ -203,6 +203,8 @@ fun HomeScreen(vm: AppViewModel) {
 
         // Speed to lead: how fast new leads get their first call (last 7 days) + who is waiting now.
         if (vm.response != null) item { ResponseLine(vm, vm.response!!) }
+        // My Sales Revenue (verified this month, waiting for verification, still to be paid).
+        item { MySalesCard(vm) }
         // Leaderboard in one line.
         if (vm.leaderboard.size >= 2) item {
             val rows = vm.leaderboard

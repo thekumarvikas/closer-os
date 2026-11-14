@@ -1562,3 +1562,24 @@ intelligence → Play Store launch.
   🔁 ×N badge; LeadDrawer LeadOrigins ("Repeated — came in N times") + email typo hint (emailTypo in LeadProfile.tsx);
   import result says "already in your list — marked Repeated". App: lead tag "🔁 Repeated ×N", lead page LeadOriginsCard
   (Notes.origins, saved copy), Lead.arrivals; LeadIndex cursor v10.
+
+## Verified sales (migration 0076, Nov 14 2026)
+- products (price list; members read, managers write; dashboard Settings → Products & prices), sales (order: lead, product,
+  amount, sold_at, status claimed|verified|rejected, source claim|outcome|manager|import|backfill, claimed_by, credited_to,
+  verified_by/at, review_note, call_id unique, buyer jsonb), sale_payments (payment|refund, method upi/bank/cash/card/razorpay/
+  cheque/other, paid_at, reference), sale_month_locks (t_sales_lock blocks changes in locked months).
+- A "won" outcome call → claimed sale automatically (t_call_sale_claim; amount/product/product_id from outcome_data). Earlier
+  won calls backfilled as verified. claim_sale(lead, p) (managers & individual owners → verified at once), review_sale(sale,
+  approve, {credited_to, amount, note}), add_sale_payment / delete_sale_payment (managers), lock_sales_month (owner/admin),
+  sale_facts(sale) (lead, who talked, calls + recordings, WA, webinars, payments, red FLAGS: no calls / < 60 s talk / not their
+  lead / amount ≠ price list / another sale within 30 days / no conversation in 30 days before), sale_money (paid, refunded,
+  balance, net, pay_status full|part|unpaid|refunded), sales_list, sales_summary.
+- Reports count VERIFIED sales only: lead_revenue = Σ verified (amount − refunds); target_progress / leaderboard / period_summary
+  sales (+ revenue) = verified sales credited to the person; refresh_lead_stats won_at = won outcome OR verified sale.
+- FIX in 0076: t_seq_on_call_outcome (0071) had a record var "s" clashing with alias "s" → saving won/lost outcomes failed.
+- Dashboard page "Sales" (/sales, menu for all; reps see their own): month picker, Lock/Unlock month (admins), tiles, tabs To
+  verify / All / Balance due / Rejected, SaleModal (facts + flags + recordings, Verify with credit/amount/note, Reject, payments
+  ledger + add payment/refund), "Add sale" (search lead, product, paid now), CSV. LeadDrawer LeadSales.
+- App (ui/SalesScreens.kt): Home MySalesCard "💰 My Sales Revenue · this month" (verified net, collected, waiting, balance due)
+  → MySalesScreen; lead page "💰 Claim a sale" (ClaimSaleDialog, price-list chips); outcome screen sale form has price-list
+  chips (product_id in outcome_data). data/NoteKit.kt SalesApi (products, claim, summary, mine; saved copies).

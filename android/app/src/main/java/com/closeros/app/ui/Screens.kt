@@ -195,6 +195,8 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
     var waOpen by remember { mutableStateOf(false) }
     if (waOpen && lead != null) WhatsAppPicker(vm, lead!!) { waOpen = false }
     var editing by remember { mutableStateOf(false) }
+    var claimSale by remember { mutableStateOf(false) }
+    if (claimSale && lead != null) ClaimSaleDialog(vm, lead!!) { claimSale = false }
     if (editing && lead != null) { EditLeadScreen(vm, lead!!, onClose = { editing = false }) { lead = it; editing = false }; return }
     Scaffold(topBar = {
         TopAppBar(title = { Text(lead?.name?.ifBlank { "Lead" } ?: "Lead") },
@@ -233,7 +235,10 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
                     Text("⛔ Marked Do not call", color = Brand.red, fontSize = 13.sp, modifier = Modifier.weight(1f))
                     TextButton(onClick = { vm.setDoNotCall(l, false) { u -> lead = u } }) { Text("Remove") }
                 }
-                TextButton(onClick = { vm.openPlaybook(l) }) { Text("📖 Script, objection answers & links") }
+                Row {
+                    TextButton(onClick = { vm.openPlaybook(l) }) { Text("📖 Scripts & answers") }
+                    TextButton(onClick = { claimSale = true }) { Text("💰 Claim a sale") }
+                }
                 LeadSequencesCard(vm, l)
             }
             if (l.arrivals > 1) item { LeadOriginsCard(l) }

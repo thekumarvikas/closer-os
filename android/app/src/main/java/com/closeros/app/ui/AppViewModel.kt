@@ -170,6 +170,25 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ───── Smarter notes: objections, lead profile, pinned notes, note settings ─────
     var objections by mutableStateOf<List<com.closeros.app.data.Objection>?>(null)
     var showNoteSettings by mutableStateOf(false)
+    // ───── Verified sales: price list, claims, "My Sales Revenue" ─────
+    var products by mutableStateOf<List<com.closeros.app.data.Product>>(emptyList())
+    var mySalesSummary by mutableStateOf<com.closeros.app.data.SalesSummary?>(null)
+    var mySales by mutableStateOf<List<com.closeros.app.data.SaleRow>?>(null)
+    var showMySales by mutableStateOf(false)
+    fun loadProducts() = viewModelScope.launch {
+        val m = membership ?: return@launch
+        runCatching { com.closeros.app.data.SalesApi.products(m.org_id) }.onSuccess { products = it }
+    }
+    fun loadMySales() = viewModelScope.launch {
+        val m = membership ?: return@launch
+        runCatching { com.closeros.app.data.SalesApi.summary(m.org_id) }.onSuccess { mySalesSummary = it }
+        runCatching { com.closeros.app.data.SalesApi.mine(m.org_id) }.onSuccess { mySales = it }.onFailure { if (mySales == null) mySales = emptyList() }
+    }
+    fun claimSale(lead: Lead, product: com.closeros.app.data.Product?, name: String, amount: String, note: String, done: (Boolean) -> Unit) = viewModelScope.launch {
+        runCatching { com.closeros.app.data.SalesApi.claim(lead.id, product?.id, product?.name ?: name, amount, note) }
+            .onSuccess { message = if (isManager || isSolo) "💰 Sale saved" else "💰 Sale sent to your manager to verify"; loadMySales(); done(true) }
+            .onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't save the sale — check your internet"); done(false) }
+    }
     fun loadObjections() = viewModelScope.launch {
         val m = membership ?: return@launch
         runCatching { com.closeros.app.data.Notes.objections(m.org_id) }.onSuccess { objections = it }.onFailure { if (objections == null) objections = emptyList() }
@@ -395,6 +414,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun refreshHome() = viewModelScope.launch {
+        loadMySales(); if (products.isEmpty()) loadProducts()
         val m = membership ?: return@launch
         lastRefreshMs = System.currentTimeMillis()
         // Load everything Home needs at the same time (faster than one after another).
@@ -1099,6 +1119,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         when {
             showWaToday -> showWaToday = false
             showNoteSettings -> showNoteSettings = false
+            showMySales -> showMySales = false
             showLeadWork && genericList == null && openLeadId == null -> showLeadWork = false
             showRecipe && genericList == null && openLeadId == null -> showRecipe = false
             showPlaybook -> showPlaybook = false

@@ -1,6 +1,7 @@
 package com.closeros.app.data
 
 import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.from
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -175,4 +176,34 @@ object Notes {
     fun objectionsJson(picked: Map<String, String?>) = buildJsonArray {
         picked.forEach { (id, ans) -> add(buildJsonObject { put("id", id); ans?.let { put("answer", it) } }) }
     }
+}
+
+
+@Serializable data class Product(val id: String, val name: String, val price: Double? = null, val is_active: Boolean = true, val position: Int = 0)
+@Serializable data class SaleRow(val id: String, val lead_id: String? = null, val product: String? = null, val amount: Double = 0.0, val sold_at: String = "",
+    val status: String = "claimed", val review_note: String? = null, val lead_name: String? = null, val lead_phone: String? = null,
+    val paid: Double = 0.0, val balance: Double = 0.0, val net: Double = 0.0, val pay_status: String = "unpaid")
+@Serializable data class SalesSummary(val verified: Int = 0, val net: Double = 0.0, val collected: Double = 0.0, val balance_due: Double = 0.0,
+    val balance_orders: Int = 0, val pending: Int = 0)
+
+/** Price list, sale claims and "My Sales Revenue". */
+object SalesApi {
+    private val db get() = Backend.client.postgrest
+    private fun monthStart(): java.time.Instant = java.time.ZonedDateTime.now().withDayOfMonth(1).toLocalDate().atStartOfDay(java.time.ZoneId.systemDefault()).toInstant()
+
+    suspend fun products(orgId: String): List<Product> = json.decodeFromString(Repo.savedText("products:$orgId") {
+        Backend.client.from("products").select { filter { eq("org_id", orgId); eq("is_active", true) }; order("position", io.github.jan.supabase.postgrest.query.Order.ASCENDING) }.data
+    })
+    suspend fun claim(leadId: String, productId: String?, product: String?, amount: String, note: String?): String =
+        db.rpc("claim_sale", buildJsonObject { put("p_lead", leadId); put("p", buildJsonObject {
+            productId?.let { put("product_id", it) }; product?.takeIf { it.isNotBlank() }?.let { put("product", it) }
+            put("amount", amount); note?.takeIf { it.isNotBlank() }?.let { put("note", it) } }) }).data.trim('"')
+    suspend fun summary(orgId: String): SalesSummary = json.decodeFromString(Repo.savedText("salesSum:$orgId") {
+        db.rpc("sales_summary", buildJsonObject { put("p_org", orgId); put("p_from", monthStart().toString()); put("p_to", java.time.Instant.now().plusSeconds(86400).toString())
+            Backend.uid?.let { put("p_users", buildJsonArray { add(JsonPrimitive(it)) }) } }).data
+    })
+    suspend fun mine(orgId: String): List<SaleRow> = json.decodeFromString(Repo.savedText("mySales:$orgId") {
+        db.rpc("sales_list", buildJsonObject { put("p_org", orgId); put("p_from", monthStart().toString()); put("p_to", java.time.Instant.now().plusSeconds(86400).toString())
+            Backend.uid?.let { put("p_user", it) } }).data
+    })
 }

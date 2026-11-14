@@ -1,5 +1,6 @@
 import LeadWebinars from '../components/LeadWebinars'
 import LeadShares from '../components/LeadShares'
+import { LeadSales } from './Sales'
 import { LeadProfileCard, PinnedNotes, LeadObjections, LeadOrigins, emailTypo, type Pin } from '../components/LeadProfile'
 import { PlayButton, RecordingPlayer } from '../components/CallLog'
 import { CallColorKey, CallType } from '../components/CallColors'
@@ -144,6 +145,7 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
               <LeadShares leadId={leadId} assignedTo={lead.assigned_to} sharedWith={lead.shared_with ?? []} onChanged={() => { load(); onChanged() }} />
               <LeadWebinars leadId={leadId} />
 
+              <LeadSales leadId={leadId} />
               <LeadOrigins leadId={leadId} arrivals={(lead as any).arrivals ?? 1} />
               <LeadProfileCard leadId={leadId} profile={(lead as any).profile ?? {}} onChanged={() => { load(); onChanged() }} />
               <PinnedNotes leadId={leadId} pins={((lead as any).pinned ?? []) as Pin[]} onChanged={load} />

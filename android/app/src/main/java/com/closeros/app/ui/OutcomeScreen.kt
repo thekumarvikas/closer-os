@@ -70,6 +70,7 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
     fun beforeStart(t: ZonedDateTime) = webinarAt == null || t.toInstant().isBefore(webinarAt)
     var amount by remember { mutableStateOf("") }
     var product by remember { mutableStateOf("") }
+    var productId by remember { mutableStateOf<String?>(null) }
     var interest by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var profession by remember { mutableStateOf(p.profession.orEmpty()) }
@@ -161,7 +162,14 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
             "sale" -> {
                 OutlinedTextField(amount, { amount = it.filter { c -> c.isDigit() } }, label = { Text("Amount paid (₹) *") }, singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(product, { product = it }, label = { Text("Product / course") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                // Price list: one tap fills the product and the amount.
+                LaunchedEffect(Unit) { if (vm.products.isEmpty()) vm.loadProducts() }
+                if (vm.products.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    vm.products.forEach { pr -> Chip(pr.name + (pr.price?.let { " · " + fmtMoney(it, vm.membership?.organization?.currency ?: "INR") } ?: ""), productId == pr.id) {
+                        productId = pr.id; product = pr.name; pr.price?.let { amount = it.toLong().toString() } } }
+                }
+                OutlinedTextField(product, { product = it; productId = null }, label = { Text("Product / course") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Text(if (vm.isManager || vm.isSolo) "Saved as a sale." else "Your manager verifies the sale, then it counts in your numbers.", fontSize = 12.sp, color = Brand.muted)
             }
         }
 
@@ -249,6 +257,7 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
                 put("outcome_data", buildJsonObject {
                     amount.filter { it.isDigit() }.toLongOrNull()?.let { put(if (o.form == "sale") "amount" else "deal_value", it) }
                     if (product.isNotBlank()) put("product", product)
+                    productId?.let { put("product_id", it) }
                     if (interest.isNotBlank()) put("interest", interest)
                     if (noteTags.isNotEmpty()) put("note_tags", kotlinx.serialization.json.JsonArray(noteTags.map { kotlinx.serialization.json.JsonPrimitive(it) }))
                     if (objPicked.isNotEmpty()) put("objections", com.closeros.app.data.Notes.objectionsJson(objPicked))

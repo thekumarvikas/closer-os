@@ -111,3 +111,12 @@ Everything from the original product prompt plus the owner's feedback, with stat
   facts, working calendar + monthly talk-time pace, recordings on call rows, Settings tab, Back fix
 - ✅ "New · waiting" timer on lead cards, best-time-now queue order, per-rep daily focus target, effort bar on cards (v0.10.1)
 - ✅ Add leads in the app (form with city, CSV/Excel import, phone contacts), schedule a call / a WhatsApp message from the lead page, sequence details page, tap-to-insert fill-ins, safe error messages (v0.22.0)
+
+## Built Nov 14 2026 (v0.24.0)
+- ✅ Duplicate leads → one lead marked 🔁 Repeated with every origin; phone/email cleaned before matching; find + merge duplicates
+- ✅ Verified sales: rep claims (or "sale" outcome) → manager verifies with facts + red flags; price list; payments (full/part/refund);
+  balance due; month lock; reports count verified sales only; "My Sales Revenue" in the app
+- ✅ Buyer Analysis: import buyers (CSV / free Google Sheet script), cleaning + duplicate checks, matching, effort per sale (clock +
+  working minutes), pattern finder, gaps
+- ✅ Outcomes ordered by each rep's own usage (app + desk)
+- ✅ Per-SIM subscriptions: work SIM chosen in the app, only its calls tracked, second SIM / change approved by a manager

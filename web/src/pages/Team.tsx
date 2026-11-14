@@ -1,3 +1,4 @@
+import WorkSims from '../components/WorkSims'
 import { useEffect, useState, type FormEvent } from 'react'
 import { UserPlus, Users, Copy, Trash2, Plus } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
@@ -40,6 +41,7 @@ export default function Team() {
         actions={isAdmin && <Button onClick={() => setShowInvite(true)}><UserPlus className="h-4 w-4" /> Invite people</Button>} />
       <ErrorBox error={error} />
       <TeamCheckins />
+      <WorkSims dir={dir} />
 
       <Card className="mb-6 overflow-x-auto">
         <table className="min-w-full divide-y divide-slate-100">

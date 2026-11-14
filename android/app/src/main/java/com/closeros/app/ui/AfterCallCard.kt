@@ -108,6 +108,15 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
     var waStep by remember { mutableStateOf(false) }
     var sendingWa by remember { mutableStateOf(false) }
     val maxH = (LocalConfiguration.current.screenHeightDp * 0.8f).dp
+    // Company app: a call on a SIM that isn't the work SIM is never tracked — close the card.
+    LaunchedEffect(info.phone) {
+        val ph = info.phone ?: return@LaunchedEffect
+        repeat(6) {
+            kotlinx.coroutines.delay(700)
+            if (withContext(kotlinx.coroutines.Dispatchers.IO) { PhoneCalls.untrackedJustEnded(ctx, ph) }) { AfterCall.cancelNotification(ctx); onClose(); return@LaunchedEffect }
+            if (AfterCall.Overlay.current?.call != null) return@LaunchedEffect
+        }
+    }
     // Self-repair: if the call's details never reached the card, look them up here (every second, up to 2 minutes).
     LaunchedEffect(c == null, info.phone) {
         val ph = info.phone ?: return@LaunchedEffect

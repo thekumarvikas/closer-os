@@ -44,6 +44,9 @@ fun SetupScreen(vm: AppViewModel) {
     val simNums = remember { mutableStateMapOf<Int, String>().apply { sims.forEach { put(it.slot, vm.store.simNumber(it.slot) ?: PhoneCalls.simOwnNumber(ctx, it.slot) ?: "") } } }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    // Company app: the ONE SIM used for work calls (only its calls are tracked). One SIM on the phone = that one.
+    val askWork = !vm.isSolo && sims.isNotEmpty()
+    var workSlot by remember { mutableStateOf(sims.singleOrNull()?.slot ?: vm.workSims.firstOrNull { it.status == "active" }?.slot) }
     Column(Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Spacer(Modifier.height(16.dp))
         Text("Your numbers", fontSize = 24.sp, fontWeight = FontWeight.Bold)
@@ -54,11 +57,25 @@ fun SetupScreen(vm: AppViewModel) {
             OutlinedTextField(simNums[s.slot] ?: "", { simNums[s.slot] = it }, label = { Text("Number of ${s.label}") }, singleLine = true,
                 modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone))
         }
+        if (askWork && sims.size > 1) {
+            Text("Which SIM do you use for work calls?", fontWeight = FontWeight.SemiBold)
+            Text("Only this SIM's calls are tracked in Closer OS. Calls on your other SIM stay private — never shown or sent.", fontSize = 13.sp, color = Brand.muted)
+            sims.forEach { s -> Row(Modifier.fillMaxWidth().clickable { workSlot = s.slot }, verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(selected = workSlot == s.slot, onClick = { workSlot = s.slot })
+                Text(s.label + (simNums[s.slot]?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""))
+            } }
+        }
         error?.let { Text(it, color = Brand.red) }
         // Your own number = SIM 1's number (or the first SIM that has one); no separate question.
         val first = sims.sortedBy { it.slot }.firstNotNullOfOrNull { s -> simNums[s.slot]?.takeIf { n -> n.filter { c -> c.isDigit() }.length >= 7 } }.orEmpty()
-        Button(onClick = { busy = true; vm.saveSetup(if (vm.profile?.phone.isNullOrBlank()) first else "", simNums.toMap()) { error = it; busy = false } },
-            enabled = !busy && (sims.isEmpty() || first.isNotBlank()),
+        Button(onClick = {
+                busy = true
+                vm.saveSetup(if (vm.profile?.phone.isNullOrBlank()) first else "", simNums.toMap()) { error = it; busy = false }
+                val ws = sims.firstOrNull { it.slot == workSlot }
+                if (askWork && ws != null && vm.workSims.none { it.status == "active" || it.status == "pending" })
+                    simNums[ws.slot]?.takeIf { it.filter { c -> c.isDigit() }.length >= 7 }?.let { vm.requestWorkSim(ws.slot, it, ws.label, null) }
+            },
+            enabled = !busy && (sims.isEmpty() || first.isNotBlank()) && (!askWork || workSlot != null || sims.size <= 1),
             modifier = Modifier.fillMaxWidth().height(50.dp)) { Text(if (busy) "Saving…" else "Continue") }
         if (Build.VERSION.SDK_INT >= 31 && !FollowUpAlarms.canExact(ctx)) ExactAlarmHint()
     }
@@ -220,4 +237,43 @@ fun WhatsAppSettings(vm: AppViewModel, compact: Boolean = false) {
     }
     if (compact) Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFECFDF5))) { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { body() } }
     else Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { body() }
+}
+
+/** Settings (company app): my work SIM — the only SIM whose calls are tracked. Change it or add a second one (manager approves). */
+@Composable
+fun WorkSimCard(vm: AppViewModel) {
+    if (vm.isSolo) return
+    val ctx = LocalContext.current
+    val sims = remember { PhoneCalls.sims(ctx) }
+    LaunchedEffect(Unit) { vm.loadWorkSims() }
+    var asking by remember { mutableStateOf<String?>(null) }   // "replace" | "add"
+    val active = vm.workSims.filter { it.status == "active" }; val pending = vm.workSims.filter { it.status == "pending" }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("Work SIM", fontWeight = FontWeight.SemiBold)
+        if (active.isEmpty() && pending.isEmpty()) Text("Not chosen yet — all calls are tracked until you choose. Choose the SIM you use for work:", fontSize = 13.sp, color = Brand.muted)
+        active.forEach { Text("✓ ${it.label ?: "SIM"} · ${fmtPhone(it.sim_number)} — tracked", fontSize = 14.sp) }
+        pending.forEach { Text("⏳ ${it.label ?: "SIM"} · ${fmtPhone(it.sim_number)} — waiting for your manager (" + (if (it.kind == "add") "add as a second SIM" else "change") + ")", fontSize = 14.sp, color = Color(0xFFB45309)) }
+        if (active.isNotEmpty()) Text("Calls on your other SIM stay private: never shown or sent.", fontSize = 12.sp, color = Brand.muted)
+        Row {
+            if (sims.size > 1 || active.isEmpty()) TextButton(onClick = { asking = if (active.isEmpty()) "first" else "replace" }) { Text(if (active.isEmpty()) "Choose work SIM" else "Change work SIM") }
+            if (sims.size > 1 && active.size == 1) TextButton(onClick = { asking = "add" }) { Text("Also track my other SIM") }
+        }
+    }
+    asking?.let { kind ->
+        AlertDialog(onDismissRequest = { asking = null },
+            title = { Text(when (kind) { "add" -> "Track a second SIM"; "replace" -> "Change work SIM"; else -> "Choose work SIM" }) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (kind == "add") Text("Each tracked SIM is one subscription. Your manager approves it.", fontSize = 13.sp, color = Brand.muted)
+                    if (kind == "replace") Text("Your manager approves the change.", fontSize = 13.sp, color = Brand.muted)
+                    sims.filter { s -> active.none { a -> a.slot == s.slot } }.forEach { s ->
+                        val num = vm.store.simNumber(s.slot)
+                        OutlinedButton(enabled = !num.isNullOrBlank(), modifier = Modifier.fillMaxWidth(), onClick = {
+                            vm.requestWorkSim(s.slot, num.orEmpty(), s.label, if (kind == "first") null else kind) { asking = null } }) {
+                            Text(s.label + (num?.let { " · ${fmtPhone(it)}" } ?: " · add its number first (Edit my numbers)"))
+                        }
+                    }
+                }
+            }, confirmButton = {}, dismissButton = { TextButton(onClick = { asking = null }) { Text("Cancel") } })
+    }
 }

@@ -175,6 +175,20 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     var mySalesSummary by mutableStateOf<com.closeros.app.data.SalesSummary?>(null)
     var mySales by mutableStateOf<List<com.closeros.app.data.SaleRow>?>(null)
     var showMySales by mutableStateOf(false)
+    // ───── Work SIM (company app: only this SIM's calls are tracked; 1 subscription = 1 SIM) ─────
+    var workSims by mutableStateOf<List<com.closeros.app.data.WorkSim>>(emptyList())
+    fun loadWorkSims() = viewModelScope.launch {
+        val m = membership ?: return@launch
+        if (isSolo) return@launch
+        workSims = com.closeros.app.data.WorkSims.mine(ctx)
+        runCatching { com.closeros.app.data.WorkSims.refresh(ctx, m.org_id) }.onSuccess { workSims = it }
+    }
+    fun requestWorkSim(slot: Int?, number: String, label: String?, kind: String?, done: (Boolean) -> Unit = {}) = viewModelScope.launch {
+        val m = membership ?: return@launch
+        runCatching { com.closeros.app.data.WorkSims.request(m.org_id, normalizePhone(number, prefix), slot, label, kind) }
+            .onSuccess { message = it; loadWorkSims(); loadHistory(); done(true) }
+            .onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't save the work SIM — check your internet"); done(false) }
+    }
     fun loadProducts() = viewModelScope.launch {
         val m = membership ?: return@launch
         runCatching { com.closeros.app.data.SalesApi.products(m.org_id) }.onSuccess { products = it }
@@ -414,6 +428,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun refreshHome() = viewModelScope.launch {
+        loadWorkSims()
         loadMySales(); if (products.isEmpty()) loadProducts()
         val m = membership ?: return@launch
         lastRefreshMs = System.currentTimeMillis()
@@ -1178,7 +1193,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (left > 0) { signOutWaiting = left; return@launch }
         }
         signOutWaiting = null
-        runCatching { Repo.signOut() }; FollowUpAlarms.scheduleAll(ctx, emptyList()); store.clear(); cache.clearCache(); leads.clear(); pending = null; needsSetup = true }
+        runCatching { Repo.signOut() }; FollowUpAlarms.scheduleAll(ctx, emptyList()); store.clear(); com.closeros.app.data.WorkSims.clear(ctx); cache.clearCache(); leads.clear(); pending = null; needsSetup = true }
 
     // ───────────── Calling ─────────────
 

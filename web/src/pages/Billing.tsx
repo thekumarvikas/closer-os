@@ -87,7 +87,7 @@ export default function Billing() {
 
   return (
     <>
-      <PageHeader title="Plan & billing" subtitle="Choose a plan and the number of users. Payment by UPI, card or netbanking (Razorpay)." />
+      <PageHeader title="Plan & billing" subtitle="Choose a plan and the number of SIMs. One subscription = one tracked SIM (a rep's work SIM). Managers who only use the dashboard are free. Payment by UPI, card or netbanking (Razorpay)." />
       <ErrorBox error={error} />
       {done && <div className="mb-4 flex items-center gap-2 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800"><CheckCircle2 className="h-5 w-5" /> {done}</div>}
 
@@ -97,7 +97,7 @@ export default function Billing() {
           <div className="text-lg font-semibold">{access.plan ?? '—'} {access.state === 'trial' && <Badge color="blue">Trial</Badge>}{access.state === 'grace' && <Badge color="amber">Payment due</Badge>}{access.state === 'expired' && <Badge color="red">Ended</Badge>}</div>
           <div className={`text-sm ${access.state === 'grace' || access.state === 'expired' ? 'text-red-600' : 'text-slate-600'}`}>{stateText}</div>
         </div>
-        <div className="text-right text-sm"><div className="text-slate-500">Users</div><div className="text-lg font-semibold">{access.seats_used}{access.status !== 'complimentary' && <span className="text-slate-400"> / {access.status === 'active' ? access.seats : '—'}</span>}</div></div>
+        <div className="text-right text-sm"><div className="text-slate-500">Tracked SIMs</div><div className="text-lg font-semibold">{access.seats_used}{access.status !== 'complimentary' && <span className="text-slate-400"> / {access.status === 'active' ? access.seats : '—'}</span>}</div></div>
       </Card>
 
       {access.status !== 'complimentary' && (
@@ -121,9 +121,9 @@ export default function Billing() {
             ))}
           </div>
           <Card className="mb-6 flex flex-wrap items-end justify-between gap-4 p-5">
-            <label><span className="label">Number of users</span>
+            <label><span className="label">Number of SIMs</span>
               <input type="number" className="input !w-32" min={Math.max(1, access.seats_used, plan?.min_seats ?? 1)} max={1000} value={seats} onChange={e => setSeats(Math.max(1, +e.target.value || 1))} />
-              <span className="mt-1 block text-xs text-slate-500">You have {access.seats_used} active {access.seats_used === 1 ? 'person' : 'people'} (owner, managers and reps all count).</span>
+              <span className="mt-1 block text-xs text-slate-500">You track {access.seats_used} SIM{access.seats_used === 1 ? '' : 's'} now (each rep's work SIM; a second SIM counts again). Managers who only use the dashboard are free.</span>
             </label>
             <div className="text-right">
               <div className="text-sm text-slate-500">{seats} × {rupees(price)} · {cycle === 'year' ? '1 year' : '1 month'}</div>
@@ -144,7 +144,7 @@ export default function Billing() {
               {payments.filter(p => p.status === 'paid').map(p => (
                 <tr key={p.id}>
                   <td className="td">{p.paid_at ? fmtDateTime(p.paid_at, org) : ''}</td>
-                  <td className="td">{plans.find(x => x.id === p.plan_id)?.name} · {p.seats} user{p.seats > 1 ? 's' : ''}</td>
+                  <td className="td">{plans.find(x => x.id === p.plan_id)?.name} · {p.seats} SIM{p.seats > 1 ? 's' : ''}</td>
                   <td className="td">{p.period_start && fmtDate(p.period_start, org)} – {p.period_end && fmtDate(p.period_end, org)}</td>
                   <td className="td font-medium">{rupees(p.amount)}</td>
                   <td className="td text-right"><Button variant="ghost" onClick={() => setReceipt(p)}><Printer className="h-4 w-4" /> Receipt</Button></td>
@@ -165,7 +165,7 @@ export default function Billing() {
             <div className="my-6 text-sm"><div className="text-slate-500">Received from</div><div className="font-medium">{org.name}</div></div>
             <table className="w-full text-sm">
               <thead><tr className="border-b"><th className="py-2 text-left">Description</th><th className="py-2 text-right">Amount</th></tr></thead>
-              <tbody><tr className="border-b"><td className="py-2">Closer OS {plans.find(x => x.id === receipt.plan_id)?.name} — {receipt.seats} user{receipt.seats > 1 ? 's' : ''}, {receipt.period_start && fmtDate(receipt.period_start, org)} to {receipt.period_end && fmtDate(receipt.period_end, org)}</td><td className="py-2 text-right">{rupees(receipt.amount)}</td></tr></tbody>
+              <tbody><tr className="border-b"><td className="py-2">Closer OS {plans.find(x => x.id === receipt.plan_id)?.name} — {receipt.seats} SIM{receipt.seats > 1 ? 's' : ''}, {receipt.period_start && fmtDate(receipt.period_start, org)} to {receipt.period_end && fmtDate(receipt.period_end, org)}</td><td className="py-2 text-right">{rupees(receipt.amount)}</td></tr></tbody>
               <tfoot><tr><td className="py-2 text-right font-semibold">Total paid</td><td className="py-2 text-right font-semibold">{rupees(receipt.amount)}</td></tr></tfoot>
             </table>
             <p className="mt-4 text-xs text-slate-500">Paid online via Razorpay · payment ID {receipt.razorpay_payment_id}. GST not applicable (supplier not registered under GST).</p>

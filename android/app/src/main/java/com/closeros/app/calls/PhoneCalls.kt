@@ -101,6 +101,15 @@ object PhoneCalls {
     /** The newest few phone calls (quick: used right after a call ends). */
     fun latest(ctx: Context, limit: Int): List<LogCall> = query(ctx, 0, newestFirst = true, limit = limit)
 
+    /** The call that just ended with this number was on a SIM that isn't tracked (company app) → no pop-up, nothing saved. */
+    fun untrackedJustEnded(ctx: Context, phone: String): Boolean {
+        if (com.closeros.app.data.WorkSims.keys(ctx).isEmpty()) return false
+        val last10 = phone.filter { it.isDigit() }.takeLast(10)
+        val c = query(ctx, System.currentTimeMillis() - 30 * 60_000, newestFirst = true, limit = 5, allSims = true)
+            .firstOrNull { it.phone.filter { d -> d.isDigit() }.takeLast(10) == last10 } ?: return false
+        return !com.closeros.app.data.WorkSims.allowed(ctx, c.simNumber)
+    }
+
     /** Reads the whole call log (newest first) for the Calls screen. */
     fun history(ctx: Context, limit: Int): List<LogCall> =
         (query(ctx, 0, newestFirst = true, limit = limit) + WhatsAppCalls.asLog(ctx, 0)).sortedByDescending { it.startedAtMs }.take(limit)
@@ -149,7 +158,7 @@ object PhoneCalls {
 
     /** Reads only the rows needed (the phone's database does the limiting), oldest or newest first. */
     @SuppressLint("MissingPermission")
-    private fun query(ctx: Context, sinceMs: Long, newestFirst: Boolean, limit: Int): List<LogCall> {
+    private fun query(ctx: Context, sinceMs: Long, newestFirst: Boolean, limit: Int, allSims: Boolean = false): List<LogCall> {
         if (!has(ctx, android.Manifest.permission.READ_CALL_LOG)) return emptyList()
         val sims = sims(ctx)
         val store = com.closeros.app.data.LocalStore(ctx)
@@ -176,11 +185,14 @@ object PhoneCalls {
                 val sub = subs.firstOrNull { it.subscriptionId.toString() == accountId || (it.iccId != null && accountId?.startsWith(it.iccId) == true) }
                 val sim = sub?.let { s -> sims.firstOrNull { it.slot == s.simSlotIndex + 1 } }
                 val date = c.getLong(3)
+                // Company app: calls on a SIM that isn't my work SIM are never shown, counted or sent.
+                val simNum = simNumbers.getOrPut(sim?.slot) { store.simNumber(sim?.slot) }
+                if (!allSims && !com.closeros.app.data.WorkSims.allowed(ctx, simNum)) continue
                 out += LogCall(
                     id = stableId(ctx, c.getLong(0), date), phone = number, direction = dir, startedAtMs = date,
                     // MIUI stores ring time as "duration" for missed calls: only answered calls have talk time.
                     durationSec = if (dir == "incoming" || dir == "outgoing") c.getInt(4) else 0,
-                    simSlot = sim?.slot, simLabel = sim?.label, simNumber = simNumbers.getOrPut(sim?.slot) { store.simNumber(sim?.slot) },
+                    simSlot = sim?.slot, simLabel = sim?.label, simNumber = simNum,
                     // The name saved in the phone's contacts (the call log keeps a copy; else look it up).
                     name = c.getString(6)?.takeIf { it.isNotBlank() } ?: contactNames(ctx)[number.filter { it.isDigit() }.takeLast(10)],
                 )
@@ -198,10 +210,19 @@ object PhoneCalls {
         if (last10.length < 6 || !has(ctx, android.Manifest.permission.READ_CALL_LOG)) return null
         val rows = mutableListOf<Pair<String, Int>>()   // direction to talk seconds
         runCatching {
-            ctx.contentResolver.query(CallLog.Calls.CONTENT_URI, arrayOf(CallLog.Calls.NUMBER, CallLog.Calls.TYPE, CallLog.Calls.DURATION),
+            val filterSims = com.closeros.app.data.WorkSims.keys(ctx).isNotEmpty() && !com.closeros.app.BuildConfig.SOLO
+            val sims = if (filterSims) sims(ctx) else emptyList(); val subs = if (filterSims) subs(ctx) else emptyList()
+            val store = com.closeros.app.data.LocalStore(ctx)
+            ctx.contentResolver.query(CallLog.Calls.CONTENT_URI, arrayOf(CallLog.Calls.NUMBER, CallLog.Calls.TYPE, CallLog.Calls.DURATION, CallLog.Calls.PHONE_ACCOUNT_ID),
                 "${CallLog.Calls.NUMBER} LIKE ?", arrayOf("%" + last10.takeLast(7)), null)?.use { c ->
                 while (c.moveToNext()) {
                     if ((c.getString(0) ?: "").filter { it.isDigit() }.takeLast(10) != last10) continue
+                    if (filterSims) {
+                        val acc = c.getString(3)
+                        val sub = subs.firstOrNull { it.subscriptionId.toString() == acc || (it.iccId != null && acc?.startsWith(it.iccId) == true) }
+                        val slot = sub?.let { s -> sims.firstOrNull { it.slot == s.simSlotIndex + 1 } }?.slot
+                        if (!com.closeros.app.data.WorkSims.allowed(ctx, store.simNumber(slot))) continue
+                    }
                     val dir = when (c.getInt(1)) {
                         CallLog.Calls.INCOMING_TYPE -> "incoming"; CallLog.Calls.OUTGOING_TYPE -> "outgoing"
                         CallLog.Calls.MISSED_TYPE -> "missed"; CallLog.Calls.REJECTED_TYPE, CallLog.Calls.BLOCKED_TYPE -> "rejected"; else -> null

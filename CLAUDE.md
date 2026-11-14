@@ -1614,3 +1614,20 @@ intelligence → Play Store launch.
 - App LocalReports.outcomeUsage (saved outcomes, weight 0.5^(age days/21), cached 60 s, reset on save) → outcomesFor(…, usage)
   sorts used-first (round(weight×2) desc), then outcomeRank, then position; call-type filters unchanged. Desk: same from the
   rep's own calls of the last 90 days (useOutcomeUsage).
+
+## Per-SIM subscriptions built (migration 0079, v0.24.0, Nov 14 2026)
+- member_sims (org, user, sim_number, slot, label, kind first|add|replace, status pending|active|rejected|removed; one live
+  per user+number). sims_used(org) = active SIMs of active members = seats_used in org_access (+ 'seat_unit': 'sim');
+  sim_seat_free (paid active subs only); check_seat_limit on org_members is now a no-op (dashboard-only managers free).
+  request_work_sim(org, number, slot, label, kind?) — first SIM active at once when a seat is free, change ('replace') or
+  second SIM ('add') = pending; review_work_sim(id, approve) (managers; add needs a free seat; replace removes the old one);
+  remove_work_sim; org_work_sims(org). Trigger t_calls_work_sim (BEFORE INSERT on calls): a phone call whose sim_number
+  isn't one of the rep's active SIMs is NOT stored (only once the rep has an active SIM; WhatsApp + unknown SIM kept).
+  Individual orgs refused (Pro covers both SIMs).
+- App (company builds only): data/WorkSims.kt (prefs "work_sims": active keys + my SIMs; allowed(ctx, simNumber));
+  PhoneCalls.query skips untracked-SIM calls everywhere (Calls tab, Home, sync, queue lookups) + statsFor filters by SIM;
+  PhoneCalls.untrackedJustEnded → after-call card closes itself (and the backup notification) for an untracked SIM.
+  SetupScreen asks "Which SIM do you use for work calls?" (2 SIMs) → request_work_sim; Settings → WorkSimCard (status, Change
+  work SIM, Also track my other SIM → manager approves). vm.loadWorkSims on Home refresh; sign-out clears.
+- Dashboard: Team page components/WorkSims.tsx (in use x of y, approve/reject requests, stop tracking); Plan & billing wording
+  = SIMs ("One subscription = one tracked SIM … managers who only use the dashboard are free").

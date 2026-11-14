@@ -299,6 +299,7 @@ fun ProfileScreen(vm: AppViewModel) {
         if (sims.isEmpty()) Text("No SIM found (or phone permission not given).", color = Brand.muted)
         sims.forEach { Text(it.label + " — " + (vm.store.simNumber(it.slot)?.let { n -> fmtPhone(n) } ?: "number not set") + if (vm.store.preferredSim == it.slot) "  ✓ last used" else "") }
         TextButton(onClick = { vm.needsSetup = true }) { Text("Edit my numbers") }
+        WorkSimCard(vm)
         HorizontalDivider()
         Text("Phone setup", fontWeight = FontWeight.SemiBold)
         val setupItems = remember { com.closeros.app.calls.PhoneSetup.items(ctx) }

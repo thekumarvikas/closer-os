@@ -1522,5 +1522,11 @@ intelligence → Play Store launch.
 - Answer 2 (data cleaning, owner stresses it): people type emails/numbers badly (spaces before/after/inside, +91 / 91 / 0,
   dashes, brackets). Clean BOTH sides — management's buyer data AND the reps' lead data — before matching; match on phone
   AND email.
-- Still open: Google Sheet access method (link-shared vs service email), imported buyer = verified sale?, working vs clock
-  minutes for "called within 10 min", auto-mark lead as won.
+- Answer 3 (phone): KEEP the country code; match twice — full number with country code AND without it (last 10 digits),
+  because WhatsApp numbers carry the code. Phone match OR email match = buyer.
+- Answer 4: rows that can't be cleaned are listed with the reason; ALSO flag email spelling mistakes in the provider
+  (gmial / gamil / gmal / yaho / hotmial / outlok, .con / .co instead of .com …).
+- Answer 5: Google Sheet via a FREE method only (no cost to the business) — Apps Script / webhook push from the sheet.
+- Answer 6: imported buyers = VERIFIED sales.
+- Answer 7: a lead on the buyers list (CSV or Sheet) is automatically marked BOUGHT.
+- Still open: working vs clock minutes (owner asked what the difference is — explained Nov 14).

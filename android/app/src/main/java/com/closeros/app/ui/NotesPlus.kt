@@ -433,3 +433,20 @@ fun openingLine(vm: AppViewModel, lead: Lead, p: LeadProfileData, obj: Objection
         else -> "Hi $first, it's $me from $co — is this a good time to talk for 2 minutes?"
     }
 }
+
+
+/** "🔁 Repeated — came in 3 times": every source / campaign / webinar this lead came from. */
+@Composable
+fun LeadOriginsCard(lead: Lead) {
+    if (lead.arrivals < 2) return
+    var list by remember(lead.id, lead.arrivals) { mutableStateOf<List<com.closeros.app.data.Origin>>(emptyList()) }
+    LaunchedEffect(lead.id, lead.arrivals) { list = runCatching { com.closeros.app.data.Notes.origins(lead.id) }.getOrDefault(emptyList()) }
+    Column(Modifier.fillMaxWidth().background(Color(0xFFF5F3FF), RoundedCornerShape(12.dp)).border(1.dp, Color(0xFFDDD6FE), RoundedCornerShape(12.dp)).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("🔁 Repeated — came in ${maxOf(lead.arrivals, list.size)} times", fontWeight = FontWeight.SemiBold)
+        list.forEach { o ->
+            val where = listOfNotNull(o.source, o.campaign, o.batch?.let { "webinar: $it" }).joinToString(" · ")
+            Text("${fmtWhen(o.at)} · " + (if (o.first) "First came in" else "Came in again") + (if (where.isNotBlank()) " — $where" else ""), fontSize = 13.sp)
+        }
+    }
+}

@@ -88,3 +88,37 @@ export function LeadObjections({ ids }: { ids: string[] }) {
     </section>
   )
 }
+
+interface Origin { at: string; kind: string; source: string | null; campaign: string | null; batch: string | null; first: boolean; by: string | null }
+const KIND: Record<string, string> = { first: 'First came in', import: 'Imported again', webhook: 'Came in again', app: 'Added again in the app', merged: 'Merged', other: 'Came in again' }
+
+/** "Came in 3 times": every source / campaign / webinar the lead came from, newest first. */
+export function LeadOrigins({ leadId, arrivals }: { leadId: string; arrivals: number }) {
+  const { org } = useOrg()
+  const [list, setList] = useState<Origin[]>([])
+  useEffect(() => { supabase.rpc('lead_origin_list', { p_lead: leadId }).then(({ data }) => setList((data ?? []) as Origin[])) }, [leadId, arrivals])
+  if (list.length < 2) return null
+  return (
+    <section className="rounded-lg border border-violet-200 bg-violet-50 p-3 text-sm">
+      <h3 className="mb-1 font-semibold">🔁 Repeated — came in {list.length} times</h3>
+      <ul className="space-y-1">{list.map((o, i) => (
+        <li key={i}><span className="text-slate-500">{fmtDateTime(o.at, org)}</span> · {KIND[o.kind] ?? 'Came in again'}
+          {[o.source, o.campaign, o.batch && `webinar: ${o.batch}`].filter(Boolean).length > 0 && <> — <b>{[o.source, o.campaign, o.batch && `webinar: ${o.batch}`].filter(Boolean).join(' · ')}</b></>}
+          {o.by && <span className="text-slate-500"> · {o.by}</span>}</li>))}
+      </ul>
+    </section>
+  )
+}
+
+/** Common email provider typos (gmial.com → gmail.com) — same list as the database. */
+export function emailTypo(email?: string | null): string | null {
+  const e = (email ?? '').replace(/\s/g, '').toLowerCase(); const at = e.lastIndexOf('@'); if (at < 1) return null
+  const dom = e.slice(at + 1)
+  const fix: Record<string, string> = { 'gmial.com': 'gmail.com', 'gamil.com': 'gmail.com', 'gmal.com': 'gmail.com', 'gmai.com': 'gmail.com', 'gmaill.com': 'gmail.com',
+    'gnail.com': 'gmail.com', 'gmail.co': 'gmail.com', 'gmail.con': 'gmail.com', 'gmail.cm': 'gmail.com', 'gmeil.com': 'gmail.com', 'gimal.com': 'gmail.com', 'gmali.com': 'gmail.com',
+    'gmil.com': 'gmail.com', 'gmail.in': 'gmail.com', 'yaho.com': 'yahoo.com', 'yahooo.com': 'yahoo.com', 'yahoo.con': 'yahoo.com', 'yhoo.com': 'yahoo.com',
+    'hotmial.com': 'hotmail.com', 'hotmal.com': 'hotmail.com', 'hotmail.con': 'hotmail.com', 'outlok.com': 'outlook.com', 'outlook.con': 'outlook.com',
+    'rediffmal.com': 'rediffmail.com', 'redifmail.com': 'rediffmail.com', 'icloud.con': 'icloud.com' }
+  const right = fix[dom] ?? (dom.endsWith('.con') ? dom.slice(0, -4) + '.com' : null)
+  return right ? e.slice(0, at + 1) + right : null
+}

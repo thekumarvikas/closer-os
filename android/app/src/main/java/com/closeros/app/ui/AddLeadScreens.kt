@@ -140,7 +140,7 @@ fun ImportScreen(vm: AppViewModel) {
                 Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFECFDF5))) {
                     Column(Modifier.padding(14.dp)) {
                         Text("✓ ${r.inserted} new lead${if (r.inserted == 1) "" else "s"} added", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Brand.green)
-                        if (r.already > 0) Text("${r.already} were already in your leads (not added twice)" + if (r.joined > 0) " · ${r.joined} joined the event" else "")
+                        if (r.already > 0) Text("${r.already} were already in your leads (not added twice — marked 🔁 Repeated)" + if (r.joined > 0) " · ${r.joined} joined the event" else "")
                         if (r.invalid > 0) Text("${r.invalid} rows had no valid phone number", color = Brand.muted)
                         Button(onClick = { vm.showImport = false; vm.importData = null; vm.importResult = null; vm.tab = Tab.Leads }, modifier = Modifier.padding(top = 8.dp)) { Text("See my leads") }
                     }

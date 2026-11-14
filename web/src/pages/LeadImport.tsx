@@ -137,7 +137,7 @@ export default function LeadImport({ orgId, dir, onClose, onDone, batchId }:
           <p className="mt-3 text-lg font-semibold">{result.inserted.toLocaleString('en-IN')} leads imported</p>
           <p className="mt-1 text-sm text-slate-500">
             {result.joined > 0 && <>{result.joined} existing leads joined this webinar (marked Repeated) · </>}
-            {result.duplicates} skipped as duplicates · {result.invalid} skipped because the phone number was missing or wrong
+            {result.duplicates} already in your list (not added again — marked 🔁 Repeated, new source remembered) · {result.invalid} skipped because the phone number was missing or wrong
           </p>
         </div>
       ) : !rows.length ? (

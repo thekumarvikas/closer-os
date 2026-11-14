@@ -442,6 +442,8 @@ fun leadTags(vm: AppViewModel, l: Lead): List<Tag> {
     if (b != null && (b.watch_minutes ?: 0) >= 60) out += Tag("🔥 Hot · ${b.watch_minutes} min", Color(0xFFFFEDD5), Color(0xFF9A3412))
     if (l.do_not_call) out += Tag("Do not call", Color(0xFFFEE2E2), Color(0xFF991B1B))
     if (l.source == "Phone call") out += Tag("Added from a call", Color(0xFFFEF3C7), Color(0xFF92400E))
+    // Same person came in more than once (another form, sheet, campaign or webinar): one lead, marked Repeated.
+    if (l.arrivals > 1) out += Tag("🔁 Repeated ×${l.arrivals}", Color(0xFFEDE9FE), Color(0xFF5B21B6))
     if (l.score >= 40 && l.won_at == null) out += Tag("⚡ Close to converting", Color(0xFFFEF3C7), Color(0xFF92400E))
     // Speed to first call: a fresh lead nobody has dialled yet shows how long it has been waiting.
     if (l.dial_count == 0 && !l.do_not_call) l.created_at?.let { runCatching { com.closeros.app.data.parseInstant(it) }.getOrNull() }?.let { at ->

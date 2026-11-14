@@ -11,6 +11,7 @@ import { Badge, Button, Card, Empty, ErrorBox, Field, Modal, PageHeader, Spinner
 import LeadImport from './LeadImport'
 import LeadDrawer from './LeadDrawer'
 import LeadUtilisation from '../components/LeadUtilisation'
+import DuplicatesModal from '../components/Duplicates'
 import { SortTh, type SortDir } from '../lib/sort'
 import { dur } from '../components/terms'
 
@@ -47,6 +48,8 @@ export default function Leads() {
   const [source, setSource] = usePersisted('leads.source', '')
   const [talk, setTalk] = usePersisted('leads.talk', '')
   const [util, setUtil] = usePersisted<'' | 'used' | 'unused'>('leads.util', '')
+  const [rep, setRep] = usePersisted<'' | 'yes'>('leads.rep', '')
+  const [dups, setDups] = useState(false)
   const [sort, setSort] = usePersisted<[string, SortDir]>('leads.sort', ['created_at', 'desc'])
   const [bands, setBands] = useState<Record<string, number> | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -66,10 +69,11 @@ export default function Leads() {
     if (source) query = query.ilike('source', source)
     if (util === 'used') query = query.gt('dial_count', 0)
     else if (util === 'unused') query = query.eq('dial_count', 0)
+    if (rep === 'yes') query = query.gt('arrivals', 1)
     const b = TALK_BANDS.find(x => x.key === talk)
     if (b) { query = query.gte('total_talk_sec', b.from); if (b.until != null) query = query.lt('total_talk_sec', b.until) }
     return query
-  }, [assignee, stage, source, talk, util])
+  }, [assignee, stage, source, talk, util, rep])
   const searchIds = useCallback(async (): Promise<string[] | null> => {
     const term = q.trim()
     if (term.length < 2) return null
@@ -115,7 +119,7 @@ export default function Leads() {
   }
 
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t) }, [load])
-  useEffect(() => { setPage(0) }, [q, assignee, stage, source, util, sort])
+  useEffect(() => { setPage(0) }, [q, assignee, stage, source, util, rep, sort])
 
   const refresh = () => { setSelected(new Set()); load(); setVersion(v => v + 1) }
   async function bulk(p: Record<string, unknown>) {
@@ -130,6 +134,7 @@ export default function Leads() {
       <PageHeader title="Leads" subtitle={`${count.toLocaleString('en-IN')} leads`} actions={
         <>
           {isManager && <Button variant="secondary" onClick={() => setShowImport(true)}><Upload className="h-4 w-4" /> Import</Button>}
+          {isManager && <Button variant="secondary" onClick={() => setDups(true)}>Possible duplicates</Button>}
           {isManager && <Button variant="secondary" onClick={exportCsv} loading={exporting}><Download className="h-4 w-4" /> Export</Button>}
           <Button onClick={() => setShowAdd(true)}><Plus className="h-4 w-4" /> Add lead</Button>
         </>
@@ -152,6 +157,9 @@ export default function Leads() {
           )}
           <select className="input !w-auto" value={util} onChange={e => setUtil(e.target.value as typeof util)}>
             <option value="">Called: any</option><option value="used">Called at least once</option><option value="unused">Never called</option>
+          </select>
+          <select className="input !w-auto" value={rep} onChange={e => setRep(e.target.value as typeof rep)} title="Leads that came in more than once">
+            <option value="">Came in: any</option><option value="yes">🔁 Repeated (came in 2+ times)</option>
           </select>
           <select className="input !w-auto" value={stage} onChange={e => setStage(e.target.value)}>
             <option value="">Stage: all</option>
@@ -193,7 +201,7 @@ export default function Leads() {
 
         <ErrorBox error={error} />
         {!leads || !dir ? <Spinner /> : leads.length === 0 ? (
-          <Empty icon={<Users className="h-6 w-6" />} title={q || assignee || stage || source || talk || util ? 'No leads match these filters' : 'No leads yet'}
+          <Empty icon={<Users className="h-6 w-6" />} title={q || assignee || stage || source || talk || util || rep ? 'No leads match these filters' : 'No leads yet'}
             text={isManager ? 'Import a CSV/Excel file or add a lead by hand.' : 'Leads assigned to you will appear here.'}
             action={isManager && !q ? <Button onClick={() => setShowImport(true)}><Upload className="h-4 w-4" /> Import leads</Button> : undefined} />
         ) : (
@@ -205,7 +213,7 @@ export default function Leads() {
                 {isManager && <input type="checkbox" className="mt-1" checked={selected.has(l.id)} onClick={e => e.stopPropagation()} onChange={() => {
                   const s = new Set(selected); if (s.has(l.id)) s.delete(l.id); else s.add(l.id); setSelected(s) }} />}
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5"><span className="truncate font-medium text-slate-900">{l.name || 'No name'}</span>{l.do_not_call && <Badge color="red">DNC</Badge>}</div>
+                  <div className="flex items-center gap-1.5"><span className="truncate font-medium text-slate-900">{l.name || 'No name'}</span>{l.do_not_call && <Badge color="red">DNC</Badge>}{((l as any).arrivals ?? 1) > 1 && <Badge color="gray">🔁 ×{(l as any).arrivals}</Badge>}</div>
                   <div className="text-xs text-slate-500">{[fmtPhone(l.phone), l.city, l.assigned_to ? dir.nameOf(l.assigned_to) : 'Unassigned'].filter(Boolean).join(' · ')}</div>
                   <div className="text-xs text-brand-700">{(l.call_count ?? 0) === 0 ? 'Not called yet' : `${l.call_count} calls · ${l.conversation_count ?? 0} conversations`}{dir.outcomeOf(l.last_outcome_id) ? ` · ${dir.outcomeOf(l.last_outcome_id)!.label}` : ''}</div>
                   {l.next_follow_up_at && <div className={`text-xs ${new Date(l.next_follow_up_at) < new Date() ? 'font-medium text-red-600' : 'text-slate-500'}`}>Next call {fmtDate(l.next_follow_up_at, org)}</div>}
@@ -238,7 +246,7 @@ export default function Leads() {
                           const s = new Set(selected); if (s.has(l.id)) s.delete(l.id); else s.add(l.id); setSelected(s)
                         }} /></td>}
                       <td className="td"><div className="font-medium text-slate-900">{l.name || <span className="text-slate-400">No name</span>}
-                        {l.do_not_call && <Badge color="red">DNC</Badge>}</div>
+                        {l.do_not_call && <Badge color="red">DNC</Badge>}{((l as any).arrivals ?? 1) > 1 && <span title="Came in more than once"> <Badge color="gray">🔁 Repeated ×{(l as any).arrivals}</Badge></span>}</div>
                         <div className="text-xs tabular-nums text-slate-500">{[fmtPhone(l.phone), l.city].filter(Boolean).join(' · ')}</div></td>
                       <td className="td">{l.assigned_to ? dir.nameOf(l.assigned_to) : <span className="text-amber-700">Unassigned</span>}</td>
                       <td className="td whitespace-nowrap text-slate-600">{(l.call_count ?? 0) === 0 ? <span className="text-slate-400">Not called</span> : <>
@@ -273,6 +281,7 @@ export default function Leads() {
       {showImport && dir && <LeadImport orgId={org.id} dir={dir} onClose={() => setShowImport(false)} onDone={refresh} />}
       {showAdd && dir && <AddLead dir={dir} onClose={() => setShowAdd(false)} onDone={refresh} />}
       {showAssign && dir && <AssignLeads dir={dir} ids={[...selected]} onClose={() => setShowAssign(false)} onDone={refresh} />}
+      {dups && dir && <DuplicatesModal dir={dir} onClose={() => setDups(false)} onMerged={refresh} />}
       {openLead && dir && <LeadDrawer leadId={openLead} dir={dir} onClose={() => setOpenLead(null)} onChanged={load} />}
     </>
   )

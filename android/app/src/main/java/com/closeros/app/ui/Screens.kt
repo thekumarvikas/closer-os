@@ -236,6 +236,7 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
                 TextButton(onClick = { vm.openPlaybook(l) }) { Text("📖 Script, objection answers & links") }
                 LeadSequencesCard(vm, l)
             }
+            if (l.arrivals > 1) item { LeadOriginsCard(l) }
             item { ProfileCard(vm, l) }
             item { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { KeyFactsCard(l) { t -> lead = l.copy(key_facts = t) }; PinnedNotes(vm, l) } }
             item { EffortCard(vm, l) }

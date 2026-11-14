@@ -1544,3 +1544,21 @@ intelligence → Play Store launch.
 ## payments, price list), duplicate leads → one lead "Repeated", outcomes ordered by each rep's own usage, per-SIM
 ## subscriptions (as decided above), Buyer Analysis. Google sign-in is "very important": NOT working in the Play Store app
 ## (likely cause: Play app-signing SHA-1 missing on the Google OAuth Android client + consent screen still "Testing").
+
+## Duplicate leads → one "Repeated" lead (migration 0075, Nov 14 2026)
+- Cleaning helpers (also for Buyer Analysis): clean_email (lower, no spaces anywhere, trailing punctuation off),
+  email_domain_fix (gmial/gamil/gmal/gmail.co/.con… → gmail.com; yahoo/hotmail/outlook/rediffmail/icloud typos; .con/.cmo/.ocm),
+  email_key (clean + typo fixed), phone_key (digits, last 10). leads.phone_key / email_key generated columns + indexes.
+- find_lead(org, phone, email): exact number → lead_phones → same last 10 digits (leads + lead_phones) → same email_key.
+  Used by import_leads, ingest_lead, import_my_leads, add_lead and log_call(create_lead) — all re-created in 0075.
+- lead_origins (every arrival: first | import | webhook | app | …, source, campaign, batch, user, data) + trigger
+  t_lead_first_origin; lead_arrived(lead, kind, source, campaign, batch, data) = origin row + leads.arrivals+1 +
+  last_arrived_at + fills empty name/email/city/state/profession/company + new number → lead_phones + activity 'repeated'.
+  Backfilled (first origin per lead + repeat batch joins). lead_origin_list(lead).
+- lead_duplicates(org) (managers: groups by phone_key / email_key), merge_leads(keep, others[]) (moves calls, follow_ups,
+  activities, WA, sequences, batch_leads (best attendance), shares, lead_phones (+ other's number), origins; fills blanks,
+  sums arrivals; others deleted_at + merged_into; refresh_lead_stats; audit leads.merged).
+- Dashboard: Leads "Possible duplicates" (components/Duplicates.tsx, pick Keep → Merge), filter "Came in: 🔁 Repeated",
+  🔁 ×N badge; LeadDrawer LeadOrigins ("Repeated — came in N times") + email typo hint (emailTypo in LeadProfile.tsx);
+  import result says "already in your list — marked Repeated". App: lead tag "🔁 Repeated ×N", lead page LeadOriginsCard
+  (Notes.origins, saved copy), Lead.arrivals; LeadIndex cursor v10.

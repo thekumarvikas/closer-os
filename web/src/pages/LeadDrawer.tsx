@@ -1,6 +1,6 @@
 import LeadWebinars from '../components/LeadWebinars'
 import LeadShares from '../components/LeadShares'
-import { LeadProfileCard, PinnedNotes, LeadObjections, type Pin } from '../components/LeadProfile'
+import { LeadProfileCard, PinnedNotes, LeadObjections, LeadOrigins, emailTypo, type Pin } from '../components/LeadProfile'
 import { PlayButton, RecordingPlayer } from '../components/CallLog'
 import { CallColorKey, CallType } from '../components/CallColors'
 import { useEffect, useState } from 'react'
@@ -128,6 +128,7 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
               </div>
               <div className="space-y-1.5 text-sm text-slate-700">
                 {lead.email && <p className="flex items-center gap-2"><Mail className="h-4 w-4 text-slate-400" /> {lead.email}</p>}
+                {emailTypo(lead.email) && <p className="ml-6 text-xs text-amber-700">⚠ Email may be misspelt — did you mean <b>{emailTypo(lead.email)}</b>? (It still matches buyers with the right spelling.)</p>}
                 {(lead.city || lead.state) && <p className="flex items-center gap-2"><MapPin className="h-4 w-4 text-slate-400" /> {[lead.city, lead.state, lead.country].filter(Boolean).join(', ')}</p>}
                 {(lead.company || lead.profession) && <p className="flex items-center gap-2"><Building2 className="h-4 w-4 text-slate-400" /> {[lead.profession, lead.company].filter(Boolean).join(' at ')}</p>}
                 {lead.deal_value != null && <p>Deal: <b>{fmtMoney(lead.deal_value, org)}</b></p>}
@@ -143,6 +144,7 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
               <LeadShares leadId={leadId} assignedTo={lead.assigned_to} sharedWith={lead.shared_with ?? []} onChanged={() => { load(); onChanged() }} />
               <LeadWebinars leadId={leadId} />
 
+              <LeadOrigins leadId={leadId} arrivals={(lead as any).arrivals ?? 1} />
               <LeadProfileCard leadId={leadId} profile={(lead as any).profile ?? {}} onChanged={() => { load(); onChanged() }} />
               <PinnedNotes leadId={leadId} pins={((lead as any).pinned ?? []) as Pin[]} onChanged={load} />
               <LeadObjections ids={(lead as any).objections ?? []} />

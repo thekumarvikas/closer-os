@@ -29,6 +29,9 @@ import kotlinx.serialization.json.put
     val best: ObjAnswer? get() = allAnswers.firstOrNull { it.status == "published" } ?: allAnswers.firstOrNull()
 }
 
+@Serializable data class Origin(val at: String, val kind: String = "other", val source: String? = null, val campaign: String? = null,
+    val batch: String? = null, val first: Boolean = false, val by: String? = null)
+
 /** The lead profile as the app reads it. */
 data class LeadProfileData(val challenges: List<String> = emptyList(), val challengesText: String? = null, val goals: List<String> = emptyList(),
                            val goalsText: String? = null, val budget: String? = null, val budgetAmount: String? = null) {
@@ -162,6 +165,11 @@ object Notes {
             put("p_org", orgId)
             put("p", buildJsonObject { id?.let { put("id", it) }; title?.let { put("title", it) }; body?.let { put("body", it) }; parentId?.let { put("parent_id", it) } })
         }).data.trim('"')
+
+    /** Every place a lead came in from (newest first) — "Came in 3 times". */
+    suspend fun origins(leadId: String): List<Origin> = json.decodeFromString(Repo.savedText("origins:$leadId") {
+        db.rpc("lead_origin_list", buildJsonObject { put("p_lead", leadId) }).data
+    })
 
     /** Objections raised in a call, as stored in calls.outcome_data. */
     fun objectionsJson(picked: Map<String, String?>) = buildJsonArray {

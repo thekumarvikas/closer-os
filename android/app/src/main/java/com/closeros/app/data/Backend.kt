@@ -146,6 +146,8 @@ data class LeadFact(val key: String, val label: String, val options: List<String
     val pinned: List<Pin> = emptyList(),
     /** The latest note written about this lead (call or note), for the before-call brief and reminders. */
     val last_note: String? = null, val last_note_at: String? = null,
+    /** How many times this person came in (another form, sheet, campaign, webinar) — 2+ = "Repeated". */
+    val arrivals: Int = 1, val last_arrived_at: String? = null,
     /** Objections this lead raised (newest first, ids of playbook objections). */
     val objections: List<String> = emptyList(),
     /** From today's focus list: what kind of call this is (reminder / sales) and for which webinar. */

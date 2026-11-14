@@ -67,7 +67,8 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
     var purpose by remember(info.purpose) { mutableStateOf(info.purpose) }
     // Until Android's call history has the entry, the ringing state tells received from dialled.
     val dir = c?.direction ?: info.dirHint?.takeIf { it == "incoming" || it == "missed" }
-    val choices = outcomesFor(co.outcomes, purpose, dir, c?.durationSec)
+    val usage = remember { com.closeros.app.data.LocalReports.outcomeUsage(ctx) }
+    val choices = outcomesFor(co.outcomes, purpose, dir, c?.durationSec, usage)
     // A reminder call-back must be before the webinar starts.
     val webinarAt = if (purpose == "reminder") com.closeros.app.data.CallPurpose.webinarOf(lead, info.batchId)?.takeIf { it.isAfter(Instant.now()) } else null
     var outcome by remember { mutableStateOf<Outcome?>(null) }

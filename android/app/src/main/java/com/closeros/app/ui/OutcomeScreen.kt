@@ -44,7 +44,8 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
     val zone = ZoneId.of(vm.membership?.organization?.timezone ?: "Asia/Kolkata")
     // Reminder or sales: set by where the call came from or worked out for the lead; the rep can switch it.
     var purpose by remember(p) { mutableStateOf(p.purpose) }
-    val choices = outcomesFor(vm.outcomes, purpose, log?.direction, log?.durationSec)
+    val usage = remember(p) { com.closeros.app.data.LocalReports.outcomeUsage(ctx) }
+    val choices = outcomesFor(vm.outcomes, purpose, log?.direction, log?.durationSec, usage)
     var outcome by remember { mutableStateOf<Outcome?>(null) }
     // Dialled and nobody picked up (0 s): "Didn't pick" is already chosen — one tap on Save.
     LaunchedEffect(choices, log?.id) {
@@ -312,11 +313,12 @@ private fun Chip(label: String, selected: Boolean, onClick: () -> Unit) {
 /** Outcomes that only make sense when WE dialled (shown nowhere for a received call). */
 val DIALLED_ONLY = setOf("not_in_service", "invalid_number", "r_invalid", "r_out_of_service", "someone_else", "r_someone_else")
 
-fun outcomesFor(all: List<Outcome>, purpose: String, direction: String?, durationSec: Int?): List<Outcome> {
-    // Positive first, negative last: sale → interested → still talking → not interested → disqualified.
+fun outcomesFor(all: List<Outcome>, purpose: String, direction: String?, durationSec: Int?, usage: Map<String, Double> = emptyMap()): List<Outcome> {
+    // MY most-used outcomes first (recent weeks count more); unused ones keep the positive-first order:
+    // sale → interested → still talking → not interested → disqualified. The call-type rules below still decide what's shown.
     val list = all.filter { it.is_active && (it.purpose == purpose || it.purpose == "both") }
         .filter { direction == null || direction == "incoming" || it.shown_on != "incoming" }   // received-only outcomes never on a dialled call
-        .sortedWith(compareBy({ outcomeRank(it) }, { it.position }))
+        .sortedWith(compareByDescending<Outcome> { Math.round((usage[it.id] ?: 0.0) * 2) }.thenBy { outcomeRank(it) }.thenBy { it.position })
     val noContact = { o: Outcome -> o.category == "not_connected" }
     val talk = durationSec ?: 0
     return when {

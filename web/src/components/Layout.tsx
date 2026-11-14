@@ -1,6 +1,6 @@
 import { NavLink, Outlet, Link, useLocation } from 'react-router-dom'
 import { Suspense, useState, type FormEvent } from 'react'
-import { LayoutDashboard, Headphones, BarChart3, Video, Plug, BookOpen, Megaphone, ClipboardCheck, CreditCard, ShieldCheck, Users, PhoneCall, CalendarClock, UserCog, Settings, LogOut, Menu, X, Wallet } from 'lucide-react'
+import { LayoutDashboard, Headphones, BarChart3, Video, Plug, BookOpen, Megaphone, ClipboardCheck, CreditCard, ShieldCheck, Users, PhoneCall, CalendarClock, UserCog, Settings, LogOut, Menu, X, Wallet, Search } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { Button, ErrorBox, Field, Modal, Spinner } from './ui'
 import { useSession } from '../lib/session'
@@ -13,6 +13,7 @@ const nav = [
   { to: '/webinars', label: 'Webinars / Sales Events', icon: Video },
   { to: '/leads', label: 'Leads', icon: Users },
   { to: '/sales', label: 'Sales', icon: Wallet },
+  { to: '/buyers', label: 'Buyer Analysis', icon: Search, manager: true },
   { to: '/lead-sources', label: 'Lead sources', icon: Plug, manager: true, team: true },
   { to: '/calls', label: 'Calls', icon: PhoneCall },
   { to: '/playbook', label: 'Playbook', icon: BookOpen },

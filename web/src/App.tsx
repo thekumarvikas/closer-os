@@ -22,6 +22,7 @@ const FollowUps = lazy(() => import('./pages/FollowUps'))
 const Team = lazy(() => import('./pages/Team'))
 const Settings = lazy(() => import('./pages/Settings'))
 const Sales = lazy(() => import('./pages/Sales'))
+const BuyerAnalysis = lazy(() => import('./pages/BuyerAnalysis'))
 import SetPassword, { useRecoveryMode } from './pages/SetPassword'
 
 export default function App() {
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="follow-ups" element={<FollowUps />} />
         <Route path="playbook" element={<Playbook />} />
         <Route path="sales" element={<Sales />} />
+        {isManager && <Route path="buyers" element={<BuyerAnalysis />} />}
         {team && isManager && <Route path="team" element={<Team />} />}
         {team && isManager && <Route path="announcements" element={<Announcements />} />}
         {team && isManager && <Route path="reviews" element={<Reviews />} />}

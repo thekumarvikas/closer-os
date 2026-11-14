@@ -34,6 +34,24 @@ object LocalReports {
     private fun outcomesMap(ctx: Context): Map<String, String> =
         LocalDb.get(ctx).get(KEY)?.let { runCatching { json.decodeFromString(mapSer, it) }.getOrNull() } ?: emptyMap()
 
+    /**
+     * How much I use each outcome (outcome id → weight): every saved outcome counts, recent weeks more (half-life 3 weeks).
+     * Used to put MY most-used outcomes first. Cached for a minute; refreshed right after I save one.
+     */
+    @Volatile private var usageCache: Pair<Long, Map<String, Double>>? = null
+    fun outcomeUsage(ctx: Context): Map<String, Double> {
+        usageCache?.let { (at, m) -> if (System.currentTimeMillis() - at < 60_000) return m }
+        val now = System.currentTimeMillis()
+        val m = mutableMapOf<String, Double>()
+        outcomesMap(ctx).values.forEach { v ->
+            val parts = v.split('|'); val oc = parts.getOrNull(0)?.takeIf { it.isNotBlank() } ?: return@forEach
+            val ageDays = parts.getOrNull(2)?.toLongOrNull()?.let { (now - it) / 86_400_000.0 } ?: 30.0
+            m[oc] = (m[oc] ?: 0.0) + Math.pow(0.5, ageDays / 21.0)
+        }
+        usageCache = now to m
+        return m
+    }
+
     /** Call id → outcome id, for outcomes saved from this phone (used by the Calls search). */
     fun outcomeOfCalls(ctx: Context): Map<String, String> = outcomesMap(ctx).mapValues { it.value.substringBefore('|') }
 
@@ -43,6 +61,7 @@ object LocalReports {
         val oc = payload["outcome_id"]?.jsonPrimitive?.content?.takeIf { it != "null" } ?: return
         val lead = payload["lead_id"]?.jsonPrimitive?.content?.takeIf { it != "null" }.orEmpty()
         merge(ctx, mapOf(id to "$oc|$lead|${System.currentTimeMillis()}"))
+        usageCache = null
         // Sale amount (for the hourly check-in's "🎉 1 sale · ₹12,000").
         val od = payload["outcome_data"] as? JsonObject
         val amt = (od?.get("amount") ?: od?.get("deal_value"))?.jsonPrimitive?.content?.toLongOrNull()

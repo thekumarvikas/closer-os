@@ -66,7 +66,7 @@ export function Buyers() {
       <p className="mb-4 mt-1 text-sm text-slate-500">Upload people who already bought. When one of them registers again, reps see "Already enrolled: product", and webinar reports count previous and new enrolments automatically.</p>
       <p className="text-sm"><b>{count?.toLocaleString('en-IN') ?? '…'}</b> buyers</p>
       {products.length > 0 && <ul className="mt-2 space-y-1 text-sm text-slate-600">{products.slice(0, 8).map(p => <li key={p.product} className="flex justify-between"><span>{p.product}</span><span className="tabular-nums">{p.n.toLocaleString('en-IN')}</span></li>)}</ul>}
-      <Button variant="secondary" className="mt-4" onClick={() => setOpen(true)}><Upload className="h-4 w-4" /> Upload buyers</Button>
+      <p className="mt-3 text-sm">New buyers are imported in <a href="/buyers" className="text-brand-700 underline">Buyer Analysis → Import buyers</a> (CSV or a connected Google Sheet): numbers and emails are cleaned, buyers are matched to leads and counted as verified sales.</p>
       {open && <BuyersUpload onClose={() => setOpen(false)} onDone={() => setVersion(v => v + 1)} />}
     </Card>
   )

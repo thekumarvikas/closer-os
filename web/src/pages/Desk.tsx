@@ -226,7 +226,8 @@ function WhatsAppWeb({ lead, repName, onClose }: { lead: Lead; repName: string; 
 /** The same outcome form as the app: outcome, notes + tags, next call (day + time) or no follow-up. */
 function OutcomePanel({ call, dir, onClose, onSaved }: { call: NeedCall; dir: Directory; onClose: () => void; onSaved: () => void }) {
   const { org } = useOrg()
-  const choices = outcomesFor(dir.outcomes.filter((o: Outcome) => o.is_active && (o.purpose === call.purpose || o.purpose === 'both')), call.direction, call.duration_sec)
+  const usage = useOutcomeUsage(org.id)
+  const choices = outcomesFor(dir.outcomes.filter((o: Outcome) => o.is_active && (o.purpose === call.purpose || o.purpose === 'both')), call.direction, call.duration_sec, usage)
   const [outcome, setOutcome] = useState<Outcome | null>(null)
   const [notes, setNotes] = useState('')
   const [tags, setTags] = useState<string[]>([])
@@ -334,8 +335,10 @@ function outcomeRank(o: Outcome): number {
 }
 
 /** Same rule as the app: only outcomes that make sense for this kind of call, positive ones first. */
-function outcomesFor(all: Outcome[], direction: string, talk: number): Outcome[] {
-  const list = [...all].sort((a, b) => outcomeRank(a) - outcomeRank(b) || a.position - b.position)
+function outcomesFor(all: Outcome[], direction: string, talk: number, usage: Record<string, number> = {}): Outcome[] {
+  // MY most-used outcomes first (recent weeks count more), then positive-first.
+  const u = (o: Outcome) => Math.round((usage[o.id] ?? 0) * 2)
+  const list = [...all].sort((a, b) => u(b) - u(a) || outcomeRank(a) - outcomeRank(b) || a.position - b.position)
   const noContact = (o: Outcome) => o.category === 'not_connected'
   const dialledOnly = ['not_in_service', 'invalid_number', 'r_invalid', 'r_out_of_service', 'someone_else', 'r_someone_else']
   // Received / missed / declined: hide "couldn't reach / dead number" kinds.
@@ -346,4 +349,22 @@ function outcomesFor(all: Outcome[], direction: string, talk: number): Outcome[]
   if (talk < 20) return [...dialled].sort((a, b) => Number(!noContact(a)) - Number(!noContact(b)))
   const l = dialled.filter(o => !noContact(o) && !dead.includes(o.code) && !(talk >= 60 && ['disconnected', 'r_disconnected'].includes(o.code)))
   return l.length ? l : dialled
+}
+
+/** How much I've used each outcome in the last 90 days (recent weeks count more — half-life 3 weeks). */
+let usageCache: { at: number; org: string; m: Record<string, number> } | null = null
+function useOutcomeUsage(orgId: string) {
+  const [m, setM] = useState<Record<string, number>>(usageCache?.org === orgId ? usageCache.m : {})
+  useEffect(() => {
+    if (usageCache && usageCache.org === orgId && Date.now() - usageCache.at < 60000) return
+    ;(async () => {
+      const { data: u } = await supabase.auth.getUser(); if (!u.user) return
+      const { data } = await supabase.from('calls').select('outcome_id, started_at').eq('org_id', orgId).eq('user_id', u.user.id)
+        .not('outcome_id', 'is', null).gte('started_at', new Date(Date.now() - 90 * 86400000).toISOString()).limit(5000)
+      const out: Record<string, number> = {}
+      for (const c of data ?? []) { const age = (Date.now() - new Date(c.started_at).getTime()) / 86400000; out[c.outcome_id] = (out[c.outcome_id] ?? 0) + Math.pow(0.5, age / 21) }
+      usageCache = { at: Date.now(), org: orgId, m: out }; setM(out)
+    })()
+  }, [orgId])
+  return m
 }

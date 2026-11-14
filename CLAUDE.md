@@ -1583,3 +1583,34 @@ intelligence → Play Store launch.
 - App (ui/SalesScreens.kt): Home MySalesCard "💰 My Sales Revenue · this month" (verified net, collected, waiting, balance due)
   → MySalesScreen; lead page "💰 Claim a sale" (ClaimSaleDialog, price-list chips); outcome screen sale form has price-list
   chips (product_id in outcome_data). data/NoteKit.kt SalesApi (products, claim, summary, mine; saved copies).
+
+## Buyer Analysis built (migrations 0077–0078, Nov 14 2026)
+- 0077: parse_amount (₹/Rs/commas), parse_any_date (DD/MM first, US order when day > 12, ISO, "14 Nov 2026", Excel serial,
+  time + AM/PM; missing time = noon company tz), buyer_imports (history + problem rows), buyer_sources (Google Sheet: token,
+  field_map, headers, last_result), sales.import_id / row_key (unique per org: same row again = skipped) / match_how
+  (phone|email|manual|check|none) / dup_of. buyer_field_guess(heading) — WHOLE WORDS (\m…\M; "Course" ≠ "rs").
+  import_buyers_core: cleans, fails rows with reasons (phone < 8 digits, no phone+email, amount not a number, date not
+  understood), warns (email typo, bad email ignored, no date → today), matches phone (exact / last 10) and email (typo-fixed)
+  separately → phone≠email lead = 'check'; same buyer + same day + same amount but different details = claimed sale with
+  dup_of ("confirm on Sales → To verify"); else VERIFIED sale + payment row + customers row (old buyers list); credited_to =
+  lead's assignee. import_buyers (managers, CSV, ≤ 5,000/call), buyer_sheet_push(token, headers, rows, first_row, sheet)
+  (anon via PostgREST /rest/v1/rpc with the publishable key; Apps Script in the dashboard, daily trigger + "Closer OS → Send
+  buyers now" menu; row_key = sheet id + md5(row)), save_buyer_source, link_buyer, rematch_buyers (pg_cron 'buyers-rematch'
+  daily 02:17 UTC), buyer_match_lists (unmatched + suggestions, please-check candidates).
+- 0078: leads.first_connected_at (t_call_first_connected: real dialled pick-up or received talk), leads.call_work_sec /
+  conn_work_sec (t_lead_work_secs = work_seconds from created_at), backfilled. ba_users (admins all, team managers their team).
+  buyer_effort (per verified sale with a lead: clock + working minutes to first call / first conversation, calls, conversations,
+  talk before payment, days call→pay / sign-up→pay, ALL webinars before payment (journey), closers; stats avg + median),
+  buyer_timeline(sale), buyer_patterns (cohort = all leads signed up in range, excluding 'Phone call' source; thresholds
+  call_min / call_basis working|clock / call_on first_call|first_connected / attend_min / paid_days; buyers meeting each + all
+  three; conversion met vs not; paths), buyer_gaps (look-like-buyers-not-paid, slow/never by member + by day, bought despite,
+  attended N+ min but no call after the webinar).
+- Dashboard pages/BuyerAnalysis.tsx (/buyers, managers): 1 Import (CSV/XLSX mapping, report, history, Google Sheet card with
+  script + column mapping), 2 Match (please check, unmatched + link), 3 Effort (filters, tiles, sortable table, timeline with
+  recordings, CSV), 4 Pattern finder (thresholds saved per browser, sentence, tables), 5 Gaps (+ follow-up CSV). Settings →
+  Buyers card now points here. Test: web/tests/buyers-test.cjs (temporary org, messy CSV, screenshots, cleans up) — passed.
+
+## Outcomes ordered by each rep's own usage (Nov 14 2026)
+- App LocalReports.outcomeUsage (saved outcomes, weight 0.5^(age days/21), cached 60 s, reset on save) → outcomesFor(…, usage)
+  sorts used-first (round(weight×2) desc), then outcomeRank, then position; call-type filters unchanged. Desk: same from the
+  rep's own calls of the last 90 days (useOutcomeUsage).

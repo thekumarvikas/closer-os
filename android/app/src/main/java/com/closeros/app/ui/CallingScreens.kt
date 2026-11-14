@@ -103,9 +103,13 @@ fun HomeScreen(vm: AppViewModel) {
         // What to do now: one big button that changes with the situation.
         item {
             val fmt = java.time.format.DateTimeFormatter.ofPattern("h:mm a").withZone(java.time.ZoneId.of(m.organization.timezone))
-            data class Next(val title: String, val sub: String?, val urgent: Boolean, val go: () -> Unit)
+            data class Next(val title: String, val sub: String?, val urgent: Boolean, val wa: Boolean = false, val go: () -> Unit)
+            val waDue = vm.seqDue?.due?.size ?: 0
+            val callsLine = if (dueToday.isNotEmpty()) " · ${dueToday.size} call${if (dueToday.size > 1) "s" else ""} due too" else ""
             val next = when {
                 vm.queueActive -> Next("Continue calling · ${vm.queuePos + 1} of ${vm.queue.size}", "Your calling queue is paused", false) { vm.queueResume() }
+                // WhatsApp messages due now (sequences + scheduled messages) — say "message", never "call".
+                waDue > 0 && overdue == 0 -> Next("Send $waDue WhatsApp message${if (waDue > 1) "s" else ""}", "Due now · one tap each$callsLine", false, wa = true) { vm.startSeqQueue() }
                 vm.focusTotal > 0 -> Next("Start today's focus · ${vm.focusTotal}",
                     (if (overdue > 0) "Incl. $overdue overdue follow-up${if (overdue > 1) "s" else ""} · " else "") + "${vm.focusDone} done today · see the list, then call or WhatsApp",
                     overdue > 0) { vm.openFocusList() }
@@ -117,9 +121,9 @@ fun HomeScreen(vm: AppViewModel) {
             Column(Modifier.fillMaxWidth().background(Brand.primary, RoundedCornerShape(16.dp)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(onClick = next.go, modifier = Modifier.fillMaxWidth().height(54.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = if (next.urgent) Color(0xFFDC2626) else Color.White, contentColor = if (next.urgent) Color.White else Brand.primaryDark)) {
-                    Icon(Icons.Default.Call, null); Spacer(Modifier.width(8.dp)); Text(next.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    if (next.wa) SeqIcon(22.dp) else Icon(Icons.Default.Call, null); Spacer(Modifier.width(8.dp)); Text(next.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                 }
-                next.sub?.let { Text(it, color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp, modifier = Modifier.clickable { if (vm.focusTotal > 0 && !vm.queueActive) vm.openFocusList() else vm.tab = Tab.FollowUps }) }
+                next.sub?.let { Text(it, color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp, modifier = Modifier.clickable { if (next.wa) vm.showSequences = true else if (vm.focusTotal > 0 && !vm.queueActive) vm.openFocusList() else vm.tab = Tab.FollowUps }) }
                 // Daily focus target set by the manager (e.g. 150 leads a day): progress only, never hides leads.
                 vm.progress?.daily?.focus?.takeIf { it > 0 }?.let { goal ->
                     Text("Today's focus target: ${vm.focusDone} of $goal leads", color = Color.White, fontSize = 12.sp)
@@ -140,7 +144,8 @@ fun HomeScreen(vm: AppViewModel) {
         }
 
         // WhatsApp sequence messages due now → one tap to send them all in the queue.
-        if ((vm.seqDue?.due?.size ?: 0) > 0) item { SeqDueCard(vm) }
+        // (Skipped when the big green button above already offers them.)
+        if ((vm.seqDue?.due?.size ?: 0) > 0 && (vm.queueActive || vm.followUps.any { (ms(it.due_at) ?: 0) < now })) item { SeqDueCard(vm) }
 
         // Today: 4 key numbers (with target bars when targets are set); the rest on "More".
         item {

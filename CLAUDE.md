@@ -1435,6 +1435,10 @@ intelligence → Play Store launch.
 - v0.22.1 bundle uploaded to the Alpha closed test and sent for review (Nov 13 2026). Play release notes must be
   wrapped in a language tag: <en-US> … </en-US> (else "text outside language tags").
 
+- v0.22.2 (versionCode 80): Home big button said "Call N follow-ups due" while WhatsApp sequence / scheduled messages were
+  due. Now (no queue running, no overdue calls) it says "Send N WhatsApp messages" (WhatsApp icon, → vm.startSeqQueue, sub-line
+  "· N calls due too"); the separate SeqDueCard on Home shows only when the big button is busy with calls.
+
 ## Owner decision — SIM-based subscriptions (Nov 13 2026; DECIDED, NOT built — owner said "do not make it now")
 - Company app: subscription = per SIM. At sign-up / phone setup the rep picks the ONE SIM used for work calls; only
   that SIM's calls are tracked (app + dashboard). The other SIM's calls never appear anywhere in Closer OS. To track a

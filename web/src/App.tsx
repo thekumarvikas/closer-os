@@ -30,6 +30,8 @@ export default function App() {
   if (!session) return <AuthPage />
   if (recovery) return <SetPassword email={session.user.email} onDone={recoveryDone} />
   if (!org) return <Onboarding />
+  // Personal accounts (Closer OS app for individuals) never see team or billing pages.
+  const team = !org.is_individual
   return (
     <Routes>
       <Route element={<Layout />}>
@@ -42,12 +44,12 @@ export default function App() {
         <Route path="calls" element={<Calls />} />
         <Route path="follow-ups" element={<FollowUps />} />
         <Route path="playbook" element={<Playbook />} />
-        {isManager && <Route path="team" element={<Team />} />}
-        {isManager && <Route path="announcements" element={<Announcements />} />}
-        {isManager && <Route path="reviews" element={<Reviews />} />}
-        {isManager && <Route path="lead-sources" element={<LeadSources />} />}
+        {team && isManager && <Route path="team" element={<Team />} />}
+        {team && isManager && <Route path="announcements" element={<Announcements />} />}
+        {team && isManager && <Route path="reviews" element={<Reviews />} />}
+        {team && isManager && <Route path="lead-sources" element={<LeadSources />} />}
         {isAdmin && <Route path="settings" element={<Settings />} />}
-        {isAdmin && <Route path="billing" element={<Billing />} />}
+        {team && isAdmin && <Route path="billing" element={<Billing />} />}
         {profile?.is_super_admin && <Route path="admin" element={<SuperAdmin />} />}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

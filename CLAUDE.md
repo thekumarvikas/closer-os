@@ -1449,3 +1449,13 @@ intelligence → Play Store launch.
 
 ## Sign-in without emails (owner idea, Nov 13 2026; not decided/built yet)
 - Owner: skip verification emails; use Google sign-in directly, no email sender (Resend) needed.
+
+## Personal vs company accounts on the website (Nov 14 2026)
+- The Play reviewer login (teamcloseros+review) had been created on the WEBSITE → a company account (14-day trial).
+  Owner sets it to Free (complimentary) in Super Admin so the reviewer is never locked out.
+- Website now respects organizations.is_individual: personal accounts hide Lead sources, Call reviews, Announcements,
+  Team, Plan & billing (menu + routes), "Webinars / Sales Events" shows as "Events", sidebar says "Personal account".
+- Onboarding (signed in, no company yet) asks "A company with a sales team" (create_organization) or "Just me"
+  (create_individual_account) — sign-up on the website no longer silently makes a company.
+- Not built: Super Admin switch to turn an existing company into a personal account (needs a migration; the
+  SUPABASE_ACCESS_TOKEN was not loaded in that session). Node is now installed on the Mac via Homebrew (web builds locally).

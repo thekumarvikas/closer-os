@@ -12,20 +12,21 @@ const nav = [
   { to: '/reports', label: 'Reports', icon: BarChart3 },
   { to: '/webinars', label: 'Webinars / Sales Events', icon: Video },
   { to: '/leads', label: 'Leads', icon: Users },
-  { to: '/lead-sources', label: 'Lead sources', icon: Plug, manager: true },
+  { to: '/lead-sources', label: 'Lead sources', icon: Plug, manager: true, team: true },
   { to: '/calls', label: 'Calls', icon: PhoneCall },
   { to: '/playbook', label: 'Playbook', icon: BookOpen },
-  { to: '/reviews', label: 'Call reviews', icon: ClipboardCheck, manager: true },
+  { to: '/reviews', label: 'Call reviews', icon: ClipboardCheck, manager: true, team: true },
   { to: '/follow-ups', label: 'Follow-ups', icon: CalendarClock },
-  { to: '/announcements', label: 'Announcements', icon: Megaphone, manager: true },
-  { to: '/team', label: 'Team', icon: UserCog, manager: true },
+  { to: '/announcements', label: 'Announcements', icon: Megaphone, manager: true, team: true },
+  { to: '/team', label: 'Team', icon: UserCog, manager: true, team: true },
   { to: '/settings', label: 'Settings', icon: Settings, admin: true },
-  { to: '/billing', label: 'Plan & billing', icon: CreditCard, admin: true },
+  { to: '/billing', label: 'Plan & billing', icon: CreditCard, admin: true, team: true },
   { to: '/admin', label: 'Super Admin', icon: ShieldCheck, superAdmin: true },
 ]
 
 export default function Layout() {
   const { org, role, profile, memberships, selectOrg, isAdmin, isManager, access } = useSession()
+  const solo = !!org?.is_individual
   const location = useLocation()
   const [open, setOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
@@ -41,19 +42,19 @@ export default function Layout() {
           {memberships.map(m => <option key={m.org_id} value={m.org_id}>{m.organization.name}</option>)}
         </select>
       ) : (
-        <p className="mx-5 mb-3 truncate text-sm text-brand-200">{org?.name}</p>
+        <p className="mx-5 mb-3 truncate text-sm text-brand-200">{org?.name}{solo && <span className="block text-xs text-brand-300">Personal account · Closer OS app</span>}</p>
       )}
       <nav className="flex-1 space-y-0.5 px-3">
-        {nav.filter(n => (!n.admin || isAdmin) && (!n.manager || isManager) && (!('superAdmin' in n) || profile?.is_super_admin)).map(n => (
+        {nav.filter(n => (!('team' in n) || !solo) && (!n.admin || isAdmin) && (!n.manager || isManager) && (!('superAdmin' in n) || profile?.is_super_admin)).map(n => (
           <NavLink key={n.to} to={n.to} end={n.end} onClick={() => setOpen(false)}
             className={({ isActive }) => `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${isActive ? 'bg-white/15 text-white' : 'text-brand-100 hover:bg-white/10 hover:text-white'}`}>
-            <n.icon className="h-4 w-4" /> {n.label}
+            <n.icon className="h-4 w-4" /> {solo && n.to === '/webinars' ? 'Events' : n.label}
           </NavLink>
         ))}
       </nav>
       <div className="border-t border-white/10 p-4">
         <button onClick={() => setProfileOpen(true)} className="block w-full truncate text-left text-sm font-medium text-white hover:underline" title="My profile">{profile?.full_name || profile?.email}</button>
-        <p className="text-xs text-brand-200">{role ? roleLabel[role] : ''}</p>
+        <p className="text-xs text-brand-200">{solo ? 'Personal account' : role ? roleLabel[role] : ''}</p>
         <button onClick={() => supabase.auth.signOut()} className="mt-3 flex items-center gap-2 text-sm text-brand-100 hover:text-white">
           <LogOut className="h-4 w-4" /> Sign out
         </button>
@@ -81,7 +82,7 @@ export default function Layout() {
           {access.state === 'trial' && <>Free trial: <b>{access.days_left} day{access.days_left === 1 ? '' : 's'} left</b>. </>}
           {access.state === 'grace' && <>Your plan has ended — please renew to keep using Closer OS. </>}
           {access.state === 'expired' && <>Your plan has ended. Your data is safe. </>}
-          {isAdmin ? <Link to="/billing" className="font-semibold underline">{access.state === 'trial' ? 'Choose a plan' : 'Renew now'}</Link> : 'Please ask your company owner to renew.'}
+          {solo ? null : isAdmin ? <Link to="/billing" className="font-semibold underline">{access.state === 'trial' ? 'Choose a plan' : 'Renew now'}</Link> : 'Please ask your company owner to renew.'}
         </div>
       )}
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">

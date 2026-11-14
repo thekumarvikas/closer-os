@@ -211,7 +211,7 @@ object AfterCall {
         val open = PendingIntent.getActivity(ctx, NOTIFY_ID, Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val n = NotificationCompat.Builder(ctx, FollowUpAlarms.CHANNEL)
-            .setSmallIcon(android.R.drawable.sym_call_outgoing)
+            .setSmallIcon(com.closeros.app.R.drawable.ic_notif).setColor(0xFF0E5E57.toInt())
             .setContentTitle("Save the outcome: ${lead.name.ifBlank { c.phone }}")
             .setContentText(if (c.direction == "incoming") "Received call — add the outcome and next call time" else "Add the outcome and next call time")
             .setContentIntent(open).setAutoCancel(true).setPriority(NotificationCompat.PRIORITY_HIGH).build()

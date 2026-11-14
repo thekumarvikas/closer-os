@@ -394,18 +394,8 @@ fun EffortCard(vm: AppViewModel, lead: Lead) {
     val nConv = maxOf(lead.conversation_count, ph?.conversations ?: 0)
     val nTalk = maxOf(lead.total_talk_sec, ph?.talkSec ?: 0)
     Column(Modifier.fillMaxWidth().background(if (won) Color(0xFFECFDF5) else Color.White, RoundedCornerShape(12.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(if (won) "💰 What it took to win this sale" else "Your work with this lead so far", fontWeight = FontWeight.SemiBold)
-        // Four plain numbers instead of one long line.
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            @Composable fun tile(v: String, l: String, sub: String? = null, m: Modifier) = Column(m.background(Color(0xFFF1F5F9), RoundedCornerShape(10.dp)).padding(8.dp)) {
-                Text(v, fontWeight = FontWeight.Bold, fontSize = 16.sp); Text(l, fontSize = 11.sp, color = Brand.muted)
-                sub?.let { Text(it, fontSize = 10.sp, color = Brand.muted) }
-            }
-            tile("$nCalls", "Calls", "$nDialled dialled · $nReceived received", Modifier.weight(1.3f))
-            tile("$nConv", "Conversations", null, Modifier.weight(1f))
-            tile(fmtDur(nTalk), "Talk time", null, Modifier.weight(1f))
-            tile("${lead.wa_count}", "WhatsApp", null, Modifier.weight(0.9f))
-        }
+        // The numbers themselves are in the lead page header (LeadStatsLine) — here only the sale path / usual-sale comparison.
+        if (won) Text("💰 What it took to win this sale", fontWeight = FontWeight.SemiBold)
         if (e != null && won) Text(effortLine(e), fontSize = 12.sp, color = Brand.muted)
         // Neutral comparison with my usual sale (never a warning).
         val r = vm.recipe

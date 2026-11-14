@@ -90,7 +90,7 @@ object Monetize {
                 setAdSize(size); adUnitId = BuildConfig.AD_BANNER
                 adListener = object : AdListener() {
                     override fun onAdLoaded() { loaded = true }
-                    override fun onAdFailedToLoad(e: LoadAdError) { loaded = false }
+                    override fun onAdFailedToLoad(e: LoadAdError) { loaded = false; logAdError(c, "banner", e) }
                 }
                 loadAd(AdRequest.Builder().build())
             }
@@ -103,7 +103,7 @@ object Monetize {
         loadingRewarded = true
         RewardedAd.load(ctx, BuildConfig.AD_REWARDED, AdRequest.Builder().build(), object : RewardedAdLoadCallback() {
             override fun onAdLoaded(ad: RewardedAd) { rewarded = ad; loadingRewarded = false }
-            override fun onAdFailedToLoad(e: LoadAdError) { rewarded = null; loadingRewarded = false }
+            override fun onAdFailedToLoad(e: LoadAdError) { rewarded = null; loadingRewarded = false; logAdError(ctx, "rewarded", e) }
         })
     }
 
@@ -176,5 +176,14 @@ object Monetize {
     fun restore(ctx: Context, onResult: (String) -> Unit) {
         connectBilling(ctx.applicationContext)
         refresh(ctx.applicationContext) { onResult(if (it) "Closer OS Pro is on ✓" else "No Closer OS Pro purchase found on this Google account") }
+    }
+
+    /** Why an ad didn't show (e.g. "No fill" while AdMob still reviews the app) — once a day per kind, for app_errors. */
+    private fun logAdError(ctx: android.content.Context, kind: String, e: LoadAdError) {
+        val p = ctx.getSharedPreferences("monetize", android.content.Context.MODE_PRIVATE)
+        val day = java.time.LocalDate.now().toString()
+        if (p.getString("ad_err_$kind", null) == day) return
+        p.edit().putString("ad_err_$kind", day).apply()
+        com.closeros.app.data.AppLog.error(ctx, "ads", null, kind = "info", message = "$kind ad not loaded: code ${e.code} · ${e.message}")
     }
 }

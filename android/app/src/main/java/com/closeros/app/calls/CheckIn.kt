@@ -268,7 +268,7 @@ object CheckIn {
             s.reminders.firstOrNull()?.takeIf { s.kind != "summary" }?.let { r -> "🎓 ${r.name}: ${r.left} left · pick-up ${r.pickupPct}%" + (if (r.missed > 0) " · ~${r.missed} may be missed at your usual pace" else "") },
             s.goalLine).joinToString("\n")
         val n = NotificationCompat.Builder(ctx, CHANNEL)
-            .setSmallIcon(android.R.drawable.ic_menu_recent_history)
+            .setSmallIcon(com.closeros.app.R.drawable.ic_notif).setColor(0xFF0E5E57.toInt())
             .setContentTitle(s.title).setContentText(if (s.kind == "morning") s.goalLine else s.lastLine)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setPriority(NotificationCompat.PRIORITY_HIGH).setCategory(NotificationCompat.CATEGORY_REMINDER)

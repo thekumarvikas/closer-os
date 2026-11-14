@@ -97,7 +97,7 @@ fun FollowUpsTabs(vm: AppViewModel) {
             item { ScheduledWaList(vm) }   // 💬 WhatsApp messages I scheduled for leads
             if (tab in setOf("overdue", "today") && shown.isNotEmpty()) item {
                 Button(onClick = { vm.startFollowUpQueue() }, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Default.Call, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Call due follow-ups in a queue")
+                    Icon(Icons.Default.Call, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Call follow-ups due now in a queue")
                 }
             }
             if (shown.isEmpty()) item {

@@ -246,7 +246,14 @@ object PhoneCalls {
 }
 
 /** Opens another app or settings screen; shows a short message instead of crashing when the phone has no app for it. */
-fun safeStart(ctx: android.content.Context, i: android.content.Intent, missing: String = "No app on this phone can open this") {
+fun safeStart(ctx: android.content.Context, i: android.content.Intent, missing: String = "No app on this phone can open this",
+              fallback: android.content.Intent? = null, fallbackNote: String? = null) {
     try { ctx.startActivity(i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
-    catch (e: Exception) { android.widget.Toast.makeText(ctx, missing, android.widget.Toast.LENGTH_LONG).show() }
+    catch (e: Exception) {
+        if (fallback != null) {
+            try { ctx.startActivity(fallback.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)); fallbackNote?.let { android.widget.Toast.makeText(ctx, it, android.widget.Toast.LENGTH_LONG).show() }; return }
+            catch (_: Exception) {}
+        }
+        android.widget.Toast.makeText(ctx, missing, android.widget.Toast.LENGTH_LONG).show()
+    }
 }

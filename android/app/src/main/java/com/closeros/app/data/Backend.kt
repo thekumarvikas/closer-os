@@ -1,5 +1,7 @@
 package com.closeros.app.data
 
+import kotlinx.coroutines.sync.withLock
+
 import android.content.Context
 import com.closeros.app.BuildConfig
 import io.github.jan.supabase.auth.Auth
@@ -56,7 +58,15 @@ object Backend {
      * would call the server WITHOUT the login ("JWT expired" / "permission denied"). So: load the saved
      * login ourselves and refresh it, retrying a few times. Returns true when a valid login is ready.
      */
-    suspend fun ensureFreshSession(): Boolean {
+    /** One refresh at a time: two parallel refreshes with the same token (pop-up + sync + app) can make the server revoke
+     *  the login, after which every request went out without it ("permission denied") and saves were lost. */
+    private val refreshLock = kotlinx.coroutines.sync.Mutex()
+    /** True when the server refused this phone's saved login: the app asks the rep to sign in again (nothing on the phone is lost). */
+    @Volatile var loginInvalid = false
+
+    suspend fun ensureFreshSession(): Boolean = refreshLock.withLock { freshSessionLocked() }
+
+    private suspend fun freshSessionLocked(): Boolean {
         val a = client.auth
         runCatching { kotlinx.coroutines.withTimeoutOrNull(3_000) { a.awaitInitialization() } }
         val soon = kotlinx.datetime.Clock.System.now() + kotlin.time.Duration.parse("2m")
@@ -64,8 +74,16 @@ object Backend {
             val cur = a.currentSessionOrNull()
             if (cur != null && cur.expiresAt > soon) return true
             val saved = cur ?: runCatching { a.sessionManager.loadSession() }.getOrNull() ?: return false   // really signed out
-            val ok = runCatching { a.importSession(a.refreshSession(saved.refreshToken)) }.isSuccess
-            if (ok) return true
+            val r = runCatching { a.importSession(a.refreshSession(saved.refreshToken)) }
+            if (r.isSuccess) { loginInvalid = false; return true }
+            // The server refused the saved login (not a network problem): the rep must sign in again.
+            // (Unless the library renewed it meanwhile — then the old token is "already used" but all is fine.)
+            if (!Net.isNetworkError(r.exceptionOrNull()!!)) {
+                kotlinx.coroutines.delay(1_000)
+                val now = a.currentSessionOrNull()
+                if (now != null && now.expiresAt > kotlinx.datetime.Clock.System.now() + kotlin.time.Duration.parse("1m")) return true
+                if (attempt >= 1) { loginInvalid = true; return false }
+            }
             kotlinx.coroutines.delay(1_500L * (attempt + 1))   // internet may still be waking up
         }
         return false
@@ -305,6 +323,7 @@ object TalkBands {
     val id: String, val direction: String, val started_at: String, val duration_sec: Int = 0,
     val outcome_id: String? = null, val notes: String? = null,
     val recording_status: String? = null, val recording_path: String? = null, val sim_slot: Int? = null, val channel: String = "phone",
+    val purpose: String? = null,
 )
 
 @Serializable data class TodayStats(val calls: Int = 0, val connected: Int = 0, val talkSec: Int = 0, val notPicked: Int = 0, val missed: Int = 0)
@@ -747,7 +766,7 @@ object Repo {
     }.decodeList<Template>() }
 
     suspend fun leadCalls(id: String): List<CallRow> = saved("calls:$id") { Backend.client.from("calls")
-        .select(Columns.raw("id, direction, started_at, duration_sec, outcome_id, notes, recording_status, recording_path, sim_slot, channel")) {
+        .select(Columns.raw("id, direction, started_at, duration_sec, outcome_id, notes, recording_status, recording_path, sim_slot, channel, purpose")) {
             filter { eq("lead_id", id) }
             order("started_at", Order.DESCENDING)
             limit(20)

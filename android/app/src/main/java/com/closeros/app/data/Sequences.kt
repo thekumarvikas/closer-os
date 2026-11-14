@@ -170,7 +170,7 @@ object SeqAlerts {
         val pi = PendingIntent.getActivity(ctx, 8810, Intent(ctx, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("open_tab", "sequences"),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val notif = NotificationCompat.Builder(ctx, CH).setSmallIcon(android.R.drawable.ic_dialog_email)
+        val notif = NotificationCompat.Builder(ctx, CH).setSmallIcon(com.closeros.app.R.drawable.ic_notif).setColor(0xFF0E5E57.toInt())
             .setContentTitle("💬 $n WhatsApp message${if (n == 1) "" else "s"} due today")
             .setContentText("Tap to send them one by one").setAutoCancel(true).setContentIntent(pi).build()
         runCatching { nm.notify(8810, notif) }
@@ -210,7 +210,7 @@ object WaSchedAlarms {
         val open = PendingIntent.getActivity(ctx, 7000 + (id.hashCode() and 0xFFFF), Intent(ctx, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("open_tab", "wa_due"),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val n = NotificationCompat.Builder(ctx, CH).setSmallIcon(android.R.drawable.ic_dialog_email)
+        val n = NotificationCompat.Builder(ctx, CH).setSmallIcon(com.closeros.app.R.drawable.ic_notif).setColor(0xFF0E5E57.toInt())
             .setContentTitle("💬 Send WhatsApp to $name now").setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body)).setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH).setContentIntent(open)

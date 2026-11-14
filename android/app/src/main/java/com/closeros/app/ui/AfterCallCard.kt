@@ -194,7 +194,7 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
                         trailingIcon = { IconButton(onClick = {
                             AfterCall.Overlay.setFocusable(ctx, false)
                             com.closeros.app.calls.safeStart(ctx, Intent(ctx, AfterCallActivity::class.java).putExtra("mode", "voice").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                        }) { Text("🎤", fontSize = 20.sp) } })
+                        }) { MicCircle() } })
                     co.org?.let { org ->
                         val cat = outcome?.category
                         SentencePicker(com.closeros.app.data.NoteKit.linesFor(org.noteLines, cat).take(6), org.profileOptions, compact = true,

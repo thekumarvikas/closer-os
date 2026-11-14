@@ -27,7 +27,8 @@ object CallSync {
         val orgId = store.orgId ?: return@runCatching 0
         if (Backend.uid == null) return@runCatching 0
         if (!com.closeros.app.data.Net.isOnline) return@runCatching 0   // nothing can be sent; runs again when the internet is back
-        Backend.ensureFreshSession()
+        // Never send anything without a valid login: the server would refuse it ("permission denied") and it would be lost.
+        if (!Backend.ensureFreshSession()) { com.closeros.app.data.AppLog.error(ctx, "sync", null, kind = "info", message = "skipped: login could not be renewed"); return@runCatching 0 }
 
         // 1) Outcomes saved while offline.
         val pending = store.outbox

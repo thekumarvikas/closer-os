@@ -44,7 +44,7 @@ object TeamAlerts {
         list.forEach { a ->
             val key = a.id + "|" + (a.reminded_at ?: "")
             val n = NotificationCompat.Builder(ctx, ANN)
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setSmallIcon(com.closeros.app.R.drawable.ic_notif).setColor(0xFF0E5E57.toInt())
                 .setContentTitle((if (a.urgent) "🔴 " else "📢 ") + a.title)
                 .setContentText(a.body)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(a.body + "\n\nOpen Closer OS to acknowledge."))
@@ -71,7 +71,7 @@ object TeamAlerts {
             channels(ctx)
             val more = if (nl.count > nl.names.size) " and ${nl.count - nl.names.size} more" else ""
             val n = NotificationCompat.Builder(ctx, LEADS)
-                .setSmallIcon(android.R.drawable.ic_menu_add)
+                .setSmallIcon(com.closeros.app.R.drawable.ic_notif).setColor(0xFF0E5E57.toInt())
                 .setContentTitle(if (nl.count == 1) "New lead assigned to you" else "${nl.count} new leads assigned to you")
                 .setContentText(nl.names.joinToString(", ") + more)
                 .setAutoCancel(true).setPriority(NotificationCompat.PRIORITY_HIGH)

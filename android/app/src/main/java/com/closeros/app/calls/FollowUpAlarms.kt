@@ -156,7 +156,7 @@ class FollowUpReceiver : BroadcastReceiver() {
             setOnClickPendingIntent(com.closeros.app.R.id.n_open, open)
         }
         val n = NotificationCompat.Builder(ctx, FollowUpAlarms.CHANNEL)
-            .setSmallIcon(android.R.drawable.sym_action_call)
+            .setSmallIcon(com.closeros.app.R.drawable.ic_notif).setColor(0xFF0E5E57.toInt())
             .setContentTitle(title).setContentText(line)
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
             .setCustomContentView(small).setCustomBigContentView(big).setCustomHeadsUpContentView(small)

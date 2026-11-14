@@ -1631,3 +1631,33 @@ intelligence → Play Store launch.
   work SIM, Also track my other SIM → manager approves). vm.loadWorkSims on Home refresh; sign-out clears.
 - Dashboard: Team page components/WorkSims.tsx (in use x of y, approve/reject requests, stop tracking); Plan & billing wording
   = SIMs ("One subscription = one tracked SIM … managers who only use the dashboard are free").
+
+## Owner feedback on 0.22.1 (v0.25.0, Nov 14 2026)
+- Home follow-up button = "Call N follow-ups" with N = due UP TO NOW; vm.startFollowUpQueue takes only due ≤ now (+1 min).
+  Follow-ups later in the next 24 h are never dialled by it (sub-line "N more later"; when only later ones exist the
+  button is "Pick leads to call" with "Next follow-up at …").
+- Large text / large display size: ui/Theme.kt ReadableScale (inside CloserTheme): fontScale capped at 1.15 and the
+  layout is at least 360 dp wide (density shrunk on narrower screens). Home tools in rows of 3, hero links icon over
+  label, tiles/bottom-nav labels one line. Keep labels maxLines = 1 + softWrap = false where space is tight.
+- WhatsApp-style mic: MicCircle() (ui/NotesKit.kt, res/drawable/ic_mic.xml) in VoiceButton + after-call card.
+- Notification icon: res/drawable/ic_notif.xml (white Closer OS mark) + setColor(brand) for ALL notifications.
+- Autostart: OPPO / realme / OnePlus open the app's App info page (Battery usage → Allow auto launch / background
+  activity); other brands keep their Autostart screen; Item.fallback / fallbackSteps + safeStart(…, fallback) when a
+  brand screen can't be opened ("No app on this phone can open this" on realme).
+- Lead page order: phone · profession/company/city/state · source · 📅 next follow-up · ONE stats line
+  (LeadStatsLine = max(server, phone call log): calls (dialled · received) · conversations · talk · WhatsApp) ·
+  best time · actions; "📋 Copy details" (ui/LeadPage.kt copyLead: lead, source, last call with purpose + outcome,
+  last 3 call notes, key facts, pins, next follow-up, counts → clipboard). EffortCard now only for won leads / the
+  usual-sale comparison (no tiles). Colour key moved to Settings → "Call colours" (removed from lead page + Calls tab).
+  CallRow carries purpose.
+- Individual app: ResponseLine says "You call new leads within X (usual time, last 7 days)" — no target.
+- Compare periods (app): "1 · Period" (Today, Yesterday, This week, Last week, Last 7 days, This month, Last month,
+  Pick dates) + "2 · Compare with" (period just before, same days last week, same days last month, Pick dates); both
+  date ranges shown; rows "value vs value ▲%".
+- Login loss ("permission denied" as anon in app_errors → saves refused): Backend.ensureFreshSession is serialised
+  (Mutex) so pop-up / sync / app never refresh the same token in parallel; a server-refused login (not network) sets
+  Backend.loginInvalid → vm.loginExpired shows the sign-in screen with a note (phone data kept, uploads after);
+  CallSync skips the run when the login can't be renewed (never sends requests without login).
+- Ads (solo): banner / rewarded load failures logged once a day to app_errors (place "ads", kind info). AdMob app is
+  "Requires review · Limited ad serving" until the Play listing is public and linked (AdMob → Add store).
+- Buyer matching confirmed with owner: phone OR email OR both (already so).

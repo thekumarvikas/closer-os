@@ -40,7 +40,15 @@ fun VoiceButton(onText: (String) -> Unit) {
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-IN")
             .putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak your note")
         runCatching { launcher.launch(i) }.onFailure { android.widget.Toast.makeText(ctx, "Voice typing isn't available on this phone", android.widget.Toast.LENGTH_SHORT).show() }
-    }) { Text("🎤", fontSize = 20.sp) }
+    }) { MicCircle() }
+}
+
+/** WhatsApp-style mic: white mic in a round green button. */
+@Composable
+fun MicCircle(size: androidx.compose.ui.unit.Dp = 36.dp) {
+    Box(Modifier.size(size).background(Color(0xFF00A884), androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
+        Icon(androidx.compose.ui.res.painterResource(com.closeros.app.R.drawable.ic_mic), "Speak", tint = Color.White, modifier = Modifier.size(size * 0.58f))
+    }
 }
 
 /** Note box with voice typing and one-tap tags. */

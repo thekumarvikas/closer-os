@@ -77,7 +77,7 @@ private fun Section(title: String, list: List<PhoneSetup.Item>, vm: AppViewModel
                         TextButton(onClick = {
                             when {
                                 it.key == "recfolder" -> PhoneSetup.pickRecordingsFolder(ctx)
-                                it.intent != null -> runCatching { safeStart(ctx, it.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                                it.intent != null -> runCatching { safeStart(ctx, it.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), fallback = it.fallback, fallbackNote = it.fallbackSteps) }
                             }
                         }, contentPadding = PaddingValues(horizontal = 4.dp)) { Text(if (it.key == "recfolder") "Change folder" else "Open setting again", fontSize = 13.sp) }
                         if (it.kind == PhoneSetup.Kind.Confirm) TextButton(onClick = { vm.store.unconfirm(it.key); refresh() }, contentPadding = PaddingValues(horizontal = 4.dp)) {
@@ -90,7 +90,7 @@ private fun Section(title: String, list: List<PhoneSetup.Item>, vm: AppViewModel
                                 when {
                                     it.kind == PhoneSetup.Kind.Runtime -> ask.launch(it.perms.toTypedArray())
                                     it.key == "recfolder" -> PhoneSetup.pickRecordingsFolder(ctx)
-                                    it.intent != null -> runCatching { safeStart(ctx, it.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                                    it.intent != null -> runCatching { safeStart(ctx, it.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), fallback = it.fallback, fallbackNote = it.fallbackSteps) }
                                         .onFailure { _ -> safeStart(ctx, Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
                                 }
                             }, contentPadding = PaddingValues(horizontal = 14.dp)) { Text(if (it.kind == PhoneSetup.Kind.Runtime) "Allow" else if (it.key == "autorecord") "Open Phone app" else "Turn on") }

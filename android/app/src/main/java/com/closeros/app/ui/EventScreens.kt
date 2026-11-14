@@ -93,8 +93,8 @@ fun eventWhen(e: BatchSummary): String =
 fun LeadEventsRow(vm: AppViewModel, l: Lead) {
     val names = l.batch_leads.mapNotNull { it.batch?.name }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(if (names.isEmpty()) "📅 Not in any event" else "📅 " + names.joinToString(" · "), fontSize = 14.sp, color = if (names.isEmpty()) Brand.muted else Brand.primaryDark, modifier = Modifier.weight(1f))
-        TextButton(onClick = { vm.eventPickFor = listOf(l) }) { Text(if (names.isEmpty()) "+ Add to event" else "Change") }
+        Text(if (names.isEmpty()) "🗓 No event" else "🗓 " + names.joinToString(" · "), fontSize = 14.sp, color = if (names.isEmpty()) Brand.muted else Brand.primaryDark, modifier = Modifier.weight(1f))
+        TextButton(onClick = { vm.eventPickFor = listOf(l) }) { Text(if (names.isEmpty()) "+ Add to event" else "Change", maxLines = 1, softWrap = false) }
     }
 }
 

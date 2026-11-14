@@ -138,7 +138,6 @@ fun CallHistoryScreen(vm: AppViewModel) {
         OutlinedTextField(q, { q = it }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
             placeholder = { Text("Search: name, number, city, notes, \"interested\"…", fontSize = 14.sp) },
             trailingIcon = { if (q.isNotEmpty()) TextButton(onClick = { q = "" }) { Text("✕") } })
-        CallColorKey(Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
         if (items == null) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }; return }
         val searching = q.trim().length >= 2
         if (searching) Text(when { found == null -> "Searching…"; else -> "${found!!.size} call${if (found!!.size == 1) "" else "s"} found in your phone's call history" },

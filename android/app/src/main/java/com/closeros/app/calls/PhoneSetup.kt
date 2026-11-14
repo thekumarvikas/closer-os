@@ -23,6 +23,8 @@ object PhoneSetup {
         val key: String, val title: String, val why: String, val done: Boolean, val kind: Kind,
         val required: Boolean = true, val perms: List<String> = emptyList(), val intent: Intent? = null,
         val steps: String? = null, val warning: String? = null,
+        /** Opened when [intent] can't be opened on this phone (e.g. the brand moved its screen). */
+        val fallback: Intent? = null, val fallbackSteps: String? = null,
     )
 
     val callPerms = buildList {
@@ -108,8 +110,17 @@ object PhoneSetup {
             pm.isIgnoringBatteryOptimizations(ctx.packageName), Kind.Special,
             intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${ctx.packageName}")),
             steps = "Tap Allow on the pop-up.")
-        autostartIntent(ctx)?.let { list += Item("autostart", "Autostart", "Required: your phone (${Build.MANUFACTURER}) stops apps from syncing in the background unless this is on.",
-            store.confirmed("autostart"), Kind.Confirm, intent = it, steps = "Find Closer OS in the list and turn its switch on, then come back and tap \"Done\".") }
+        val appInfo = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}"))
+        val oppoFamily = brand in setOf("oppo", "realme", "oneplus")
+        val appInfoSteps = if (oppoFamily) "On the Closer OS page: tap \"Battery usage\" and turn on \"Allow auto launch\" (or \"Auto launch\") and \"Allow background activity\". Then come back and tap \"Done\"."
+            else "On the Closer OS page: open \"Battery\" (or \"Other permissions\") and allow auto-start / background activity. Then come back and tap \"Done\"."
+        val auto = autostartIntent(ctx)
+        if (auto != null || oppoFamily) list += Item("autostart", "Autostart", "Required: your phone (${Build.MANUFACTURER}) stops apps from syncing in the background unless this is on.",
+            store.confirmed("autostart"), Kind.Confirm,
+            // Realme / OPPO / OnePlus keep auto launch on the app's own Battery page in newer versions.
+            intent = if (oppoFamily) appInfo else auto,
+            steps = if (oppoFamily) appInfoSteps else "Find Closer OS in the list and turn its switch on, then come back and tap \"Done\".",
+            fallback = appInfo, fallbackSteps = appInfoSteps)
         list += Item("dialer", "Phone app that records calls", when {
                 google -> "This phone uses Google's Phone app, which keeps recordings private."
                 makerDialer(dialer) -> "Your phone's own Phone app is set as the default ✓"

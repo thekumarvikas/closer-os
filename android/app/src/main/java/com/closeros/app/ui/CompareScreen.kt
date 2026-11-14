@@ -64,38 +64,67 @@ private val MEASURES = listOf(
     Measure("Percentages", "Conversion (sales ÷ leads talked to)", pct = true, fmt = pc) { ratio(it.d("sales"), it.d("leads_reached")) },
 )
 
-/** Today / Yesterday / Last 7 days / This month / Last month, each with the period before it. */
-private fun periods(today: LocalDate): List<Triple<String, Pair<LocalDate, LocalDate>, Pair<LocalDate, LocalDate>>> {
-    val m1 = today.withDayOfMonth(1); val lastM1 = m1.minusMonths(1)
-    val sameDayLast = lastM1.plusDays((minOf(today.dayOfMonth, lastM1.lengthOfMonth()) - 1).toLong())
+private typealias Range = Pair<LocalDate, LocalDate>
+
+/** The period you look at. */
+private fun mainPeriods(today: LocalDate): List<Pair<String, Range>> {
+    val mon = today.minusDays((today.dayOfWeek.value - 1).toLong())
+    val m1 = today.withDayOfMonth(1)
     return listOf(
-        Triple("Today", today to today, today.minusDays(1) to today.minusDays(1)),
-        Triple("Yesterday", today.minusDays(1) to today.minusDays(1), today.minusDays(2) to today.minusDays(2)),
-        Triple("Last 7 days", today.minusDays(6) to today, today.minusDays(13) to today.minusDays(7)),
-        Triple("This month", m1 to today, lastM1 to sameDayLast),
-        Triple("Last month", lastM1 to m1.minusDays(1), lastM1.minusMonths(1) to lastM1.minusDays(1)),
+        "Today" to (today to today),
+        "Yesterday" to (today.minusDays(1) to today.minusDays(1)),
+        "This week" to (mon to today),
+        "Last week" to (mon.minusDays(7) to mon.minusDays(1)),
+        "Last 7 days" to (today.minusDays(6) to today),
+        "This month" to (m1 to today),
+        "Last month" to (m1.minusMonths(1) to m1.minusDays(1)),
     )
 }
-private val prevName = mapOf("Today" to "yesterday", "Yesterday" to "the day before", "Last 7 days" to "the 7 days before",
-    "This month" to "the same days last month", "Last month" to "the month before")
 
-/** Reports → Compare periods: totals, uniques, averages and percentages vs the period before (▲▼). */
+/** What it is compared with: the same number of days just before, the same days a week / month earlier. */
+private fun compareWith(kind: String, r: Range): Range {
+    val days = java.time.temporal.ChronoUnit.DAYS.between(r.first, r.second) + 1
+    return when (kind) {
+        "week" -> r.first.minusWeeks(1) to r.second.minusWeeks(1)
+        "month" -> r.first.minusMonths(1) to r.second.minusMonths(1)
+        else -> r.first.minusDays(days) to r.first.minusDays(1)
+    }
+}
+
+private val dShort = java.time.format.DateTimeFormatter.ofPattern("d MMM")
+private fun Range.label(): String = if (first == second) dShort.format(first) else
+    if (first.month == second.month && first.year == second.year) "${first.dayOfMonth}–${dShort.format(second)}" else "${dShort.format(first)} – ${dShort.format(second)}"
+
+/** Reports → Compare periods: you choose the period AND what to compare it with; both date ranges are shown. */
 @Composable
 fun CompareScreen(vm: AppViewModel, users: List<String>?, whoLabel: String, onClose: () -> Unit) {
     BackHandler { onClose() }
     val m = vm.membership ?: return
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     val zone = runCatching { ZoneId.of(m.organization.timezone) }.getOrDefault(ZoneId.of("Asia/Kolkata"))
-    val ps = remember { periods(LocalDate.now(zone)) }
-    var pick by remember { mutableStateOf("Today") }
+    val today = remember { LocalDate.now(zone) }
+    val ps = remember { mainPeriods(today) }
+    var main by remember { mutableStateOf(ps.first().second) }
+    var mainName by remember { mutableStateOf<String?>("Today") }
+    var withKind by remember { mutableStateOf("before") }           // before | week | month | custom
+    var custom by remember { mutableStateOf<Range?>(null) }
+    val other = if (withKind == "custom") custom ?: compareWith("before", main) else compareWith(withKind, main)
     var cur by remember { mutableStateOf<JsonObject?>(null) }
     var prev by remember { mutableStateOf<JsonObject?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(pick) {
+    fun pick(start: LocalDate?, done: (Range) -> Unit) {
+        val s0 = start ?: today
+        android.app.DatePickerDialog(ctx, { _, y, mo, d ->
+            val a = LocalDate.of(y, mo + 1, d)
+            android.app.DatePickerDialog(ctx, { _, y2, mo2, d2 -> done(a to maxOf(a, LocalDate.of(y2, mo2 + 1, d2))) }, a.year, a.monthValue - 1, a.dayOfMonth)
+                .apply { setTitle("Until"); datePicker.minDate = a.atStartOfDay(zone).toInstant().toEpochMilli(); datePicker.maxDate = System.currentTimeMillis() }.show()
+        }, s0.year, s0.monthValue - 1, s0.dayOfMonth).apply { setTitle("From"); datePicker.maxDate = System.currentTimeMillis() }.show()
+    }
+    LaunchedEffect(main, other) {
         cur = null; prev = null; error = null
-        val p = ps.first { it.first == pick }
-        fun range(r: Pair<LocalDate, LocalDate>) = r.first.atStartOfDay(zone).toInstant() to r.second.plusDays(1).atStartOfDay(zone).toInstant()
+        fun range(r: Range) = r.first.atStartOfDay(zone).toInstant() to r.second.plusDays(1).atStartOfDay(zone).toInstant()
         runCatching {
-            val (a, b) = range(p.second); val (c, d) = range(p.third)
+            val (a, b) = range(main); val (c, d) = range(other)
             Repo.report("period_summary", m.org_id, a, b, users).jsonObject["total"]!!.jsonObject to
                 Repo.report("period_summary", m.org_id, c, d, users).jsonObject["total"]!!.jsonObject
         }.onSuccess { cur = it.first; prev = it.second }
@@ -106,11 +135,29 @@ fun CompareScreen(vm: AppViewModel, users: List<String>?, whoLabel: String, onCl
             IconButton(onClick = onClose) { Icon(Icons.Default.ArrowBack, "Back") }
             Column {
                 Text("Compare periods", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Text("$whoLabel · vs ${prevName[pick]}", fontSize = 13.sp, color = Brand.muted)
+                Text(whoLabel, fontSize = 13.sp, color = Brand.muted)
             }
         }
-        Row(Modifier.horizontalScroll(rememberScrollState()).padding(12.dp, 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            ps.forEach { p -> FilterChip(pick == p.first, { pick = p.first }, { Text(p.first) }) }
+        Text("1 · Period", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Brand.muted, modifier = Modifier.padding(start = 16.dp, top = 6.dp))
+        Row(Modifier.horizontalScroll(rememberScrollState()).padding(12.dp, 2.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            ps.forEach { (n, r) -> FilterChip(mainName == n, { mainName = n; main = r }, { Text(n) }) }
+            FilterChip(mainName == null, { pick(main.first) { mainName = null; main = it } }, { Text("Pick dates") })
+        }
+        Text("2 · Compare with", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Brand.muted, modifier = Modifier.padding(start = 16.dp, top = 4.dp))
+        Row(Modifier.horizontalScroll(rememberScrollState()).padding(12.dp, 2.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf("before" to "The period just before", "week" to "Same days last week", "month" to "Same days last month").forEach { (k, l) ->
+                FilterChip(withKind == k, { withKind = k }, { Text(l) })
+            }
+            FilterChip(withKind == "custom", { pick(other.first) { custom = it; withKind = "custom" } }, { Text("Pick dates") })
+        }
+        // Both date ranges, spelled out.
+        Row(Modifier.fillMaxWidth().padding(16.dp, 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.weight(1f).background(Color(0xFFE6F4F1), RoundedCornerShape(10.dp)).padding(10.dp)) {
+                Text("This period", fontSize = 11.sp, color = Brand.muted); Text(main.label(), fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            }
+            Column(Modifier.weight(1f).background(Color(0xFFF1F5F9), RoundedCornerShape(10.dp)).padding(10.dp)) {
+                Text("Compared with", fontSize = 11.sp, color = Brand.muted); Text(other.label(), fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            }
         }
         error?.let { Text(it, color = Brand.red, modifier = Modifier.padding(16.dp)) }
         val c = cur; val p = prev
@@ -122,13 +169,11 @@ fun CompareScreen(vm: AppViewModel, users: List<String>?, whoLabel: String, onCl
                         Text(group.uppercase(), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Brand.muted)
                         list.forEach { ms ->
                             val a = ms.v(c); val b = ms.v(p)
-                            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(ms.label, fontSize = 14.sp)
-                                    Text("Before: ${b?.let(ms.fmt) ?: "—"}", fontSize = 11.sp, color = Brand.muted)
-                                }
-                                Column(horizontalAlignment = Alignment.End) {
+                            Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                                Text(ms.label, fontSize = 14.sp)
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                     Text(a?.let(ms.fmt) ?: "—", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                                    Text("vs ${b?.let(ms.fmt) ?: "—"}", fontSize = 13.sp, color = Brand.muted)
                                     Delta(ms, a, b)
                                 }
                             }

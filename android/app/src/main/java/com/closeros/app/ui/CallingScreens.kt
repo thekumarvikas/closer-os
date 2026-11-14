@@ -67,7 +67,9 @@ fun HomeScreen(vm: AppViewModel) {
     val now = System.currentTimeMillis()
     fun ms(iso: String?) = iso?.let { runCatching { com.closeros.app.data.parseInstant(it).toEpochMilli() }.getOrNull() }
     val dueToday = vm.followUps.filter { (ms(it.due_at) ?: 0) < now + 86_400_000 }
-    val overdue = vm.followUps.count { (ms(it.due_at) ?: 0) < now }
+    val overdue = vm.followUps.count { (ms(it.due_at) ?: 0) <= now }   // due up to now (only these are called)
+    val late15 = vm.followUps.any { (ms(it.due_at) ?: 0) < now - 15 * 60_000 }
+    val laterToday = dueToday.filter { (ms(it.due_at) ?: 0) > now }
     val newFeedback = vm.reviews.count { it.seen_at == null }
     // A webinar in the next 18 h with reminder calls of mine still to make.
     val upcoming = vm.batches.orEmpty().filter { b -> (ms(b.webinar_at) ?: 0) in (now - 3_600_000)..(now + 18 * 3_600_000) && b.reminder_mine > 0 }
@@ -113,9 +115,9 @@ fun HomeScreen(vm: AppViewModel) {
                 vm.focusTotal > 0 -> Next("Start today's focus · ${vm.focusTotal}",
                     (if (overdue > 0) "Incl. $overdue overdue follow-up${if (overdue > 1) "s" else ""} · " else "") + "${vm.focusDone} done today · see the list, then call or WhatsApp",
                     overdue > 0) { vm.openFocusList() }
-                overdue > 0 -> Next("Call $overdue overdue follow-up${if (overdue > 1) "s" else ""}", "${dueToday.size} due in the next 24 hours", true) { vm.startFollowUpQueue() }
+                overdue > 0 -> Next("Call $overdue follow-up${if (overdue > 1) "s" else ""}", "Due now" + (if (laterToday.isNotEmpty()) " · ${laterToday.size} more later (not called yet)" else ""), late15) { vm.startFollowUpQueue() }
                 upcoming != null -> Next("Reminder calls · ${upcoming.name}", "Starts ${ms(upcoming.webinar_at)?.let { fmt.format(Instant.ofEpochMilli(it)) } ?: ""} · ${upcoming.reminder_mine} leads", false) { vm.openBatchList(upcoming, "reminder") }
-                dueToday.isNotEmpty() -> Next("Call ${dueToday.size} follow-up${if (dueToday.size > 1) "s" else ""} due", "In the next 24 hours", false) { vm.startFollowUpQueue() }
+                laterToday.isNotEmpty() -> Next("Pick leads to call", "Next follow-up at ${ms(laterToday.minOf { it.due_at })?.let { fmt.format(Instant.ofEpochMilli(it)) } ?: ""} · ${laterToday.size} in the next 24 h", false) { vm.selectMode = true; vm.tab = Tab.Leads }
                 else -> Next("Pick leads to call", "No follow-ups due — choose who to call", false) { vm.selectMode = true; vm.tab = Tab.Leads }
             }
             Column(Modifier.fillMaxWidth().background(Brand.primary, RoundedCornerShape(16.dp)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -135,10 +137,10 @@ fun HomeScreen(vm: AppViewModel) {
                         modifier = Modifier.clickable { vm.openBatchList(u, "reminder") })
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    HeroLink("📋 Pick leads", Modifier.weight(1f)) { vm.selectMode = true; vm.tab = Tab.Leads }
-                    HeroLink("📅 Follow-ups${if (dueToday.isNotEmpty()) " (${dueToday.size})" else ""}", Modifier.weight(1f)) { vm.tab = Tab.FollowUps }
+                    HeroLink("📋", "Pick leads", Modifier.weight(1f)) { vm.selectMode = true; vm.tab = Tab.Leads }
+                    HeroLink("📅", "Follow-ups${if (dueToday.isNotEmpty()) " (${dueToday.size})" else ""}", Modifier.weight(1f)) { vm.tab = Tab.FollowUps }
                     // Company: webinars set up on the dashboard. Individual app: the person's own events.
-                    HeroLink(if (vm.isSolo) "📅 Events" else "🎓 Webinars", Modifier.weight(1f)) { vm.showBatches = true }
+                    HeroLink(if (vm.isSolo) "🗓" else "🎓", if (vm.isSolo) "Events" else "Webinars", Modifier.weight(1f)) { vm.showBatches = true }
                 }
             }
         }
@@ -171,8 +173,8 @@ fun HomeScreen(vm: AppViewModel) {
                                 Column(Modifier.weight(1f).background(Color(0xFFF8FAFC), RoundedCornerShape(10.dp))
                                     .clickable { if (t == null) vm.showWaToday = true else vm.todayFilter = t.key }.padding(8.dp)) {
                                     Text(v, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = if (t?.bad == true && v != "0") Brand.red else Color(0xFF0F172A), maxLines = 1)
-                                    Text(t?.short ?: "Interactions", fontSize = 11.sp, color = Brand.muted, maxLines = 1)
-                                    if (t == null && vm.waToday.isNotEmpty()) Text("${vm.waToday.size} WhatsApp", fontSize = 10.sp, color = Color(0xFF16A34A))
+                                    Text(t?.short ?: "Interactions", fontSize = 11.sp, color = Brand.muted, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                                    if (t == null && vm.waToday.isNotEmpty()) Text("+${vm.waToday.size} WA", fontSize = 10.sp, color = Color(0xFF16A34A), maxLines = 1, softWrap = false)
                                     if (t != null && tg != null) {
                                         val pct = (actual(t.key).toFloat() / tg).coerceIn(0f, 1f)
                                         LinearProgressIndicator(progress = { pct }, Modifier.fillMaxWidth().padding(top = 4.dp).height(4.dp),
@@ -219,13 +221,22 @@ fun HomeScreen(vm: AppViewModel) {
 
         // Tools.
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ToolTile("📖", "Playbook", Modifier.weight(1f)) { vm.openPlaybook(null) }
-                ToolTile("seq", "Sequences", Modifier.weight(1f)) { vm.showSequences = true }
-                ToolTile("📊", if (vm.isManager && !vm.isSolo) "Reports" else "My reports", Modifier.weight(1f)) { vm.showReports = true }
-                ToolTile("📈", "Lead work", Modifier.weight(1f)) { vm.require(com.closeros.app.data.Feature.REPORTS) { vm.showLeadWork = true } }
-                ToolTile("💡", "Sales insights", Modifier.weight(1f)) { vm.require(com.closeros.app.data.Feature.REPORTS) { vm.showRecipe = true } }
-                if (vm.reviews.isNotEmpty()) ToolTile("🎯", "Feedback", Modifier.weight(1f)) { vm.showFeedback = true }
+            // Three per row so every name fits on one line, even with large text.
+            val tools = buildList<Triple<String, String, () -> Unit>> {
+                add(Triple("📖", "Playbook") { vm.openPlaybook(null) })
+                add(Triple("seq", "Sequences") { vm.showSequences = true })
+                add(Triple("📊", if (vm.isManager && !vm.isSolo) "Reports" else "My reports") { vm.showReports = true })
+                add(Triple("📈", "Lead work") { vm.require(com.closeros.app.data.Feature.REPORTS) { vm.showLeadWork = true } })
+                add(Triple("💡", "Sales insights") { vm.require(com.closeros.app.data.Feature.REPORTS) { vm.showRecipe = true } })
+                if (vm.reviews.isNotEmpty()) add(Triple("🎯", "Feedback") { vm.showFeedback = true })
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                tools.chunked(3).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        row.forEach { (i, l, go) -> ToolTile(i, l, Modifier.weight(1f), go) }
+                        repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                }
             }
         }
         item { SyncStatusLine(vm, onlyProblems = false, small = true) }
@@ -233,17 +244,21 @@ fun HomeScreen(vm: AppViewModel) {
 }
 
 @Composable
-private fun HeroLink(text: String, modifier: Modifier, onClick: () -> Unit) {
-    Text(text, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
-        modifier = modifier.background(Color.White.copy(alpha = 0.15f), RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(vertical = 9.dp, horizontal = 6.dp),
-        textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+private fun HeroLink(icon: String, text: String, modifier: Modifier, onClick: () -> Unit) {
+    // Icon above the words, so the words get the whole width (large-text phones showed "Foll…").
+    Column(modifier.background(Color.White.copy(alpha = 0.15f), RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(vertical = 6.dp, horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(icon, fontSize = 16.sp)
+        Text(text, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+    }
 }
 
 @Composable
 private fun ToolTile(icon: String, label: String, modifier: Modifier, onClick: () -> Unit) {
     Column(modifier.background(Color.White, RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         if (icon == "seq") SeqIcon(24.dp) else Text(icon, fontSize = 20.sp)
-        Text(label, fontSize = 12.sp, color = Color(0xFF334155))
+        Text(label, fontSize = 12.sp, color = Color(0xFF334155), maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -777,11 +792,13 @@ fun ResponseLine(vm: AppViewModel, r: kotlinx.serialization.json.JsonObject) {
     val oldest = ((r["waiting_list"] as? kotlinx.serialization.json.JsonArray)?.firstOrNull() as? kotlinx.serialization.json.JsonObject)?.get("wait_min").num()?.toInt()
     fun mins(m: Double) = if (m < 1) "under a minute" else if (m < 60) "${m.toInt()} min" else "${(m / 60).toInt()} h ${(m % 60).toInt()} min"
     val good = median != null && median <= target
-    Column(Modifier.fillMaxWidth().background(if (waiting > 0) Color(0xFFFEF2F2) else if (good) Color(0xFFECFDF5) else Color(0xFFFFFBEB), RoundedCornerShape(10.dp))
+    Column(Modifier.fillMaxWidth().background(if (waiting > 0) Color(0xFFFEF2F2) else if (good || vm.isSolo) Color(0xFFECFDF5) else Color(0xFFFFFBEB), RoundedCornerShape(10.dp))
         .clickable { vm.openFocusList() }.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         if (waiting > 0) Text("🆕 $waiting new lead${if (waiting > 1) "s" else ""} waiting" + (oldest?.let { " · oldest $it min" } ?: "") + " — call now ›",
             fontWeight = FontWeight.SemiBold, color = Color(0xFFB91C1C), fontSize = 14.sp)
-        median?.let { m -> Text("⚡ New leads called in ${mins(m)} (median, 7 days) · target $target min · $within of $responded on time",
-            fontSize = 13.sp, color = if (good) Color(0xFF047857) else Color(0xFF92400E)) }
+        // Individuals have no company target: just how fast they call new leads.
+        median?.let { m -> Text(if (vm.isSolo) "⚡ You call new leads within ${mins(m)} (usual time, last 7 days)"
+            else "⚡ New leads called in ${mins(m)} (median, 7 days) · target $target min · $within of $responded on time",
+            fontSize = 13.sp, color = if (good || vm.isSolo) Color(0xFF047857) else Color(0xFF92400E)) }
     }
 }

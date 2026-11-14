@@ -206,14 +206,17 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
         val l = lead
         if (l == null) { Box(Modifier.fillMaxSize().padding(pad), contentAlignment = Alignment.Center) { CircularProgressIndicator() }; return@Scaffold }
         LazyColumn(Modifier.fillMaxSize().padding(pad), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Who, where from, what's next — then ONE line of numbers (no repeated stats further down).
             item {
-                Text(fmtPhone(l.phone), fontSize = 18.sp)
-                Text("📞 " + callsLine(l.call_count, l.conversation_count) + if (l.total_talk_sec > 0) " · talked ${fmtDur(l.total_talk_sec)}" else "", fontSize = 14.sp, color = Brand.primaryDark)
-                listOfNotNull(l.profession, l.company, l.city).joinToString(" · ").takeIf { it.isNotEmpty() }?.let { Text(it, color = Brand.muted) }
-                listOfNotNull(l.source, l.campaign).joinToString(" · ").takeIf { it.isNotEmpty() }?.let { Text("Source: $it", color = Brand.muted, fontSize = 14.sp) }
-                l.next_follow_up_at?.let { Text("Next follow-up: ${fmtWhen(it)}", color = Brand.primary, fontSize = 14.sp) }
-                BestTimeLine(l.id, l.phone)
-                l.response_sec?.let { r -> Text("⚡ First call " + (if (r < 60) "within a minute" else "${r / 60} working min") + " after it came in", fontSize = 13.sp, color = Brand.muted) }
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(fmtPhone(l.phone), fontSize = 18.sp)
+                    listOfNotNull(l.profession, l.company, l.city, l.state).filter { it.isNotBlank() }.joinToString(" · ").takeIf { it.isNotEmpty() }?.let { Text(it, color = Brand.muted) }
+                    listOfNotNull(l.source, l.campaign).filter { it.isNotBlank() }.joinToString(" · ").takeIf { it.isNotEmpty() }?.let { Text("Source: $it", color = Brand.muted, fontSize = 14.sp) }
+                    Text(l.next_follow_up_at?.let { "📅 Next follow-up: ${fmtWhen(it)}" } ?: "📅 No follow-up planned", color = Brand.primary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    LeadStatsLine(vm, l)
+                    BestTimeLine(l.id, l.phone)
+                    l.response_sec?.let { r -> Text("⚡ First call " + (if (r < 60) "within a minute" else "${r / 60} working min") + " after it came in", fontSize = 13.sp, color = Brand.muted) }
+                }
             }
             item { BriefCard(vm, l, showProfile = false) }
             if (vm.isSolo) item { LeadEventsRow(vm, l) }
@@ -224,18 +227,21 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
                     Button(onClick = { onCall(l) }, modifier = Modifier.weight(1f).height(52.dp)) {
                         Icon(Icons.Default.Call, null); Spacer(Modifier.width(6.dp)); Text("Call")
                     }
-                    OutlinedButton(onClick = { waOpen = true }, modifier = Modifier.weight(1f).height(52.dp), contentPadding = PaddingValues(horizontal = 8.dp)) {
-                        Icon(Icons.Default.Send, null, tint = Color(0xFF16A34A)); Spacer(Modifier.width(4.dp)); Text("WhatsApp")
+                    OutlinedButton(onClick = { waOpen = true }, modifier = Modifier.weight(1.1f).height(52.dp), contentPadding = PaddingValues(horizontal = 6.dp)) {
+                        Icon(Icons.Default.Send, null, tint = Color(0xFF16A34A), modifier = Modifier.size(18.dp)); Spacer(Modifier.width(4.dp))
+                        Text("WhatsApp", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
                     }
-                    OutlinedButton(onClick = { PhoneCalls.sms(ctx, l.phone) }, modifier = Modifier.weight(0.7f).height(52.dp), contentPadding = PaddingValues(horizontal = 8.dp)) {
-                        Text("✉️ SMS")
+                    OutlinedButton(onClick = { PhoneCalls.sms(ctx, l.phone) }, modifier = Modifier.weight(0.7f).height(52.dp), contentPadding = PaddingValues(horizontal = 6.dp)) {
+                        Text("SMS", maxLines = 1, softWrap = false)
                     }
                 }
                 if (l.do_not_call) Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("⛔ Marked Do not call", color = Brand.red, fontSize = 13.sp, modifier = Modifier.weight(1f))
                     TextButton(onClick = { vm.setDoNotCall(l, false) { u -> lead = u } }) { Text("Remove") }
                 }
-                Row {
+                @OptIn(ExperimentalLayoutApi::class)
+                FlowRow {
+                    TextButton(onClick = { copyLead(ctx, vm, l, calls) }) { Text("📋 Copy details") }
                     TextButton(onClick = { vm.openPlaybook(l) }) { Text("📖 Scripts & answers") }
                     TextButton(onClick = { claimSale = true }) { Text("💰 Claim a sale") }
                 }
@@ -244,14 +250,14 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
             if (l.arrivals > 1) item { LeadOriginsCard(l) }
             item { ProfileCard(vm, l) }
             item { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { KeyFactsCard(l) { t -> lead = l.copy(key_facts = t) }; PinnedNotes(vm, l) } }
-            item { EffortCard(vm, l) }
+            if (l.won_at != null || vm.recipe != null) item { EffortCard(vm, l) }
             if (!l.notes.isNullOrBlank()) item {
                 Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
                     Column(Modifier.padding(14.dp)) { Text("Notes from the imported file", fontWeight = FontWeight.SemiBold); Text(l.notes, fontSize = 14.sp) }
                 }
             }
             item { NotesTimeline(vm, l.id, l) }
-            item { Text("Calls", fontWeight = FontWeight.SemiBold); if (calls.isNotEmpty()) CallColorKey(Modifier.padding(top = 2.dp)) }
+            item { Text("Calls", fontWeight = FontWeight.SemiBold) }
             if (calls.isEmpty()) item { Text("No calls yet.", color = Brand.muted) }
             items(calls) { c ->
                 val hasRec = c.recording_path != null || c.recording_status == "expired" || com.closeros.app.calls.LocalRecordings.known(ctx).contains(c.id)
@@ -370,6 +376,10 @@ fun ProfileScreen(vm: AppViewModel) {
             } }) { Text("Show my check-in now") }
         }
         }
+        HorizontalDivider()
+        Text("Call colours", fontWeight = FontWeight.SemiBold)
+        Text("What the colours on call lists mean", color = Brand.muted, fontSize = 14.sp)
+        CallColorKey()
         HorizontalDivider()
         Text("Sync", fontWeight = FontWeight.SemiBold)
         Text(if (vm.store.lastSyncMs == 0L) "Not synced yet" else "Last sync ${fmtWhen(Instant.ofEpochMilli(vm.store.lastSyncMs).toString())}", color = Brand.muted)

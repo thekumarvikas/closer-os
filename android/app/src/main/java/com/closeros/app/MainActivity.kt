@@ -156,6 +156,7 @@ fun Root(vm: AppViewModel) {
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         when {
             vm.status is SessionStatus.Initializing -> Loading()
+            vm.loginExpired -> LoginScreen(vm)
             vm.status !is SessionStatus.Authenticated && !(vm.status is SessionStatus.RefreshFailure && vm.membership != null) -> LoginScreen(vm)
             vm.loadingOrg && vm.membership == null -> Loading()
             vm.membership == null -> NoCompanyScreen(vm)
@@ -198,7 +199,7 @@ fun Root(vm: AppViewModel) {
                 NavigationBar {
                     listOf(Triple(Tab.Home, "Home", Icons.Default.Home), Triple(Tab.Leads, "Leads", Icons.Default.Person), Triple(Tab.Calls, "Calls", Icons.Default.Call),
                         Triple(Tab.FollowUps, "Follow-ups", Icons.Default.DateRange), Triple(Tab.Profile, "Settings", Icons.Default.Settings)).forEach { (t, label, icon) ->
-                        NavigationBarItem(selected = vm.tab == t, onClick = { vm.tab = t }, icon = { Icon(icon, null) }, label = { Text(label) })
+                        NavigationBarItem(selected = vm.tab == t, onClick = { vm.tab = t }, icon = { Icon(icon, null) }, label = { Text(label, fontSize = 11.sp, maxLines = 1, softWrap = false, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) })
                     }
                 } }
             }) { pad ->

@@ -16,8 +16,22 @@ object Brand {
     val bg = Color(0xFFF8FAFC)
 }
 
+/**
+ * Phones set to very large text or a large "Display size" squeezed our screens (words cut to "Foll…", "Playbo/ok").
+ * Keep the layout readable: text grows at most 15% over normal, and the screen is laid out at least 360 dp wide
+ * (the size every screen is designed for). Small-text and normal phones are unchanged.
+ */
 @Composable
-fun CloserTheme(content: @Composable () -> Unit) {
+fun ReadableScale(content: @Composable () -> Unit) {
+    val d = androidx.compose.ui.platform.LocalDensity.current
+    val widthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
+    val shrink = if (widthDp in 1 until 360) widthDp / 360f else 1f
+    val fixed = androidx.compose.ui.unit.Density(d.density * shrink, minOf(d.fontScale, 1.15f))
+    androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides fixed, content = content)
+}
+
+@Composable
+fun CloserTheme(content: @Composable () -> Unit) = ReadableScale {
     MaterialTheme(
         colorScheme = lightColorScheme(
             primary = Brand.primary, onPrimary = Color.White, primaryContainer = Brand.light, onPrimaryContainer = Brand.primaryDark,

@@ -112,6 +112,18 @@ Everything from the original product prompt plus the owner's feedback, with stat
 - ✅ "New · waiting" timer on lead cards, best-time-now queue order, per-rep daily focus target, effort bar on cards (v0.10.1)
 - ✅ Add leads in the app (form with city, CSV/Excel import, phone contacts), schedule a call / a WhatsApp message from the lead page, sequence details page, tap-to-insert fill-ins, safe error messages (v0.22.0)
 
+## Built Nov 14 2026 (v0.25.0) — owner feedback on 0.22.1
+- [x] "Call N follow-ups" dials only follow-ups due up to now (future ones never)
+- [x] Readable with large text / display size (whole app)
+- [x] WhatsApp-style mic on every notes box
+- [x] Closer OS icon on every notification
+- [x] Autostart on realme / OPPO / OnePlus (App info → Battery usage) + fallback
+- [x] Lead page: clean order, one stats line, colour key moved to Settings, 📋 Copy details
+- [x] Individual app: no "target" on the speed-to-lead line
+- [x] Compare periods: choose period + what to compare with, dates shown
+- [x] Login renewal fixed (no more silent "permission denied"); sign-in screen when the login must be renewed
+- [x] Ad load errors logged
+
 ## Built Nov 14 2026 (v0.24.0)
 - ✅ Duplicate leads → one lead marked 🔁 Repeated with every origin; phone/email cleaned before matching; find + merge duplicates
 - ✅ Verified sales: rep claims (or "sale" outcome) → manager verifies with facts + red flags; price list; payments (full/part/refund);

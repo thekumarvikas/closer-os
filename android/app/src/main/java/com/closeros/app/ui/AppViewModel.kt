@@ -460,9 +460,9 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         today = logs.mapIndexed { i, l -> HistoryItem(l, phones[i], byPhone[phones[i]]) }
     }
 
-    /** Queue of leads whose follow-ups are due within 24 hours (overdue first). */
+    /** Queue of leads whose follow-ups are due UP TO NOW (oldest first). Future follow-ups are never dialled. */
     fun startFollowUpQueue() = viewModelScope.launch {
-        val soon = System.currentTimeMillis() + 86_400_000
+        val soon = System.currentTimeMillis() + 60_000
         val due = followUps.filter { runCatching { com.closeros.app.data.parseInstant(it.due_at).toEpochMilli() }.getOrDefault(0) < soon }.sortedBy { it.due_at }
         val leads = runCatching { Repo.leadsByIds(due.map { it.lead_id }) }.getOrDefault(emptyList()).associateBy { it.id }
         startQueue(due.mapNotNull { leads[it.lead_id] })
@@ -1217,7 +1217,18 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Called when the app comes back to the front: look up the finished call in the call log. */
+    /** The server refused this phone's saved login: show the sign-in screen (everything saved on the phone stays and uploads after). */
+    var loginExpired by mutableStateOf(false)
+    private fun checkLogin() = viewModelScope.launch {
+        if (!com.closeros.app.data.Net.isOnline || status is SessionStatus.NotAuthenticated) return@launch
+        if (!Backend.ensureFreshSession() && Backend.loginInvalid) {
+            store.kickedReason = "Please sign in again — your login needed renewing. Everything saved on this phone is kept and uploads after you sign in."
+            loginExpired = true
+        }
+    }
+
     fun onResume() {
+        checkLogin()
         viewModelScope.launch { com.closeros.app.calls.DeviceGuard.check(ctx) }   // signed in on another phone? (one login, one phone)
         maybeShowCheckIn()
         loadWaToConfirm()
@@ -1400,6 +1411,8 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
             Backend.auth.sessionStatus.collectLatest { s ->
                 status = s
                 // No internet when the login needed renewing: stay signed in and work from the phone's copy.
+                if (s is SessionStatus.Authenticated) { loginExpired = false; Backend.loginInvalid = false }
+                if (s is SessionStatus.RefreshFailure) checkLogin()
                 if (s is SessionStatus.Authenticated || (s is SessionStatus.RefreshFailure && membership == null)) loadOrg()
                 if (s is SessionStatus.NotAuthenticated) { membership = null; loadingOrg = false }
             }

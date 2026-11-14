@@ -45,7 +45,7 @@ object FollowUpAlarms {
                 putExtra("due", it.due_at); putExtra("reason", it.reason ?: ""); putExtra("notes", it.notes ?: ""); putExtra("purpose", it.purpose)
                 it.lead?.let { l ->
                     putExtra("calls", l.call_count); putExtra("convs", l.conversation_count); putExtra("talk", l.total_talk_sec)
-                    putExtra("outcome", l.last_outcome_id); putExtra("facts", l.key_facts); putExtra("about", listOfNotNull(l.profession, l.city).filter { s -> s.isNotBlank() }.joinToString(" · "))
+                    putExtra("outcome", l.last_outcome_id); putExtra("facts", l.key_facts); putExtra("lastnote", l.last_note?.take(300)); putExtra("about", listOfNotNull(l.profession, l.city).filter { s -> s.isNotBlank() }.joinToString(" · "))
                 }
             }
         }
@@ -115,15 +115,18 @@ class FollowUpReceiver : BroadcastReceiver() {
         val kind = if (purpose == "reminder") "Reminder call" else "Follow-up"
         // One glance: who, how late, what happened last time.
         val title = "$name · $status"
-        val line = "⏰ $dueText · " + listOfNotNull(outcome, countLine).joinToString(" · ")
         val about = i.getStringExtra("about").orEmpty()
         val facts = i.getStringExtra("facts").orEmpty()
-        val why = listOf(i.getStringExtra("reason").orEmpty(), i.getStringExtra("notes").orEmpty()).filter { it.isNotBlank() }.joinToString(" · ")
+        val lastNote = i.getStringExtra("lastnote")?.takeIf { it.isNotBlank() }
+        val why = listOf(i.getStringExtra("reason").orEmpty().takeIf { it != "Scheduled call" }.orEmpty(), i.getStringExtra("notes").orEmpty()).filter { it.isNotBlank() }.joinToString(" · ")
+        // Closed view: why this call (or the last note), then the last outcome.
+        val line = "⏰ $dueText · " + listOfNotNull(why.ifBlank { null }, lastNote?.let { "📝 $it" }, outcome, countLine).take(2).joinToString(" · ")
         val detail = listOfNotNull(
             "Last: " + (outcome ?: "—") + " · " + countLine,
             about.takeIf { it.isNotBlank() },
             facts.takeIf { it.isNotBlank() }?.let { "📌 $it" },
             why.takeIf { it.isNotBlank() },
+            lastNote?.let { "📝 Last note: $it" },
             if (offset >= 10) "Call within 5 minutes or it counts as late." else null,
         ).joinToString("\n")
         val timeLine = "⏰ Scheduled for $dueText · $kind" + (if (phone.isNotEmpty()) " · $phone" else "")

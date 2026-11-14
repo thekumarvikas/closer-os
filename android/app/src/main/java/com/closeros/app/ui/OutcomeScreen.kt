@@ -60,6 +60,11 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
     var factValues by remember { mutableStateOf(emptyMap<String, String>()) }
     var lead by remember { mutableStateOf<com.closeros.app.data.Lead?>(null) }
     LaunchedEffect(p.leadId) { lead = runCatching { com.closeros.app.data.Repo.lead(p.leadId) }.getOrNull() }
+    // Smarter notes: lead profile chips, objections raised (+ answer used), profile facts from filled sentences.
+    val org = vm.membership?.organization
+    val profileDraft = remember(lead?.id) { ProfileDraft(lead) }
+    var objPicked by remember { mutableStateOf(emptyMap<String, String?>()) }
+    var sentenceFields by remember { mutableStateOf(emptyMap<String, String>()) }
     // A reminder call-back must be before the webinar starts.
     val webinarAt = if (purpose == "reminder") com.closeros.app.data.CallPurpose.webinarOf(lead, p.batchId)?.takeIf { it.isAfter(Instant.now()) } else null
     fun beforeStart(t: ZonedDateTime) = webinarAt == null || t.toInstant().isBefore(webinarAt)
@@ -196,7 +201,11 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
         }
         followAt?.let { Text("Next call: " + it.format(DateTimeFormatter.ofPattern("EEE d MMM, h:mm a")), color = Brand.primaryDark, fontWeight = FontWeight.SemiBold) }
 
-        lead?.let { l -> KeyFactsCard(l) { t -> lead = l.copy(key_facts = t) } }
+        lead?.let { l -> KeyFactsCard(l) { t -> lead = l.copy(key_facts = t) }; PinnedNotes(vm, l) }
+        if (lead != null && org != null) ProfileQuick(org.profileOptions, profileDraft)
+        // Objections: only when there was a conversation.
+        if (lead != null && outcome != null && outcome?.category !in setOf("not_connected", "invalid") && (log?.durationSec ?: 1) > 0)
+            ObjectionPicker(vm, objPicked) { objPicked = it }
         // Facts the company wants on every lead (e.g. Budget, Decision maker): one tap each, saved on the lead.
         val facts = vm.membership?.organization?.leadFacts.orEmpty()
         facts.forEach { f ->
@@ -206,8 +215,19 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
                 f.options.forEach { o -> Chip(o, cur == o) { factValues = factValues + (f.key to o) } }
             }
         }
+        org?.let { o -> SentencePicker(com.closeros.app.data.NoteKit.linesFor(o.noteLines, outcome?.category), o.profileOptions,
+            onAdd = { t, f ->
+                notes = if (notes.isBlank()) t else notes.trimEnd() + ". " + t
+                // Choices from the profile lists go straight into the profile chips; typed words are kept as text.
+                f.forEach { (field, v) -> when {
+                    field == "goals" && v in o.profileOptions.goals -> { profileDraft.goals = (profileDraft.goals + v).distinct(); profileDraft.touched = true }
+                    field == "challenges" && v in o.profileOptions.challenges -> { profileDraft.challenges = (profileDraft.challenges + v).distinct(); profileDraft.touched = true }
+                    field == "budget" && v in o.profileOptions.budget -> { profileDraft.budget = v; profileDraft.touched = true }
+                    else -> sentenceFields = sentenceFields + (field to v)
+                } }
+            }) }
         NoteEditor(notes, { notes = it }, noteTags, { noteTags = it }, emptyList(), "Notes from this call",
-            groups = vm.membership?.organization?.tagGroups.orEmpty())
+            groups = org?.tagGroupsFor(outcome?.category).orEmpty())
         if (p.leadId.isNotBlank()) OutcomeSeqChips(vm, startSeq) { startSeq = it }
 
         Button(onClick = {
@@ -231,6 +251,7 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
                     if (product.isNotBlank()) put("product", product)
                     if (interest.isNotBlank()) put("interest", interest)
                     if (noteTags.isNotEmpty()) put("note_tags", kotlinx.serialization.json.JsonArray(noteTags.map { kotlinx.serialization.json.JsonPrimitive(it) }))
+                    if (objPicked.isNotEmpty()) put("objections", com.closeros.app.data.Notes.objectionsJson(objPicked))
                 })
                 if (notes.isNotBlank()) put("notes", notes.trim())
                 if (factValues.isNotEmpty()) put("lead_custom", buildJsonObject { factValues.forEach { (k, v) -> put(k, v) } })
@@ -241,6 +262,12 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
             }
             val seqToStart = startSeq?.let { id -> vm.sequences?.firstOrNull { it.id == id } }
             val leadId = p.leadId; val leadName = p.leadName; val batch = p.batchId
+            // Profile chips + facts from filled sentences → the lead's profile (waits on the phone with no internet).
+            lead?.let { l -> org?.let { o ->
+                val fromLines = profilePatchFrom(sentenceFields, o.profileOptions, com.closeros.app.data.NoteKit.profileOf(l))
+                val merged = kotlinx.serialization.json.JsonObject((fromLines ?: emptyMap()) + (profileDraft.patch() ?: emptyMap()))
+                if (merged.isNotEmpty()) vm.saveProfile(l, merged, quiet = true)
+            } }
             vm.saveOutcome(payload) {
                 busy = false
                 seqToStart?.let { vm.startSequence(it, AppViewModel.SeqPick(listOf(leadId), leadName.ifBlank { "this lead" }, batch)) }

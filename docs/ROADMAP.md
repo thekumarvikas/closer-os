@@ -39,6 +39,10 @@ Everything from the original product prompt plus the owner's feedback, with stat
 - ✅ Mandatory outcome after incoming calls and calls dialled outside the app (with a reminder notification)
 - ✅ Two-tap next-call picker (day, then 30-minute slot)
 - ✅ Notes: key facts, quick tags, voice typing, notes history, notes without a call
+- ✅ Smarter notes (v0.23.0): lead profile (challenges, goals, budget), fill-in-the-blank sentences per outcome, tags that match
+  the outcome, quick note + voice typing on the after-call pop-up, pinned notes (max 3), objections with several answers (reps'
+  approved by a manager; usage + sales per answer), "Before you call" brief, last note on follow-up reminders
+- ⏳ Later: "why people don't buy" report, what buyers had in common, dashboard filters by tag / profile
 
 - ✅ Announcements from management that each rep must acknowledge (pinned notification + blocking screen; dashboard shows who acknowledged)
 

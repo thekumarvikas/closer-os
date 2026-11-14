@@ -44,11 +44,7 @@ fun TargetsCard(p: Progress) {
 @Composable
 fun GlanceCard(vm: AppViewModel, base: Lead) {
     var lead by remember(base.id) { mutableStateOf(base) }
-    var notes by remember(base.id) { mutableStateOf<List<NoteEntry>?>(null) }
-    LaunchedEffect(base.id) {
-        runCatching { Repo.lead(base.id) }.getOrNull()?.let { lead = it }
-        notes = runCatching { Repo.leadNotes(base.id) }.getOrDefault(emptyList())
-    }
+    LaunchedEffect(base.id) { runCatching { Repo.lead(base.id) }.getOrNull()?.let { lead = it } }
     val l = lead
     val tags = leadTags(vm, l)
     Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
@@ -66,19 +62,8 @@ fun GlanceCard(vm: AppViewModel, base: Lead) {
             l.key_facts?.takeIf { it.isNotBlank() }?.let {
                 Text("📌 $it", fontSize = 14.sp, modifier = Modifier.fillMaxWidth().background(Color(0xFFFFFBEB), RoundedCornerShape(8.dp)).padding(10.dp))
             }
-            val last = notes?.firstOrNull()
-            val lastOutcome = vm.outcomes.firstOrNull { it.id == l.last_outcome_id }?.label
-            when {
-                notes == null -> Text("Loading last call…", fontSize = 13.sp, color = Brand.muted)
-                l.last_call_at == null && last == null -> Text("First call to this lead", fontSize = 14.sp, color = Brand.primaryDark)
-                else -> Column(Modifier.fillMaxWidth().background(Color(0xFFF8FAFC), RoundedCornerShape(8.dp)).padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("Last call: " + listOfNotNull(l.last_call_at?.let { fmtWhen(it) }, lastOutcome).joinToString(" · "), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                    last?.let { n ->
-                        Text(listOfNotNull(n.text, n.tags.takeIf { it.isNotEmpty() }?.joinToString(" ") { "#$it" }).joinToString("  "), fontSize = 14.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                        Text("${fmtWhen(n.at)}${n.by?.let { " · $it" } ?: ""}", fontSize = 11.sp, color = Brand.muted)
-                    }
-                }
-            }
+            // Before-call brief: why now, profile, pinned notes, last time, their objection + best answer, first line, signals.
+            BriefCard(vm, l)
         }
     }
 }

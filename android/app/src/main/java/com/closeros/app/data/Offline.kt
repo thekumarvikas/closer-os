@@ -196,6 +196,7 @@ object Ops {
                     "note" -> Repo.addNoteNow(s("lead")!!, s("text")!!, a["tags"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty())
                     "facts" -> Repo.setKeyFactsNow(s("lead")!!, s("text").orEmpty())
                     "edit" -> Repo.updateLeadDetailsNow(s("lead")!!, a["p"] as JsonObject)
+                    "profile" -> Notes.setProfileNow(s("lead")!!, a["p"] as JsonObject)
                     "wa" -> Repo.logWaOrThrow(s("org")!!, s("lead"), s("phone")!!, s("template_id"), s("template_name"), s("source") ?: "single")
                     "lead" -> runCatching { Repo.createLead(s("org")!!, s("name").orEmpty(), s("phone")!!, s("profession"), s("notes")) }
                         .onFailure { if (it.message?.contains("leads_org_phone_uq") != true) throw it }   // already a lead: fine

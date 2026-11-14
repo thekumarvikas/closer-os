@@ -1464,7 +1464,7 @@ intelligence → Play Store launch.
 - Not built: Super Admin switch to turn an existing company into a personal account (needs a migration; the
   SUPABASE_ACCESS_TOKEN was not loaded in that session). Node is now installed on the Mac via Homebrew (web builds locally).
 
-## Smarter notes — owner decisions (Nov 14 2026; DECIDED, not built — waiting for "go")
+## Smarter notes — owner decisions (Nov 14 2026) — BUILT in v0.23.0 (see below)
 - Build together: (1) quick note on the after-call pop-up card (one line + tag chips + mic); (2) note tags that match the
   picked outcome; fill-in-the-blank note sentences per outcome (gaps = tap a suggestion or type; management edits them on the
   dashboard, individuals their own in the app; a gap can fill a lead profile field); lead PROFILE card = Name, Profession,
@@ -1480,3 +1480,34 @@ intelligence → Play Store launch.
 - DROPPED for now: promise tracker (too company-specific). Dropped profile fields: decision maker, timeline, main objection.
 - LATER (owner: "can be built, not now"): why-people-don't-buy report (objections/tags ranked + bought after), what buyers
   had in common, dashboard Leads filters by tag / profile fields.
+
+## Smarter notes built (v0.23.0, migration 0074, Nov 14 2026)
+- DB: leads.profile jsonb (challenges[], challenges_text, goals[], goals_text, budget, budget_amount) via set_lead_profile(lead, p)
+  (also profession/city); leads.pinned jsonb [{ref,text,by,at}] max 3 via pin_lead_note(lead, ref, text, on); leads.last_note /
+  last_note_at kept by triggers t_call_last_note (calls.notes) + t_note_last_note (note activities), backfilled; leads.objections
+  uuid[] (newest first, max 5) from calls.outcome_data.objections = [{id, answer}]. lead_notes() rows now carry id + objections.
+  Objections = playbook_items kind 'objection' (title = what the lead says, body = first answer) + NEW kind 'answer' (parent_id);
+  save_objection(org, {id?, title, body, parent_id?}) — managers/individual owners published, reps pending (visible to them only
+  until review_playbook_item approves); objection_list(org) = visible objections + answers + stats (raised / bought; per answer
+  used / bought, 365 days; the objection's own body counts as an answer with id = objection id). App Repo.playbook excludes 'answer'.
+- Settings (organizations.settings): profile_options {challenges, goals, budget}, note_lines [{text, show_for[]}] (gap syntax
+  [a/b/c] choices, [budget]/[goal]/[challenge] = profile choices and fill the profile, [x] typed), tag_groups[].show_for (outcome
+  categories; empty = all). Defaults (no settings) in app data/NoteKit.kt AND web lib/notes.ts — keep both in step; default tag
+  groups apply only when neither tag_groups nor note_tags is set.
+- App: data/NoteKit.kt (NoteKit defaults/parse/profile helpers, Notes RPCs, Ops op "profile" offline), ui/NotesPlus.kt
+  (SentencePicker inline gap filling — no dialogs so it works in the overlay, OutcomeTags, ProfileCard/ProfileEditDialog/PickChips,
+  ProfileDraft + ProfileQuick on the outcome screen, PinnedNotes, ObjectionPicker (outcome screen, conversations only; answer used
+  is recorded), ObjectionEditDialog, ObjectionCard (Playbook → Objections tab now lists objection_list with all answers),
+  BriefCard "Before you call" (why now, profile, pins, last time + last note, objection + best answer, suggested opening line,
+  signals) in the queue GlanceCard and on the lead page), ui/NoteSettingsScreen.kt (Settings → "Notes & lead profile", individuals
+  + managers). Lead page: brief, ProfileCard, key facts + pins, 📌 Pin on timeline notes. vm.replaceLead updates list/queue/LeadIndex.
+  Follow-up reminders carry the last note (extra "lastnote"; closed view shows why-now or last note). LeadIndex cursor v9.
+- After-call pop-up: quick note box (overlay window becomes focusable while it's touched — AfterCall.Overlay.setFocusable), 🎤 =
+  AfterCallActivity mode "voice" (RecognizerIntent → AfterCall.voiceText), outcome-matched sentences + tags; saved as notes +
+  note_tags + lead_tags; sentence gaps → profile. Header shows first pin + last note. Company carries org settings.
+- Dashboard: Settings → Note tags (Shows for per group), Quick note sentences, Lead profile choices, "Extra lead profile fields"
+  (= old Facts to capture); LeadDrawer components/LeadProfile.tsx (profile edit, pinned, objections raised) + Pin on notes;
+  Playbook objections show answers + usage + "+ Add another answer" (AddAnswer → save_objection), approvals show "Answer to …";
+  Desk outcome panel: tags + sentences filtered by outcome.
+- Voice = speech-to-text only; audio notes NOT built. Promise tracker dropped. Later: reports (why people don't buy, what buyers
+  had in common) + dashboard tag/profile filters.

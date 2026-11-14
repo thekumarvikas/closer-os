@@ -118,21 +118,21 @@ export function WorkingCalendar() {
   )
 }
 
-interface TagGroup { name: string; color: string; tags: string[] }
+import { OUTCOME_KINDS, tagGroups as tagGroupsOf, profileOptions, noteLines, type TagGroup, type NoteLine } from '../lib/notes'
 const COLORS = ['#0E5E57', '#DC2626', '#D97706', '#2563EB', '#7C3AED', '#059669', '#DB2777', '#475569']
 
 /** Tag groups: reps tap tags after a call (no typing); leads can be filtered by them. */
 export function TagGroups() {
   const { org, save, error, saved } = useSaveSettings()
-  const initial: TagGroup[] = (org.settings?.tag_groups as TagGroup[] | undefined) ??
-    [{ name: 'Tags', color: COLORS[0], tags: (org.settings?.note_tags as string[] | undefined) ?? [] }]
+  const initial: TagGroup[] = tagGroupsOf(org.settings)
   const [groups, setGroups] = useState<TagGroup[]>(initial)
   const [newTag, setNewTag] = useState<Record<number, string>>({})
   function update(next: TagGroup[]) { setGroups(next); save({ tag_groups: next }) }
   return (
     <Card className="p-5 lg:col-span-2">
       <h2 className="font-semibold">Note tags in groups {saved && <span className="ml-2 text-xs font-normal text-emerald-600">Saved ✓</span>}</h2>
-      <p className="mb-3 mt-1 text-sm text-slate-500">Reps tap these after a call instead of typing. Tags are saved on the lead, so you can filter leads (e.g. all with “Price” objection) and see patterns.</p>
+      <p className="mb-3 mt-1 text-sm text-slate-500">Reps tap these after a call instead of typing. Tags are saved on the lead, so you can filter leads (e.g. all with “Price” objection) and see patterns.
+        Each group shows only for the outcomes ticked (none ticked = every outcome).</p>
       <ErrorBox error={error} />
       <div className="space-y-3">
         {groups.map((g, gi) => (
@@ -143,6 +143,7 @@ export function TagGroups() {
                 className={`h-5 w-5 rounded-full ${g.color === c ? 'ring-2 ring-offset-1 ring-slate-400' : ''}`} style={{ background: c }} aria-label="Colour" />)}</div>
               <button className="text-slate-400 hover:text-red-600" onClick={() => confirm(`Delete the group "${g.name}"?`) && update(groups.filter((_, i) => i !== gi))}><Trash2 className="h-4 w-4" /></button>
             </div>
+            <KindPicker value={g.show_for ?? []} onChange={v => update(groups.map((x, i) => i === gi ? { ...x, show_for: v } : x))} />
             <div className="mb-2 flex flex-wrap gap-1.5">{g.tags.map(t => (
               <span key={t} className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-sm text-white" style={{ background: g.color }}>{t}
                 <button onClick={() => update(groups.map((x, i) => i === gi ? { ...x, tags: x.tags.filter(y => y !== t) } : x))} className="opacity-70 hover:opacity-100">×</button></span>))}
@@ -169,8 +170,8 @@ export function LeadFacts() {
   function update(next: Fact[]) { setFacts(next); save({ lead_facts: next }) }
   return (
     <Card className="p-5 lg:col-span-2">
-      <h2 className="font-semibold">Facts to capture on each lead {saved && <span className="ml-2 text-xs font-normal text-emerald-600">Saved ✓</span>}</h2>
-      <p className="mb-3 mt-1 text-sm text-slate-500">e.g. Budget, Decision maker, Current job. Reps pick one option on the outcome screen; the answer is saved on the lead and appears as a filter in the app and on the Leads page.</p>
+      <h2 className="font-semibold">Extra lead profile fields {saved && <span className="ml-2 text-xs font-normal text-emerald-600">Saved ✓</span>}</h2>
+      <p className="mb-3 mt-1 text-sm text-slate-500">Optional extra pick-lists for the lead profile (challenges, goals and budget are already there), e.g. Current job. Reps pick one option on the outcome screen; the answer is saved on the lead and appears as a filter in the app and on the Leads page.</p>
       <ErrorBox error={error} />
       {facts.map((f, i) => (
         <div key={f.key} className="flex items-center justify-between border-b border-slate-100 py-1.5 text-sm">
@@ -267,6 +268,80 @@ export function EfficiencySettings() {
         </div>
         <Button onClick={() => save({ efficiency: { shift_start: start, shift_end: end, break_min: brk, idle_min: idle, wa_sec: wa, weights: w } })}>{saved ? 'Saved ✓' : 'Save'}</Button>
       </div>
+    </Card>
+  )
+}
+
+/** Which outcomes a tag group or sentence shows for (none ticked = all). */
+function KindPicker({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+  return (
+    <div className="mb-2 flex flex-wrap items-center gap-1.5 text-xs">
+      <span className="text-slate-500">Shows for:</span>
+      {OUTCOME_KINDS.map(([k, l]) => {
+        const on = value.includes(k)
+        return <button key={k} type="button" onClick={() => onChange(on ? value.filter(x => x !== k) : [...value, k])}
+          className={`rounded-full px-2 py-0.5 ${on ? 'bg-teal-700 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{l}</button>
+      })}
+      {value.length === 0 && <span className="text-slate-400">every outcome</span>}
+    </div>
+  )
+}
+
+/** Lead profile choices: challenges, goals, budget ranges (chips reps tap in the app and the desk). */
+export function ProfileChoices() {
+  const { org, save, error, saved } = useSaveSettings()
+  const [opts, setOpts] = useState(profileOptions(org.settings))
+  const [add, setAdd] = useState<Record<string, string>>({})
+  function update(next: typeof opts) { setOpts(next); save({ profile_options: next }) }
+  const rows: [keyof typeof opts, string, string][] = [['challenges', 'Challenges', 'e.g. No time'], ['goals', 'Goals', 'e.g. Job switch'], ['budget', 'Budget choices', 'e.g. 25k–50k']]
+  return (
+    <Card className="p-5 lg:col-span-2">
+      <h2 className="font-semibold">Lead profile {saved && <span className="ml-2 text-xs font-normal text-emerald-600">Saved ✓</span>}</h2>
+      <p className="mb-3 mt-1 text-sm text-slate-500">Every lead has a profile: profession, city, challenges, goals and budget. Reps fill it with one tap per chip, over several calls. Set the choices here.</p>
+      <ErrorBox error={error} />
+      {rows.map(([k, label, hint]) => (
+        <div key={k} className="mb-3">
+          <div className="mb-1 text-sm font-medium">{label}</div>
+          <div className="mb-1.5 flex flex-wrap gap-1.5">{opts[k].map(t => (
+            <span key={t} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-sm">{t}
+              <button className="text-slate-400 hover:text-red-600" onClick={() => update({ ...opts, [k]: opts[k].filter(x => x !== t) })}>×</button></span>))}</div>
+          <form className="flex gap-2" onSubmit={e => { e.preventDefault(); const t = (add[k] ?? '').trim(); if (t && !opts[k].includes(t)) update({ ...opts, [k]: [...opts[k], t] }); setAdd({ ...add, [k]: '' }) }}>
+            <input className="input !py-1.5" placeholder={hint} value={add[k] ?? ''} onChange={e => setAdd({ ...add, [k]: e.target.value })} maxLength={40} />
+            <Button type="submit" variant="secondary"><Plus className="h-4 w-4" /></Button>
+          </form>
+        </div>
+      ))}
+    </Card>
+  )
+}
+
+/** Fill-in-the-blank note sentences, per outcome. */
+export function NoteSentences() {
+  const { org, save, error, saved } = useSaveSettings()
+  const [lines, setLines] = useState<NoteLine[]>(noteLines(org.settings))
+  const [draft, setDraft] = useState('')
+  function update(next: NoteLine[]) { setLines(next); save({ note_lines: next }) }
+  return (
+    <Card className="p-5 lg:col-span-2">
+      <h2 className="font-semibold">Quick note sentences {saved && <span className="ml-2 text-xs font-normal text-emerald-600">Saved ✓</span>}</h2>
+      <p className="mb-3 mt-1 text-sm text-slate-500">Ready-made sentences reps tap after a call, then fill the gaps. Write a gap in square brackets:
+        <b> [spouse/parent/boss]</b> gives choices, <b>[budget] [goal] [challenge]</b> use the lead profile choices (and fill the profile), anything else like <b>[product]</b> is typed.</p>
+      <ErrorBox error={error} />
+      <div className="space-y-2">
+        {lines.map((l, i) => (
+          <div key={i} className="rounded-lg border border-slate-200 p-3">
+            <div className="flex items-center gap-2">
+              <input className="input !py-1.5" defaultValue={l.text} onBlur={e => e.target.value.trim() && e.target.value !== l.text && update(lines.map((x, j) => j === i ? { ...x, text: e.target.value.trim() } : x))} />
+              <button className="text-slate-400 hover:text-red-600" onClick={() => update(lines.filter((_, j) => j !== i))}><Trash2 className="h-4 w-4" /></button>
+            </div>
+            <div className="mt-2"><KindPicker value={l.show_for ?? []} onChange={v => update(lines.map((x, j) => j === i ? { ...x, show_for: v } : x))} /></div>
+          </div>
+        ))}
+      </div>
+      <form className="mt-3 flex gap-2" onSubmit={e => { e.preventDefault(); if (draft.trim()) update([...lines, { text: draft.trim(), show_for: [] }]); setDraft('') }}>
+        <input className="input" placeholder="New sentence, e.g. Wants to start in [January/February/March]" value={draft} onChange={e => setDraft(e.target.value)} />
+        <Button type="submit" variant="secondary"><Plus className="h-4 w-4" /> Add</Button>
+      </form>
     </Card>
   )
 }

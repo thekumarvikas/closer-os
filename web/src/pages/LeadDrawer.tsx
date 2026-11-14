@@ -1,5 +1,6 @@
 import LeadWebinars from '../components/LeadWebinars'
 import LeadShares from '../components/LeadShares'
+import { LeadProfileCard, PinnedNotes, LeadObjections, type Pin } from '../components/LeadProfile'
 import { PlayButton, RecordingPlayer } from '../components/CallLog'
 import { CallColorKey, CallType } from '../components/CallColors'
 import { useEffect, useState } from 'react'
@@ -13,7 +14,7 @@ import { Badge, Button, ErrorBox, Spinner } from '../components/ui'
 
 interface Activity { id: string; kind: string; data: Record<string, unknown>; created_at: string; user_id: string | null }
 
-interface NoteEntry { kind: string; at: string; text: string | null; tags: string[]; outcome?: string | null; direction?: string; by?: string | null }
+interface NoteEntry { id?: string; objections?: string[] | null; kind: string; at: string; text: string | null; tags: string[]; outcome?: string | null; direction?: string; by?: string | null }
 
 export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
   { leadId: string; dir: Directory; onClose: () => void; onChanged: () => void }) {
@@ -142,6 +143,9 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
               <LeadShares leadId={leadId} assignedTo={lead.assigned_to} sharedWith={lead.shared_with ?? []} onChanged={() => { load(); onChanged() }} />
               <LeadWebinars leadId={leadId} />
 
+              <LeadProfileCard leadId={leadId} profile={(lead as any).profile ?? {}} onChanged={() => { load(); onChanged() }} />
+              <PinnedNotes leadId={leadId} pins={((lead as any).pinned ?? []) as Pin[]} onChanged={load} />
+              <LeadObjections ids={(lead as any).objections ?? []} />
               <EffortSummary leadId={leadId} />
               <section className="rounded-lg border border-amber-200 bg-amber-50 p-3">
                 <h3 className="mb-1 text-sm font-semibold">📌 Key facts</h3>
@@ -169,6 +173,12 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
                         <div className="text-xs text-slate-500">{fmtDateTime(n.at, org)}{n.by ? ` · ${n.by}` : ''}{n.kind === 'call' ? ` · ${n.direction === 'incoming' ? 'Received call' : 'Dialled'}${n.outcome ? ` · ${n.outcome}` : ''}` : ' · Note'}</div>
                         {n.text && <div className="whitespace-pre-wrap text-slate-800">{n.text}</div>}
                         {n.tags?.length > 0 && <div className="mt-1 flex flex-wrap gap-1">{n.tags.map(t => <span key={t} className="rounded-full bg-brand-50 px-2 py-0.5 text-xs text-brand-700">{t}</span>)}</div>}
+                        {n.objections && n.objections.length > 0 && <div className="mt-1 text-xs text-orange-800">⚠ Objection: {n.objections.join(', ')}</div>}
+                        {n.id && n.text && (() => { const pinned = ((lead as any).pinned ?? []).some((p: Pin) => p.ref === n.id); return (
+                          <button className="mt-1 text-xs text-brand-700 hover:underline" onClick={async () => {
+                            const { error } = await supabase.rpc('pin_lead_note', { p_lead: leadId, p_ref: n.id, p_text: n.text, p_on: !pinned })
+                            if (error) setError(errorText(error)); else load()
+                          }}>{pinned ? '📌 Pinned · unpin' : '📌 Pin'}</button>) })()}
                       </li>
                     ))}
                   </ul>

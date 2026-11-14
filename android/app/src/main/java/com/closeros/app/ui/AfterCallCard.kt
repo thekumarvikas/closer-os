@@ -19,6 +19,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
@@ -93,6 +95,13 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
     }
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    // Quick note on the card: a line of text (typed or spoken), tags that fit the outcome, ready-made sentences.
+    var note by remember { mutableStateOf("") }
+    var noteTags by remember { mutableStateOf(emptyList<String>()) }
+    var noteFields by remember { mutableStateOf(emptyMap<String, String>()) }
+    val voice = AfterCall.voiceText.value
+    LaunchedEffect(voice) { voice?.let { note = if (note.isBlank()) it else note.trimEnd() + " " + it; AfterCall.voiceText.value = null } }
+    DisposableEffect(Unit) { onDispose { AfterCall.Overlay.setFocusable(ctx, false) } }
     // Step 2 after saving (or the WhatsApp button): pick a message right on the card.
     var savedLine by remember { mutableStateOf<String?>(null) }
     var waStep by remember { mutableStateOf(false) }
@@ -138,6 +147,8 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
                 val about = listOfNotNull(callsLine(l.call_count, l.conversation_count), l.profession, l.company, l.city).filter { it.isNotBlank() }.joinToString(" · ")
                 if (about.isNotBlank()) Text(about, color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 l.key_facts?.takeIf { it.isNotBlank() }?.let { Text("📌 $it", color = Color(0xFFFDE68A), fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                l.pinned.firstOrNull()?.let { Text("📌 ${it.text}", color = Color(0xFFFDE68A), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                l.last_note?.takeIf { it.isNotBlank() }?.let { Text("📝 Last note: $it", color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
         }
 
@@ -163,6 +174,24 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
                         PopChip("No follow-up", noFollow) { noFollow = true; next = null }
                         PopChip("Other time…", false) { fullForm(if (lead == null) "add" else "outcome") }
                     }
+                    // Quick note: type (the card takes the keyboard while this box is tapped) or tap 🎤 to speak.
+                    OutlinedTextField(note, { note = it }, placeholder = { Text("Quick note (optional)") }, maxLines = 3,
+                        textStyle = androidx.compose.material3.LocalTextStyle.current.copy(fontSize = 14.sp),
+                        modifier = Modifier.fillMaxWidth()
+                            // Take the keyboard as soon as the box is touched (before Compose asks for focus).
+                            .pointerInput(Unit) { awaitPointerEventScope { while (true) { awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial); AfterCall.Overlay.setFocusable(ctx, true) } } }
+                            .onFocusChanged { if (it.isFocused) AfterCall.Overlay.setFocusable(ctx, true) },
+                        trailingIcon = { IconButton(onClick = {
+                            AfterCall.Overlay.setFocusable(ctx, false)
+                            com.closeros.app.calls.safeStart(ctx, Intent(ctx, AfterCallActivity::class.java).putExtra("mode", "voice").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        }) { Text("🎤", fontSize = 20.sp) } })
+                    co.org?.let { org ->
+                        val cat = outcome?.category
+                        SentencePicker(com.closeros.app.data.NoteKit.linesFor(org.noteLines, cat).take(6), org.profileOptions, compact = true,
+                            onAdd = { t, f -> note = if (note.isBlank()) t else note.trimEnd() + ". " + t; noteFields = noteFields + f },
+                            onTyping = { AfterCall.Overlay.setFocusable(ctx, it) })
+                        if (outcome != null) OutcomeTags(org.tagGroupsFor(cat), noteTags, { noteTags = it }, small = true)
+                    }
                     error?.let { Text(it, color = Brand.red, fontSize = 13.sp) }
                     val sale = outcome?.form == "sale"
                     Button(onClick = {
@@ -174,7 +203,12 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
                             val withCall = if (info.call != null) info else info.phone?.let { ph ->
                                 withContext(kotlinx.coroutines.Dispatchers.IO) { AfterCall.findRecentCall(ctx, ph, co.prefix) }
                             }?.let { info.copy(call = it) } ?: info
-                            val r = saveQuick(ctx, withCall, lead, o, next, noFollow, purpose)
+                            val r = saveQuick(ctx, withCall, lead, o, next, noFollow, purpose, note.trim(), noteTags)
+                            // Facts from filled sentences (budget, goal, challenge) → the lead's profile.
+                            if (r == null && lead != null && noteFields.isNotEmpty()) co.org?.let { org ->
+                                profilePatchFrom(noteFields, org.profileOptions, com.closeros.app.data.NoteKit.profileOf(lead))?.let { patch ->
+                                    runCatching { com.closeros.app.data.Notes.setProfile(ctx, lead.id, patch) } }
+                            }
                             saving = false
                             // Saved: step 2 on the same card — send a WhatsApp message, or close and dial the next.
                             if (r == null) {
@@ -252,7 +286,8 @@ private fun quickTimesAll(zone: ZoneId): List<Triple<String, String, ZonedDateTi
 }
 
 /** Saves from the card. Returns null when saved (or kept on the phone to send later), else the reason it can't be saved. */
-private suspend fun saveQuick(ctx: Context, info: AfterCall.Info, lead: Lead?, o: Outcome, next: ZonedDateTime?, noFollow: Boolean, purpose: String = info.purpose): String? {
+private suspend fun saveQuick(ctx: Context, info: AfterCall.Info, lead: Lead?, o: Outcome, next: ZonedDateTime?, noFollow: Boolean, purpose: String = info.purpose,
+                              note: String = "", tags: List<String> = emptyList()): String? {
     val c = info.call ?: return "Couldn't find this call in the phone's call history yet — wait 2 seconds and tap Save again"
     val co = info.co
     val store = LocalStore(ctx)
@@ -265,7 +300,10 @@ private suspend fun saveQuick(ctx: Context, info: AfterCall.Info, lead: Lead?, o
         put("started_at", Instant.ofEpochMilli(c.startedAtMs).toString()); put("duration_sec", c.durationSec)
         c.simSlot?.let { put("sim_slot", it) }; c.simLabel?.let { put("sim_label", it) }; c.simNumber?.let { put("sim_number", it) }
         put("device_id", PhoneCalls.deviceId(ctx)); put("from_dialer_queue", false)
-        put("outcome_id", o.id); put("outcome_data", buildJsonObject { })
+        put("outcome_id", o.id)
+        put("outcome_data", buildJsonObject { if (tags.isNotEmpty()) put("note_tags", kotlinx.serialization.json.JsonArray(tags.map { kotlinx.serialization.json.JsonPrimitive(it) })) })
+        if (note.isNotBlank()) put("notes", note)
+        if (tags.isNotEmpty()) put("lead_tags", kotlinx.serialization.json.JsonArray(tags.map { kotlinx.serialization.json.JsonPrimitive(it) }))
         if (noFollow) put("no_follow_up", true) else next?.let { put("follow_up_at", it.toInstant().toString()) }
     }
     com.closeros.app.data.LocalReports.recordOutcome(ctx, payload)   // my reports count it right away, even offline

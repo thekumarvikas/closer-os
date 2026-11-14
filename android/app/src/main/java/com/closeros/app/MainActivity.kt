@@ -143,7 +143,7 @@ fun Root(vm: AppViewModel) {
 
     // Back always closes the screen on top (inner screens with their own Back handling still go first).
     val secondary = vm.showWaToday || vm.showLeadWork || vm.showRecipe || vm.showPlaybook || vm.showFeedback || vm.showDialer || vm.showReports ||
-        vm.showLeaderboard || vm.showSequences || vm.editSequence != null || vm.openSequenceId != null || vm.showImport || vm.showContactsPick || vm.openLeadId != null || vm.genericList != null || vm.openList != null || vm.showBatches || vm.todayFilter != null
+        vm.showLeaderboard || vm.showSequences || vm.showNoteSettings || vm.editSequence != null || vm.openSequenceId != null || vm.showImport || vm.showContactsPick || vm.openLeadId != null || vm.genericList != null || vm.openList != null || vm.showBatches || vm.todayFilter != null
     androidx.activity.compose.BackHandler(enabled = secondary && vm.pending == null) { vm.closeTop() }
     WaChooseDialog(vm)
     EventPickerDialog(vm)
@@ -171,6 +171,7 @@ fun Root(vm: AppViewModel) {
             vm.editSequence != null -> vm.editSequence?.let { s -> SequenceEditor(vm, s) }
             vm.showImport -> ImportScreen(vm)
             vm.showContactsPick -> ContactsPickScreen(vm)
+            vm.showNoteSettings -> NoteSettingsScreen(vm)
             vm.showPlaybook -> WithBanner { PlaybookScreen(vm) }
             vm.showFeedback -> FeedbackScreen(vm)
             vm.showDialer -> DialerScreen(vm)

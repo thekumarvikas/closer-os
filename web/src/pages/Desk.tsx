@@ -1,3 +1,4 @@
+import { tagGroupsFor, linesFor } from '../lib/notes'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { MessageCircle, Phone, PhoneCall, Search, StickyNote, X } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
@@ -236,7 +237,9 @@ function OutcomePanel({ call, dir, onClose, onSaved }: { call: NeedCall; dir: Di
   const [amount, setAmount] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const allTags = (org.settings?.note_tags as string[] | undefined) ?? []
+  // Tags and ready-made sentences that fit the chosen outcome (Settings → Note tags / Quick note sentences).
+  const allTags = [...new Set(tagGroupsFor(org.settings, (outcome as { category?: string } | null)?.category).flatMap(g => g.tags))]
+  const lines = linesFor(org.settings, (outcome as { category?: string } | null)?.category)
   const dayOpts = useMemo(() => {
     const out: [string, string][] = []
     for (let i = 0; i < 7; i++) {
@@ -307,6 +310,9 @@ function OutcomePanel({ call, dir, onClose, onSaved }: { call: NeedCall; dir: Di
         return <button key={s} onClick={() => setTime(s)} className={`rounded-md border px-2 py-1 text-xs ${time === s ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-200 hover:bg-slate-50'}`}>{label}</button>
       })}</div>}
       {fa && !noFollow && <p className={`mb-2 text-sm font-medium ${fa.getTime() > Date.now() ? 'text-brand-700' : 'text-red-600'}`}>{fa.getTime() > Date.now() ? `Next call: ${fmtDateTime(fa.toISOString(), org)}` : 'That time has passed — pick a later one'}</p>}
+      {lines.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{lines.map(l => <button key={l.text} title="Adds the sentence — fill the ___ gaps"
+        onClick={() => { const t = l.text.replace(/\[[^\]]*\]/g, '___'); setNotes(n => n.trim() ? `${n.trim().replace(/\.$/, '')}. ${t}` : t) }}
+        className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs text-slate-800 hover:bg-indigo-100">✎ {l.text.replace(/\[[^\]]*\]/g, '…')}</button>)}</div>}
       <textarea className="input mt-2 min-h-[70px]" placeholder="Notes from this call" value={notes} onChange={e => setNotes(e.target.value)} />
       {allTags.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{allTags.map(t => <button key={t} onClick={() => setTags(x => x.includes(t) ? x.filter(y => y !== t) : [...x, t])} className={`rounded-full px-2.5 py-1 text-xs ${tags.includes(t) ? 'bg-brand-700 text-white' : 'bg-slate-100 text-slate-700'}`}>{tags.includes(t) ? '✓ ' : '+ '}{t}</button>)}</div>}
       <Button className="mt-4 w-full" onClick={save} loading={busy} disabled={!canSave}>Save outcome</Button>

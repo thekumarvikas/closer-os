@@ -54,7 +54,7 @@ object Prefetch {
             val ok = mutableMapOf<String, Long>()
             fun keep(k: String, success: Boolean) { if (success) current?.get(k)?.let { ok[k] = it } else seen[k]?.let { ok[k] = it } }
             for ((k, fetch) in listOf<Pair<String, suspend () -> Unit>>(
-                "playbook" to { Repo.playbook(org) }, "templates" to { Repo.templates(org) }, "files" to { Repo.companyFiles(org) },
+                "playbook" to { Repo.playbook(org); com.closeros.app.data.Notes.objections(org) }, "templates" to { Repo.templates(org) }, "files" to { Repo.companyFiles(org) },
                 "categories" to { Repo.categories(org) }, "outcomes" to { Repo.outcomes(org) }, "batches" to { Repo.myBatches(org) })) {
                 if (changed(k)) keep(k, t(fetch)) else seen[k]?.let { ok[k] = it }
             }

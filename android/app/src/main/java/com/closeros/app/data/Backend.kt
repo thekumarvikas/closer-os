@@ -93,8 +93,16 @@ object Backend {
     /** Tag groups (dashboard Settings → Note tags), e.g. Objection: Price · Time. Falls back to the flat tag list. */
     val tagGroups: List<TagGroup> get() = runCatching {
         settings?.get("tag_groups")?.jsonArray?.map { g -> val o = g.jsonObject
-            TagGroup(o["name"]?.jsonPrimitive?.content ?: "", o["color"]?.jsonPrimitive?.contentOrNull ?: "#0E5E57", o["tags"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty()) }
-    }.getOrNull()?.filter { it.tags.isNotEmpty() }?.ifEmpty { null } ?: listOf(TagGroup("Tags", "#0E5E57", noteTags))
+            TagGroup(o["name"]?.jsonPrimitive?.content ?: "", o["color"]?.jsonPrimitive?.contentOrNull ?: "#0E5E57", o["tags"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(),
+                o["show_for"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty()) }
+    }.getOrNull()?.filter { it.tags.isNotEmpty() }?.ifEmpty { null }
+        ?: if (settings?.get("note_tags") != null) listOf(TagGroup("Tags", "#0E5E57", noteTags)) else NoteKit.DEFAULT_TAG_GROUPS
+    /** Tag groups that fit an outcome category (a group with no categories fits every outcome). */
+    fun tagGroupsFor(category: String?): List<TagGroup> = tagGroups.filter { category == null || it.showFor.isEmpty() || category in it.showFor }
+    /** Lead profile choices (dashboard Settings → Lead profile; individuals in the app). */
+    val profileOptions: ProfileOptions get() = NoteKit.profileOptions(settings)
+    /** Fill-in-the-blank note sentences per outcome category. */
+    val noteLines: List<NoteLine> get() = NoteKit.noteLines(settings)
     /** Facts the company wants captured on each lead (short pick-lists), saved in leads.custom. */
     val leadFacts: List<LeadFact> get() = runCatching {
         settings?.get("lead_facts")?.jsonArray?.map { f -> val o = f.jsonObject
@@ -105,7 +113,10 @@ object Backend {
         ?: listOf("Price objection", "Wants EMI", "Needs to ask family", "Decision maker: spouse", "Busy — call in evening",
             "Asked for details on WhatsApp", "Comparing with others", "Very interested", "Already bought elsewhere")
 }
-data class TagGroup(val name: String, val color: String, val tags: List<String>)
+data class TagGroup(val name: String, val color: String, val tags: List<String>, val showFor: List<String> = emptyList())
+data class ProfileOptions(val challenges: List<String>, val goals: List<String>, val budget: List<String>)
+/** A note sentence with gaps, e.g. "Will decide after talking to [spouse/parent/boss]"; [showFor] = outcome categories (empty = all). */
+data class NoteLine(val text: String, val showFor: List<String> = emptyList())
 data class LeadFact(val key: String, val label: String, val options: List<String>)
 @Serializable data class Membership(val org_id: String, val role: String, val organization: Org)
 @Serializable data class Profile(val id: String, val email: String? = null, val full_name: String? = null, val phone: String? = null)
@@ -129,12 +140,22 @@ data class LeadFact(val key: String, val label: String, val options: List<String
     val last_call_status: String? = null, val has_talked: Boolean = false, val score: Int = 0, val won_at: String? = null,
     val tags: List<String>? = null, val custom: JsonObject? = null, val created_at: String? = null, val best_hour: Int? = null,
     val conversation_count: Int = 0, val profession_category_id: String? = null,
+    /** Lead profile: challenges / goals (lists + text), budget, budget_amount. */
+    val profile: JsonObject? = null,
+    /** Pinned notes (max 3), newest first. */
+    val pinned: List<Pin> = emptyList(),
+    /** The latest note written about this lead (call or note), for the before-call brief and reminders. */
+    val last_note: String? = null, val last_note_at: String? = null,
+    /** Objections this lead raised (newest first, ids of playbook objections). */
+    val objections: List<String> = emptyList(),
     /** From today's focus list: what kind of call this is (reminder / sales) and for which webinar. */
     val call_purpose: String? = null, val call_batch_id: String? = null,
 ) {
     /** Latest webinar/event this lead registered for. */
     val latestBatch: BatchLink? get() = batch_leads.maxByOrNull { it.batch?.webinar_at ?: "" }
 }
+
+@Serializable data class Pin(val ref: String = "", val text: String = "", val by: String? = null, val at: String? = null)
 
 @Serializable data class WebSession(val join: String, val leave: String)
 @Serializable data class WebChat(val at: String? = null, val minute: Int? = null, val message: String = "")
@@ -196,6 +217,7 @@ data class LeadFact(val key: String, val label: String, val options: List<String
 
 /** One entry in a lead's notes history. */
 @Serializable data class NoteEntry(
+    val id: String? = null, val objections: List<String>? = null,
     val kind: String, val at: String, val text: String? = null, val tags: List<String> = emptyList(), val outcome: String? = null,
     val direction: String? = null, val duration_sec: Int? = null, val purpose: String? = null, val by: String? = null,
 )
@@ -270,7 +292,8 @@ object TalkBands {
 @Serializable data class CallRequest(val id: String, val lead_id: String, val purpose: String = "sales", val batch_id: String? = null)
 
 @Serializable data class LeadMini(val name: String = "", val phone: String = "", val dial_count: Int = 0, val conversation_count: Int = 0, val call_count: Int = 0,
-    val last_outcome_id: String? = null, val key_facts: String? = null, val profession: String? = null, val city: String? = null, val total_talk_sec: Int = 0)
+    val last_outcome_id: String? = null, val key_facts: String? = null, val profession: String? = null, val city: String? = null, val total_talk_sec: Int = 0,
+    val last_note: String? = null)
 @Serializable data class FollowUp(
     val id: String, val lead_id: String, val due_at: String, val status: String, val reason: String? = null,
     val notes: String? = null, val purpose: String = "sales", val lead: LeadMini? = null,
@@ -517,7 +540,7 @@ object Repo {
     }
 
     suspend fun playbook(orgId: String): List<PlaybookItem> = saved("playbook:$orgId") { Backend.client.from("playbook_items").select {
-        filter { eq("org_id", orgId); neq("status", "archived") }
+        filter { eq("org_id", orgId); neq("status", "archived"); neq("kind", "answer") }
         order("position", Order.ASCENDING)
     }.decodeList<PlaybookItem>() }
 
@@ -795,7 +818,7 @@ object Repo {
     suspend fun followUps(orgId: String): List<FollowUp> {
         val uid = Backend.uid ?: throw IllegalStateException("Not signed in")   // never replace the saved list with "nothing"
         if (!Net.isOnline) throw IllegalStateException("No internet")
-        return Backend.client.from("follow_ups").select(Columns.raw("*, lead:leads(name, phone, dial_count, conversation_count, call_count, last_outcome_id, key_facts, profession, city, total_talk_sec)")) {
+        return Backend.client.from("follow_ups").select(Columns.raw("*, lead:leads(name, phone, dial_count, conversation_count, call_count, last_outcome_id, key_facts, profession, city, total_talk_sec, last_note)")) {
             filter { eq("org_id", orgId); eq("assigned_to", uid); eq("status", "pending") }
             order("due_at", Order.ASCENDING)
             limit(200)
@@ -805,7 +828,7 @@ object Repo {
     /** Follow-ups of the last 7 days that are finished, to show on time / late / not called. */
     suspend fun pastFollowUps(orgId: String): List<FollowUp> {
         val uid = Backend.uid ?: throw IllegalStateException("Not signed in")
-        return saved("pastfu:$orgId") { Backend.client.from("follow_ups").select(Columns.raw("*, lead:leads(name, phone, dial_count, conversation_count, call_count, last_outcome_id, key_facts, profession, city, total_talk_sec)")) {
+        return saved("pastfu:$orgId") { Backend.client.from("follow_ups").select(Columns.raw("*, lead:leads(name, phone, dial_count, conversation_count, call_count, last_outcome_id, key_facts, profession, city, total_talk_sec, last_note)")) {
             filter { eq("org_id", orgId); eq("assigned_to", uid); eq("status", "done"); gte("due_at", Instant.now().minusSeconds(7 * 86400).toString()) }
             order("due_at", Order.DESCENDING)
             limit(300)

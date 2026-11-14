@@ -6,7 +6,7 @@ import { useDirectory } from '../lib/directory'
 import type { Rule } from '../lib/types'
 import { Badge, Button, Card, ErrorBox, Field, PageHeader, Spinner } from '../components/ui'
 import { CompanySequences } from '../components/Sequences'
-import { OutcomeNextSteps, WorkingCalendar, TagGroups, LeadFacts, CheckinSettings } from './SettingsRound9'
+import { OutcomeNextSteps, WorkingCalendar, TagGroups, LeadFacts, CheckinSettings, ProfileChoices, NoteSentences } from './SettingsRound9'
 import { AppLeadFilters, Buyers, RecordingAndTeamSettings, ExcludedNumbers, ProfessionCategories, ReviewChecklist, WhatsAppTemplates, CompanyFiles } from './SettingsExtra'
 
 export default function Settings() {
@@ -134,6 +134,8 @@ export default function Settings() {
 
         <OutcomeNextSteps />
         <TagGroups />
+        <NoteSentences />
+        <ProfileChoices />
         <LeadFacts />
         <WorkingCalendar />
         <CheckinSettings />

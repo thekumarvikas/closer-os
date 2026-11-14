@@ -45,6 +45,10 @@ fun PlaybookScreen(vm: AppViewModel) {
     var suggesting by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<PlaybookItem?>(null) }   // individual app: change own items
     val all = vm.playbook
+    LaunchedEffect(Unit) { vm.loadObjections() }
+    var openObj by remember { mutableStateOf<String?>(null) }
+    var newObjection by remember { mutableStateOf(false) }
+    val objs = vm.objections.orEmpty().filter { o -> q.isBlank() && kind == "objection" || q.isNotBlank() && (o.title.contains(q.trim(), true) || o.allAnswers.any { it.body?.contains(q.trim(), true) == true }) }
     fun fill(t: String) = if (lead != null) vm.fillTemplate(t, lead) else t
 
     Column(Modifier.fillMaxSize().background(Brand.bg)) {
@@ -54,18 +58,24 @@ fun PlaybookScreen(vm: AppViewModel) {
                 Text("Playbook", fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 lead?.let { Text("For ${it.name.ifBlank { fmtPhone(it.phone) }}", fontSize = 13.sp, color = Brand.muted) }
             }
-            TextButton(onClick = { suggesting = true }) { Text(if (vm.isSolo) "+ Add" else "Suggest") }
+            TextButton(onClick = { if (kind == "objection") newObjection = true else suggesting = true }) { Text(if (vm.isSolo || kind == "objection") "+ Add" else "Suggest") }
         }
         OutlinedTextField(q, { q = it }, singleLine = true, placeholder = { Text("Search, e.g. price, EMI, link") }, leadingIcon = { Icon(Icons.Default.Search, null) },
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(12.dp, 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            kinds.forEach { (k, l) -> FilterChip(selected = kind == k && q.isBlank(), onClick = { kind = k; q = "" }, label = { Text("$l (${all?.count { it.kind == k && it.status == "published" } ?: 0})") }) }
+            kinds.forEach { (k, l) -> FilterChip(selected = kind == k && q.isBlank(), onClick = { kind = k; q = "" }, label = { Text("$l (${if (k == "objection") vm.objections?.count { it.status == "published" } ?: 0 else all?.count { it.kind == k && it.status == "published" } ?: 0})") }) }
         }
         if (all == null) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }; return }
         val shown = all.filter { it.status == "published" || it.created_by == com.closeros.app.data.Backend.uid }
+            .filter { it.kind != "objection" }   // objections (with all their answers) are shown below
             .filter { if (q.isBlank()) it.kind == kind else listOfNotNull(it.title, it.body, it.section, it.url).any { s -> s.contains(q.trim(), true) } }
         LazyColumn(contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (shown.isEmpty()) item { Text(if (q.isNotBlank()) "Nothing matches “$q”." else if (vm.isSolo) "Nothing here yet. Tap “+ Add” to save your own scripts, objection answers, links and documents."
+            if (objs.isNotEmpty() || (kind == "objection" && q.isBlank())) {
+                if (kind == "objection" && q.isBlank()) item { Text(if (vm.isManager || vm.isSolo) "What leads say, and the answers that work — best answer first."
+                    else "What leads say, and the answers that work. Add your own: you can use it at once, the team sees it after your manager approves.", fontSize = 13.sp, color = Brand.muted) }
+                items(objs, key = { "o-" + it.id }) { o -> ObjectionCard(vm, o, lead, openObj == o.id) { openObj = if (openObj == o.id) null else o.id } }
+            }
+            if (shown.isEmpty() && objs.isEmpty() && !(kind == "objection" && q.isBlank())) item { Text(if (q.isNotBlank()) "Nothing matches “$q”." else if (vm.isSolo) "Nothing here yet. Tap “+ Add” to save your own scripts, objection answers, links and documents."
                 else "Nothing here yet. Your manager adds these on the dashboard (Playbook).", color = Brand.muted) }
             var lastSection: String? = "\u0000"
             shown.forEach { item ->
@@ -78,6 +88,7 @@ fun PlaybookScreen(vm: AppViewModel) {
         }
     }
     if (suggesting) SuggestDialog(vm, null) { suggesting = false }
+    if (newObjection) ObjectionEditDialog(vm, null) { newObjection = false }
     editing?.let { e -> SuggestDialog(vm, e) { editing = null } }
 }
 

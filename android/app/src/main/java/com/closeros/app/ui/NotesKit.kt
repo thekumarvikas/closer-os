@@ -113,7 +113,7 @@ fun KeyFactsCard(lead: Lead, onSaved: (String) -> Unit) {
 
 /** Every note on a lead, newest first, plus "Add note" without making a call. */
 @Composable
-fun NotesTimeline(vm: AppViewModel, leadId: String) {
+fun NotesTimeline(vm: AppViewModel, leadId: String, lead: Lead? = null) {
     var notes by remember { mutableStateOf<List<NoteEntry>?>(null) }
     var adding by remember { mutableStateOf(false) }
     var reload by remember { mutableStateOf(0) }
@@ -135,6 +135,13 @@ fun NotesTimeline(vm: AppViewModel, leadId: String) {
                     else "Note").joinToString(" · "), fontSize = 12.sp, color = Brand.muted)
                 n.text?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 14.sp) }
                 if (n.tags.isNotEmpty()) Text(n.tags.joinToString("  ") { "#$it" }, fontSize = 12.sp, color = Brand.primaryDark)
+                n.objections?.takeIf { it.isNotEmpty() }?.let { o -> Text("⚠ Objection: " + o.joinToString(", ") { it.trim('"', '“', '”') }, fontSize = 12.sp, color = Color(0xFF9A3412)) }
+                // Pin an important note to the top of the lead (max 3).
+                if (lead != null && n.id != null && !n.text.isNullOrBlank()) {
+                    val pinned = lead.pinned.any { it.ref == n.id }
+                    Text(if (pinned) "📌 Pinned · unpin" else "📌 Pin", fontSize = 12.sp, color = Brand.primary,
+                        modifier = Modifier.clickable { vm.pinNote(lead, n.id, n.text, !pinned) }.padding(vertical = 2.dp))
+                }
             }
         }
     }

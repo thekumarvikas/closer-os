@@ -167,6 +167,58 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         val m = membership ?: return@launch
         runCatching { Repo.playbook(m.org_id) }.onSuccess { playbook = it }.onFailure { if (playbook == null) playbook = emptyList(); message = "Couldn't load the playbook" }
     }
+    // ───── Smarter notes: objections, lead profile, pinned notes, note settings ─────
+    var objections by mutableStateOf<List<com.closeros.app.data.Objection>?>(null)
+    var showNoteSettings by mutableStateOf(false)
+    fun loadObjections() = viewModelScope.launch {
+        val m = membership ?: return@launch
+        runCatching { com.closeros.app.data.Notes.objections(m.org_id) }.onSuccess { objections = it }.onFailure { if (objections == null) objections = emptyList() }
+    }
+    fun objectionById(id: String) = objections?.firstOrNull { it.id == id }
+    /** New objection (with an optional first answer) or another answer. Reps: waits for a manager before the team sees it. */
+    fun saveObjection(title: String?, body: String?, parentId: String? = null, id: String? = null, done: (String?) -> Unit = {}) = viewModelScope.launch {
+        val m = membership ?: return@launch
+        runCatching { com.closeros.app.data.Notes.saveObjection(m.org_id, id, title, body, parentId) }
+            .onSuccess { newId ->
+                message = if (isManager || isSolo) "Saved ✓" else "Saved for you ✓ — your manager approves it for the team"
+                loadObjections(); done(newId)
+            }.onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't save — check your internet"); done(null) }
+    }
+    /** Saves part of a lead's profile (offline: waits on the phone) and updates the lead everywhere on screen. */
+    fun saveProfile(lead: Lead, patch: kotlinx.serialization.json.JsonObject, quiet: Boolean = false) = viewModelScope.launch {
+        if (patch.isEmpty()) return@launch
+        runCatching { com.closeros.app.data.Notes.setProfile(ctx, lead.id, patch) }
+            .onSuccess {
+                val updated = com.closeros.app.data.NoteKit.applyPatch(lead, patch)
+                replaceLead(updated)
+                if (!quiet) message = "Profile saved ✓"
+            }.onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't save the profile") }
+    }
+    /** Pins or unpins a note on a lead (max 3). */
+    fun pinNote(lead: Lead, ref: String, text: String, on: Boolean) = viewModelScope.launch {
+        runCatching { com.closeros.app.data.Notes.pin(lead.id, ref, text, on) }
+            .onSuccess { pins -> replaceLead(lead.copy(pinned = pins)); message = if (on) "📌 Pinned" else "Unpinned" }
+            .onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't pin — check your internet") }
+    }
+    /** A changed lead: shown at once in the list, the open lead page and the phone's lead copy. */
+    fun replaceLead(l: Lead) {
+        val i = leads.indexOfFirst { it.id == l.id }; if (i >= 0) leads[i] = l
+        val q = queue.indexOfFirst { it.id == l.id }; if (q >= 0) queue = queue.toMutableList().also { it[q] = l }
+        runCatching { com.closeros.app.data.LeadIndex.remember(ctx, listOf(l)) }
+        leadRefresh++
+    }
+    /** Company / personal settings (managers and individuals), merged into organizations.settings. */
+    fun saveOrgSettings(patch: kotlinx.serialization.json.JsonObject, done: (Boolean) -> Unit = {}) = viewModelScope.launch {
+        val m = membership ?: return@launch
+        val merged = kotlinx.serialization.json.JsonObject((m.organization.settings ?: kotlinx.serialization.json.JsonObject(emptyMap())) + patch)
+        runCatching {
+            com.closeros.app.data.Backend.client.from("organizations").update(kotlinx.serialization.json.buildJsonObject { put("settings", merged) }) { filter { eq("id", m.org_id) } }
+        }.onSuccess {
+            membership = m.copy(organization = m.organization.copy(settings = merged)); save("membership", membership)
+            message = "Saved ✓"; done(true)
+        }.onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't save — check your internet"); done(false) }
+    }
+
     var history by mutableStateOf<List<HistoryItem>?>(null)
     var historyLimit by mutableStateOf(300)
     var historyHasMore by mutableStateOf(false)
@@ -1046,6 +1098,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun closeTop(): Boolean {
         when {
             showWaToday -> showWaToday = false
+            showNoteSettings -> showNoteSettings = false
             showLeadWork && genericList == null && openLeadId == null -> showLeadWork = false
             showRecipe && genericList == null && openLeadId == null -> showRecipe = false
             showPlaybook -> showPlaybook = false

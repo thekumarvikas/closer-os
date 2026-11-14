@@ -62,8 +62,25 @@ class AfterCallActivity : ComponentActivity() {
         setIntent(intent); req = intent
     }
 
+    /** Voice typing for the after-call card: runs the phone's speech-to-text, hands the words back to the card, closes. */
+    @Composable
+    private fun VoiceOnly() {
+        val launcher = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { r ->
+            if (r.resultCode == RESULT_OK) r.data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let { AfterCall.voiceText.value = it }
+            finish()
+        }
+        LaunchedEffect(Unit) {
+            val v = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "en-IN")
+                .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Speak your note")
+            runCatching { launcher.launch(v) }.onFailure { Toast.makeText(this@AfterCallActivity, "Voice typing isn't available on this phone", Toast.LENGTH_SHORT).show(); finish() }
+        }
+    }
+
     @Composable
     private fun Sheet(i: Intent) {
+        if (i.getStringExtra("mode") == "voice") { VoiceOnly(); return }
         val logId = i.getStringExtra("log_id") ?: run { finish(); return }
         val started = i.getLongExtra("started", 0L)
         val phone = i.getStringExtra("phone").orEmpty()

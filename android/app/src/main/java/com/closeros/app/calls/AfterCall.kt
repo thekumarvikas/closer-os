@@ -53,7 +53,9 @@ object AfterCall {
     /** Everything the card needs about the company, from the copy saved on the phone (works offline). */
     data class Company(val orgId: String, val prefix: String, val timezone: String, val outcomes: List<Outcome>,
                        val name: String = "", val repName: String = "", val templates: List<com.closeros.app.data.Template> = emptyList(),
-                       val followUps: List<com.closeros.app.data.FollowUp> = emptyList())
+                       val followUps: List<com.closeros.app.data.FollowUp> = emptyList(),
+                       /** Company settings (tags, note sentences, lead profile choices). */
+                       val org: com.closeros.app.data.Org? = null)
 
     fun company(ctx: Context): Company? {
         val db = com.closeros.app.data.LocalDb.get(ctx)
@@ -62,7 +64,7 @@ object AfterCall {
         val templates = db.get("templates")?.let { runCatching { com.closeros.app.data.json.decodeFromString<List<com.closeros.app.data.Template>>(it) }.getOrNull() }.orEmpty()
         val rep = db.get("profile")?.let { runCatching { com.closeros.app.data.json.decodeFromString<com.closeros.app.data.Profile>(it) }.getOrNull() }?.full_name.orEmpty()
         val fus = db.get("followUps")?.let { runCatching { com.closeros.app.data.json.decodeFromString<List<com.closeros.app.data.FollowUp>>(it) }.getOrNull() }.orEmpty()
-        return Company(m.org_id, m.organization.phone_prefix, m.organization.timezone, outcomes, m.organization.name, rep, templates, fus)
+        return Company(m.org_id, m.organization.phone_prefix, m.organization.timezone, outcomes, m.organization.name, rep, templates, fus, m.organization)
     }
 
     /**
@@ -219,8 +221,22 @@ object AfterCall {
     fun cancelNotification(ctx: Context) = runCatching { ctx.getSystemService(NotificationManager::class.java).cancel(NOTIFY_ID) }
 
     /** The floating card itself: a small window drawn over other apps. */
+    /** Voice typing for the card: the words come back here from a small screen that runs the phone's speech-to-text. */
+    val voiceText = androidx.compose.runtime.mutableStateOf<String?>(null)
+
     object Overlay {
         private var view: View? = null
+        private var params: WindowManager.LayoutParams? = null
+        /** The card normally doesn't take the keyboard (so the phone behind stays usable); while a note box is tapped it does. */
+        fun setFocusable(ctx: Context, on: Boolean) {
+            val v = view ?: return; val lp = params ?: return
+            val nf = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+            val want = if (on) lp.flags and nf.inv() else lp.flags or nf
+            if (want == lp.flags) return
+            lp.flags = want
+            lp.softInputMode = android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN or android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE
+            runCatching { ctx.getSystemService(WindowManager::class.java)?.updateViewLayout(v, lp) }
+        }
         private var owner: Owner? = null
         private var state: androidx.compose.runtime.MutableState<Info>? = null
         /** True while the card is on screen (the calling queue waits). */
@@ -247,14 +263,14 @@ object AfterCall {
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 PixelFormat.TRANSLUCENT,
             ).apply { gravity = Gravity.CENTER }
-            return runCatching { wm.addView(v, lp); view = v; owner = o; state = st }
+            return runCatching { wm.addView(v, lp); view = v; owner = o; state = st; params = lp }
                 .onFailure { o.stop(); com.closeros.app.data.AppLog.error(ctx, "after-call pop-up", it) }.isSuccess
         }
 
         fun hide(ctx: Context) {
             val v = view ?: return
             runCatching { ctx.getSystemService(WindowManager::class.java)?.removeViewImmediate(v) }
-            owner?.stop(); view = null; owner = null; state = null
+            owner?.stop(); view = null; owner = null; state = null; params = null
         }
     }
 

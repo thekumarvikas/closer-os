@@ -213,6 +213,7 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
                 BestTimeLine(l.id, l.phone)
                 l.response_sec?.let { r -> Text("⚡ First call " + (if (r < 60) "within a minute" else "${r / 60} working min") + " after it came in", fontSize = 13.sp, color = Brand.muted) }
             }
+            item { BriefCard(vm, l, showProfile = false) }
             if (vm.isSolo) item { LeadEventsRow(vm, l) }
             else if (l.batch_leads.isNotEmpty()) item { LeadWebinarsCard(l) }
             if (!vm.isSolo) item { LeadShareCard(vm, l) { lead = it } }
@@ -235,14 +236,15 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
                 TextButton(onClick = { vm.openPlaybook(l) }) { Text("📖 Script, objection answers & links") }
                 LeadSequencesCard(vm, l)
             }
+            item { ProfileCard(vm, l) }
+            item { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { KeyFactsCard(l) { t -> lead = l.copy(key_facts = t) }; PinnedNotes(vm, l) } }
             item { EffortCard(vm, l) }
-            item { KeyFactsCard(l) { t -> lead = l.copy(key_facts = t) } }
             if (!l.notes.isNullOrBlank()) item {
                 Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
                     Column(Modifier.padding(14.dp)) { Text("Notes from the imported file", fontWeight = FontWeight.SemiBold); Text(l.notes, fontSize = 14.sp) }
                 }
             }
-            item { NotesTimeline(vm, l.id) }
+            item { NotesTimeline(vm, l.id, l) }
             item { Text("Calls", fontWeight = FontWeight.SemiBold); if (calls.isNotEmpty()) CallColorKey(Modifier.padding(top = 2.dp)) }
             if (calls.isEmpty()) item { Text("No calls yet.", color = Brand.muted) }
             items(calls) { c ->
@@ -333,6 +335,7 @@ fun ProfileScreen(vm: AppViewModel) {
                 FilterChip(selected = sh == h, onClick = { com.closeros.app.data.SeqAlerts.setHour(ctx, h); sh = h }, label = { Text(l) }) }
         }
         TextButton(onClick = { vm.showSequences = true }) { SeqIcon(18.dp); Spacer(Modifier.width(6.dp)); Text("Open WhatsApp sequences") }
+        if (vm.isSolo || vm.isManager) TextButton(onClick = { vm.showNoteSettings = true }) { Text("📝 Notes & lead profile: sentences, tags, profile choices") }
         HorizontalDivider()
         Text("After-call pop-up", fontWeight = FontWeight.SemiBold)
         Text("A card over any app when a call ends, to save the outcome straight away", color = Brand.muted, fontSize = 14.sp)

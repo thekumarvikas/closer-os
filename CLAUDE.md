@@ -1529,4 +1529,9 @@ intelligence → Play Store launch.
 - Answer 5: Google Sheet via a FREE method only (no cost to the business) — Apps Script / webhook push from the sheet.
 - Answer 6: imported buyers = VERIFIED sales.
 - Answer 7: a lead on the buyers list (CSV or Sheet) is automatically marked BOUGHT.
-- Still open: working vs clock minutes (owner asked what the difference is — explained Nov 14).
+- Answer 8: show BOTH clock minutes (business view: how fast leads are reached after sign-up) AND working minutes
+  (team member view: fair to reps, working hours/holidays from Settings), for TWO milestones: sign-up → first call
+  (dialled) and sign-up → first connected call (real conversation). Needs a new leads.first_connected_at (today only
+  first_dialled_at / response_sec exist). Split by sales vs reminder team members where relevant.
+- All questions answered (Nov 14). Build order when owner says "go": import + clean + dedupe (CSV, Sheet script) →
+  matching (+ unmatched / please-check lists, auto Bought + verified) → effort table + timeline → pattern finder → gaps.

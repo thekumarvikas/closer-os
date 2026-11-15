@@ -1677,3 +1677,7 @@ intelligence → Play Store launch.
 - Tester activity: no per-person view in Play Console → query individual orgs (owner email, joined, last sign-in,
   device_status.updated_at = last sync + app version, leads, calls). Random-name accounts (e.g. "Candida Bryson",
   "Frances Miller") = Google's pre-launch / review test devices, not real testers.
+- Pending feedback (Nov 16, Play build 0.25.0, not built — waiting for "go"): WhatsApp queue (ui/Round9Screens.kt
+  WaQueueScreen + vm.waConfirmSent): "✗ Not sent" just returns (acts as a pause) → should move on with the countdown;
+  unsent leads collected for "Try N again" at the end (sequence messages stay due). Countdown UI → premium 2-line card
+  (next lead name / "Opening WhatsApp in 3s" + thin animated bar, Pause), less helper text.

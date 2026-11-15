@@ -1797,3 +1797,12 @@ intelligence → Play Store launch.
   for now; non-attendees are NOT auto-registered for the next webinar (reminder team invites them; only a real
   registration counts); people who shared a number / asked in chat or answered polls = hot leads → warmth ranking from
   attendee + chat + polls decides who is hottest / closest to converting (top of sales call lists, spread evenly).
+- Nov 16 PROPOSED simpler assignment (owner: "still complex"; not built): (1) Lead source setup = 3 questions only:
+  which sheet / which column says the webinar (auto-detected, e.g. "Webinar Date" = "4th Oct - 2026") / tick who gets
+  new leads — then every new row is assigned instantly in turn; distribution-rules page only for advanced rules.
+  (2) Webinars AUTO-CREATED from the sheet's webinar column (one webinar per date, name "Webinar · 4 Oct 2026", default
+  start time per source, editable; lead joins it; registrations for a date not yet created still land correctly).
+  (3) Webinar card = the single place: Registered · Assigned · Called · Attended · Hot, plus "Unassigned N → Assign"
+  and, after the date, "Upload Zoom reports → Assign sales calls" wizard (upload → hot computed → tick members → done).
+  (4) App: webinar chips at the top of the Leads tab + webinar filter ("4 Oct webinar · 120") so reps pick a webinar and
+  call its leads; existing Webinars list stays. Open questions to owner: does the sheet column carry the time? naming?

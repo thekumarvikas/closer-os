@@ -1758,3 +1758,8 @@ intelligence → Play Store launch.
   place; buyer journey opens as a side drawer (no page change); actions (call, play, download, edit, delete, verify)
   directly on rows; Overview cards link straight into the Buyers tab pre-filtered; Learn = play inline, download one /
   all. Waiting for "go".
+- Nov 16 changes to the final Sales design: "What buyers have in common" = 15–20 bullet points (not 3–4), each a
+  plain sentence with buyers vs non-buyers numbers, strongest first. Training library MOVES OUT of Sales into its own
+  dashboard menu item "Training" (Sales page = 2 tabs: Overview · Buyers). Dashboard-wide filter rule: every filter bar
+  has "Apply filters" (changes take effect only on Apply, pending changes shown) + "Clear filters" (back to defaults),
+  plus a count of active filters — on ALL management pages (Leads, Calls, Follow-ups, Reports, Sales, Webinars, etc.).

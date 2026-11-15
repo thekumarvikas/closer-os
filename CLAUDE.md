@@ -1719,3 +1719,6 @@ intelligence → Play Store launch.
      paid/pending · sold by · date); by product; trend by day/week; "Path to sale" per member + company (avg calls,
      conversations, talk, WhatsApp, webinars, days to buy — from lead_path / sales_recipe, like the app) ; verification
      = a small "To verify (N)" tab/badge, not the main view.
+- Pending (Nov 16): "Download sample file" next to EVERY dashboard import (leads CSV/XLSX, buyers, Zoom attendee /
+  chat / polls, lead sources Sheet, products if any). Buyers sample to be modelled on the owner's real buyer file
+  (owner will share it) — same headings/order, fake data.

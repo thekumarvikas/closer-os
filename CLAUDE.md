@@ -1672,3 +1672,8 @@ intelligence → Play Store launch.
   ("saved on your phone… backed up/syncs"), sales by owner/manager/individual verified automatically (t_call_sale_claim),
   personal wording "₹X · N sales" (no "verified"/"manager"), compact collapse-on-select outcome screen, no-SIM / call
   not placed handling.
+- Domain closeros.in bought (GoDaddy, Nov 15 2026, 3 years). Not connected yet — owner: later. Checklist in
+  docs/ROADMAP.md "Launch checklist — domain closeros.in". Don't buy GoDaddy extras (email/SSL/builder).
+- Tester activity: no per-person view in Play Console → query individual orgs (owner email, joined, last sign-in,
+  device_status.updated_at = last sync + app version, leads, calls). Random-name accounts (e.g. "Candida Bryson",
+  "Frances Miller") = Google's pre-launch / review test devices, not real testers.

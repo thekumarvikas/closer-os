@@ -112,6 +112,14 @@ Everything from the original product prompt plus the owner's feedback, with stat
 - ✅ "New · waiting" timer on lead cards, best-time-now queue order, per-rep daily focus target, effort bar on cards (v0.10.1)
 - ✅ Add leads in the app (form with city, CSV/Excel import, phone contacts), schedule a call / a WhatsApp message from the lead page, sequence details page, tap-to-insert fill-ins, safe error messages (v0.22.0)
 
+## Launch checklist — domain closeros.in (bought Nov 15 2026 on GoDaddy; owner: "do it later")
+- [ ] Vercel → Settings → Domains: add closeros.in (+ www) → DNS records in GoDaddy (A / CNAME)
+- [ ] Supabase Auth: Site URL + redirect list → closeros.in (keep the vercel.app address too)
+- [ ] Play Console: website, privacy, delete-account URLs → closeros.in; Google OAuth consent Branding domain
+- [ ] app-ads.txt reachable at closeros.in/app-ads.txt; app links (WEB_URL) → closeros.in
+- [ ] Email sender on the domain (Resend, no-reply@closeros.in) → Supabase SMTP (ends the 2-emails/hour limit)
+- [ ] Later: business email (hello@closeros.in), landing page on closeros.in, dashboard on app.closeros.in
+
 ## Built Nov 14 2026 (v0.25.0) — owner feedback on 0.22.1
 - [x] "Call N follow-ups" dials only follow-ups due up to now (future ones never)
 - [x] Readable with large text / display size (whole app)

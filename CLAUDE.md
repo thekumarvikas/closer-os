@@ -1748,3 +1748,8 @@ intelligence → Play Store launch.
   paid/pending, sold by, days to convert with start-point switch, sortable fastest↔slowest) → click = journey drawer.
   Learn = winning-calls library. Import buyers / Sheet / To verify (N) = buttons in the page header, not tabs.
   Medians (not averages) for days; every number clickable to its list; plain words; same colours as elsewhere.
+- DECIDED (Nov 16, owner: "whatever is easiest for management"): Sales page = 2 tabs only: "Sales" (filter bar →
+  5 tiles → By team member / By webinar-event (compare) / What buyers have in common / Missed money → Buyers table with
+  start-point switch + fastest⇄slowest; buyer click = side journey drawer) and "Learn" (winning-calls library).
+  Header buttons: Import buyers · Google Sheet · To verify (N, only when > 0). 1-click rule: every number opens its
+  list; filters persist. Still waiting for "go" to build.

@@ -1763,3 +1763,12 @@ intelligence → Play Store launch.
   dashboard menu item "Training" (Sales page = 2 tabs: Overview · Buyers). Dashboard-wide filter rule: every filter bar
   has "Apply filters" (changes take effect only on Apply, pending changes shown) + "Clear filters" (back to defaults),
   plus a count of active filters — on ALL management pages (Leads, Calls, Follow-ups, Reports, Sales, Webinars, etc.).
+- Owner's buyer sheet (Nov 16, "Buyers Mastersheet Template", one client's real format). Master columns: S. No., Year,
+  Month, Payment Date, Webinar Date, Days to convert, Program Name, Batch No., Name, Email ID, Contact Number,
+  Engineering field / Business Category, Profession, City/Location, (State & UT in detail tabs), Country,
+  Direct/Sales Team (= Source of sale: Live Webinar Full | Live Webinar Part | Live Webinar Part to Full | Sales Team
+  Full | Sales Team Part | Sales Team Part to Full), Team Member Name, Amount Paid, Price Point, Pending Amount, Method
+  (Razorpay / Personal UPI / Bank), Part/Full, Remark. Other tabs = hand-made reports Closer OS should replace: monthly
+  team sales (revenue POST GST), sales per day, top performing webinar (all time), team member sales, business category
+  & profession, location → revenue, days to convert, per-member-per-batch detail tabs. Phones arrive as numbers
+  (float, sometimes 11 digits). Questions asked to owner before mapping (see chat Nov 16).

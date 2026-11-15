@@ -1741,3 +1741,10 @@ intelligence → Play Store launch.
   · "Winning calls" training library: every converted sale with its recordings + full journey; filters (product,
     team member, webinar, days to convert); play, download one / download all (zip); later shown in the app Playbook
     ("Learn from real sales") for reps.
+- PROPOSED design (Nov 16) for sales area — ONE page "Sales" replaces Sales + Reports→Sales insights + Buyer Analysis:
+  one filter bar (period · team member · product · webinar/event · source) shared by 3 tabs only: Overview · Buyers ·
+  Learn. Overview = 5 tiles (Revenue, Sales, Collected, Pending, Median days to convert) + 3 cards (By team member,
+  By webinar/event, What buyers have in common) + "Missed money" card. Buyers = one table (buyer, product, amount,
+  paid/pending, sold by, days to convert with start-point switch, sortable fastest↔slowest) → click = journey drawer.
+  Learn = winning-calls library. Import buyers / Sheet / To verify (N) = buttons in the page header, not tabs.
+  Medians (not averages) for days; every number clickable to its list; plain words; same colours as elsewhere.

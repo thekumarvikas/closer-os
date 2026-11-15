@@ -94,13 +94,27 @@ fun WaQueueScreen(vm: AppViewModel) {
         if (c <= 0) { vm.waOpenCurrent(); return@LaunchedEffect }
         delay(1000); if (vm.waCountdown == c) vm.waCountdown = c - 1
     }
+    val green = Color(0xFF16A34A)
     Column(Modifier.fillMaxSize().background(Brand.bg).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(if (vm.waSeqItems != null) "WhatsApp sequences" else "WhatsApp queue", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Column(Modifier.weight(1f)) {
+                Text(if (vm.waSeqItems != null) "WhatsApp sequences" else "WhatsApp queue", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text("${vm.waSent} sent · ${(vm.waQueue.size - vm.waPos).coerceAtLeast(0)} to go" + (if (vm.waNotSent.isNotEmpty()) " · ${vm.waNotSent.size} not sent" else ""),
+                    fontSize = 13.sp, color = Brand.muted)
+            }
             TextButton(onClick = { vm.waStop() }) { Text("Stop") }
         }
-        LinearProgressIndicator(progress = { vm.waPos.toFloat() / vm.waQueue.size.coerceAtLeast(1) }, Modifier.fillMaxWidth().height(6.dp))
-        Text("${vm.waSent} sent · ${vm.waQueue.size - vm.waPos} to go · message: ${t?.name ?: ""}", fontSize = 13.sp, color = Brand.muted)
+        LinearProgressIndicator(progress = { vm.waPos.toFloat() / vm.waQueue.size.coerceAtLeast(1) }, Modifier.fillMaxWidth().height(4.dp), color = green, trackColor = Color(0xFFE2E8F0))
+        // End of the list, some didn't go: try them again (or finish).
+        if (vm.waDone) {
+            Spacer(Modifier.height(24.dp))
+            Text("✓ ${vm.waSent} sent", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = green, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+            Text("${vm.waNotSent.size} didn't go", fontSize = 16.sp, color = Brand.muted, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+            Button(onClick = { vm.waRetry() }, modifier = Modifier.fillMaxWidth().height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = green)) {
+                Text("Try ${vm.waNotSent.size} again", fontSize = 17.sp) }
+            OutlinedButton(onClick = { vm.waFinish() }, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text("Finish") }
+            return@Column
+        }
         if (l == null || t == null) { Text("Done.", fontSize = 18.sp); return@Column }
         Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -108,25 +122,37 @@ fun WaQueueScreen(vm: AppViewModel) {
                 Text(l.name.ifBlank { fmtPhone(l.phone) }, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 Text(listOfNotNull(fmtPhone(l.phone), l.profession, l.city).filter { it.isNotBlank() }.joinToString(" · "), color = Brand.muted, fontSize = 13.sp)
                 Text(vm.fillTemplate(t.body, l), fontSize = 14.sp, modifier = Modifier.fillMaxWidth().background(Color(0xFFDCF8C6), RoundedCornerShape(10.dp)).padding(10.dp),
-                    maxLines = 6, overflow = TextOverflow.Ellipsis)
-                if (t.media_path != null) Text("📎 ${t.media_name ?: "Attachment"} is sent with it", fontSize = 12.sp, color = Brand.muted)
+                    maxLines = 5, overflow = TextOverflow.Ellipsis)
+                if (t.media_path != null) Text("📎 ${t.media_name ?: "Attachment"}", fontSize = 12.sp, color = Brand.muted)
             }
         }
         if (vm.waAskSent) {
-            Text("Did the message to ${l.name.ifBlank { fmtPhone(l.phone) }} go?", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+            Text("Did it go?", fontWeight = FontWeight.SemiBold, fontSize = 17.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { vm.waConfirmSent(true) }, modifier = Modifier.weight(1f).height(52.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A))) { Text("✓ Sent — next") }
-                OutlinedButton(onClick = { vm.waConfirmSent(false) }, modifier = Modifier.weight(1f).height(52.dp)) { Text("✗ Not sent") }
+                Button(onClick = { vm.waConfirmSent(true) }, modifier = Modifier.weight(1f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = green)) { Text("✓ Sent", fontSize = 16.sp) }
+                OutlinedButton(onClick = { vm.waConfirmSent(false) }, modifier = Modifier.weight(1f).height(56.dp)) { Text("✗ Not sent", fontSize = 16.sp) }
             }
             return@Column
         }
+        // The countdown is the highlight: a big green ring with the seconds in the middle.
         val cd = vm.waCountdown
-        Button(onClick = { vm.waPaused = false; vm.waOpenCurrent() }, modifier = Modifier.fillMaxWidth().height(56.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A))) {
-            Icon(Icons.Default.Send, null); Spacer(Modifier.width(8.dp))
-            Text(if (cd != null) "Opening WhatsApp in $cd…" else "Send on WhatsApp", fontSize = 17.sp)
+        Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+            if (cd != null) {
+                val frac by androidx.compose.animation.core.animateFloatAsState(cd.coerceAtLeast(0) / 3f,
+                    androidx.compose.animation.core.tween(950, easing = androidx.compose.animation.core.LinearEasing), label = "wa-ring")
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(Modifier.size(150.dp).clickable { vm.waPaused = false; vm.waOpenCurrent() }, contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(progress = { frac }, Modifier.fillMaxSize(), color = green, strokeWidth = 10.dp, trackColor = Color(0xFFDCFCE7))
+                        Text("${cd.coerceAtLeast(0)}", fontSize = 64.sp, fontWeight = FontWeight.Bold, color = green)
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Text("Opening WhatsApp…", fontSize = 15.sp, color = Brand.muted)
+                }
+            } else Button(onClick = { vm.waPaused = false; vm.waOpenCurrent() }, modifier = Modifier.size(150.dp), shape = androidx.compose.foundation.shape.CircleShape,
+                colors = ButtonDefaults.buttonColors(containerColor = green)) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) { Icon(Icons.Default.Send, null, Modifier.size(36.dp)); Text("Send", fontSize = 17.sp) }
+            }
         }
-        Text("In WhatsApp tap Send, then come back and confirm — only messages you confirm are counted.", fontSize = 12.sp, color = Brand.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { if (vm.waPaused) { vm.waPaused = false; vm.waCountdown = 3 } else { vm.waPaused = true; vm.waCountdown = null } }, modifier = Modifier.weight(1f)) {
                 Text(if (vm.waPaused) "Resume" else "Pause") }

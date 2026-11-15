@@ -122,34 +122,64 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
     val canSave = outcome != null && (noFollow || followAt != null) && !busy &&
         (outcome?.form != "sale" || amount.isNotBlank())
 
-    Column(Modifier.fillMaxSize().background(Brand.bg).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        if (!popup) Text("How did the call go?", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+    // Compact (owner's rule): each section folds to one line once it's answered; extras stay behind "More details".
+    var outcomeOpen by remember { mutableStateOf(true) }
+    var allOutcomes by remember { mutableStateOf(false) }
+    var nextOpen by remember { mutableStateOf(true) }
+    var profOpen by remember { mutableStateOf(categoryId == null) }
+    var tagsOpen by remember { mutableStateOf(false) }
+    var moreOpen by remember { mutableStateOf(false) }
+    // An outcome picked by default (didn't pick) or by tap folds the list; its suggested next call folds that too.
+    LaunchedEffect(outcome?.id) { if (outcome != null) { outcomeOpen = false; allOutcomes = false } }
+    LaunchedEffect(outcome?.id, followAt, noFollow) { if (outcome != null && (followAt != null || noFollow) && day == null) nextOpen = false }
+    // Call not in the phone's history after a few seconds: it probably never went through (no SIM, no signal, cancelled).
+    var waited by remember(p) { mutableStateOf(false) }
+    LaunchedEffect(p) { kotlinx.coroutines.delay(4_000); waited = true }
+
+    Column(Modifier.fillMaxSize().background(Brand.bg).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
-            Column(Modifier.padding(14.dp)) {
-                Text(p.leadName.ifBlank { fmtPhone(p.phone) }, fontWeight = FontWeight.SemiBold)
+            Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                Text(p.leadName.ifBlank { fmtPhone(p.phone) }, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
                 Text(
                     when {
-                        log == null -> "Call not found in the phone's call log yet"
-                        log.direction == "incoming" -> "Received call · talked ${fmtDur(log.durationSec)}" + (log.simLabel?.let { " · $it" } ?: "")
-                        log.direction == "missed" || log.direction == "rejected" -> "Missed call" + (log.simLabel?.let { " · $it" } ?: "")
-                        log.durationSec > 0 -> "Dialled call · talked ${fmtDur(log.durationSec)}" + (log.simLabel?.let { " · $it" } ?: "")
-                        else -> "Dialled call · not answered" + (log.simLabel?.let { " · $it" } ?: "")
-                    }, color = Brand.muted, fontSize = 14.sp,
+                        log == null -> if (waited) "Not in the phone's call history" else "Looking for the call…"
+                        log.direction == "incoming" -> "Received · talked ${fmtDur(log.durationSec)}"
+                        log.direction == "missed" || log.direction == "rejected" -> "Missed call"
+                        log.durationSec > 0 -> "Dialled · talked ${fmtDur(log.durationSec)}"
+                        else -> "Dialled · not answered"
+                    } + (log?.simLabel?.let { " · $it" } ?: "") + " · " + fmtCallTime(log?.startedAtMs ?: p.startedAtMs),
+                    color = Brand.muted, fontSize = 13.sp,
                 )
-                // When the call happened: outcomes are often filled later, after other calls with the same person.
-                Text("🕒 " + fmtCallTime(log?.startedAtMs ?: p.startedAtMs), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Color(0xFF0F172A))
+            }
+        }
+        if (log == null && waited) Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFBEB)), modifier = Modifier.border(1.dp, Color(0xFFFDE68A), RoundedCornerShape(12.dp))) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("This call didn't go through?", fontWeight = FontWeight.SemiBold)
+                Text(PhoneCalls.cannotCallReason(ctx) ?: "It isn't in the phone's call history — maybe no signal, or the call was cancelled.", fontSize = 13.sp, color = Color(0xFF92400E))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { vm.discardAndContinue() }) { Text("Skip — no call") }
+                    if (!popup) lead?.let { l -> OutlinedButton(onClick = { vm.discardPending(); vm.callRequest = l }) { Text("Call again") } }
+                }
             }
         }
 
         // Reminder or sales call — one tap to switch (shown when the lead is in a webinar / event).
         if (lead?.batch_leads?.isNotEmpty() == true || purpose == "reminder") Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Call type", color = Brand.muted, fontSize = 14.sp)
-            Chip("Sales", purpose == "sales") { if (purpose != "sales") { purpose = "sales"; outcome = null } }
-            Chip("Reminder", purpose == "reminder") { if (purpose != "reminder") { purpose = "reminder"; outcome = null } }
+            Chip("Sales", purpose == "sales") { if (purpose != "sales") { purpose = "sales"; outcome = null; outcomeOpen = true } }
+            Chip("Reminder", purpose == "reminder") { if (purpose != "reminder") { purpose = "reminder"; outcome = null; outcomeOpen = true } }
         }
-        Text("Outcome", fontWeight = FontWeight.SemiBold)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            choices.forEach { o -> Chip(o.label, outcome?.id == o.id) { outcome = o } }
+
+        // 1 · Outcome: the 6 most likely first (by call type + my own use), the rest behind "More".
+        val sel = outcome
+        if (sel != null && !outcomeOpen) Folded("Outcome", sel.label) { outcomeOpen = true }
+        else {
+            Text("Outcome", fontWeight = FontWeight.SemiBold)
+            val top = if (allOutcomes) choices else (choices.take(6) + listOfNotNull(sel?.takeIf { s -> choices.take(6).none { it.id == s.id } }))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                top.forEach { o -> Chip(o.label, sel?.id == o.id) { outcome = o; outcomeOpen = false } }
+                if (!allOutcomes && choices.size > 6) Chip("More (${choices.size - 6}) ▾", false) { allOutcomes = true }
+            }
         }
 
         when (outcome?.form) {
@@ -170,74 +200,78 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
                         productId = pr.id; product = pr.name; pr.price?.let { amount = it.toLong().toString() } } }
                 }
                 OutlinedTextField(product, { product = it; productId = null }, label = { Text("Product / course") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                Text(if (vm.isManager || vm.isSolo) "Saved as a sale." else "Your manager verifies the sale, then it counts in your numbers.", fontSize = 12.sp, color = Brand.muted)
+                if (!vm.isManager && !vm.isSolo) Text("Your manager checks the sale, then it counts in your numbers.", fontSize = 12.sp, color = Brand.muted)
             }
         }
 
-        if (askProfession && vm.categories.isNotEmpty()) {
-            Text("Profession", fontWeight = FontWeight.SemiBold)
-            OutlinedTextField(profession, { profession = it }, label = { Text("What do they do? e.g. civil engineer, shop owner") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        // 2 · Notes: near the top, one box with the mic; tags + quick sentences fold away.
+        OutlinedTextField(notes, { notes = it }, placeholder = { Text("Note (optional)") }, modifier = Modifier.fillMaxWidth(), minLines = 1, maxLines = 5,
+            trailingIcon = { VoiceButton { spoken -> notes = if (notes.isBlank()) spoken else "$notes $spoken" } })
+        val groups = org?.tagGroupsFor(outcome?.category).orEmpty()
+        val lines = org?.let { com.closeros.app.data.NoteKit.linesFor(it.noteLines, outcome?.category) }.orEmpty()
+        if (groups.isNotEmpty() || lines.isNotEmpty()) {
+            if (!tagsOpen) Text("＋ Tags & quick sentences" + (if (noteTags.isNotEmpty()) " · ${noteTags.size} picked" else ""), color = Brand.primaryDark, fontSize = 14.sp,
+                fontWeight = FontWeight.Medium, modifier = Modifier.clickable { tagsOpen = true }.padding(vertical = 2.dp))
+            else {
+                NoteEditor("", {}, noteTags, { noteTags = it }, emptyList(), groups = groups, showText = false)
+                org?.let { o -> SentencePicker(lines, o.profileOptions,
+                    onAdd = { t, f ->
+                        notes = if (notes.isBlank()) t else notes.trimEnd() + ". " + t
+                        // Choices from the profile lists go straight into the profile chips; typed words are kept as text.
+                        f.forEach { (field, v) -> when {
+                            field == "goals" && v in o.profileOptions.goals -> { profileDraft.goals = (profileDraft.goals + v).distinct(); profileDraft.touched = true }
+                            field == "challenges" && v in o.profileOptions.challenges -> { profileDraft.challenges = (profileDraft.challenges + v).distinct(); profileDraft.touched = true }
+                            field == "budget" && v in o.profileOptions.budget -> { profileDraft.budget = v; profileDraft.touched = true }
+                            else -> sentenceFields = sentenceFields + (field to v)
+                        } }
+                    }) }
+            }
+        }
+
+        // 3 · Next call: one tap ("In 1 hour"), or a day then a 30-minute slot. Folds to one line once chosen.
+        if (!nextOpen && (followAt != null || noFollow)) Folded("Next call", if (noFollow) "No follow-up" else followAt!!.format(DateTimeFormatter.ofPattern("EEE d MMM, h:mm a"))) { nextOpen = true }
+        else {
+            Text("Next call", fontWeight = FontWeight.SemiBold)
+            webinarAt?.let { Text("Webinar starts at ${it.atZone(zone).format(DateTimeFormatter.ofPattern("h:mm a"))} — call back before that", fontSize = 13.sp, color = Brand.muted) }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                vm.categories.forEach { c -> Chip(c.name, categoryId == c.id) { categoryId = if (categoryId == c.id) null else c.id } }
+                quickIns.filter { (_, mins, _) -> beforeStart(base.plusMinutes(mins)) }.forEach { (key, mins, label) ->
+                    Chip(label, !noFollow && quick == key) { quick = key; followAt = base.plusMinutes(mins); day = null; noFollow = false; nextOpen = false }
+                }
+                webinarAt?.let { w -> val pre = w.minusSeconds(1800).atZone(zone).withSecond(0).withNano(0)
+                    if (pre.isAfter(now.plusMinutes(5))) Chip("30 min before start (${pre.format(DateTimeFormatter.ofPattern("h:mm a"))})", !noFollow && quick == "prestart") {
+                        quick = "prestart"; followAt = pre; day = null; noFollow = false; nextOpen = false } }
+                if (slotsFor(today).isNotEmpty()) Chip("Today", day == today && !noFollow) { day = today; followAt = null; noFollow = false; quick = null }
+                if (slotsFor(today.plusDays(1)).isNotEmpty()) Chip("Tomorrow", day == today.plusDays(1) && !noFollow) { day = today.plusDays(1); followAt = null; noFollow = false; quick = null }
+                if (slotsFor(today.plusDays(2)).isNotEmpty()) Chip(today.plusDays(2).format(DateTimeFormatter.ofPattern("EEE d MMM")), day == today.plusDays(2) && !noFollow) { day = today.plusDays(2); followAt = null; noFollow = false; quick = null }
+                val other = day?.takeIf { it.isAfter(today.plusDays(2)) }
+                if (webinarAt == null) Chip(other?.format(DateTimeFormatter.ofPattern("EEE d MMM")) ?: "Other date", other != null && !noFollow) { pickOtherDate() }
+                Chip("No follow-up", noFollow) { noFollow = true; followAt = null; day = null; quick = null; nextOpen = false }
+            }
+            day?.let { d ->
+                Text("Time on ${d.format(DateTimeFormatter.ofPattern("EEE d MMM"))}", fontSize = 13.sp, color = Brand.muted)
+                val slots = slotsFor(d)
+                val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+                androidx.compose.foundation.lazy.LazyRow(state = listState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(slots.size) { i -> val t = slots[i]; Chip(t.format(DateTimeFormatter.ofPattern("h:mm a")), followAt == t) { followAt = t; noFollow = false; day = null; nextOpen = false } }
+                    item { Chip("Other time", followAt != null && slots.none { it == followAt }) { pickOtherTime() } }
+                }
             }
         }
+        // "Other time" picker sets the time from a dialog: fold once it's set.
+        LaunchedEffect(followAt) { if (followAt != null && day != null && quick == null) { day = null; nextOpen = false } }
 
-        Text("Next call", fontWeight = FontWeight.SemiBold)
-        webinarAt?.let { Text("Webinar starts at ${it.atZone(zone).format(DateTimeFormatter.ofPattern("h:mm a"))} — call back before that", fontSize = 13.sp, color = Brand.muted) }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            // One tap: in 30 min / 1 / 2 / 3 hours. Two taps: a day, then a 30-minute slot.
-            quickIns.filter { (_, mins, _) -> beforeStart(base.plusMinutes(mins)) }.forEach { (key, mins, label) ->
-                Chip(label, !noFollow && quick == key) { quick = key; followAt = base.plusMinutes(mins); day = null; noFollow = false }
-            }
-            webinarAt?.let { w -> val pre = w.minusSeconds(1800).atZone(zone).withSecond(0).withNano(0)
-                if (pre.isAfter(now.plusMinutes(5))) Chip("30 min before start (${pre.format(DateTimeFormatter.ofPattern("h:mm a"))})", !noFollow && quick == "prestart") {
-                    quick = "prestart"; followAt = pre; day = null; noFollow = false } }
-            if (slotsFor(today).isNotEmpty()) Chip("Today", day == today && !noFollow) { day = today; followAt = null; noFollow = false; quick = null }
-            if (slotsFor(today.plusDays(1)).isNotEmpty()) Chip("Tomorrow", day == today.plusDays(1) && !noFollow) { day = today.plusDays(1); followAt = null; noFollow = false; quick = null }
-            if (slotsFor(today.plusDays(2)).isNotEmpty()) Chip(today.plusDays(2).format(DateTimeFormatter.ofPattern("EEE d MMM")), day == today.plusDays(2) && !noFollow) { day = today.plusDays(2); followAt = null; noFollow = false; quick = null }
-            val other = day?.takeIf { it.isAfter(today.plusDays(2)) }
-            if (webinarAt == null) Chip(other?.format(DateTimeFormatter.ofPattern("EEE d MMM")) ?: "Other date", other != null && !noFollow) { pickOtherDate() }
-            Chip("No follow-up", noFollow) { noFollow = true; followAt = null; day = null; quick = null }
-        }
-        day?.let { d ->
-            Text("Time on ${d.format(DateTimeFormatter.ofPattern("EEE d MMM"))}", fontSize = 13.sp, color = Brand.muted)
-            val slots = slotsFor(d)
-            val listState = androidx.compose.foundation.lazy.rememberLazyListState()
-            androidx.compose.foundation.lazy.LazyRow(state = listState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(slots.size) { i -> val t = slots[i]; Chip(t.format(DateTimeFormatter.ofPattern("h:mm a")), followAt == t) { followAt = t; noFollow = false } }
-                item { Chip("Other time", followAt != null && slots.none { it == followAt }) { pickOtherTime() } }
+        // 4 · Profession (webinar calls, or the lead has none): folds once a group is picked.
+        if (askProfession && vm.categories.isNotEmpty()) {
+            val catName = vm.categories.firstOrNull { it.id == categoryId }?.name
+            if (!profOpen && catName != null) Folded("Profession", listOf(profession.trim(), catName).filter { it.isNotBlank() }.joinToString(" · ")) { profOpen = true }
+            else {
+                Text("Profession", fontWeight = FontWeight.SemiBold)
+                OutlinedTextField(profession, { profession = it }, placeholder = { Text("What do they do? e.g. civil engineer") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    vm.categories.forEach { c -> Chip(c.name, categoryId == c.id) { categoryId = if (categoryId == c.id) null else c.id; if (categoryId != null) profOpen = false } }
+                }
             }
         }
-        followAt?.let { Text("Next call: " + it.format(DateTimeFormatter.ofPattern("EEE d MMM, h:mm a")), color = Brand.primaryDark, fontWeight = FontWeight.SemiBold) }
-
-        lead?.let { l -> KeyFactsCard(l) { t -> lead = l.copy(key_facts = t) }; PinnedNotes(vm, l) }
-        if (lead != null && org != null) ProfileQuick(org.profileOptions, profileDraft)
-        // Objections: only when there was a conversation.
-        if (lead != null && outcome != null && outcome?.category !in setOf("not_connected", "invalid") && (log?.durationSec ?: 1) > 0)
-            ObjectionPicker(vm, objPicked) { objPicked = it }
-        // Facts the company wants on every lead (e.g. Budget, Decision maker): one tap each, saved on the lead.
-        val facts = vm.membership?.organization?.leadFacts.orEmpty()
-        facts.forEach { f ->
-            val cur = factValues[f.key] ?: lead?.custom?.get(f.key)?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
-            Text(f.label, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                f.options.forEach { o -> Chip(o, cur == o) { factValues = factValues + (f.key to o) } }
-            }
-        }
-        org?.let { o -> SentencePicker(com.closeros.app.data.NoteKit.linesFor(o.noteLines, outcome?.category), o.profileOptions,
-            onAdd = { t, f ->
-                notes = if (notes.isBlank()) t else notes.trimEnd() + ". " + t
-                // Choices from the profile lists go straight into the profile chips; typed words are kept as text.
-                f.forEach { (field, v) -> when {
-                    field == "goals" && v in o.profileOptions.goals -> { profileDraft.goals = (profileDraft.goals + v).distinct(); profileDraft.touched = true }
-                    field == "challenges" && v in o.profileOptions.challenges -> { profileDraft.challenges = (profileDraft.challenges + v).distinct(); profileDraft.touched = true }
-                    field == "budget" && v in o.profileOptions.budget -> { profileDraft.budget = v; profileDraft.touched = true }
-                    else -> sentenceFields = sentenceFields + (field to v)
-                } }
-            }) }
-        NoteEditor(notes, { notes = it }, noteTags, { noteTags = it }, emptyList(), "Notes from this call",
-            groups = org?.tagGroupsFor(outcome?.category).orEmpty())
-        if (p.leadId.isNotBlank()) OutcomeSeqChips(vm, startSeq) { startSeq = it }
 
         Button(onClick = {
             val o = outcome ?: return@Button
@@ -283,11 +317,42 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
                 seqToStart?.let { vm.startSequence(it, AppViewModel.SeqPick(listOf(leadId), leadName.ifBlank { "this lead" }, batch)) }
             }
         }, enabled = canSave, modifier = Modifier.fillMaxWidth().height(54.dp)) { Text(if (busy) "Saving…" else "Save", fontSize = 17.sp) }
-
         if (outcome == null || (!noFollow && followAt == null)) {
-            Text("Choose an outcome and the next call time (or “No follow-up needed”).", fontSize = 13.sp, color = Brand.muted)
+            Text(if (outcome == null) "Pick the outcome" else "Pick the next call time (or “No follow-up”)", fontSize = 13.sp, color = Brand.muted)
         }
-        if (log == null) TextButton(onClick = { vm.discardAndContinue() }) { Text("The call didn't happen — discard") }
+
+        // Extras, folded: key facts, pinned notes, profile, objections, company facts, WhatsApp sequence.
+        val facts = vm.membership?.organization?.leadFacts.orEmpty()
+        if (lead != null || facts.isNotEmpty()) {
+            Text(if (moreOpen) "▴ Less" else "▾ More details — key facts, profile, objections" + (if (p.leadId.isNotBlank()) ", WhatsApp sequence" else ""),
+                color = Brand.primaryDark, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.clickable { moreOpen = !moreOpen }.padding(vertical = 4.dp))
+            if (moreOpen) {
+                lead?.let { l -> KeyFactsCard(l) { t -> lead = l.copy(key_facts = t) }; PinnedNotes(vm, l) }
+                if (lead != null && org != null) ProfileQuick(org.profileOptions, profileDraft)
+                // Objections: only when there was a conversation.
+                if (lead != null && outcome != null && outcome?.category !in setOf("not_connected", "invalid") && (log?.durationSec ?: 1) > 0)
+                    ObjectionPicker(vm, objPicked) { objPicked = it }
+                facts.forEach { f ->
+                    val cur = factValues[f.key] ?: lead?.custom?.get(f.key)?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
+                    Text(f.label, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        f.options.forEach { o -> Chip(o, cur == o) { factValues = factValues + (f.key to o) } }
+                    }
+                }
+                if (p.leadId.isNotBlank()) OutcomeSeqChips(vm, startSeq) { startSeq = it }
+            }
+        }
+    }
+}
+
+/** A section that's answered, folded to one line: "Outcome  Didn't pick   Change". */
+@Composable
+private fun Folded(label: String, value: String, onChange: () -> Unit) {
+    Row(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(10.dp)).border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(10.dp))
+        .clickable(onClick = onChange).padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = Brand.muted, fontSize = 13.sp, modifier = Modifier.width(84.dp), maxLines = 1, softWrap = false)
+        Text("✓ $value", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, modifier = Modifier.weight(1f), maxLines = 2)
+        Text("Change", color = Brand.primaryDark, fontSize = 13.sp, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -326,7 +391,7 @@ fun outcomesFor(all: List<Outcome>, purpose: String, direction: String?, duratio
         // They called us (answered, missed or declined): nothing about failing to reach them or a dead number.
         direction != "outgoing" -> list.filterNot { noContact(it) || it.code in DIALLED_ONLY || it.shown_on == "outgoing" }
         // Dialled, nobody answered: only "couldn't reach them" kinds.
-        talk == 0 -> list.filter { noContact(it) || it.code in DEAD_NUMBER }.ifEmpty { list }
+        talk == 0 -> list.filter { noContact(it) || it.code in DEAD_NUMBER }.ifEmpty { list }.sortedBy { if (it.code in DIDNT_PICK) 0 else 1 }
         // A few seconds: could be an operator message or a quick hang-up — everything, "couldn't reach" first.
         talk < 20 -> list.sortedBy { if (noContact(it)) 0 else 1 }
         // They talked: nothing about not reaching them or a dead number; "disconnected after intro" only for short talks.
@@ -348,6 +413,9 @@ fun outcomeRank(o: Outcome): Int = when {
     o.category == "not_connected" -> 6
     else -> 2
 }
+
+/** "Didn't pick": always first for a dialled call nobody answered. */
+val DIDNT_PICK = setOf("no_answer", "r_didnt_pick")
 
 /** Dead / wrong-line numbers: only possible when the call didn't really connect. */
 val DEAD_NUMBER = setOf("not_in_service", "invalid_number", "r_invalid", "r_out_of_service", "incoming_na", "r_incoming_na")

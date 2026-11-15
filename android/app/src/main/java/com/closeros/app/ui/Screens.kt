@@ -243,7 +243,7 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
                 FlowRow {
                     TextButton(onClick = { copyLead(ctx, vm, l, calls) }) { Text("📋 Copy details") }
                     TextButton(onClick = { vm.openPlaybook(l) }) { Text("📖 Scripts & answers") }
-                    TextButton(onClick = { claimSale = true }) { Text("💰 Claim a sale") }
+                    TextButton(onClick = { claimSale = true }) { Text(if (vm.isSolo || vm.isManager) "💰 Add a sale" else "💰 Claim a sale") }
                 }
                 LeadSequencesCard(vm, l)
             }

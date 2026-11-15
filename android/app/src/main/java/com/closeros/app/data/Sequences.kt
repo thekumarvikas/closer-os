@@ -102,15 +102,20 @@ object Seqs {
     suspend fun due(orgId: String): SeqDueList =
         json.decodeFromString(Repo.savedText("srv:seq_due:$orgId") { db.rpc("my_sequence_due", buildJsonObject { put("p_org", orgId) }).data })
 
-    suspend fun mark(id: String, sent: Boolean) { db.rpc("sequence_mark", buildJsonObject { put("p_id", id); put("p_sent", sent) }) }
+    suspend fun mark(id: String, sent: Boolean) { Ops.rpc("sequence_mark", buildJsonObject { put("p_id", id); put("p_sent", sent) }) }
 
     // ── Scheduled WhatsApp messages ──
-    suspend fun scheduleWa(leadId: String, at: java.time.Instant, body: String, media: Triple<String, String, String>?, id: String? = null): String =
-        db.rpc("schedule_wa", buildJsonObject {
-            put("p_lead", leadId); put("p_due", at.toString()); put("p_body", body); id?.let { put("p_id", it) }
+    /** The message's id (made on the phone, so it works with no internet too — then it's sent later). */
+    suspend fun scheduleWa(leadId: String, at: java.time.Instant, body: String, media: Triple<String, String, String>?, id: String? = null): String {
+        val newId = id ?: java.util.UUID.randomUUID().toString()
+        Ops.rpc("schedule_wa", buildJsonObject {
+            put("p_lead", leadId); put("p_due", at.toString()); put("p_body", body)
+            if (id != null) put("p_id", id) else put("p_new_id", newId)
             media?.let { (p, t, n) -> put("p_media", buildJsonObject { put("path", p); put("type", t); put("name", n) }) }
-        }).data.trim().trim('"')
-    suspend fun markScheduled(id: String, sent: Boolean) { db.rpc("wa_scheduled_mark", buildJsonObject { put("p_id", id); put("p_sent", sent) }) }
+        })
+        return newId
+    }
+    suspend fun markScheduled(id: String, sent: Boolean) { Ops.rpc("wa_scheduled_mark", buildJsonObject { put("p_id", id); put("p_sent", sent) }) }
     suspend fun myScheduled(orgId: String): List<WaScheduled> =
         json.decodeFromString(Repo.savedText("srv:my_wa_scheduled:$orgId") { db.rpc("my_wa_scheduled", buildJsonObject { put("p_org", orgId) }).data })
     suspend fun leadScheduled(leadId: String): List<WaScheduled> =
@@ -162,7 +167,7 @@ object SeqAlerts {
         if (h < 0 || LocalTime.now().hour < h) return
         val today = LocalDate.now().toString()
         if (p(ctx).getString("day", null) == today) return
-        val n = Seqs.due(orgId).due.size
+        val n = Seqs.due(orgId).due.count { it.kind != "scheduled" }   // scheduled messages ring on their own at their time
         p(ctx).edit().putString("day", today).apply()
         if (n == 0) return
         val nm = ctx.getSystemService(NotificationManager::class.java)
@@ -182,13 +187,21 @@ object WaSchedAlarms {
     private const val CH = "wa_scheduled"
     private fun pi(ctx: Context, s: WaScheduled, flags: Int) = PendingIntent.getBroadcast(ctx, 7000 + (s.id.hashCode() and 0xFFFF),
         Intent(ctx, WaScheduledReceiver::class.java).putExtra("id", s.id).putExtra("name", s.lead_name.orEmpty().ifBlank { s.phone.orEmpty() })
-            .putExtra("body", s.body.take(200)), flags or PendingIntent.FLAG_IMMUTABLE)
+            .putExtra("body", s.body.take(400)).putExtra("lead", s.lead_id).putExtra("file", s.media_name), flags or PendingIntent.FLAG_IMMUTABLE)
+
+    /** Ids whose reminder already went off — never armed again (re-arming a just-passed time rang it twice). */
+    private fun fired(ctx: Context) = ctx.getSharedPreferences("wa_sched", Context.MODE_PRIVATE)
+    fun markFired(ctx: Context, id: String) {
+        val p = fired(ctx); val set = (p.getStringSet("fired", emptySet()).orEmpty() + id).toList().takeLast(300).toSet()
+        p.edit().putStringSet("fired", set).apply()
+    }
+    private fun wasFired(ctx: Context, id: String) = id in fired(ctx).getStringSet("fired", emptySet()).orEmpty()
 
     fun scheduleAll(ctx: Context, list: List<WaScheduled>) = list.forEach { schedule(ctx, it) }
 
     fun schedule(ctx: Context, s: WaScheduled) {
         val at = runCatching { parseInstant(s.due_at).toEpochMilli() }.getOrNull() ?: return
-        if (at < System.currentTimeMillis() - 60_000) return
+        if (at < System.currentTimeMillis() - 60_000 || wasFired(ctx, s.id)) return
         val am = ctx.getSystemService(android.app.AlarmManager::class.java)
         val p = pi(ctx, s, PendingIntent.FLAG_UPDATE_CURRENT)
         runCatching {
@@ -202,6 +215,14 @@ object WaSchedAlarms {
             PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE) ?: return
         ctx.getSystemService(android.app.AlarmManager::class.java).cancel(p)
         ctx.getSystemService(NotificationManager::class.java).cancel(7000 + (id.hashCode() and 0xFFFF))
+    }
+
+    /** The message as the lead will get it: {{leadName}} etc. filled in from the phone's lead copy (never the raw {{…}}). */
+    fun filled(ctx: Context, body: String, leadId: String?, name: String): String {
+        val lead = leadId?.let { runCatching { LocalLeads.byId(ctx, it) }.getOrNull() }
+        val b = if (lead != null) com.closeros.app.ui.fillTemplateText(body, lead, "", java.time.ZoneId.systemDefault().id, "")
+            else body.replace("{{leadName}}", name.substringBefore(' ')).replace("{{leadFullName}}", name)
+        return b.replace(Regex("\\{\\{\\w+\\}\\}"), "").replace(Regex("[ \\t]{2,}"), " ").trim()
     }
 
     fun notify(ctx: Context, id: String, name: String, body: String) {
@@ -221,6 +242,11 @@ object WaSchedAlarms {
 
 class WaScheduledReceiver : android.content.BroadcastReceiver() {
     override fun onReceive(ctx: Context, i: Intent) {
-        WaSchedAlarms.notify(ctx, i.getStringExtra("id") ?: return, i.getStringExtra("name").orEmpty(), i.getStringExtra("body").orEmpty())
+        val id = i.getStringExtra("id") ?: return
+        WaSchedAlarms.markFired(ctx, id)
+        val name = i.getStringExtra("name").orEmpty()
+        val text = WaSchedAlarms.filled(ctx, i.getStringExtra("body").orEmpty(), i.getStringExtra("lead"), name) +
+            (i.getStringExtra("file")?.takeIf { it.isNotBlank() }?.let { "\n📎 $it" } ?: "")
+        WaSchedAlarms.notify(ctx, id, name, text)
     }
 }

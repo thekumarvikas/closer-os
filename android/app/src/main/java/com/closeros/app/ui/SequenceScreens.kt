@@ -267,7 +267,8 @@ fun LeadSequencesCard(vm: AppViewModel, l: Lead) {
         scheduled.forEach { s ->
             Row(Modifier.fillMaxWidth().background(Color(0xFFECFDF5), RoundedCornerShape(10.dp)).padding(10.dp, 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("💬 WhatsApp ${fmtWhen(s.due_at)}" + (s.media_name?.let { " · 📎" } ?: ""), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text("💬 WhatsApp ${fmtWhen(s.due_at)}", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    s.media_name?.takeIf { it.isNotBlank() }?.let { Text("📎 $it", fontSize = 12.sp, color = Color(0xFF065F46)) }
                     Text(s.body, fontSize = 12.sp, color = Brand.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 if (s.mine) {
@@ -298,8 +299,11 @@ fun LeadSequencesCard(vm: AppViewModel, l: Lead) {
         }
     }
     if (callOpen) ScheduleCallDialog(vm, l, planned?.notes.orEmpty()) { callOpen = false }
-    if (waNew) ScheduleWaDialog(vm, l, null) { waNew = false }
-    waOpen?.let { s -> ScheduleWaDialog(vm, l, s) { waOpen = null } }
+    // The dialog itself is drawn by MainActivity from vm.waSched, so it survives the file picker (the lead page may reload meanwhile).
+    LaunchedEffect(waNew, waOpen) {
+        if (waNew) { vm.openWaSchedule(l, null); waNew = false }
+        waOpen?.let { s -> vm.openWaSchedule(l, s); waOpen = null }
+    }
 }
 
 /** Quick times + any date & time. */
@@ -340,38 +344,40 @@ fun ScheduleCallDialog(vm: AppViewModel, l: Lead, oldNote: String, onClose: () -
 }
 
 @Composable
-fun ScheduleWaDialog(vm: AppViewModel, l: Lead, existing: WaScheduled?, onClose: () -> Unit) {
+fun ScheduleWaDialog(vm: AppViewModel, d: AppViewModel.WaSchedDraft) {
     val ctx = LocalContext.current
-    var at by remember { mutableStateOf(existing?.let { runCatching { com.closeros.app.data.parseInstant(it.due_at).atZone(ZoneId.systemDefault()).toLocalDateTime() }.getOrNull() }) }
-    var body by remember { mutableStateOf(existing?.body.orEmpty()) }
+    val l = d.lead; val existing = d.existing
     var busy by remember { mutableStateOf(false) }
     var savedPick by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { vm.waPickedFile = existing?.media_path?.let { Triple(it, existing.media_type.orEmpty(), existing.media_name.orEmpty()) } }
     val file = vm.waPickedFile
+    val uploading = vm.waUploading
     val canUpload = vm.isManager || vm.isSolo
-    AlertDialog(onDismissRequest = { if (!busy) onClose() }, title = { Text("💬 WhatsApp ${l.name.ifBlank { "this lead" }}") },
+    val onClose = { vm.waSched = null; vm.waPickedFile = null }
+    AlertDialog(onDismissRequest = { if (!busy && !uploading) onClose() }, title = { Text("💬 WhatsApp ${l.name.ifBlank { "this lead" }}") },
         text = { Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            TimePicks(at) { at = it }
-            MessageField(body, { body = it }, "Message")
-            if (file != null) Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("📎 ${file.third}", fontSize = 13.sp, modifier = Modifier.weight(1f))
+            TimePicks(d.at) { d.at = it }
+            MessageField(d.body, { d.body = it }, "Message")
+            if (uploading) Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)); Text("Attaching the file…", fontSize = 13.sp)
+            } else if (file != null) Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("📎 ${file.third}", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                 TextButton(onClick = { vm.waPickedFile = null }) { Text("Remove") }
             }
             Row {
                 if (vm.templates.isNotEmpty()) TextButton(onClick = { savedPick = true }) { Text("Use a saved message") }
-                if (canUpload) TextButton(onClick = { pickFile(ctx, vm, "wa") }) { Text("📎 Attach a file") }
+                if (canUpload && !uploading) TextButton(onClick = { pickFile(ctx, vm, "wa") }) { Text(if (file == null) "📎 Attach a file" else "📎 Change file") }
             }
             Text("At that time you get a notification. Tap it and WhatsApp opens with the message ready — you just press Send.", fontSize = 12.sp, color = Brand.muted)
         } },
-        confirmButton = { Button(enabled = at != null && (body.isNotBlank() || file != null) && !busy, onClick = {
-            busy = true; vm.scheduleWa(l, at!!.atZone(ZoneId.systemDefault()).toInstant(), body, file, existing?.id) { ok -> busy = false; if (ok) { vm.waPickedFile = null; onClose() } }
-        }) { Text(if (busy) "Saving…" else "Schedule") } },
-        dismissButton = { TextButton(onClick = { vm.waPickedFile = null; onClose() }) { Text("Cancel") } })
+        confirmButton = { Button(enabled = d.at != null && (d.body.isNotBlank() || file != null) && !busy && !uploading, onClick = {
+            busy = true; vm.scheduleWa(l, d.at!!.atZone(ZoneId.systemDefault()).toInstant(), d.body, file, existing?.id) { ok -> busy = false; if (ok) onClose() }
+        }) { Text(if (busy) "Saving…" else if (uploading) "Attaching…" else "Schedule") } },
+        dismissButton = { TextButton(onClick = onClose) { Text("Cancel") } })
     if (savedPick) AlertDialog(onDismissRequest = { savedPick = false }, title = { Text("Use a saved message") },
         text = { Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             vm.templates.forEach { t ->
                 Column(Modifier.fillMaxWidth().border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(10.dp)).clickable {
-                    body = t.body; t.media_path?.let { vm.waPickedFile = Triple(it, t.media_type.orEmpty(), t.media_name.orEmpty()) }; savedPick = false
+                    d.body = t.body; t.media_path?.let { vm.waPickedFile = Triple(it, t.media_type.orEmpty(), t.media_name.orEmpty()) }; savedPick = false
                 }.padding(10.dp)) {
                     Text((if (t.media_path != null) "📎 " else "") + t.name, fontWeight = FontWeight.SemiBold)
                     Text(t.body, fontSize = 12.sp, color = Brand.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -394,6 +400,7 @@ fun ScheduledWaList(vm: AppViewModel) {
                     Column(Modifier.weight(1f).clickable { s.lead_id?.let { vm.openLeadId = it } }) {
                         Text("${fmtWhen(s.due_at)} · ${s.lead_name?.ifBlank { null } ?: fmtPhone(s.phone.orEmpty())}", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         Text(s.body, fontSize = 12.sp, color = Brand.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        s.media_name?.takeIf { it.isNotBlank() }?.let { Text("📎 $it", fontSize = 12.sp, color = Color(0xFF065F46)) }
                     }
                     TextButton(onClick = { vm.cancelWa(s.id) }) { Text("Cancel", color = Brand.muted) }
                 }

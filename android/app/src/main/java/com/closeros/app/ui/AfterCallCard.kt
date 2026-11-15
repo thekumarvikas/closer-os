@@ -82,6 +82,11 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
     var next by remember { mutableStateOf<ZonedDateTime?>(null) }
     var nextKey by remember { mutableStateOf<String?>(null) }   // keeps "In 30 min" highlighted when the clock ticks over
     var noFollow by remember { mutableStateOf(false) }
+    var outcomeOpen by remember { mutableStateOf(true) }
+    var allOutcomes by remember { mutableStateOf(false) }
+    var nextOpen by remember { mutableStateOf(true) }
+    var tagsOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(outcome?.id) { if (outcome != null) { outcomeOpen = false; allOutcomes = false } }
     // Each outcome suggests its next step (e.g. Busy → in 1 hour, Not interested → no follow-up).
     LaunchedEffect(outcome) {
         val o = outcome ?: return@LaunchedEffect
@@ -93,6 +98,7 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
             else -> (opts.firstOrNull { it.first == o.next_default } ?: opts.firstOrNull { it.first == "prestart" }.takeIf { webinarAt != null })
                 ?.let { noFollow = false; next = it.third; nextKey = it.first } ?: run { next = null; nextKey = null }
         }
+        nextOpen = !(noFollow || next != null)   // a suggested next call folds to one line ("Change" to pick another)
     }
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -172,17 +178,17 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
                         PopChip("Sales", purpose == "sales") { if (purpose != "sales") { purpose = "sales"; outcome = null } }
                         PopChip("Reminder", purpose == "reminder") { if (purpose != "reminder") { purpose = "reminder"; outcome = null } }
                     }
-                    Text("Outcome", fontWeight = FontWeight.SemiBold)
-                    if (choices.isEmpty()) Text("Open the full form to save the outcome.", color = Brand.muted, fontSize = 14.sp)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        choices.forEach { o -> PopChip(o.label, outcome?.id == o.id) { outcome = o } }
-                    }
-                    Text("Next call", fontWeight = FontWeight.SemiBold)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        webinarAt?.let { Text("Webinar starts at ${it.atZone(zone).format(DateTimeFormatter.ofPattern("h:mm a"))} — call back before that", fontSize = 12.sp, color = Brand.muted) }
-                        quickTimes(zone, webinarAt).forEach { (key, label, t) -> PopChip(label, !noFollow && next != null && (next == t || nextKey == key)) { next = t; nextKey = key; noFollow = false } }
-                        PopChip("No follow-up", noFollow) { noFollow = true; next = null }
-                        PopChip("Other time…", false) { fullForm(if (lead == null) "add" else "outcome") }
+                    // Compact: 6 most likely outcomes (call type + my use), the rest behind "More"; answered sections fold to one line.
+                    val sel = outcome
+                    if (sel != null && !outcomeOpen) PopFolded("Outcome", sel.label) { outcomeOpen = true }
+                    else {
+                        Text("Outcome", fontWeight = FontWeight.SemiBold)
+                        if (choices.isEmpty()) Text("Open the full form to save the outcome.", color = Brand.muted, fontSize = 14.sp)
+                        val top = if (allOutcomes) choices else choices.take(6) + listOfNotNull(sel?.takeIf { s -> choices.take(6).none { it.id == s.id } })
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            top.forEach { o -> PopChip(o.label, sel?.id == o.id) { outcome = o; outcomeOpen = false } }
+                            if (!allOutcomes && choices.size > 6) PopChip("More (${choices.size - 6}) ▾", false) { allOutcomes = true }
+                        }
                     }
                     // Quick note: type (the card takes the keyboard while this box is tapped) or tap 🎤 to speak.
                     OutlinedTextField(note, { note = it }, placeholder = { Text("Quick note (optional)") }, maxLines = 3,
@@ -197,10 +203,29 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
                         }) { MicCircle() } })
                     co.org?.let { org ->
                         val cat = outcome?.category
-                        SentencePicker(com.closeros.app.data.NoteKit.linesFor(org.noteLines, cat).take(6), org.profileOptions, compact = true,
-                            onAdd = { t, f -> note = if (note.isBlank()) t else note.trimEnd() + ". " + t; noteFields = noteFields + f },
-                            onTyping = { AfterCall.Overlay.setFocusable(ctx, it) })
-                        if (outcome != null) OutcomeTags(org.tagGroupsFor(cat), noteTags, { noteTags = it }, small = true)
+                        val lines = com.closeros.app.data.NoteKit.linesFor(org.noteLines, cat).take(6)
+                        val groups = org.tagGroupsFor(cat)
+                        if (lines.isNotEmpty() || (outcome != null && groups.isNotEmpty())) {
+                            if (!tagsOpen) Text("＋ Tags & quick sentences" + (if (noteTags.isNotEmpty()) " · ${noteTags.size} picked" else ""), color = Brand.primaryDark,
+                                fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.clickable { tagsOpen = true }.padding(vertical = 2.dp))
+                            else {
+                                SentencePicker(lines, org.profileOptions, compact = true,
+                                    onAdd = { t, f -> note = if (note.isBlank()) t else note.trimEnd() + ". " + t; noteFields = noteFields + f },
+                                    onTyping = { AfterCall.Overlay.setFocusable(ctx, it) })
+                                if (outcome != null) OutcomeTags(groups, noteTags, { noteTags = it }, small = true)
+                            }
+                        }
+                    }
+                    val nextLabel = if (noFollow) "No follow-up" else next?.format(DateTimeFormatter.ofPattern("EEE d MMM, h:mm a"))
+                    if (!nextOpen && nextLabel != null) PopFolded("Next call", nextLabel) { nextOpen = true }
+                    else {
+                        Text("Next call", fontWeight = FontWeight.SemiBold)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            webinarAt?.let { Text("Webinar starts at ${it.atZone(zone).format(DateTimeFormatter.ofPattern("h:mm a"))} — call back before that", fontSize = 12.sp, color = Brand.muted) }
+                            quickTimes(zone, webinarAt).forEach { (key, label, t) -> PopChip(label, !noFollow && next != null && (next == t || nextKey == key)) { next = t; nextKey = key; noFollow = false; nextOpen = false } }
+                            PopChip("No follow-up", noFollow) { noFollow = true; next = null; nextOpen = false }
+                            PopChip("Other time…", false) { fullForm(if (lead == null) "add" else "outcome") }
+                        }
                     }
                     error?.let { Text(it, color = Brand.red, fontSize = 13.sp) }
                     val sale = outcome?.form == "sale"
@@ -230,7 +255,7 @@ fun AfterCallCard(info: AfterCall.Info, onClose: () -> Unit) {
                         Text(when { saving -> "Saving…"; sale -> "Continue — add the amount"; else -> "Save" }, fontSize = 16.sp)
                     }
                     TextButton(onClick = { fullForm(if (lead == null) "add" else "outcome") }, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (lead == null) "Add with name & details" else "More options (notes, other date, amount)") }
+                        Text(if (lead == null) "Add with name & details" else "More options", fontSize = 13.sp) }
                     if (notInList) PersonalButtons(number, co.prefix, onClose)
                     if (notInList) Text("Saving adds this number to your leads, so the next call is reminded.", fontSize = 12.sp, color = Brand.muted)
                 }
@@ -418,5 +443,16 @@ private fun PersonalButtons(number: String, prefix: String, onClose: () -> Unit)
             LocalStore(ctx).addPersonalNumber(com.closeros.app.ui.normalizePhone(number, prefix))
             Toast.makeText(ctx, "Won't ask again for this number", Toast.LENGTH_SHORT).show(); onClose()
         }, modifier = Modifier.weight(1f)) { Text("Never ask for this number", fontSize = 13.sp) }
+    }
+}
+
+/** An answered section folded to one line on the pop-up card. */
+@Composable
+private fun PopFolded(label: String, value: String, onChange: () -> Unit) {
+    Row(Modifier.fillMaxWidth().background(Color(0xFFF8FAFC), RoundedCornerShape(10.dp)).border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(10.dp))
+        .clickable(onClick = onChange).padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = Brand.muted, fontSize = 12.sp, modifier = Modifier.width(72.dp), maxLines = 1, softWrap = false)
+        Text("✓ $value", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.weight(1f), maxLines = 1)
+        Text("Change", color = Brand.primaryDark, fontSize = 12.sp)
     }
 }

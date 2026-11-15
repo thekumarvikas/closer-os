@@ -117,6 +117,8 @@ fun Root(vm: AppViewModel) {
 
     fun call(lead: Lead) {
         if (lead.do_not_call) { vm.dncAsk = lead; return }   // ask first, then remove the mark and call
+        // No SIM / airplane mode: say so instead of opening the phone app (and then asking for an outcome of a call that never happened).
+        PhoneCalls.cannotCallReason(ctx)?.let { vm.message = it; if (vm.queueActive) { vm.queuePaused = true; vm.countdown = null }; return }
         val sims = vm.sims()
         val preferred = sims.firstOrNull { it.slot == vm.store.preferredSim }
         // In a queue, keep using the SIM chosen for the first call instead of asking every time.
@@ -147,6 +149,7 @@ fun Root(vm: AppViewModel) {
     androidx.activity.compose.BackHandler(enabled = secondary && vm.pending == null) { vm.closeTop() }
     WaChooseDialog(vm)
     EventPickerDialog(vm)
+    vm.waSched?.let { com.closeros.app.ui.ScheduleWaDialog(vm, it) }
     SequencePickerDialog(vm)
     AddMenuDialog(vm)
     AddLeadDialog(vm)
@@ -275,7 +278,8 @@ fun OfflineBar(vm: AppViewModel) {
     if (vm.online) return
     val ctx = LocalContext.current
     val waiting = remember(vm.message, vm.pending) { vm.store.outbox.size + com.closeros.app.data.Ops.count(ctx) }
-    Text("📴 No internet — keep working. " + (if (waiting > 0) "$waiting saved on this phone, sent automatically when you're back online." else "Everything you save is sent when you're back online."),
+    // Plain words: work is safe on the phone and syncs by itself (no "sent" — nothing has gone anywhere yet).
+    Text("📴 You're offline — keep working. Everything is saved on your phone" + (if (waiting > 0) " ($waiting to sync)" else "") + " and syncs by itself when you're back online.",
         Modifier.fillMaxWidth().background(androidx.compose.ui.graphics.Color(0xFFFEF3C7)).padding(horizontal = 12.dp, vertical = 8.dp),
         color = androidx.compose.ui.graphics.Color(0xFF92400E), fontSize = 13.sp)
 }

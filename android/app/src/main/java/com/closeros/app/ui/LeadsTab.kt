@@ -52,6 +52,22 @@ fun LeadsTab(vm: AppViewModel, onCall: (Lead) -> Unit) {
             FilterChip(selected = vm.selectMode, onClick = { vm.selectMode = !vm.selectMode; if (!vm.selectMode) vm.selected.clear() },
                 label = { Text(if (vm.selectMode) "Selecting" else "Select to call / WhatsApp") })
         }
+        // Webinar / event chips: tap one to see just its leads (then Call all / WhatsApp). Newest first.
+        LaunchedEffect(Unit) { if (vm.batches == null) vm.loadBatches(quiet = true) }
+        val chips = vm.batches.orEmpty().sortedByDescending { it.webinar_at }.take(10)
+        if (chips.isNotEmpty() && !vm.selectMode) androidx.compose.foundation.lazy.LazyRow(contentPadding = PaddingValues(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            items(chips, key = { it.id }) { e ->
+                val on = e.id in vm.leadFilters.events
+                val n = if (e.leads > 0) e.leads else maxOf(e.sales_mine, e.reminder_mine)
+                val day = runCatching { com.closeros.app.data.parseInstant(e.webinar_at).atZone(java.time.ZoneId.systemDefault())
+                    .format(java.time.format.DateTimeFormatter.ofPattern("d MMM")) }.getOrDefault("")
+                val label = (if (day.isNotBlank() && !e.name.contains(day)) "$day · " else "") + e.name + (if (n > 0) " · $n" else "")
+                FilterChip(selected = on, onClick = {
+                    vm.applyFilters(vm.leadFilters.copy(events = if (on) emptySet() else setOf(e.id)))
+                }, label = { Text(label, maxLines = 1, softWrap = false) })
+            }
+        }
         if (vm.selectMode) Row(Modifier.fillMaxWidth().background(Brand.light).padding(12.dp, 6.dp), verticalAlignment = Alignment.CenterVertically) {
             // Narrow phones: just "✓ 4" on one line, so "4 selected" never breaks mid-word.
             if (vm.selected.isEmpty()) Text("Tap leads to pick them", modifier = Modifier.weight(1f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)

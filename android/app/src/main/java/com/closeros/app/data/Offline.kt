@@ -4,6 +4,8 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
+import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.JsonObject
@@ -198,6 +200,10 @@ object Ops {
                     "edit" -> Repo.updateLeadDetailsNow(s("lead")!!, a["p"] as JsonObject)
                     "profile" -> Notes.setProfileNow(s("lead")!!, a["p"] as JsonObject)
                     "wa" -> Repo.logWaOrThrow(s("org")!!, s("lead"), s("phone")!!, s("template_id"), s("template_name"), s("source") ?: "single")
+                    "rpc" -> Backend.client.postgrest.rpc(s("fn")!!, a["p"] as JsonObject)
+                    "upd" -> Backend.client.from(s("table")!!).update(a["p"] as JsonObject) { filter { eq("id", s("rid")!!) } }
+                    "ins" -> runCatching { Backend.client.from(s("table")!!).insert(a["p"] as JsonObject) }
+                        .onFailure { if (it.message?.contains("duplicate key") != true) throw it }   // sent before: fine
                     "lead" -> runCatching { Repo.createLead(s("org")!!, s("name").orEmpty(), s("phone")!!, s("profession"), s("notes")) }
                         .onFailure { if (it.message?.contains("leads_org_phone_uq") != true) throw it }   // already a lead: fine
                     else -> Unit
@@ -210,6 +216,23 @@ object Ops {
         }
         synchronized(lock) { write(ctx, read(ctx).filter { it["id"]?.jsonPrimitive?.content !in done }) }
     }
+
+    /**
+     * Sends now; with no internet (or a network failure) it's kept on the phone and sent later, in order.
+     * Returns true when it went now, false when it's waiting on the phone. A server "no" still throws.
+     */
+    suspend fun sendOrKeep(op: String, args: JsonObject, send: suspend () -> Unit): Boolean {
+        if (!Net.isOnline) { add(AppCtx.ctx, op, args); return false }
+        return try { send(); true } catch (t: Throwable) {
+            if (Net.isNetworkError(t)) { add(AppCtx.ctx, op, args); false } else throw t
+        }
+    }
+    suspend fun rpc(fn: String, p: JsonObject): Boolean =
+        sendOrKeep("rpc", buildJsonObject { put("fn", fn); put("p", p) }) { Backend.client.postgrest.rpc(fn, p) }
+    suspend fun update(table: String, id: String, p: JsonObject): Boolean =
+        sendOrKeep("upd", buildJsonObject { put("table", table); put("rid", id); put("p", p) }) { Backend.client.from(table).update(p) { filter { eq("id", id) } } }
+    suspend fun insert(table: String, p: JsonObject): Boolean =
+        sendOrKeep("ins", buildJsonObject { put("table", table); put("p", p) }) { Backend.client.from(table).insert(p) }
 
     fun note(ctx: Context, leadId: String, text: String, tags: List<String>) =
         add(ctx, "note", buildJsonObject { put("lead", leadId); put("text", text); put("tags", buildJsonArray { tags.forEach { add(JsonPrimitive(it)) } }) })

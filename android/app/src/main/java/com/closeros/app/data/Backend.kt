@@ -650,7 +650,7 @@ object Repo {
     }
 
     suspend fun setDoNotCall(leadId: String, value: Boolean) {
-        db.rpc("set_do_not_call", buildJsonObject { put("p_lead", leadId); put("p_value", value) })
+        Ops.rpc("set_do_not_call", buildJsonObject { put("p_lead", leadId); put("p_value", value) })
     }
 
     /** Per-company change counters of management content (playbook, templates, files, outcomes, groups, webinars, targets, settings). */
@@ -697,17 +697,27 @@ object Repo {
     /** Every event of the account (also empty ones, any date), newest first. */
     suspend fun myEvents(orgId: String): List<BatchSummary> =
         json.decodeFromString(rpcR("my_events", buildJsonObject { put("p_org", orgId) }).data)
-    suspend fun createEvent(orgId: String, name: String, at: Instant): String =
-        Backend.client.from("batches").insert(buildJsonObject {
-            put("org_id", orgId); put("name", name); put("kind", "event"); put("webinar_at", at.toString()); put("created_by", Backend.uid)
-        }) { select(Columns.raw("id")) }.decodeSingle<IdOnly>().id
-    suspend fun renameEvent(id: String, name: String, at: Instant) {
-        Backend.client.from("batches").update(buildJsonObject { put("name", name); put("webinar_at", at.toString()) }) { filter { eq("id", id) } }
+    /** The event's id is made on the phone, so it can be created with no internet too (sent later). */
+    suspend fun createEvent(orgId: String, name: String, at: Instant): String {
+        val id = java.util.UUID.randomUUID().toString()
+        Ops.insert("batches", buildJsonObject {
+            put("id", id); put("org_id", orgId); put("name", name); put("kind", "event"); put("webinar_at", at.toString()); put("created_by", Backend.uid)
+        })
+        return id
     }
-    suspend fun archiveEvent(id: String) { Backend.client.from("batches").update(buildJsonObject { put("is_archived", true) }) { filter { eq("id", id) } } }
+    suspend fun renameEvent(id: String, name: String, at: Instant) {
+        Ops.update("batches", id, buildJsonObject { put("name", name); put("webinar_at", at.toString()) })
+    }
+    suspend fun archiveEvent(id: String) { Ops.update("batches", id, buildJsonObject { put("is_archived", true) }) }
     /** Adds (or removes) leads to an event; returns how many changed. */
-    suspend fun eventSetLeads(batchId: String, leadIds: Collection<String>, add: Boolean = true): Int =
-        db.rpc("event_set_leads", buildJsonObject { put("p_batch", batchId); put("p_leads", uuids(leadIds.toList())); put("p_add", add) }).data.trim().toIntOrNull() ?: 0
+    /** How many were added; -1 = no internet, kept on the phone and sent later. */
+    suspend fun eventSetLeads(batchId: String, leadIds: Collection<String>, add: Boolean = true): Int {
+        val p = buildJsonObject { put("p_batch", batchId); put("p_leads", uuids(leadIds.toList())); put("p_add", add) }
+        if (!Net.isOnline) { Ops.add(AppCtx.ctx, "rpc", buildJsonObject { put("fn", "event_set_leads"); put("p", p) }); return -1 }
+        return try { db.rpc("event_set_leads", p).data.trim().toIntOrNull() ?: 0 } catch (t: Throwable) {
+            if (Net.isNetworkError(t)) { Ops.add(AppCtx.ctx, "rpc", buildJsonObject { put("fn", "event_set_leads"); put("p", p) }); -1 } else throw t
+        }
+    }
     /** Lead ids in any of these events (for the Leads filter). */
     suspend fun eventLeadIds(eventIds: Collection<String>): List<String> =
         Backend.client.from("batch_leads").select(Columns.raw("lead_id")) { filter { isIn("batch_id", eventIds.toList()) } }.decodeList<LeadIdOnly>().map { it.lead_id }
@@ -879,12 +889,9 @@ object Repo {
         }) { select() }.decodeSingle()
 
     /** Moves a planned call to a new time (and note). */
-    suspend fun moveFollowUp(id: String, at: Instant, note: String?) {
-        Backend.client.from("follow_ups").update(buildJsonObject { put("due_at", at.toString()); note?.let { put("notes", it) } }) { filter { eq("id", id) } }
-    }
-    suspend fun cancelFollowUp(id: String) {
-        Backend.client.from("follow_ups").update(buildJsonObject { put("status", "cancelled") }) { filter { eq("id", id) } }
-    }
+    suspend fun moveFollowUp(id: String, at: Instant, note: String?): Boolean =
+        Ops.update("follow_ups", id, buildJsonObject { put("due_at", at.toString()); note?.let { put("notes", it) } })
+    suspend fun cancelFollowUp(id: String): Boolean = Ops.update("follow_ups", id, buildJsonObject { put("status", "cancelled") })
 
     /** Saves a call with its outcome (see log_call in the database). */
     suspend fun logCall(payload: JsonObject) {

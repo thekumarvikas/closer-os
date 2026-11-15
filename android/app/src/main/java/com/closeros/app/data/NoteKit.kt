@@ -194,10 +194,11 @@ object SalesApi {
     suspend fun products(orgId: String): List<Product> = json.decodeFromString(Repo.savedText("products:$orgId") {
         Backend.client.from("products").select { filter { eq("org_id", orgId); eq("is_active", true) }; order("position", io.github.jan.supabase.postgrest.query.Order.ASCENDING) }.data
     })
-    suspend fun claim(leadId: String, productId: String?, product: String?, amount: String, note: String?): String =
-        db.rpc("claim_sale", buildJsonObject { put("p_lead", leadId); put("p", buildJsonObject {
+    /** True = sent now; false = no internet, kept on the phone and sent later. */
+    suspend fun claim(leadId: String, productId: String?, product: String?, amount: String, note: String?): Boolean =
+        Ops.rpc("claim_sale", buildJsonObject { put("p_lead", leadId); put("p", buildJsonObject {
             productId?.let { put("product_id", it) }; product?.takeIf { it.isNotBlank() }?.let { put("product", it) }
-            put("amount", amount); note?.takeIf { it.isNotBlank() }?.let { put("note", it) } }) }).data.trim('"')
+            put("amount", amount); note?.takeIf { it.isNotBlank() }?.let { put("note", it) } }) })
     suspend fun summary(orgId: String): SalesSummary = json.decodeFromString(Repo.savedText("salesSum:$orgId") {
         db.rpc("sales_summary", buildJsonObject { put("p_org", orgId); put("p_from", monthStart().toString()); put("p_to", java.time.Instant.now().plusSeconds(86400).toString())
             Backend.uid?.let { put("p_users", buildJsonArray { add(JsonPrimitive(it)) }) } }).data

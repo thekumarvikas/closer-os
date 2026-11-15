@@ -170,11 +170,15 @@ object CallSync {
 
     /** After every call: upload it ~30 s later (call history written, pop-up done). Back-to-back calls share one upload. */
     fun syncAfterCall(ctx: Context) {
-        WorkManager.getInstance(ctx).enqueueUniqueWork(
-            "call-end-sync", ExistingWorkPolicy.REPLACE,
-            OneTimeWorkRequestBuilder<SyncWorker>().setConstraints(online)
-                .setInitialDelay(30, java.util.concurrent.TimeUnit.SECONDS).build(),
-        )
+        // 30 s: the call + its recording. Some phones finish writing the recording file later, so look again
+        // at 2 and 5 minutes (each run only uploads what isn't uploaded yet).
+        listOf("call-end-sync" to 30L, "call-end-rec-2" to 120L, "call-end-rec-5" to 300L).forEach { (name, sec) ->
+            WorkManager.getInstance(ctx).enqueueUniqueWork(
+                name, ExistingWorkPolicy.REPLACE,
+                OneTimeWorkRequestBuilder<SyncWorker>().setConstraints(online)
+                    .setInitialDelay(sec, java.util.concurrent.TimeUnit.SECONDS).build(),
+            )
+        }
     }
 
     fun syncNow(ctx: Context) {

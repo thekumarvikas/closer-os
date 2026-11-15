@@ -139,6 +139,9 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
                   <td className="truncate px-3 py-2">{c.lead ? <span className="font-medium">{c.lead.name || 'No name'}</span> : c.contact_name ? <span className="font-medium">{c.contact_name}</span> : null}
                     <span className={`block truncate ${c.lead || c.contact_name ? 'text-xs text-slate-500' : ''}`}>{fmtPhone(c.phone)}</span></td>
                   <td className="px-3 py-2"><CallType direction={c.direction} duration={c.duration_sec} channel={c.channel} />
+                    {c.recording_status === 'pending' && c.channel !== 'whatsapp' && c.duration_sec > 0 && devices.get(c.user_id)?.rec_folder_set
+                      && Date.now() - new Date(c.started_at).getTime() < 20 * 60_000
+                      ? <span title="Recording uploading — it usually arrives within 5 minutes of the call" className="ml-1 inline-block cursor-help text-xs">⏳</span> : null}
                     {c.recording_status === 'missing' ? <span title={missingReason(devices.get(c.user_id))} className="ml-1 inline-block cursor-help"><MicOff className="inline h-3 w-3 text-red-500" /></span> : null}
                     {(c.recording_status === 'uploaded' || c.recording_status === 'expired') && <PlayButton call={c} status={c.recording_status} open={playing === c.id} onPlay={() => setPlaying(p => p === c.id ? null : c.id)} />}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{c.duration_sec ? dur(c.duration_sec) : '—'}</td>

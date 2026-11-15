@@ -39,13 +39,15 @@ fun MySalesCard(vm: AppViewModel) {
     Column(Modifier.fillMaxWidth().background(Color(0xFFECFDF5), RoundedCornerShape(12.dp)).border(1.dp, Color(0xFFA7F3D0), RoundedCornerShape(12.dp))
         .clickable { vm.showMySales = true }.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("💰 My Sales Revenue · this month", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Text(if (vm.isSolo) "💰 My sales · this month" else "💰 My Sales Revenue · this month", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
             Text("›", color = Brand.primary, fontWeight = FontWeight.Bold)
         }
-        Text(fmtMoney(s.net, cur) + " · ${s.verified} sale${if (s.verified == 1) "" else "s"} verified" + if (s.collected > 0) " · ${fmtMoney(s.collected, cur)} collected" else "",
+        // Personal account / managers: plain "₹X · N sales" (nobody checks their sales). Reps: what the manager has confirmed.
+        val plain = vm.isSolo || vm.isManager
+        Text(fmtMoney(s.net, cur) + " · ${s.verified} sale${if (s.verified == 1) "" else "s"}" + (if (plain) "" else " confirmed") + if (s.collected > 0) " · ${fmtMoney(s.collected, cur)} collected" else "",
             fontSize = 15.sp, color = Color(0xFF065F46), fontWeight = FontWeight.Medium)
         val more = listOfNotNull(
-            s.pending.takeIf { it > 0 }?.let { "⏳ $it waiting for your manager to verify" },
+            s.pending.takeIf { it > 0 && !plain }?.let { "⏳ $it waiting for your manager" },
             s.balance_due.takeIf { it > 0 }?.let { "${fmtMoney(it, cur)} still to be paid on ${s.balance_orders} order${if (s.balance_orders == 1) "" else "s"}" })
         if (more.isNotEmpty()) Text(more.joinToString(" · "), fontSize = 12.sp, color = Brand.muted)
     }
@@ -60,7 +62,7 @@ fun MySalesScreen(vm: AppViewModel) {
     Column(Modifier.fillMaxSize().background(Brand.bg)) {
         Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { vm.showMySales = false }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
-            Text("My Sales Revenue", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text(if (vm.isSolo) "My sales" else "My Sales Revenue", fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
         val list = vm.mySales
         if (list == null) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }; return }
@@ -75,14 +77,15 @@ fun MySalesScreen(vm: AppViewModel) {
                             Text(fmtMoney(s.amount, cur), fontWeight = FontWeight.SemiBold)
                         }
                         Text(listOfNotNull(fmtWhen(s.sold_at), s.product).joinToString(" · "), fontSize = 13.sp, color = Brand.muted)
+                        val plain = vm.isSolo || vm.isManager
                         val (txt, col) = when (s.status) {
-                            "claimed" -> "⏳ Waiting for your manager to verify" to Color(0xFFB45309)
-                            "rejected" -> "Not verified" + (s.review_note?.let { " — $it" } ?: "") to Brand.red
+                            "claimed" -> (if (plain) "⏳ Being saved…" else "⏳ Waiting for your manager") to Color(0xFFB45309)
+                            "rejected" -> "Not counted" + (s.review_note?.let { " — $it" } ?: "") to Brand.red
                             else -> when (s.pay_status) {
-                                "full" -> "✓ Verified · fully paid" to Color(0xFF15803D)
-                                "part" -> "✓ Verified · ${fmtMoney(s.paid, cur)} paid, ${fmtMoney(s.balance, cur)} to go" to Color(0xFF15803D)
-                                "refunded" -> "Verified · refunded" to Brand.muted
-                                else -> "✓ Verified · payment not recorded yet" to Color(0xFF15803D)
+                                "full" -> "✓ Fully paid" to Color(0xFF15803D)
+                                "part" -> "✓ ${fmtMoney(s.paid, cur)} paid, ${fmtMoney(s.balance, cur)} to go" to Color(0xFF15803D)
+                                "refunded" -> "Refunded" to Brand.muted
+                                else -> (if (plain) "✓ Sale" else "✓ Confirmed") to Color(0xFF15803D)
                             }
                         }
                         Text(txt, fontSize = 13.sp, color = col)
@@ -104,7 +107,7 @@ fun ClaimSaleDialog(vm: AppViewModel, lead: Lead, onClose: () -> Unit) {
     var note by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     val instant = vm.isManager || vm.isSolo
-    AlertDialog(onDismissRequest = onClose, title = { Text("💰 Claim a sale") },
+    AlertDialog(onDismissRequest = onClose, title = { Text(if (instant) "💰 Add a sale" else "💰 Claim a sale") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(lead.name.ifBlank { fmtPhone(lead.phone) }, fontWeight = FontWeight.SemiBold)
@@ -116,7 +119,7 @@ fun ClaimSaleDialog(vm: AppViewModel, lead: Lead, onClose: () -> Unit) {
                 OutlinedTextField(amount, { amount = it.filter { c -> c.isDigit() || c == '.' } }, label = { Text("Order value") }, singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(note, { note = it }, label = { Text("Note (e.g. paid ₹5,000 by UPI)") }, modifier = Modifier.fillMaxWidth())
-                Text(if (instant) "Saved as a verified sale." else "Your manager verifies it, then it counts in your numbers.", fontSize = 12.sp, color = Brand.muted)
+                Text(if (instant) "Counts in your sales right away." else "Your manager checks it, then it counts in your numbers.", fontSize = 12.sp, color = Brand.muted)
             }
         },
         confirmButton = {

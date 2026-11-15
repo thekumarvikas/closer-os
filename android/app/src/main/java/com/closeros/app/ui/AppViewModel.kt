@@ -200,7 +200,10 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
     fun claimSale(lead: Lead, product: com.closeros.app.data.Product?, name: String, amount: String, note: String, done: (Boolean) -> Unit) = viewModelScope.launch {
         runCatching { com.closeros.app.data.SalesApi.claim(lead.id, product?.id, product?.name ?: name, amount, note) }
-            .onSuccess { message = if (isManager || isSolo) "💰 Sale saved" else "💰 Sale sent to your manager to verify"; loadMySales(); done(true) }
+            .onSuccess { sent -> message = when {
+                !sent -> "💰 Sale saved on your phone — syncs when you're online"
+                isManager || isSolo -> "💰 Sale saved"
+                else -> "💰 Sale sent to your manager to check" }; if (sent) loadMySales(); done(true) }
             .onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't save the sale — check your internet"); done(false) }
     }
     fun loadObjections() = viewModelScope.launch {
@@ -229,7 +232,16 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
     /** Pins or unpins a note on a lead (max 3). */
     fun pinNote(lead: Lead, ref: String, text: String, on: Boolean) = viewModelScope.launch {
-        runCatching { com.closeros.app.data.Notes.pin(lead.id, ref, text, on) }
+        runCatching {
+            try { com.closeros.app.data.Notes.pin(lead.id, ref, text, on) } catch (t: Throwable) {
+                if (!com.closeros.app.data.Net.isNetworkError(t)) throw t
+                // No internet: pin on the phone now, send later.
+                com.closeros.app.data.Ops.add(ctx, "rpc", kotlinx.serialization.json.buildJsonObject { put("fn", "pin_lead_note")
+                    put("p", kotlinx.serialization.json.buildJsonObject { put("p_lead", lead.id); put("p_ref", ref); put("p_text", text); put("p_on", on) }) })
+                if (on) (lead.pinned.filterNot { it.ref == ref } + com.closeros.app.data.Pin(ref, text, com.closeros.app.data.Backend.uid, java.time.Instant.now().toString())).takeLast(3)
+                else lead.pinned.filterNot { it.ref == ref }
+            }
+        }
             .onSuccess { pins -> replaceLead(lead.copy(pinned = pins)); message = if (on) "📌 Pinned" else "Unpinned" }
             .onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't pin — check your internet") }
     }
@@ -245,7 +257,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         val m = membership ?: return@launch
         val merged = kotlinx.serialization.json.JsonObject((m.organization.settings ?: kotlinx.serialization.json.JsonObject(emptyMap())) + patch)
         runCatching {
-            com.closeros.app.data.Backend.client.from("organizations").update(kotlinx.serialization.json.buildJsonObject { put("settings", merged) }) { filter { eq("id", m.org_id) } }
+            com.closeros.app.data.Ops.update("organizations", m.org_id, kotlinx.serialization.json.buildJsonObject { put("settings", merged) })
         }.onSuccess {
             membership = m.copy(organization = m.organization.copy(settings = merged)); save("membership", membership)
             message = "Saved ✓"; done(true)
@@ -314,19 +326,19 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         val m = membership ?: return@launch
         runCatching { Repo.createEvent(m.org_id, name.trim(), at) }
             .onSuccess { id -> if (thenAdd.isNullOrEmpty()) { message = "Event created"; loadBatches() } else addToEvent(id, name, thenAdd) }
-            .onFailure { message = if (com.closeros.app.data.Net.isNetworkError(it)) "No internet — try again when you're online" else "Couldn't create the event" }
+            .onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't create the event") }
     }
     fun addToEvent(eventId: String, name: String, leads: List<Lead>, add: Boolean = true) = viewModelScope.launch {
         runCatching { Repo.eventSetLeads(eventId, leads.map { it.id }, add) }
-            .onSuccess { n -> message = if (add) (if (n == 0) "Already in $name" else "$n added to $name") else "Removed from $name"
+            .onSuccess { n -> message = if (n < 0) "Saved on your phone — syncs when you're online" else if (add) (if (n == 0) "Already in $name" else "$n added to $name") else "Removed from $name"
                 eventPickFor = null; selectMode = false; selected.clear(); leadRefresh++; loadBatches(quiet = true); reloadLeads(); CallSync.syncNow(ctx) }
-            .onFailure { message = if (com.closeros.app.data.Net.isNetworkError(it)) "No internet — try again when you're online" else "Couldn't update the event" }
+            .onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't update the event") }
     }
     fun renameEvent(id: String, name: String, at: java.time.Instant) = viewModelScope.launch {
-        runCatching { Repo.renameEvent(id, name.trim(), at) }.onSuccess { message = "Saved"; loadBatches() }.onFailure { message = "Couldn't save — check your internet" }
+        runCatching { Repo.renameEvent(id, name.trim(), at) }.onSuccess { message = "Saved"; loadBatches() }.onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't save") }
     }
     fun deleteEvent(id: String) = viewModelScope.launch {
-        runCatching { Repo.archiveEvent(id) }.onSuccess { message = "Event deleted (the leads stay)"; loadBatches() }.onFailure { message = "Couldn't delete — check your internet" }
+        runCatching { Repo.archiveEvent(id) }.onSuccess { message = "Event deleted (the leads stay)"; loadBatches() }.onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't delete") }
     }
 
     fun loadList() = viewModelScope.launch {
@@ -817,7 +829,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (already.isNotEmpty()) { list = list.filter { it.id !in already }; message = "${already.size} already got this message today — skipped" }
         if (list.isEmpty()) { message = "Everyone in this list already got this message today"; return@launch }
         require(com.closeros.app.data.Feature.WA_QUEUE) {
-            waQueue = list; waSeqItems = null; waPos = 0; waTemplate = t; waSent = 0; waPaused = false; waCountdown = null; waCanUndo = false; waActive = true
+            waQueue = list; waSeqItems = null; waPos = 0; waNotSent = emptyList(); waDone = false; waTemplate = t; waSent = 0; waPaused = false; waCountdown = null; waCanUndo = false; waActive = true
             genericList = null; selectMode = false
         }
     }
@@ -846,7 +858,8 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun waConfirmSent(sent: Boolean) = viewModelScope.launch {
         waAskSent = false
-        if (!sent) { message = "Not counted — tap Send on WhatsApp to try again, or Skip"; return@launch }
+        // Not sent: move on (countdown to the next lead); it comes back in "Try again" at the end.
+        if (!sent) { waNotSent = waNotSent + waPos; waCanUndo = false; waNext(); return@launch }
         val m = membership ?: return@launch
         val l = waQueue.getOrNull(waPos) ?: return@launch
         val seq = waSeqItems?.getOrNull(waPos)
@@ -859,16 +872,39 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
             waCanUndo = true
         }
         waSent++
+        waNext()
+    }
+
+    /** Positions in the queue whose message didn't go — offered again at the end ("Try N again"). */
+    var waNotSent by mutableStateOf<List<Int>>(emptyList())
+    /** Reached the end but some didn't go: the screen offers "Try again" or "Finish". */
+    var waDone by mutableStateOf(false)
+    private fun waNext() {
         waPos++
-        if (waPos >= waQueue.size) { waActive = false; message = "WhatsApp queue finished — $waSent sent"; com.closeros.app.data.AppEvents.bumpLeads(); loadSeqDue(); return@launch }
+        if (waPos >= waQueue.size) {
+            waCountdown = null
+            if (waNotSent.isNotEmpty()) { waDone = true; return }
+            waFinish(); return
+        }
         if (!waPaused) waCountdown = 3
+    }
+    fun waRetry() {
+        val idx = waNotSent
+        waSeqItems = waSeqItems?.let { s -> idx.mapNotNull { s.getOrNull(it) } }
+        waQueue = idx.mapNotNull { waQueue.getOrNull(it) }
+        waNotSent = emptyList(); waDone = false; waPos = 0; waCanUndo = false; waPaused = false; waCountdown = 3
+    }
+    fun waFinish() {
+        waActive = false; waDone = false; waCountdown = null
+        message = "WhatsApp queue finished — $waSent sent" + (if (waNotSent.isNotEmpty()) " · ${waNotSent.size} not sent" else "")
+        waNotSent = emptyList(); com.closeros.app.data.AppEvents.bumpLeads(); loadSeqDue()
     }
 
     fun waUndo() = viewModelScope.launch {
         val id = waLastId ?: return@launch
         runCatching { Repo.undoWa(id) }.onSuccess { waLastId = null; waCanUndo = false; waSent = (waSent - 1).coerceAtLeast(0); waPos = (waPos - 1).coerceAtLeast(0); waCountdown = null; message = "Undone — not counted as sent" }
     }
-    fun waSkip() { waCountdown = null; waCanUndo = false; waPos++; if (waPos >= waQueue.size) { waActive = false; message = "WhatsApp queue finished — $waSent sent"; loadSeqDue() } }
+    fun waSkip() { waCountdown = null; waCanUndo = false; waNext() }
     fun waStop() { waActive = false; waCountdown = null; waAwaiting = false; message = "Stopped — $waSent sent"; com.closeros.app.data.AppEvents.bumpLeads(); loadSeqDue() }
 
     // ───── WhatsApp sequences ─────
@@ -934,7 +970,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (items.isEmpty()) { message = "No WhatsApp messages due right now"; return@launch }
         require(com.closeros.app.data.Feature.WA_QUEUE) {
             waQueue = items.map { it.lead }; waSeqItems = items; waTemplate = items.first().template()
-            waPos = 0; waSent = 0; waPaused = false; waCountdown = null; waCanUndo = false; waActive = true
+            waPos = 0; waNotSent = emptyList(); waDone = false; waSent = 0; waPaused = false; waCountdown = null; waCanUndo = false; waActive = true
             showSequences = false; genericList = null; selectMode = false
         }
     }
@@ -950,25 +986,35 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun scheduleCall(lead: Lead, at: java.time.Instant, note: String, done: (Boolean) -> Unit) = viewModelScope.launch {
         val m = membership ?: return@launch done(false)
         val existing = followUps.firstOrNull { it.lead_id == lead.id }
+        val newId = java.util.UUID.randomUUID().toString()
+        val purpose = com.closeros.app.data.CallPurpose.guess(lead, followUps).purpose
         runCatching {
             if (existing != null) Repo.moveFollowUp(existing.id, at, note.ifBlank { null })
-            else com.closeros.app.data.Backend.client.from("follow_ups").insert(kotlinx.serialization.json.buildJsonObject {
-                put("org_id", m.org_id); put("lead_id", lead.id); put("assigned_to", com.closeros.app.data.Backend.uid)
+            else com.closeros.app.data.Ops.insert("follow_ups", kotlinx.serialization.json.buildJsonObject {
+                put("id", newId); put("org_id", m.org_id); put("lead_id", lead.id); put("assigned_to", com.closeros.app.data.Backend.uid)
                 put("due_at", at.toString()); put("reason", "Scheduled call"); if (note.isNotBlank()) put("notes", note.trim())
-                put("created_by", com.closeros.app.data.Backend.uid); put("purpose", com.closeros.app.data.CallPurpose.guess(lead, followUps).purpose)
+                put("created_by", com.closeros.app.data.Backend.uid); put("purpose", purpose)
             })
-        }.onSuccess {
-            message = "📞 Call scheduled"; done(true)
-            runCatching { followUps = Repo.followUps(m.org_id).also { save("followUps", it) }; FollowUpAlarms.scheduleAll(ctx, followUps) }
+        }.onSuccess { sent ->
+            message = if (sent) "📞 Call scheduled" else "📞 Call scheduled — saved on your phone"; done(true)
+            // The phone's list and reminder change now (works with no internet too).
+            val mini = com.closeros.app.data.LeadMini(lead.name, lead.phone, lead.dial_count, lead.conversation_count, lead.call_count, lead.last_outcome_id, lead.key_facts, lead.profession, lead.city, lead.total_talk_sec)
+            followUps = (followUps.filterNot { it.id == existing?.id } + (existing?.copy(due_at = at.toString(), notes = note.ifBlank { existing.notes })
+                ?: com.closeros.app.data.FollowUp(newId, lead.id, at.toString(), "pending", "Scheduled call", note.ifBlank { null }, purpose, mini))).sortedBy { it.due_at }
+            save("followUps", followUps); FollowUpAlarms.scheduleAll(ctx, followUps)
+            replaceLead(lead.copy(next_follow_up_at = at.toString()))
+            if (sent) runCatching { followUps = Repo.followUps(m.org_id).also { save("followUps", it) }; FollowUpAlarms.scheduleAll(ctx, followUps) }
             leadRefresh++; reloadLeads()
         }.onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't schedule the call"); done(false) }
     }
     fun cancelScheduledCall(lead: Lead) = viewModelScope.launch {
         val m = membership ?: return@launch
         val f = followUps.firstOrNull { it.lead_id == lead.id } ?: run { message = "No call planned"; return@launch }
-        runCatching { Repo.cancelFollowUp(f.id) }.onSuccess {
+        runCatching { Repo.cancelFollowUp(f.id) }.onSuccess { sent ->
             FollowUpAlarms.cancelForLead(ctx, lead.id, followUps); message = "Planned call cancelled"
-            runCatching { followUps = Repo.followUps(m.org_id).also { save("followUps", it) } }
+            followUps = followUps.filterNot { it.id == f.id }; save("followUps", followUps)
+            replaceLead(lead.copy(next_follow_up_at = null))
+            if (sent) runCatching { followUps = Repo.followUps(m.org_id).also { save("followUps", it) } }
             leadRefresh++; reloadLeads()
         }.onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't cancel") }
     }
@@ -980,7 +1026,8 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun scheduleWa(lead: Lead, at: java.time.Instant, body: String, media: Triple<String, String, String>?, id: String?, done: (Boolean) -> Unit) = viewModelScope.launch {
         runCatching { com.closeros.app.data.Seqs.scheduleWa(lead.id, at, body, media, id) }.onSuccess { newId ->
             com.closeros.app.data.WaSchedAlarms.schedule(ctx, com.closeros.app.data.WaScheduled(newId, lead.id, lead.name, lead.phone, at.toString(), body))
-            message = "💬 WhatsApp message scheduled"; done(true); leadRefresh++; loadWaScheduled(); loadSeqDue()
+            message = if (com.closeros.app.data.Net.isOnline) "💬 WhatsApp message scheduled" else "💬 WhatsApp message scheduled — saved on your phone"
+            done(true); leadRefresh++; if (com.closeros.app.data.Net.isOnline) { loadWaScheduled(); loadSeqDue() }
         }.onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't schedule the message"); done(false) }
     }
     fun cancelWa(id: String) = viewModelScope.launch {
@@ -1006,6 +1053,17 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         set(v) { ctx.getSharedPreferences("pick", android.content.Context.MODE_PRIVATE).edit().putString("for", v).apply() }
     /** A file picked for a scheduled WhatsApp message (path, type, name after upload). */
     var waPickedFile by mutableStateOf<Triple<String, String, String>?>(null)
+    var waUploading by mutableStateOf(false)
+    /** "Schedule a WhatsApp message" being written — kept here so the file picker can't lose it. */
+    class WaSchedDraft(val lead: Lead, val existing: com.closeros.app.data.WaScheduled?) {
+        var at by mutableStateOf(existing?.let { runCatching { com.closeros.app.data.parseInstant(it.due_at).atZone(java.time.ZoneId.systemDefault()).toLocalDateTime() }.getOrNull() })
+        var body by mutableStateOf(existing?.body.orEmpty())
+    }
+    var waSched by mutableStateOf<WaSchedDraft?>(null)
+    fun openWaSchedule(l: Lead, existing: com.closeros.app.data.WaScheduled?) {
+        waPickedFile = existing?.media_path?.let { Triple(it, existing.media_type.orEmpty(), existing.media_name.orEmpty()) }
+        waSched = WaSchedDraft(l, existing)
+    }
 
     fun onFilePicked(uri: android.net.Uri?) {
         val target = filePickFor; filePickFor = null
@@ -1022,15 +1080,16 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
             target.startsWith("seq:") -> uploadPicked(uri) { f -> seqDraft?.messages?.firstOrNull { it.key == target.removePrefix("seq:") }?.let { d ->
                 d.mediaPath = f.first; d.mediaType = f.second; d.mediaName = f.third } ?: run { seqDraft?.messages?.lastOrNull()?.let { d -> d.mediaPath = f.first; d.mediaType = f.second; d.mediaName = f.third } } }
-            target == "wa" -> uploadPicked(uri) { waPickedFile = it }
+            target == "wa" -> { waUploading = true; uploadPicked(uri, done = { waUploading = false }) { waPickedFile = it } }
         }
     }
-    private fun uploadPicked(uri: android.net.Uri, then: (Triple<String, String, String>) -> Unit) = viewModelScope.launch {
-        val m = membership ?: return@launch
+    private fun uploadPicked(uri: android.net.Uri, done: () -> Unit = {}, then: (Triple<String, String, String>) -> Unit) = viewModelScope.launch {
+        val m = membership ?: return@launch done()
         message = "Uploading the file…"
         runCatching { com.closeros.app.data.Seqs.uploadMedia(ctx, m.org_id, uri) }
             .onSuccess { then(it); message = "📎 ${it.third} attached" }
             .onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't attach the file") }
+        done()
     }
 
     /** Adds one lead (form). An existing number opens that lead instead of making a copy. */
@@ -1174,7 +1233,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
                 message = if (value) "Marked Do not call" else "Removed from Do not call"
                 then(updated)
             }
-            .onFailure { message = "Couldn't change it — check internet" }
+            .onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't change it") }
     }
 
     /** Lead to offer a WhatsApp message to, right after its outcome was saved. */
@@ -1202,6 +1261,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Starts a call and remembers it, so the outcome form appears when the rep comes back. */
     fun startCall(lead: Lead, sim: Sim?) {
         if (pending != null) { message = "Save the outcome of your last call first"; return }
+        PhoneCalls.cannotCallReason(ctx)?.let { message = it; return }
         // Tag the call with its webinar when it comes from a webinar list or queue.
         val ctxPair = callContext ?: if (queueActive && queuePurpose != "auto" && queue.any { it.id == lead.id }) queuePurpose to queueBatchId
             else openList?.takeIf { o -> listRows?.any { it.id == lead.id } == true }?.let { (b, purpose) -> purpose to b.id }

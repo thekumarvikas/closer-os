@@ -61,6 +61,23 @@ object PhoneCalls {
         }.also { simCache = System.currentTimeMillis() to it }
     }
 
+    /**
+     * Why a phone call can't be made right now (no SIM, airplane mode), or null when it can.
+     * Without this the phone app just closes, and the rep is asked for the outcome of a call that never happened.
+     */
+    fun cannotCallReason(ctx: Context): String? = runCatching {
+        if (android.provider.Settings.Global.getInt(ctx.contentResolver, android.provider.Settings.Global.AIRPLANE_MODE_ON, 0) == 1)
+            return "Airplane mode is on — turn it off to make calls"
+        val tm = ctx.getSystemService(android.telephony.TelephonyManager::class.java) ?: return null
+        if (!ctx.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TELEPHONY))
+            return "This device can't make phone calls"
+        val anyReady = if (has(ctx, android.Manifest.permission.READ_PHONE_STATE)) {
+            subs(ctx).isNotEmpty() || tm.simState == android.telephony.TelephonyManager.SIM_STATE_READY
+        } else tm.simState == android.telephony.TelephonyManager.SIM_STATE_READY ||
+            tm.simState == android.telephony.TelephonyManager.SIM_STATE_UNKNOWN
+        if (!anyReady) "No SIM card in this phone — put in a SIM to call. You can still send WhatsApp messages." else null
+    }.getOrNull()
+
     /** The SIM's own number, if the phone reveals it (many phones don't — then the rep types it). */
     @SuppressLint("MissingPermission", "HardwareIds")
     fun simOwnNumber(ctx: Context, slot: Int): String? = runCatching {
@@ -138,6 +155,7 @@ object PhoneCalls {
     @SuppressLint("MissingPermission")
     fun call(ctx: Context, phone: String, sim: Sim?) {
         val uri = Uri.fromParts("tel", phone, null)
+        cannotCallReason(ctx)?.let { android.widget.Toast.makeText(ctx, it, android.widget.Toast.LENGTH_LONG).show(); return }
         if (has(ctx, android.Manifest.permission.CALL_PHONE)) {
             val extras = Bundle()
             sim?.handle?.let { extras.putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, it) }

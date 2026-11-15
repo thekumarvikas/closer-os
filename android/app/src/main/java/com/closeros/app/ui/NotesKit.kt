@@ -55,9 +55,9 @@ fun MicCircle(size: androidx.compose.ui.unit.Dp = 36.dp) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun NoteEditor(text: String, onText: (String) -> Unit, tags: List<String>, onTags: (List<String>) -> Unit, allTags: List<String>, label: String = "Notes",
-               groups: List<com.closeros.app.data.TagGroup> = emptyList()) {
+               groups: List<com.closeros.app.data.TagGroup> = emptyList(), showText: Boolean = true) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(text, onText, label = { Text(label) }, modifier = Modifier.fillMaxWidth(), minLines = 2,
+        if (showText) OutlinedTextField(text, onText, label = { Text(label) }, modifier = Modifier.fillMaxWidth(), minLines = 2,
             trailingIcon = { VoiceButton { spoken -> onText(if (text.isBlank()) spoken else "$text $spoken") } })
         // Company tag groups (e.g. Objection · Interest · Status), each in its own colour.
         groups.forEach { g ->

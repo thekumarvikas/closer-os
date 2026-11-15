@@ -1806,3 +1806,7 @@ intelligence → Play Store launch.
   and, after the date, "Upload Zoom reports → Assign sales calls" wizard (upload → hot computed → tick members → done).
   (4) App: webinar chips at the top of the Leads tab + webinar filter ("4 Oct webinar · 120") so reps pick a webinar and
   call its leads; existing Webinars list stays. Open questions to owner: does the sheet column carry the time? naming?
+- Nov 16 owner: webinar from the sheet must be OPTIONAL, not rigid (each company's sheet differs). Per lead source a switch
+  "Take the webinar from a column" (pick the column; date, or date + time if present) OR "Add webinars myself" (manager
+  creates webinar with date + time on the dashboard and picks it for the source / import, as today). Both always available;
+  manual edit of date/time on any auto-created webinar.

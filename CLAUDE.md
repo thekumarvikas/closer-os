@@ -1666,3 +1666,9 @@ intelligence → Play Store launch.
 - Ads (solo): banner / rewarded load failures logged once a day to app_errors (place "ads", kind info). AdMob app is
   "Requires review · Limited ad serving" until the Play listing is public and linked (AdMob → Add store).
 - Buyer matching confirmed with owner: phone OR email OR both (already so).
+- Nov 15: owner's account "Vikas Kumar I" (company, trialing, 1 member — made on the website before "Just me" existed)
+  converted to a PERSONAL account by hand (is_individual, solo settings, subscription complimentary); its claimed sale
+  verified. Pending (owner feedback, not built): offline queue for EVERY save (claim sale etc.), offline bar wording
+  ("saved on your phone… backed up/syncs"), sales by owner/manager/individual verified automatically (t_call_sale_claim),
+  personal wording "₹X · N sales" (no "verified"/"manager"), compact collapse-on-select outcome screen, no-SIM / call
+  not placed handling.

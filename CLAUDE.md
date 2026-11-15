@@ -1701,3 +1701,21 @@ intelligence → Play Store launch.
 - Nov 16 owner: OK with all proposals above ("Not sent" → move on with countdown + "Try N again" at the end). Countdown
   = the HIGHLIGHT of the WhatsApp queue card (big, prominent number/ring in brand green, not a small line). Still waiting
   for "go".
+- Pending feedback (Nov 16, part 3; not built — waiting for "go"):
+  7) Phone setup "Phone app that records calls" opens the default-apps list on Xiaomi/Redmi (recording switch lives in
+     Settings → Apps → System app settings → Call settings → Call recording, or the dialer's own settings) → brand-specific
+     deep links (try MIUI/HyperOS call-recording screens, TelecomManager.ACTION_SHOW_CALL_SETTINGS, dialer settings) with
+     exact steps per brand; never just the default-apps list; skip the item where recording isn't possible.
+  8) Phone setup screen (ui/SetupChecklist.kt): pending items on top, done items folded at the bottom ("Done (5)");
+     keep scroll position / jump to the next pending item when returning from Android settings; ideally one "next step"
+     card at a time (step x of y) with auto-advance; hide items not needed on this phone.
+  9) Scheduled WhatsApp (solo, K20 Pro): notification came twice — likely the scheduled-message alarm (WaSchedAlarms)
+     + the "messages due" reminder for the same item → one notification per message; notification text showed raw
+     {{leadName}} → fill variables; image missing: DB shows the scheduled row saved WITHOUT media (attachment lost before
+     save — same pattern as the old sequence-editor picker bug) → keep the picked file in the VM / MainActivity picker
+     and upload before saving; show the attachment name on the scheduled card.
+  10) Dashboard Sales page redesign (clarity first): period picker; tiles Sales · Revenue · Collected · Pending (balance
+     due) · Refunds; by team member (sales, revenue, collected, pending, avg sale); who bought (buyer · product · amount ·
+     paid/pending · sold by · date); by product; trend by day/week; "Path to sale" per member + company (avg calls,
+     conversations, talk, WhatsApp, webinars, days to buy — from lead_path / sales_recipe, like the app) ; verification
+     = a small "To verify (N)" tab/badge, not the main view.

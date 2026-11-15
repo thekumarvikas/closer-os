@@ -1783,3 +1783,12 @@ intelligence → Play Store launch.
   International buyers (India, Pakistan, UAE, USA, Canada, Australia, UK, Africa, Nepal, Bangladesh, Sri Lanka…): use the
   Country column to add the right country code when a number has none; never flag a number as wrong just for not being
   10 digits; match full international number first, last-digits fallback only within the same country.
+- DECIDED (Nov 16) lead assignment for webinars (not built — waiting for "go"): company setting "How we assign leads",
+  each webinar can override: (B) One owner sign-up → sale (assigned once; reminder_by = sales owner) or (A) Two teams
+  (members marked Reminder team / Sales team). A: at sign-up round-robin among the reminder team (reminder calls only).
+  After the webinar the manager uploads reports in order: Zoom ATTENDEE report (mandatory) → chat (optional) → polls
+  (optional) → "Assign" step: equal turns among the sales team with HOT leads spread evenly, skip people on leave
+  (no daily limit); checkboxes: include attendees / include non-attendees → sales team; "Send non-attendees back to the
+  reminder team" → reminder team gets them as repeated leads with tag "Non-attendee" + the webinar date, to invite to
+  the next webinar. Repeat leads keep their earlier sales owner. During-webinar: hosts ask people to drop their number in
+  chat → manager can add/assign those numbers live and manually reassign any lead at any time (history kept).

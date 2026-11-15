@@ -1772,3 +1772,14 @@ intelligence → Play Store launch.
   team sales (revenue POST GST), sales per day, top performing webinar (all time), team member sales, business category
   & profession, location → revenue, days to convert, per-member-per-batch detail tabs. Phones arrive as numbers
   (float, sometimes 11 digits). Questions asked to owner before mapping (see chat Nov 16).
+- Owner answers on the buyer sheet (Nov 16): 1 OK one row = one payment, rows joined into one order (phone/email +
+  program), days to convert up to the completing payment. 2 OK "Live Webinar …" = bought on their own during the
+  webinar → credited to the webinar; "Sales Team …" → Team Member Name. 3 Price Point = order value, pending never < 0,
+  overpay flagged. 4 Amounts INCLUDE 18% GST → company setting; show Revenue (excl. GST) + Collected (incl. GST).
+  5 Batch No. = the ENROLMENT batch/cohort the buyer joins (weekly / fortnightly / monthly), separate from the webinar
+  they attended (buyers also come from earlier webinars) → keep BOTH on each sale: enrolment batch (reports per batch:
+  enrolments, revenue, pending) AND webinar attended (conversion source). 6 client-specific columns (Engineering field /
+  Business Category) → lead fields; Program Name → product. 7 OK. 8 sample from his main tab, may refine.
+  International buyers (India, Pakistan, UAE, USA, Canada, Australia, UK, Africa, Nepal, Bangladesh, Sri Lanka…): use the
+  Country column to add the right country code when a number has none; never flag a number as wrong just for not being
+  10 digits; match full international number first, last-digits fallback only within the same country.

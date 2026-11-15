@@ -1681,3 +1681,20 @@ intelligence → Play Store launch.
   WaQueueScreen + vm.waConfirmSent): "✗ Not sent" just returns (acts as a pause) → should move on with the countdown;
   unsent leads collected for "Try N again" at the end (sequence messages stay due). Countdown UI → premium 2-line card
   (next lead name / "Opening WhatsApp in 3s" + thin animated bar, Pause), less helper text.
+- Pending feedback (Nov 16, dashboard + sources; not built — waiting for "go"):
+  1) Lead sources: every header of the sheet/webhook becomes a named lead FIELD (custom already stores them as
+     snake_case keys, e.g. experience, ad_source, team_member, date_time, webinar_date) → field registry with the
+     sheet's own labels, shown in lead details, filterable, optional columns; "Date & Time" = sign-up time (sort by it);
+     "Team Member" name → assign to that member.
+  2) Webinars / Sales Events: add Delete (today only archive), confirm; leads stay.
+  3+4) Leads page: 462 Skills Age sheet leads exist (Vikas Kumar Consulting, 437 unassigned) but owner couldn't find /
+     assign them. Default view = ALL leads, newest sign-up first, no filters needed; visible "Unassigned (437)" chip with
+     select-all → assign / round-robin; saved filters shown as chips + "Clear all"; column picker incl. form fields;
+     drawer shows every form field.
+  5) WhatsApp sequences (mostly exist since 0.21): add the WhatsApp-ban warning (send only to people who replied /
+     saved your number; Closer OS can't control WhatsApp's limits) in app + dashboard; ready-made templates incl.
+     "Pre-webinar countdown" (welcome on joining + 5 d / 3 d / 1 d / 5 h / 2 h / 15 min before, editable days+hours up to
+     30 days); late joiners get only messages still ahead (past ones skipped — today only > 12 h past are skipped).
+  6) Recordings slow: owner's company phone (11T Pro, app 0.19.0, third-party dialer com.hb.dialer.free) cannot
+     record at all. Speed-up for others: upload right after each call (retries at ~30 s / 2 min / 5 min), not the
+     15-min sync; dashboard shows "recording uploading…" for fresh calls.

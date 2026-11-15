@@ -1753,3 +1753,8 @@ intelligence → Play Store launch.
   start-point switch + fastest⇄slowest; buyer click = side journey drawer) and "Learn" (winning-calls library).
   Header buttons: Import buyers · Google Sheet · To verify (N, only when > 0). 1-click rule: every number opens its
   list; filters persist. Still waiting for "go" to build.
+- CORRECTION (Nov 16): owner is FINE with 3 tabs (Overview · Buyers · Learn) — his point was FEWER CLICKS. Final design
+  = the 3-tab "PROPOSED design" above + 1-click rules: shared filter bar that persists; every number opens its list in
+  place; buyer journey opens as a side drawer (no page change); actions (call, play, download, edit, delete, verify)
+  directly on rows; Overview cards link straight into the Buyers tab pre-filtered; Learn = play inline, download one /
+  all. Waiting for "go".

@@ -1728,3 +1728,16 @@ intelligence → Play Store launch.
   IMPORTANT: today row_key = sheet id + md5(row) → an EDITED row arrives as a NEW sale (duplicate). Use a stable key
   (hidden "Closer OS ID" column written back by the script, else UTR/payment id) so edits UPDATE the same sale; rows
   deleted from the sheet → sale flagged "Removed from sheet — confirm delete" (not auto-deleted).
+- Pending (Nov 16, Sales insights v2 — not built, waiting for "go"):
+  · Days to convert: sign-up → FULL payment (date the payments first cover the order amount, sale_payments) and
+    webinar attended (first attended batch before payment) → full payment; also first payment for part-paid.
+  · "Fastest converted" list: start point switch (sign-up | webinar attended) → full payment; sort fastest↔slowest.
+  · Full customer journey per buyer (exists as buyer_timeline: arrivals/sources, webinars + watch/pitch/chat/polls,
+    calls + recordings, WhatsApp, follow-ups, notes, payments) → one readable timeline.
+  · Team member: revenue + effort (calls, talk, WA per sale); lead-wise effort; best webinar / sales event by
+    conversion % AND revenue with side-by-side comparison (extend batch_compare with revenue + days to convert).
+  · Zoom: ONE "Upload webinar reports" step taking attendee + polls + chat together (auto-detect file type), all
+    merged into each lead's profile (lead_webinars already per lead) + buyer facts.
+  · "Winning calls" training library: every converted sale with its recordings + full journey; filters (product,
+    team member, webinar, days to convert); play, download one / download all (zip); later shown in the app Playbook
+    ("Learn from real sales") for reps.

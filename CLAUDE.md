@@ -1792,3 +1792,8 @@ intelligence → Play Store launch.
   reminder team" → reminder team gets them as repeated leads with tag "Non-attendee" + the webinar date, to invite to
   the next webinar. Repeat leads keep their earlier sales owner. During-webinar: hosts ask people to drop their number in
   chat → manager can add/assign those numbers live and manually reassign any lead at any time (history kept).
+- Nov 16 refinements to lead assignment: under each team checkbox show the team's MEMBERS as sub-checkboxes (pick who
+  gets leads this time); REMOVE "skip people on leave" (no leave tracking for this); "Live webinar" number entry DROPPED
+  for now; non-attendees are NOT auto-registered for the next webinar (reminder team invites them; only a real
+  registration counts); people who shared a number / asked in chat or answered polls = hot leads → warmth ranking from
+  attendee + chat + polls decides who is hottest / closest to converting (top of sales call lists, spread evenly).

@@ -1698,3 +1698,6 @@ intelligence → Play Store launch.
   6) Recordings slow: owner's company phone (11T Pro, app 0.19.0, third-party dialer com.hb.dialer.free) cannot
      record at all. Speed-up for others: upload right after each call (retries at ~30 s / 2 min / 5 min), not the
      15-min sync; dashboard shows "recording uploading…" for fresh calls.
+- Nov 16 owner: OK with all proposals above ("Not sent" → move on with countdown + "Try N again" at the end). Countdown
+  = the HIGHLIGHT of the WhatsApp queue card (big, prominent number/ring in brand green, not a small line). Still waiting
+  for "go".

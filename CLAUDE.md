@@ -1722,3 +1722,9 @@ intelligence → Play Store launch.
 - Pending (Nov 16): "Download sample file" next to EVERY dashboard import (leads CSV/XLSX, buyers, Zoom attendee /
   chat / polls, lead sources Sheet, products if any). Buyers sample to be modelled on the owner's real buyer file
   (owner will share it) — same headings/order, fake data.
+- Pending (Nov 16): Sales from the buyers Google Sheet / imports must be EDITABLE + DELETABLE on the dashboard (today
+  import sales can't be edited). Sheet auto-send: Apps Script time triggers only allow 1/5/10/15/30 min → onEdit marks
+  the sheet "changed" + a 5-min trigger sends when changed and ≥ 7 min since the last send (≈ 7–10 min after an edit).
+  IMPORTANT: today row_key = sheet id + md5(row) → an EDITED row arrives as a NEW sale (duplicate). Use a stable key
+  (hidden "Closer OS ID" column written back by the script, else UTR/payment id) so edits UPDATE the same sale; rows
+  deleted from the sheet → sale flagged "Removed from sheet — confirm delete" (not auto-deleted).

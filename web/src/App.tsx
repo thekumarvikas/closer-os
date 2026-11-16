@@ -13,6 +13,7 @@ const LeadSources = lazy(() => import('./pages/LeadSources'))
 const Playbook = lazy(() => import('./pages/Playbook'))
 const Announcements = lazy(() => import('./pages/Announcements'))
 const Reviews = lazy(() => import('./pages/Reviews'))
+const Training = lazy(() => import('./pages/Training'))
 const Desk = lazy(() => import('./pages/Desk'))
 const Billing = lazy(() => import('./pages/Billing'))
 const SuperAdmin = lazy(() => import('./pages/SuperAdmin'))
@@ -21,7 +22,7 @@ const Calls = lazy(() => import('./pages/Calls'))
 const FollowUps = lazy(() => import('./pages/FollowUps'))
 const Team = lazy(() => import('./pages/Team'))
 const Settings = lazy(() => import('./pages/Settings'))
-const Sales = lazy(() => import('./pages/Sales'))
+const Sales = lazy(() => import('./pages/SalesHome'))
 const BuyerAnalysis = lazy(() => import('./pages/BuyerAnalysis'))
 import SetPassword, { useRecoveryMode } from './pages/SetPassword'
 
@@ -48,6 +49,7 @@ export default function App() {
         <Route path="playbook" element={<Playbook />} />
         <Route path="sales" element={<Sales />} />
         {isManager && <Route path="buyers" element={<BuyerAnalysis />} />}
+        {isManager && <Route path="training" element={<Training />} />}
         {team && isManager && <Route path="team" element={<Team />} />}
         {team && isManager && <Route path="announcements" element={<Announcements />} />}
         {team && isManager && <Route path="reviews" element={<Reviews />} />}

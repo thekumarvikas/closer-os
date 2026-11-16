@@ -181,7 +181,7 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
   )
 }
 
-async function signedRecording(path: string, download: boolean): Promise<{ url?: string; err?: string }> {
+export async function signedRecording(path: string, download: boolean): Promise<{ url?: string; err?: string }> {
   const { data, error } = await supabase.storage.from('recordings').createSignedUrl(path, 900, download ? { download: true } : undefined)
   if (error || !data?.signedUrl) return { err: /not.?found/i.test(error?.message ?? '') ? 'Deleted from the server' : 'Couldn\'t open the recording' }
   return { url: data.signedUrl }

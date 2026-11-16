@@ -1,14 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Lock, Plus, Unlock, Download, Trash2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Plus, Trash2 } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
-import { useDirectory, type Directory } from '../lib/directory'
+import type { Directory } from '../lib/directory'
 import { fmtDate, fmtDateTime, fmtMoney, fmtPhone, fmtDuration } from '../lib/format'
-import { usePersisted } from '../lib/persist'
-import { downloadCsv } from '../lib/report'
-import { Badge, Button, Card, Empty, ErrorBox, Field, Modal, PageHeader, Spinner, Stat } from '../components/ui'
+import { Badge, Button, Card, ErrorBox, Field, Modal, Spinner } from '../components/ui'
 import { PlayButton, RecordingPlayer } from '../components/CallLog'
-import LeadDrawer from './LeadDrawer'
 
 export interface Sale {
   id: string; org_id: string; lead_id: string | null; product: string | null; product_id: string | null; amount: number; sold_at: string
@@ -23,126 +20,8 @@ const PAY: Record<Sale['pay_status'], [string, 'green' | 'amber' | 'red' | 'gray
 const METHODS = [['upi', 'UPI'], ['bank', 'Bank transfer'], ['cash', 'Cash'], ['card', 'Card'], ['razorpay', 'Razorpay / online'], ['cheque', 'Cheque'], ['other', 'Other']]
 const SOURCE: Record<string, string> = { claim: 'Claimed by rep', outcome: 'From a "sale" outcome', manager: 'Added by a manager', import: 'Buyers list', backfill: 'Earlier won call' }
 
-function monthRange(offset: number, tz: string) {
-  const now = new Date(new Date().toLocaleString('en-US', { timeZone: tz }))
-  const a = new Date(now.getFullYear(), now.getMonth() + offset, 1); const b = new Date(now.getFullYear(), now.getMonth() + offset + 1, 1)
-  const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
-  return { from: iso(a), to: iso(b), label: a.toLocaleString('en-IN', { month: 'long', year: 'numeric' }) }
-}
-
-/** Sales: verify reps' claims with the facts, record payments (full / part / refund), lock a month. Only verified sales count in reports. */
-export default function Sales() {
-  const { org, isManager, isAdmin } = useOrg()
-  const dir = useDirectory(org.id)
-  const [month, setMonth] = usePersisted('sales.month', 0)
-  const [tab, setTab] = usePersisted<'verify' | 'all' | 'due' | 'rejected'>('sales.tab', 'verify')
-  const [who, setWho] = usePersisted('sales.who', '')
-  const [list, setList] = useState<Sale[] | null>(null)
-  const [sum, setSum] = useState<Record<string, any> | null>(null)
-  const [open, setOpen] = useState<string | null>(null)
-  const [adding, setAdding] = useState(false)
-  const [openLead, setOpenLead] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [v, setV] = useState(0)
-  const r = monthRange(month, org.timezone)
-  const fromTs = new Date(r.from + 'T00:00:00').toISOString(); const toTs = new Date(r.to + 'T00:00:00').toISOString()
-
-  useEffect(() => {
-    setList(null)
-    supabase.rpc('sales_list', { p_org: org.id, p_from: fromTs, p_to: toTs, p_user: who || null }).then(({ data, error }) => {
-      if (error) setError(errorText(error)); setList((data ?? []) as Sale[]) })
-    supabase.rpc('sales_summary', { p_org: org.id, p_from: fromTs, p_to: toTs, p_users: who ? [who] : null }).then(({ data }) => setSum(data as Record<string, any>))
-  }, [org.id, fromTs, toTs, who, v]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const locked = (sum?.locked as string[] | undefined)?.includes(r.from)
-  const shown = useMemo(() => (list ?? []).filter(s =>
-    tab === 'verify' ? s.status === 'claimed' : tab === 'due' ? s.status === 'verified' && s.balance > 0 : tab === 'rejected' ? s.status === 'rejected' : s.status !== 'rejected'), [list, tab])
-  const counts = { verify: (list ?? []).filter(s => s.status === 'claimed').length }
-
-  async function lock(on: boolean) {
-    if (on && !confirm(`Lock ${r.label}? Its sales and payments can't be changed until it is unlocked.`)) return
-    const { error } = await supabase.rpc('lock_sales_month', { p_org: org.id, p_month: r.from, p_lock: on })
-    if (error) return setError(errorText(error)); setV(x => x + 1)
-  }
-  function exportCsv() {
-    downloadCsv(`sales-${r.from}.csv`, ['Date', 'Lead', 'Phone', 'Product', 'Order value', 'Paid', 'Refunded', 'Balance', 'Payment', 'Status', 'Credited to', 'Claimed by', 'How', 'Note'],
-      shown.map(s => [fmtDate(s.sold_at, org), s.lead_name ?? s.buyer?.name ?? '', s.lead_phone ?? s.buyer?.phone ?? '', s.product ?? '', s.amount, s.paid, s.refunded, s.balance,
-        PAY[s.pay_status][0], s.status, dir?.nameOf(s.credited_to) ?? '', dir?.nameOf(s.claimed_by) ?? '', SOURCE[s.source] ?? s.source, s.review_note ?? s.note ?? '']))
-  }
-
-  if (!dir) return <Spinner />
-  return (
-    <>
-      <PageHeader title="Sales" subtitle="Reps claim sales; you verify them with the facts and record payments. Only verified sales count in reports."
-        actions={<>
-          {isManager && <Button onClick={() => setAdding(true)}><Plus className="h-4 w-4" /> Add sale</Button>}
-          <Button variant="secondary" onClick={exportCsv}><Download className="h-4 w-4" /> CSV</Button>
-        </>} />
-      <ErrorBox error={error} />
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="flex rounded-lg bg-slate-100 p-1 text-sm">
-          {[[-1, 'Last month'], [0, 'This month']].map(([o, l]) => <button key={o} onClick={() => setMonth(o as number)} className={`rounded-md px-3 py-1.5 ${month === o ? 'bg-white shadow-sm font-medium' : 'text-slate-600'}`}>{l}</button>)}
-          <button onClick={() => setMonth(month - 1)} className="px-2 text-slate-600" title="Earlier month">‹</button>
-          <span className="px-2 py-1.5 font-medium">{r.label}</span>
-          <button onClick={() => setMonth(Math.min(0, month + 1))} className="px-2 text-slate-600" title="Later month">›</button>
-        </div>
-        {isManager && <select className="input !w-auto" value={who} onChange={e => setWho(e.target.value)}>
-          <option value="">Team member: everyone</option>{dir.members.map(m => <option key={m.user_id} value={m.user_id}>{dir.nameOf(m.user_id)}</option>)}
-        </select>}
-        {isAdmin && (locked
-          ? <Button variant="secondary" onClick={() => lock(false)}><Unlock className="h-4 w-4" /> Unlock {r.label}</Button>
-          : <Button variant="secondary" onClick={() => lock(true)}><Lock className="h-4 w-4" /> Lock {r.label}</Button>)}
-        {locked && <Badge color="gray">🔒 {r.label} is locked</Badge>}
-      </div>
-
-      {sum && <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-6">
-        <Stat label="Verified sales" value={sum.verified} sub={`${sum.full} full · ${sum.part} part · ${sum.unpaid} unpaid`} />
-        <Stat label="Order value" value={fmtMoney(sum.order_value, org)} sub={sum.refunded > 0 ? `Net ${fmtMoney(sum.net, org)} after refunds` : undefined} />
-        <Stat label="Collected" value={fmtMoney(sum.collected, org)} tone="green" />
-        <Stat label="Balance due" value={fmtMoney(sum.balance_due, org)} sub={`${sum.balance_orders} orders (all months)`} tone={sum.balance_due > 0 ? 'red' : undefined} />
-        <Stat label="Waiting to verify" value={sum.pending} sub={fmtMoney(sum.pending_value, org)} tone={sum.pending > 0 ? 'red' : undefined} />
-        <Stat label="Rejected" value={sum.rejected} />
-      </div>}
-
-      <div className="mb-3 flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1 text-sm sm:inline-flex">
-        {([['verify', `To verify (${counts.verify})`], ['all', 'All sales'], ['due', 'Balance due'], ['rejected', 'Rejected']] as const).map(([k, l]) =>
-          <button key={k} onClick={() => setTab(k)} className={`rounded-md px-3 py-1.5 font-medium ${tab === k ? 'bg-white shadow-sm' : 'text-slate-600'}`}>{l}</button>)}
-      </div>
-
-      <Card>
-        {!list ? <Spinner /> : shown.length === 0 ? <Empty title={tab === 'verify' ? 'Nothing waiting to be verified' : 'No sales here'}
-          text={tab === 'verify' ? 'When a rep saves a "sale" outcome or claims a sale, it appears here for you to verify.' : undefined} /> : (
-          <div className="overflow-x-auto">
-            <table className="w-full table-fixed text-sm">
-              <thead><tr className="text-left text-xs text-slate-500">
-                <th className="th w-24">Date</th><th className="th">Lead</th><th className="th">Product</th><th className="th w-28 text-right">Order</th>
-                <th className="th w-32">Payment</th><th className="th">Team member</th><th className="th w-28">Status</th></tr></thead>
-              <tbody className="divide-y divide-slate-100">{shown.map(s => (
-                <tr key={s.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setOpen(s.id)}>
-                  <td className="td whitespace-nowrap text-slate-600">{fmtDate(s.sold_at, org)}</td>
-                  <td className="td"><div className="truncate font-medium">{s.lead_name || s.buyer?.name || 'No name'}</div>
-                    <div className="text-xs text-slate-500">{fmtPhone(s.lead_phone ?? s.buyer?.phone ?? '')}</div></td>
-                  <td className="td truncate">{s.product || '—'}</td>
-                  <td className="td text-right tabular-nums">{fmtMoney(s.amount, org)}{s.balance > 0 && s.status === 'verified' && <div className="text-xs text-red-600">due {fmtMoney(s.balance, org)}</div>}</td>
-                  <td className="td"><Badge color={PAY[s.pay_status][1]}>{PAY[s.pay_status][0]}</Badge></td>
-                  <td className="td truncate">{dir.nameOf(s.credited_to)}{s.claimed_by && s.claimed_by !== s.credited_to && <div className="text-xs text-slate-500">claimed by {dir.nameOf(s.claimed_by)}</div>}</td>
-                  <td className="td">{s.status === 'claimed' ? <Badge color="amber">To verify{s.flags?.length ? ` · ⚠ ${s.flags.length}` : ''}</Badge>
-                    : s.status === 'verified' ? <Badge color="green">Verified</Badge> : <Badge color="red">Rejected</Badge>}</td>
-                </tr>))}</tbody>
-            </table>
-          </div>
-        )}
-      </Card>
-
-      {open && <SaleModal id={open} dir={dir} onClose={() => setOpen(null)} onChanged={() => setV(x => x + 1)} onOpenLead={setOpenLead} />}
-      {adding && <AddSale dir={dir} onClose={() => setAdding(false)} onDone={() => { setAdding(false); setV(x => x + 1) }} />}
-      {openLead && <LeadDrawer leadId={openLead} dir={dir} onClose={() => setOpenLead(null)} onChanged={() => setV(x => x + 1)} />}
-    </>
-  )
-}
-
 /** One sale: the facts (with red flags), verify / reject, and the payments ledger. */
-function SaleModal({ id, dir, onClose, onChanged, onOpenLead }: { id: string; dir: Directory; onClose: () => void; onChanged: () => void; onOpenLead: (id: string) => void }) {
+export function SaleModal({ id, dir, onClose, onChanged, onOpenLead }: { id: string; dir: Directory; onClose: () => void; onChanged: () => void; onOpenLead: (id: string) => void }) {
   const { org, isManager } = useOrg()
   const [f, setF] = useState<Record<string, any> | null>(null)
   const [credit, setCredit] = useState('')
@@ -171,6 +50,17 @@ function SaleModal({ id, dir, onClose, onChanged, onOpenLead }: { id: string; di
     const { error } = await supabase.rpc('add_sale_payment', { p_sale: id, p: { ...pay, paid_at: new Date(pay.paid_at + 'T12:00:00').toISOString() } })
     setBusy(false); if (error) return setError(errorText(error)); setPay({ ...pay, amount: '', reference: '' }); onChanged(); load()
   }
+  const [edit, setEdit] = useState<{ product: string; amount: string; sold_at: string; credited_to: string; enrol_batch: string } | null>(null)
+  async function saveEdit() {
+    if (!edit) return
+    setBusy(true)
+    const { error } = await supabase.rpc('update_sale', { p_sale: id, p: { ...edit, sold_at: edit.sold_at ? new Date(edit.sold_at + 'T12:00:00').toISOString() : '' } })
+    setBusy(false); if (error) return setError(errorText(error)); setEdit(null); onChanged(); load()
+  }
+  async function delSale() {
+    if (!confirm('Delete this sale and its payments? This cannot be undone. (If it came from your Google Sheet, also remove its row there.)')) return
+    const { error } = await supabase.rpc('delete_sale', { p_sale: id }); if (error) return setError(errorText(error)); onChanged(); onClose()
+  }
   async function delPay(pid: string) {
     if (!confirm('Remove this payment?')) return
     const { error } = await supabase.rpc('delete_sale_payment', { p_id: pid }); if (error) return setError(errorText(error)); onChanged(); load()
@@ -183,6 +73,22 @@ function SaleModal({ id, dir, onClose, onChanged, onOpenLead }: { id: string; di
         <Badge color={PAY[s.pay_status][1]}>{PAY[s.pay_status][0]}</Badge>
         <span className="text-slate-500">{fmtDateTime(s.sold_at, org)} · {SOURCE[s.source] ?? s.source}{s.claimed_by ? ` · ${dir.nameOf(s.claimed_by)}` : ''}</span>
       </div>
+      {isManager && !edit && <div className="mb-3 flex gap-2">
+        <Button variant="secondary" className="!py-1" onClick={() => setEdit({ product: s.product ?? '', amount: String(s.amount ?? ''), sold_at: String(s.sold_at).slice(0, 10), credited_to: s.credited_to ?? '', enrol_batch: (s as Sale & { enrol_batch?: string | null }).enrol_batch ?? '' })}>✏ Edit sale</Button>
+        <Button variant="ghost" className="!py-1 text-red-600" onClick={delSale}><Trash2 className="h-4 w-4" /> Delete sale</Button>
+      </div>}
+      {edit && <section className="mb-3 rounded-lg border border-brand-200 bg-brand-50/40 p-3">
+        <div className="grid gap-2 sm:grid-cols-3">
+          <Field label="Product / program"><input className="input" value={edit.product} onChange={e => setEdit({ ...edit, product: e.target.value })} /></Field>
+          <Field label={`Order value (${org.currency})`}><input className="input" inputMode="decimal" value={edit.amount} onChange={e => setEdit({ ...edit, amount: e.target.value })} /></Field>
+          <Field label="Sale date"><input className="input" type="date" value={edit.sold_at} onChange={e => setEdit({ ...edit, sold_at: e.target.value })} /></Field>
+          <Field label="Credit goes to"><select className="input" value={edit.credited_to} onChange={e => setEdit({ ...edit, credited_to: e.target.value })}>
+            <option value="">Nobody (bought in the webinar)</option>{dir.members.map(m => <option key={m.user_id} value={m.user_id}>{dir.nameOf(m.user_id)}</option>)}</select></Field>
+          <Field label="Batch joined"><input className="input" value={edit.enrol_batch} onChange={e => setEdit({ ...edit, enrol_batch: e.target.value })} placeholder="e.g. Batch 12" /></Field>
+        </div>
+        <div className="mt-2 flex gap-2"><Button loading={busy} onClick={saveEdit}>Save changes</Button><Button variant="ghost" onClick={() => setEdit(null)}>Cancel</Button></div>
+        {s.source === 'import' && <p className="mt-2 text-xs text-slate-500">This sale came from your buyers list. If you change its row in the Google Sheet later, the sheet's values come in again.</p>}
+      </section>}
       {s.note && <p className="mb-2 text-sm">“{s.note}”</p>}
       {s.review_note && <p className="mb-2 text-sm text-slate-600">Manager's note: {s.review_note}</p>}
 
@@ -227,7 +133,7 @@ function SaleModal({ id, dir, onClose, onChanged, onOpenLead }: { id: string; di
         <h3 className="mb-1 text-sm font-semibold">Payments · paid {fmtMoney(s.paid, org)}{s.refunded > 0 ? ` · refunded ${fmtMoney(s.refunded, org)}` : ''} · balance {fmtMoney(s.balance, org)}</h3>
         {(f.payments as any[]).length === 0 ? <p className="text-sm text-slate-500">No payments recorded yet.</p> : (
           <ul className="mb-2 space-y-1 text-sm">{(f.payments as any[]).map(p => <li key={p.id} className="flex items-center justify-between rounded border border-slate-200 px-2 py-1">
-            <span className={p.kind === 'refund' ? 'text-red-700' : ''}>{fmtDate(p.paid_at, org)} · {p.kind === 'refund' ? 'Refund' : 'Payment'} {fmtMoney(p.amount, org)} · {METHODS.find(m => m[0] === p.method)?.[1] ?? p.method}{p.reference ? ` · ${p.reference}` : ''}</span>
+            <span className={p.kind === 'refund' ? 'text-red-700' : ''}>{fmtDate(p.paid_at, org)} · {p.kind === 'refund' ? 'Refund' : 'Payment'} {fmtMoney(p.amount, org)} · {METHODS.find(m => m[0] === p.method)?.[1] ?? p.method}{p.reference ? ` · ${p.reference}` : ''}{p.removed_at && <b className="ml-2 text-amber-700">removed from the sheet</b>}</span>
             {isManager && <button className="text-slate-400 hover:text-red-600" onClick={() => delPay(p.id)}><Trash2 className="h-4 w-4" /></button>}</li>)}</ul>)}
         {isManager && s.status !== 'rejected' && <div className="grid gap-2 sm:grid-cols-6">
           <select className="input" value={pay.kind} onChange={e => setPay({ ...pay, kind: e.target.value })}><option value="payment">Payment</option><option value="refund">Refund</option></select>
@@ -243,7 +149,7 @@ function SaleModal({ id, dir, onClose, onChanged, onOpenLead }: { id: string; di
 }
 
 /** A manager adds a sale (verified at once): pick the lead, product, amount and what's been paid. */
-function AddSale({ dir, onClose, onDone }: { dir: Directory; onClose: () => void; onDone: () => void }) {
+export function AddSale({ dir, onClose, onDone }: { dir: Directory; onClose: () => void; onDone: () => void }) {
   const { org, session } = useOrg()
   const [q, setQ] = useState(''); const [hits, setHits] = useState<{ id: string; name: string; phone: string; assigned_to: string | null }[]>([])
   const [lead, setLead] = useState<{ id: string; name: string; phone: string; assigned_to: string | null } | null>(null)
@@ -306,6 +212,12 @@ export function PriceList() {
       <h2 className="font-semibold">Products & prices</h2>
       <p className="mb-3 mt-1 text-sm text-slate-500">Your price list. Reps pick a product when they save a sale (the amount fills in), and a sale with a different amount is flagged when you verify it.</p>
       <ErrorBox error={error} />
+      <label className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 p-3 text-sm">
+        <span className="font-medium">GST included in your prices</span>
+        <input className="input !w-20 !py-1" inputMode="decimal" defaultValue={String((org.settings?.sales as { gst_pct?: number } | undefined)?.gst_pct ?? 0)}
+          onBlur={e => run(supabase.from('organizations').update({ settings: { ...(org.settings ?? {}), sales: { ...((org.settings?.sales as object) ?? {}), gst_pct: Math.max(0, Number(e.target.value) || 0) } } }).eq('id', org.id))} />
+        <span>%</span><span className="text-slate-500">— e.g. 18. The Sales page then shows Revenue without GST and Collected with GST. 0 = no GST.</span>
+      </label>
       {items.map(i => (
         <div key={i.id} className="flex items-center gap-2 border-b border-slate-100 py-1.5 text-sm">
           <input className="input !py-1" defaultValue={i.name} onBlur={e => e.target.value.trim() && e.target.value !== i.name && run(supabase.from('products').update({ name: e.target.value.trim() }).eq('id', i.id))} />

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
 import { SampleLink } from '../lib/samples'
 import Papa from 'papaparse'
@@ -15,18 +16,35 @@ import { PlayButton, RecordingPlayer } from '../components/CallLog'
 import LeadDrawer from './LeadDrawer'
 
 type Tab = 'import' | 'match' | 'effort' | 'pattern' | 'gaps'
-const FIELDS: [string, string][] = [['name', 'Name'], ['phone', 'Phone'], ['email', 'Email'], ['amount', 'Amount paid'], ['paid_at', 'Payment date'],
-  ['product', 'Product / course'], ['source', 'Source'], ['reference', 'UTR / payment id']]
+const FIELDS: [string, string][] = [['name', 'Name'], ['phone', 'Phone'], ['email', 'Email'], ['amount', 'Amount paid (this payment)'], ['price', 'Price point (full order value)'],
+  ['paid_at', 'Payment date'], ['product', 'Program / product'], ['enrol_batch', 'Batch joined (Batch No.)'], ['webinar_date', 'Webinar date'],
+  ['sale_type', 'Direct / Sales team'], ['member', 'Team member name'], ['method', 'Payment method'], ['part_full', 'Part / Full'], ['remark', 'Remark'],
+  ['country', 'Country'], ['city', 'City'], ['state', 'State'], ['profession', 'Profession'], ['source', 'Source'], ['reference', 'UTR / payment id']]
+const SKIP = /^(s\.?\s*no\.?|sr\.?\s*no\.?|serial|#|year|month|days to convert|closer os id)/i
 
-/** Same heading rules as the database (buyer_field_guess): whole words only. */
+/** Same heading rules as the database (buyer_field_guess): whole words, the most specific first. */
 function guess(h: string): string | null {
-  const x = h.toLowerCase(); const w = (re: string) => new RegExp(`\\b(${re})\\b`).test(x)
-  if (w('utr|txn|transaction|reference|ref|razorpay') || /(payment|order)\s*id/.test(x)) return 'reference'
+  const x = h.toLowerCase().trim().replace(/\s+/g, ' '); const w = (re: string) => new RegExp(`\\b(${re})\\b`).test(x)
+  if (SKIP.test(x)) return null
+  if (w('utr|txn|transaction|reference|ref') || /(payment|order)\s*id/.test(x)) return 'reference'
+  if (/pending|balance|due/.test(x)) return null
+  if (/price point|order value|course fee|total fee|full price|\bprice\b/.test(x)) return 'price'
+  if (/webinar/.test(x)) return 'webinar_date'
+  if (/batch/.test(x)) return 'enrol_batch'
+  if (/team member|sales ?person|closer|sold by|counsell?or|\bmember\b/.test(x)) return 'member'
+  if (/direct|sales team|source of sale|sale type/.test(x)) return 'sale_type'
+  if (/part\s*\/?\s*full|full\s*\/?\s*part|payment type/.test(x)) return 'part_full'
+  if (w('method|mode|gateway|paid via|paid through')) return 'method'
+  if (w('remark|remarks|comment|comments|note|notes')) return 'remark'
+  if (w('country')) return 'country'
+  if (w('city|location|town')) return 'city'
+  if (w('state')) return 'state'
+  if (w('profession|occupation|designation')) return 'profession'
   if (w('phone|mobile|contact|whatsapp|number|cell|mob')) return 'phone'
   if (/\be\s*-?\s*mail/.test(x)) return 'email'
   if (w('date|time|timestamp|when|created') || /(paid|payment|purchased) on/.test(x)) return 'paid_at'
-  if (w('amount|price|paid|fee|fees|value|total|revenue|rs|inr') || x.includes('₹')) return 'amount'
-  if (w('product|course|plan|program|programme|package|item|batch|service')) return 'product'
+  if (w('amount|paid|fee|fees|value|total|revenue|rs|inr') || x.includes('₹')) return 'amount'
+  if (w('product|course|plan|program|programme|package|item|service')) return 'product'
   if (w('source|channel|via|medium|platform')) return 'source'
   if (w('name|buyer|customer|student|client')) return 'name'
   return null
@@ -42,7 +60,7 @@ export default function BuyerAnalysis() {
   if (!dir) return <Spinner />
   return (
     <>
-      <PageHeader title="Buyer Analysis" subtitle="Who bought, what it took, and which leads look like buyers but haven't paid yet." />
+      <PageHeader title="Import buyers · Buyer Analysis" subtitle="Bring in your buyers (file or Google Sheet), match them to leads, and dig into what each sale took." actions={<Link to="/sales"><Button variant="secondary">← Back to Sales</Button></Link>} />
       <div className="mb-4 flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1 text-sm sm:inline-flex">
         {([['import', '1 · Import buyers'], ['match', '2 · Match to leads'], ['effort', '3 · Effort per sale'], ['pattern', '4 · Pattern finder'], ['gaps', '5 · Gaps']] as const)
           .map(([k, l]) => <button key={k} onClick={() => setTab(k)} className={`rounded-md px-3 py-1.5 font-medium ${tab === k ? 'bg-white shadow-sm' : 'text-slate-600'}`}>{l}</button>)}
@@ -58,7 +76,7 @@ export default function BuyerAnalysis() {
 }
 
 // ───────────── 1 Import ─────────────
-interface ImportResult { rows: number; added: number; matched: number; unmatched: number; check: number; already: number; confirm: number; failed: number;
+interface ImportResult { rows: number; added: number; payments?: number; updated?: number; matched: number; unmatched: number; check: number; already: number; confirm: number; failed: number;
   problems: { row: number; level: 'failed' | 'warning' | 'confirm'; reason: string }[] }
 
 function ImportTab({ onDone }: { onDone: () => void }) {
@@ -92,14 +110,17 @@ function ImportTab({ onDone }: { onDone: () => void }) {
   async function run() {
     const fields = Object.values(map)
     if (!fields.includes('phone') && !fields.includes('email')) return setError('Choose which column has the phone number (or the email)')
-    const mapped = rows.map((r, i) => { const o: Record<string, string | number> = { row: i + 2 }; for (const [col, f] of Object.entries(map)) if (f) o[f] = r[col] ?? ''; return o })
-    const total: ImportResult = { rows: 0, added: 0, matched: 0, unmatched: 0, check: 0, already: 0, confirm: 0, failed: 0, problems: [] }
+    // Columns you don't map (e.g. "Engineering field") still travel along and become lead fields.
+    const mapped = rows.map((r, i) => { const o: Record<string, unknown> = { row: i + 2 }; const extra: Record<string, string> = {}
+      for (const col of headers) { const f = map[col]; if (f) o[f] = r[col] ?? ''; else if (!SKIP.test(col) && !/pending|balance/i.test(col) && String(r[col] ?? '').trim()) extra[col] = String(r[col]) }
+      o.extra = extra; return o })
+    const total: ImportResult = { rows: 0, added: 0, payments: 0, updated: 0, matched: 0, unmatched: 0, check: 0, already: 0, confirm: 0, failed: 0, problems: [] }
     for (let i = 0; i < mapped.length; i += 1000) {
       setBusy(`Importing ${Math.min(i + 1000, mapped.length)} of ${mapped.length}…`)
       const { data, error } = await supabase.rpc('import_buyers', { p_org: org.id, p_rows: mapped.slice(i, i + 1000), p_name: file })
       if (error) { setBusy(''); return setError(errorText(error)) }
       const d = data as ImportResult
-      for (const k of ['rows', 'added', 'matched', 'unmatched', 'check', 'already', 'confirm', 'failed'] as const) total[k] += d[k] ?? 0
+      for (const k of ['rows', 'added', 'payments', 'updated', 'matched', 'unmatched', 'check', 'already', 'confirm', 'failed'] as const) total[k] = (total[k] ?? 0) + (d[k] ?? 0)
       total.problems.push(...(d.problems ?? []))
     }
     setBusy(''); setRes(total); setRows([]); onDone()
@@ -146,8 +167,8 @@ function ImportReport({ res }: { res: ImportResult }) {
   const fail = res.problems.filter(p => p.level === 'failed'); const warn = res.problems.filter(p => p.level !== 'failed')
   return (
     <div className="mt-4 rounded-lg border border-slate-200 p-3 text-sm">
-      <p className="font-semibold">Done: {res.added} added · {res.already} already there (skipped) · {res.failed} failed</p>
-      <p className="text-slate-600">{res.matched} matched to a lead · {res.unmatched} not matched yet · {res.check} need a check (phone and email point to different leads) · {res.confirm} possible duplicates to confirm on the Sales page</p>
+      <p className="font-semibold">Done: {res.added} new orders{res.payments ? ` · ${res.payments} more payments on existing orders` : ''}{res.updated ? ` · ${res.updated} updated` : ''} · {res.already} already there (skipped) · {res.failed} failed</p>
+      <p className="text-slate-600">{res.matched} matched to a lead · {res.unmatched} not matched yet · {res.check} need a check (phone and email point to different leads) · {res.confirm} possible repeat payments to check on the Sales page</p>
       {fail.length > 0 && <><p className="mt-2 font-medium text-red-700">Failed rows</p><ul className="max-h-40 overflow-y-auto text-red-700">{fail.map((p, i) => <li key={i}>Row {p.row}: {p.reason}</li>)}</ul></>}
       {warn.length > 0 && <><p className="mt-2 font-medium text-amber-700">Check these</p><ul className="max-h-40 overflow-y-auto text-amber-800">{warn.map((p, i) => <li key={i}>Row {p.row}: {p.reason}</li>)}</ul></>}
       {res.problems.length > 0 && <button className="mt-2 text-brand-700 underline" onClick={() => downloadCsv('import-problems.csv', ['Row', 'Type', 'Reason'], res.problems.map(p => [p.row, p.level, p.reason]))}>Download these rows (CSV)</button>}
@@ -173,24 +194,59 @@ const CLOSER_KEY = '${key}';
 const TOKEN = '${src.token}';   // keep this private
 const SHEET_NAME = '';          // leave empty for the first tab, or write the tab name
 
+const ID_HEADER = 'Closer OS ID';   // a column the script adds: it lets you EDIT a row without creating a second sale
+
+function sheet_() { const ss = SpreadsheetApp.getActive(); return SHEET_NAME ? ss.getSheetByName(SHEET_NAME) : ss.getSheets()[0]; }
+
+// Gives every row its own id (kept for good), in a "Closer OS ID" column at the end.
+function ensureIds_(sh) {
+  const lastRow = sh.getLastRow(); if (lastRow < 2) return -1;
+  let headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getDisplayValues()[0];
+  let col = headers.indexOf(ID_HEADER);
+  if (col < 0) { col = headers.length; sh.getRange(1, col + 1).setValue(ID_HEADER); }
+  const data = sh.getRange(2, 1, lastRow - 1, Math.max(col + 1, headers.length)).getDisplayValues();
+  const ids = data.map(function (r) { return [r[col]]; }); let changed = false;
+  data.forEach(function (r, i) {
+    const hasData = r.some(function (v, j) { return j !== col && String(v).trim() !== ''; });
+    if (hasData && !ids[i][0]) { ids[i][0] = Utilities.getUuid(); changed = true; }
+  });
+  if (changed) sh.getRange(2, col + 1, ids.length, 1).setValues(ids);
+  return col;
+}
+
 function sendBuyers() {
-  const ss = SpreadsheetApp.getActive();
-  const sh = SHEET_NAME ? ss.getSheetByName(SHEET_NAME) : ss.getSheets()[0];
+  const sh = sheet_();
+  const idCol = ensureIds_(sh);
   const values = sh.getDataRange().getDisplayValues();
   if (values.length < 2) return;
   const headers = values[0], rows = values.slice(1);
+  const ids = idCol < 0 ? null : rows.map(function (r) { return r[idCol]; }).filter(String);
   for (let i = 0; i < rows.length; i += 2000) {
     const res = UrlFetchApp.fetch(CLOSER_URL, { method: 'post', contentType: 'application/json', muteHttpExceptions: true,
       headers: { apikey: CLOSER_KEY, Authorization: 'Bearer ' + CLOSER_KEY },
-      payload: JSON.stringify({ p_token: TOKEN, p_headers: headers, p_rows: rows.slice(i, i + 2000), p_first_row: i + 2, p_sheet: sh.getName() }) });
+      payload: JSON.stringify({ p_token: TOKEN, p_headers: headers, p_rows: rows.slice(i, i + 2000), p_first_row: i + 2, p_sheet: sh.getName(), p_ids: ids }) });
     Logger.log(res.getContentText());
   }
+  const p = PropertiesService.getDocumentProperties();
+  p.setProperty('lastSent', String(Date.now())); p.deleteProperty('changed');
   SpreadsheetApp.getActive().toast('Buyers sent to Closer OS ✓');
 }
 
-// Run this once: adds the daily send and sends everything now.
+// Every edit marks the sheet as changed…
+function onEdit() { PropertiesService.getDocumentProperties().setProperty('changed', String(Date.now())); }
+
+// …and this runs every 5 minutes: it sends only when something changed, and at most once in 7 minutes.
+function sendIfChanged() {
+  const p = PropertiesService.getDocumentProperties();
+  if (!p.getProperty('changed')) return;
+  if (Date.now() - Number(p.getProperty('lastSent') || 0) < 7 * 60 * 1000) return;
+  sendBuyers();
+}
+
+// Run this once: sends everything now, then by itself a few minutes after every change (and once a night).
 function setup() {
-  ScriptApp.getProjectTriggers().forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('sendIfChanged').timeBased().everyMinutes(5).create();
   ScriptApp.newTrigger('sendBuyers').timeBased().everyDays(1).atHour(2).create();
   sendBuyers();
 }
@@ -204,12 +260,14 @@ function onOpen() { SpreadsheetApp.getUi().createMenu('Closer OS').addItem('Send
   return (
     <Card className="p-5">
       <h2 className="font-semibold">Connect a Google Sheet (free)</h2>
-      <p className="mb-3 mt-1 text-sm text-slate-500">Whatever the team adds to the sheet becomes buyers in Closer OS — sent automatically once a day, and any time with the sheet's
-        <b> Closer OS → Send buyers now</b> menu. No paid tools, the sheet stays private.</p>
+      <p className="mb-3 mt-1 text-sm text-slate-500">Whatever the team adds or changes in the sheet reaches Closer OS by itself about 7–10 minutes later (and any time with the sheet's
+        <b> Closer OS → Send buyers now</b> menu). One row = one payment; part payments of the same buyer and program join into one order. Editing a row updates the same sale — nothing doubles.
+        No paid tools, the sheet stays private. <SampleLink kind="buyers" label="Sample sheet" /></p>
+      {src && src.last_push_at && <p className="mb-2 rounded bg-amber-50 p-2 text-xs text-amber-900">Connected before 16 Nov 2026? Paste the new script once (Show the setup steps → Copy → replace the old one → run <b>setup</b>) to get automatic sending and edit-without-duplicates.</p>}
       <ErrorBox error={error} />
       {src === undefined ? <Spinner /> : !src ? <Button onClick={create}>Connect a Google Sheet</Button> : <>
         <p className="text-sm">{src.last_push_at ? <>Last received <b>{fmtDateTime(src.last_push_at, org)}</b> · {src.rows_seen} rows ·
-          {' '}{last?.added ?? 0} new, {last?.already ?? 0} already there, {last?.failed ?? 0} failed</> : <span className="text-amber-700">Nothing received yet — follow the steps below.</span>}</p>
+          {' '}{last?.added ?? 0} new, {last?.updated ?? 0} updated, {last?.already ?? 0} unchanged, {last?.failed ?? 0} failed{last?.removed ? `, ${last.removed} removed from the sheet (confirm on the Sales page)` : ''}</> : <span className="text-amber-700">Nothing received yet — follow the steps below.</span>}</p>
         {last && (last.problems ?? []).length > 0 && <button className="text-sm text-brand-700 underline" onClick={() => downloadCsv('sheet-problems.csv', ['Row', 'Type', 'Reason'],
           (last.problems as any[]).map(p => [p.row, p.level, p.reason]))}>Problem rows from the last send (CSV)</button>}
         {heads.length > 0 && <div className="mt-3"><p className="mb-1 text-sm font-medium">Columns in your sheet</p>
@@ -225,7 +283,7 @@ function onOpen() { SpreadsheetApp.getUi().createMenu('Closer OS').addItem('Send
             <Button variant="secondary" className="mt-1" onClick={() => navigator.clipboard.writeText(script)}><Copy className="h-4 w-4" /> Copy the script</Button></li>
           <li>Click <b>Save</b> (disk icon). In the function list choose <b>setup</b> → <b>Run</b>. Google asks for permission: choose your account → Advanced → Go to (unsafe) → Allow.
             (It's your own script — it only reads this sheet and sends it to Closer OS.)</li>
-          <li>Reload the sheet: a <b>Closer OS</b> menu appears. Use <b>Send buyers now</b> any time; it also sends every night.</li>
+          <li>Reload the sheet: a <b>Closer OS</b> menu appears, and a new last column <b>Closer OS ID</b> (don't change or delete it — it's how an edited row stays the same sale). Changes are sent by themselves within about 10 minutes; <b>Send buyers now</b> sends at once.</li>
           <li>Come back here: you'll see "Last received" and can fix which column is which.</li>
         </ol>}
       </>}

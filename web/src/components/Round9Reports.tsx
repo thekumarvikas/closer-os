@@ -11,7 +11,7 @@ const n1 = (v: unknown) => v == null ? '–' : Number(v) % 1 === 0 ? String(Numb
 const mins = (sec: number) => sec >= 3600 ? `${Math.floor(sec / 3600)}h ${Math.round((sec % 3600) / 60)}m` : `${Math.round(sec / 60)}m`
 
 /** A list of leads behind one number; click a lead for the full drawer. */
-function LeadListModal({ title, leads, dir, onClose }: { title: string; leads: J[] | null; dir: Directory; onClose: () => void }) {
+export function LeadListModal({ title, leads, dir, onClose }: { title: string; leads: J[] | null; dir: Directory; onClose: () => void }) {
   const [open, setOpen] = useState<string | null>(null)
   const name = (id: string | null) => dir.members.find(m => m.user_id === id)?.profile?.full_name ?? '—'
   return (

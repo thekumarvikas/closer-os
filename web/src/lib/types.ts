@@ -11,7 +11,7 @@ export interface Profile { id: string; email: string | null; full_name: string |
 /** What the company may do now (org_access()). state: trial | active | grace | expired. */
 export interface Access { state: 'trial' | 'active' | 'grace' | 'expired'; status: string; plan: string | null; plan_id: string | null; features: Record<string, boolean>
   seats: number; seats_used: number; cycle: 'month' | 'year' | null; ends_at: string | null; grace_ends_at: string | null; days_left: number | null }
-export interface Member { org_id: string; user_id: string; role: Role; status: 'active' | 'deactivated'; joined_at: string; profile?: Profile | null }
+export interface Member { org_id: string; user_id: string; role: Role; status: 'active' | 'deactivated'; joined_at: string; profile?: Profile | null; call_team?: 'reminder' | 'sales' | null }
 export interface Team { id: string; org_id: string; name: string }
 export interface TeamMember { team_id: string; user_id: string; org_id: string; is_manager: boolean }
 export interface Stage { id: string; name: string; position: number; is_won: boolean; is_lost: boolean; is_active: boolean }
@@ -22,7 +22,7 @@ export interface Lead {
   source: string | null; campaign: string | null; assigned_to: string | null; assigned_at?: string | null; stage_id: string | null
   deal_value: number | null; tags: string[]; custom: Record<string, unknown>; notes: string | null; key_facts?: string | null
   last_call_at: string | null; last_outcome_id: string | null; next_follow_up_at: string | null
-  do_not_call: boolean; created_at: string
+  do_not_call: boolean; created_at: string; signup_at?: string | null; arrivals?: number
   shared_with?: string[]; response_sec?: number | null; first_dialled_at?: string | null
   dial_count?: number; call_count?: number; conversation_count?: number; total_talk_sec?: number; wa_count?: number
 }

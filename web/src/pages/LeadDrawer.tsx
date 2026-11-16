@@ -5,6 +5,7 @@ import { LeadProfileCard, PinnedNotes, LeadObjections, LeadOrigins, emailTypo, t
 import { PlayButton, RecordingPlayer } from '../components/CallLog'
 import { CallColorKey, CallType } from '../components/CallColors'
 import { useEffect, useState } from 'react'
+import { useLeadFields, fieldLabel } from '../lib/leadFields'
 import { X, Phone, Mail, MapPin, Building2, GraduationCap } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
@@ -20,6 +21,7 @@ interface NoteEntry { id?: string; objections?: string[] | null; kind: string; a
 export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
   { leadId: string; dir: Directory; onClose: () => void; onChanged: () => void }) {
   const { org, isManager } = useOrg()
+  const fields = useLeadFields(org.id)
   const [lead, setLead] = useState<Lead | null>(null)
   const [calls, setCalls] = useState<Call[]>([])
   const [playing, setPlaying] = useState<string | null>(null)
@@ -134,10 +136,15 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
                 {(lead.company || lead.profession) && <p className="flex items-center gap-2"><Building2 className="h-4 w-4 text-slate-400" /> {[lead.profession, lead.company].filter(Boolean).join(' at ')}</p>}
                 {lead.deal_value != null && <p>Deal: <b>{fmtMoney(lead.deal_value, org)}</b></p>}
                 {lead.tags.length > 0 && <div className="flex flex-wrap gap-1">{lead.tags.map(t => <Badge key={t}>{t}</Badge>)}</div>}
+                {lead.signup_at && <p className="text-xs text-slate-500">Signed up {fmtDateTime(lead.signup_at, org)}</p>}
                 {Object.keys(lead.custom ?? {}).length > 0 && (
-                  <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg bg-slate-50 p-3 text-xs">
-                    {Object.entries(lead.custom).map(([k, v]) => <div key={k}><dt className="text-slate-500">{k.replace(/_/g, ' ')}</dt><dd className="font-medium">{String(v)}</dd></div>)}
-                  </dl>
+                  <div className="mt-2 rounded-lg bg-slate-50 p-3">
+                    <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Form / sheet answers</p>
+                    <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                      {Object.entries(lead.custom).map(([k, v]) => <div key={k} className="min-w-0"><dt className="text-slate-500">{fieldLabel(fields, k)}</dt>
+                        <dd className="break-words font-medium">{String(v)}</dd></div>)}
+                    </dl>
+                  </div>
                 )}
               </div>
 

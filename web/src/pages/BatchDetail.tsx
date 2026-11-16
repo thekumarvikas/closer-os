@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import Papa from 'papaparse'
 import readXlsxFile from 'read-excel-file'
 import { ArrowLeft, Upload, UserPlus, Pencil, Download, X, CheckCircle2, Video } from 'lucide-react'
@@ -62,7 +62,11 @@ export default function BatchDetail() {
   const [batch, setBatch] = useState<Batch | null>(null)
   const [purpose, setPurpose] = useState<View>('sales')
   const [version, setVersion] = useState(0)
-  const [modal, setModal] = useState<'import' | 'zoom' | 'remind' | 'edit' | 'chat' | 'polls' | null>(null)
+  const [modal, setModal] = useState<'import' | 'zoom' | 'remind' | 'edit' | 'chat' | 'polls' | 'after' | 'assign' | null>(null)
+  // "After the webinar": the files picked in one go, then each report is confirmed in turn, then sales calls are shared out.
+  const [after, setAfter] = useState<{ zoom?: File; chat?: File; polls?: File; queue: ('zoom' | 'chat' | 'polls')[] } | null>(null)
+  const [params] = useSearchParams()
+  useEffect(() => { if (params.get('after') === '1' && isManager) setModal('after') }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(() => {
@@ -77,6 +81,12 @@ export default function BatchDetail() {
   if (error) return <ErrorBox error={error} />
   if (!batch || !dir) return <Spinner />
   const refresh = () => { setVersion(v => v + 1); load() }
+  /** A report modal closed: the next picked file, then "share out sales calls" (only inside the after-webinar flow). */
+  function nextAfter() {
+    if (!after) return setModal(null)
+    const [n, ...rest] = after.queue
+    if (n) { setAfter({ ...after, queue: rest }); setModal(n) } else { setAfter(null); setModal('assign') }
+  }
 
   return (
     <>
@@ -91,9 +101,10 @@ export default function BatchDetail() {
         </div>
         {isManager && (
           <div className="flex flex-wrap gap-2">
+            {new Date(batch.webinar_at) < new Date() && <Button onClick={() => setModal('after')}><Video className="h-4 w-4" /> After the webinar: reports → sales calls</Button>}
             <Button variant="secondary" onClick={() => setModal('import')}><Upload className="h-4 w-4" /> Add registrations</Button>
             <Button variant="secondary" onClick={() => setModal('remind')}><UserPlus className="h-4 w-4" /> Assign reminder calls</Button>
-            <Button onClick={() => setModal('zoom')}><Video className="h-4 w-4" /> Upload attendance (Zoom)</Button>
+            <Button variant="secondary" onClick={() => setModal('zoom')}><Video className="h-4 w-4" /> Upload attendance (Zoom)</Button>
             <Button variant="secondary" onClick={() => setModal('chat')}>💬 Upload chat{batch.chat_uploaded_at ? ' ✓' : ''}</Button>
             <Button variant="secondary" onClick={() => setModal('polls')}>📊 Upload polls{batch.polls_uploaded_at ? ' ✓' : ''}</Button>
           </div>
@@ -112,9 +123,13 @@ export default function BatchDetail() {
       {purpose === 'sales' && <WatchBands key={'w' + version} batch={batch} dir={dir} onSetPitch={isManager ? () => setModal('edit') : undefined} />}
 
       {modal === 'import' && <LeadImport orgId={org.id} dir={dir} batchId={batch.id} onClose={() => setModal(null)} onDone={refresh} />}
-      {modal === 'zoom' && <ZoomUpload batch={batch} dir={dir} onClose={() => setModal(null)} onDone={refresh} />}
-      {modal === 'chat' && <ChatUpload batch={batch} onClose={() => setModal(null)} onDone={refresh} />}
-      {modal === 'polls' && <PollUpload batch={batch} onClose={() => setModal(null)} onDone={refresh} />}
+      {modal === 'zoom' && <ZoomUpload batch={batch} dir={dir} file={after?.zoom} onClose={nextAfter} onDone={refresh} />}
+      {modal === 'chat' && <ChatUpload batch={batch} file={after?.chat} onClose={nextAfter} onDone={refresh} />}
+      {modal === 'polls' && <PollUpload batch={batch} file={after?.polls} onClose={nextAfter} onDone={refresh} />}
+      {modal === 'after' && <AfterWebinar batch={batch} onClose={() => { setModal(null); setAfter(null) }}
+        onGo={(f) => { const q = (['zoom', 'chat', 'polls'] as const).filter(k => f[k]); setAfter({ ...f, queue: q.slice(1) }); setModal(q[0] ?? 'assign') }}
+        onAssign={() => setModal('assign')} />}
+      {modal === 'assign' && <AssignSalesCalls batch={batch} dir={dir} onClose={() => { setModal(null); setAfter(null) }} onDone={refresh} />}
       {modal === 'remind' && <AssignReminders batch={batch} dir={dir} onClose={() => setModal(null)} onDone={refresh} />}
       {modal === 'edit' && <BatchForm batch={batch} onClose={() => setModal(null)} onSaved={refresh} />}
     </>
@@ -360,7 +375,7 @@ const zoomGuess: Record<ZoomCol, RegExp> = {
   leave: /leave time/i,
 }
 
-function ZoomUpload({ batch, dir, onClose, onDone }: { batch: Batch; dir: Directory; onClose: () => void; onDone: () => void }) {
+function ZoomUpload({ batch, dir, file, onClose, onDone }: { batch: Batch; dir: Directory; file?: File; onClose: () => void; onDone: () => void }) {
   const { org } = useOrg()
   const [table, setTable] = useState<string[][] | null>(null)
   const [cols, setCols] = useState<Record<ZoomCol, number>>({ name: -1, email: -1, phone: -1, minutes: -1, join: -1, leave: -1 })
@@ -412,6 +427,7 @@ function ZoomUpload({ batch, dir, onClose, onDone }: { batch: Batch; dir: Direct
       setTable([head, ...body])
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not read this file') }
   }
+  useEffect(() => { if (file) read(file) }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // One entry per person; Zoom lists a row per join, so minutes are added up.
   const attendees = useMemo(() => {
@@ -588,7 +604,7 @@ function AssignReminders({ batch, dir, onClose, onDone }: { batch: Batch; dir: D
 
 /* ───────────── Zoom chat + polls ───────────── */
 
-function ChatUpload({ batch, onClose, onDone }: { batch: Batch; onClose: () => void; onDone: () => void }) {
+function ChatUpload({ batch, file, onClose, onDone }: { batch: Batch; file?: File; onClose: () => void; onDone: () => void }) {
   const { org } = useOrg()
   const [lines, setLines] = useState<ReturnType<typeof parseChat> | null>(null)
   const [busy, setBusy] = useState(false)
@@ -609,6 +625,7 @@ function ChatUpload({ batch, onClose, onDone }: { batch: Batch; onClose: () => v
     if (!l.length) return setError("Couldn't find chat messages in this file. Use the chat file Zoom saves (meeting_saved_chat.txt) or a CSV with name and message columns.")
     setLines(l)
   }
+  useEffect(() => { if (file) read(file) }, []) // eslint-disable-line react-hooks/exhaustive-deps
   async function apply() {
     if (!lines) return
     setBusy(true); setError(null)
@@ -668,7 +685,7 @@ function ChatUpload({ batch, onClose, onDone }: { batch: Batch; onClose: () => v
   )
 }
 
-function PollUpload({ batch, onClose, onDone }: { batch: Batch; onClose: () => void; onDone: () => void }) {
+function PollUpload({ batch, file, onClose, onDone }: { batch: Batch; file?: File; onClose: () => void; onDone: () => void }) {
   const { org } = useOrg()
   const [answers, setAnswers] = useState<ReturnType<typeof parsePolls> | null>(null)
   const [busy, setBusy] = useState(false)
@@ -681,6 +698,7 @@ function PollUpload({ batch, onClose, onDone }: { batch: Batch; onClose: () => v
     if (!a.length) return setError("Couldn't find poll answers in this file. Use Zoom → Reports → Webinar → Poll report → Export.")
     setAnswers(a)
   }
+  useEffect(() => { if (file) read(file) }, []) // eslint-disable-line react-hooks/exhaustive-deps
   async function apply() {
     if (!answers) return
     setBusy(true); setError(null)
@@ -714,6 +732,140 @@ function PollUpload({ batch, onClose, onDone }: { batch: Batch; onClose: () => v
           <p>Found <b>{answers.length}</b> answers from <b>{new Set(answers.map(a => (a.email || a.name).toLowerCase())).size}</b> people to <b>{qs.length}</b> questions:</p>
           <ul className="list-disc pl-5 text-slate-700">{qs.slice(0, 10).map(q => <li key={q}>{q}</li>)}</ul>
           {batch.polls_uploaded_at && <p className="text-xs text-amber-700">This replaces the polls uploaded earlier for this webinar.</p>}
+          <ErrorBox error={error} />
+        </div>
+      )}
+    </Modal>
+  )
+}
+
+
+/* ───────────── After the webinar: all reports in one go → share out sales calls ───────────── */
+
+/** Which Zoom report a file is: attendee report, chat or polls (from its contents). */
+async function detectZoomFile(f: File): Promise<'zoom' | 'chat' | 'polls' | null> {
+  if (/\.txt$/i.test(f.name)) return 'chat'
+  try {
+    const rows: string[][] = /\.xlsx$/i.test(f.name) ? (await readXlsxFile(f)).map(r => r.map(cellText)) : Papa.parse<string[]>(await f.text()).data
+    const text = rows.slice(0, 40).map(r => r.join(' ')).join(' ').toLowerCase()
+    if (/poll|question/.test(text) && !/time in session|attendee details/.test(text)) return 'polls'
+    if (/attendee|time in session|join time|duration|minutes/.test(text)) return 'zoom'
+    if (/message|chat/.test(text)) return 'chat'
+  } catch { /* unreadable */ }
+  return null
+}
+
+function AfterWebinar({ batch, onClose, onGo, onAssign }: { batch: Batch; onClose: () => void
+  onGo: (f: { zoom?: File; chat?: File; polls?: File }) => void; onAssign: () => void }) {
+  const [files, setFiles] = useState<{ zoom?: File; chat?: File; polls?: File }>({})
+  const [unknown, setUnknown] = useState<string[]>([])
+  const [reading, setReading] = useState(false)
+  async function pick(list: FileList | null) {
+    if (!list) return
+    setReading(true)
+    const next = { ...files }; const bad: string[] = []
+    for (const f of Array.from(list)) { const k = await detectZoomFile(f); if (k) next[k] = f; else bad.push(f.name) }
+    setFiles(next); setUnknown(bad); setReading(false)
+  }
+  const row = (k: 'zoom' | 'chat' | 'polls', title: string, need: string, done: string | null | undefined) => (
+    <div className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2">
+      <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${files[k] || done ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'}`}>{files[k] || done ? '✓' : '·'}</span>
+      <div className="min-w-0 flex-1"><p className="font-medium">{title} <span className="text-xs font-normal text-slate-500">{need}</span></p>
+        <p className="truncate text-xs text-slate-500">{files[k]?.name ?? (done ? 'Uploaded before — pick a file only to replace it' : 'Not picked')}</p></div>
+      {files[k] && <button className="text-xs text-slate-500 hover:underline" onClick={() => setFiles({ ...files, [k]: undefined })}>Remove</button>}
+    </div>)
+  const canGo = !!files.zoom || !!batch.zoom_uploaded_at
+  return (
+    <Modal open wide onClose={onClose} title="After the webinar" footer={<>
+      <Button variant="secondary" onClick={onClose}>Cancel</Button>
+      {batch.zoom_uploaded_at && !files.zoom && !files.chat && !files.polls && <Button variant="secondary" onClick={onAssign}>Skip to sharing out sales calls</Button>}
+      <Button onClick={() => onGo(files)} disabled={!canGo || reading}>Next →</Button></>}>
+      <div className="space-y-4 text-sm">
+        <ol className="flex gap-2 text-xs font-medium text-slate-500">
+          <li className="rounded-full bg-brand-600 px-2.5 py-1 text-white">1 · Upload Zoom reports</li><li className="rounded-full bg-slate-100 px-2.5 py-1">2 · Check each one</li><li className="rounded-full bg-slate-100 px-2.5 py-1">3 · Share out sales calls</li>
+        </ol>
+        <label className="flex cursor-pointer flex-col items-center rounded-xl border-2 border-dashed border-slate-300 px-6 py-8 text-center hover:border-brand-400 hover:bg-brand-50/40">
+          <Upload className="h-7 w-7 text-brand-600" />
+          <span className="mt-2 font-medium">{reading ? 'Reading…' : 'Choose the Zoom files — all at once is fine'}</span>
+          <span className="mt-1 max-w-md text-xs text-slate-500">Closer OS works out which file is which. Zoom → Reports → Webinar → Attendee report / Poll report (CSV or XLSX), and the chat file (.txt).</span>
+          <input type="file" multiple accept=".csv,.xlsx,.txt" className="hidden" onChange={e => pick(e.target.files)} />
+        </label>
+        <div className="space-y-2">
+          {row('zoom', 'Attendee report', '(needed)', batch.zoom_uploaded_at)}
+          {row('chat', 'Chat', '(optional)', batch.chat_uploaded_at)}
+          {row('polls', 'Polls', '(optional)', batch.polls_uploaded_at)}
+        </div>
+        {unknown.length > 0 && <p className="text-xs text-amber-700">Couldn't tell what these are: {unknown.join(', ')}</p>}
+        <p className="text-xs text-slate-500">Watch time + chat + poll answers decide who is hottest. Hot leads go to the top of the sales call lists and are shared evenly.</p>
+      </div>
+    </Modal>
+  )
+}
+
+function AssignSalesCalls({ batch, dir, onClose, onDone }: { batch: Batch; dir: Directory; onClose: () => void; onDone: () => void }) {
+  const { org } = useOrg()
+  const active = dir.members.filter(m => m.status === 'active')
+  const twoTeams = active.some(m => m.call_team)
+  const salesTeam = active.filter(m => m.call_team === 'sales').map(m => m.user_id)
+  const remTeam = active.filter(m => m.call_team === 'reminder').map(m => m.user_id)
+  const [att, setAtt] = useState(twoTeams)
+  const [attUsers, setAttUsers] = useState<string[]>(salesTeam.length ? salesTeam : active.map(m => m.user_id))
+  const [non, setNon] = useState<'none' | 'sales' | 'reminder'>(twoTeams && remTeam.length ? 'reminder' : 'none')
+  const [nonUsers, setNonUsers] = useState<string[]>(remTeam)
+  const [counts, setCounts] = useState<{ att: number; non: number } | null>(null)
+  const [preview, setPreview] = useState<{ per_person: Record<string, number>; moved: number; kept: number } | null>(null)
+  const [done, setDone] = useState<{ moved: number; kept: number; tagged: number } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    Promise.all([
+      supabase.from('batch_leads').select('lead_id', { count: 'exact', head: true }).eq('batch_id', batch.id).or('watch_minutes.gt.0,attended.eq.true'),
+      supabase.from('batch_leads').select('lead_id', { count: 'exact', head: true }).eq('batch_id', batch.id),
+    ]).then(([a, all]) => setCounts({ att: a.count ?? 0, non: (all.count ?? 0) - (a.count ?? 0) }))
+  }, [batch.id])
+  const p = { attendees: att, attendee_users: attUsers, non_attendees: non, non_attendee_users: nonUsers }
+  useEffect(() => {
+    setPreview(null)
+    if ((!att || !attUsers.length) && (non === 'none' || (non === 'reminder' && !nonUsers.length))) return
+    const t = setTimeout(() => supabase.rpc('assign_batch_leads', { p_batch: batch.id, p: { ...p, dry_run: true } }).then(({ data }) => setPreview(data)), 300)
+    return () => clearTimeout(t)
+  }, [JSON.stringify(p)]) // eslint-disable-line react-hooks/exhaustive-deps
+  async function go() {
+    setBusy(true); setError(null)
+    const { data, error } = await supabase.rpc('assign_batch_leads', { p_batch: batch.id, p })
+    setBusy(false)
+    if (error) return setError(errorText(error))
+    setDone(data); onDone()
+  }
+  const People = ({ list, set }: { list: string[]; set: (v: string[]) => void }) => (
+    <div className="ml-6 mt-1 grid gap-0.5 sm:grid-cols-2">{active.map(m => (
+      <label key={m.user_id} className="flex items-center gap-2 rounded px-2 py-0.5 hover:bg-slate-50">
+        <input type="checkbox" checked={list.includes(m.user_id)} onChange={() => set(list.includes(m.user_id) ? list.filter(u => u !== m.user_id) : [...list, m.user_id])} />
+        {dir.nameOf(m.user_id)}{m.call_team && <span className="text-xs text-slate-400">{m.call_team === 'sales' ? 'sales' : 'reminder'}</span>}
+        {preview?.per_person[m.user_id] ? <b className="ml-auto text-xs text-brand-700">{preview.per_person[m.user_id]}</b> : null}
+      </label>))}</div>)
+  return (
+    <Modal open wide onClose={onClose} title="Share out the sales calls" footer={done ? <Button onClick={onClose}>Done</Button> : <>
+      <Button variant="secondary" onClick={onClose}>Not now</Button>
+      <Button onClick={go} loading={busy} disabled={!preview}>Assign{preview ? ` ${preview.moved + preview.kept} leads` : ''}</Button></>}>
+      {done ? <p className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900">✅ Done — {done.moved} leads moved{done.kept ? `, ${done.kept} repeat leads kept their earlier owner` : ''}{done.tagged ? `, ${done.tagged} non-attendees tagged for the reminder team` : ''}. Reps see them in their app now, hottest first.</p> : (
+        <div className="space-y-4 text-sm">
+          {!twoTeams && <p className="rounded-lg bg-slate-50 p-3 text-slate-600">Each lead stays with the person who has it, unless you share leads out here. (Working with a separate reminder team and sales team? Mark them on the Team page.)</p>}
+          <div>
+            <label className="flex items-center gap-2 font-medium"><input type="checkbox" checked={att} onChange={e => setAtt(e.target.checked)} />
+              Attendees{counts ? ` (${counts.att})` : ''} → these people, in turns, hottest first</label>
+            {att && <People list={attUsers} set={setAttUsers} />}
+          </div>
+          <div>
+            <p className="font-medium">Didn't attend{counts ? ` (${counts.non})` : ''}</p>
+            <div className="ml-1 mt-1 space-y-1">
+              <label className="flex items-center gap-2"><input type="radio" checked={non === 'none'} onChange={() => setNon('none')} /> Keep with the person who has them</label>
+              <label className="flex items-center gap-2"><input type="radio" checked={non === 'sales'} onChange={() => setNon('sales')} /> Share out with the attendees (same people)</label>
+              <label className="flex items-center gap-2"><input type="radio" checked={non === 'reminder'} onChange={() => setNon('reminder')} /> Send back to the reminder team — tagged "Non-attendee · {new Intl.DateTimeFormat('en-GB', { timeZone: org.timezone, day: 'numeric', month: 'short' }).format(new Date(batch.webinar_at))}" to invite to the next webinar</label>
+            </div>
+            {non === 'reminder' && <People list={nonUsers} set={setNonUsers} />}
+          </div>
+          {preview && <p className="rounded-lg bg-brand-50 p-3 text-brand-900">{preview.moved + preview.kept} leads: {preview.moved} change owner{preview.kept ? `, ${preview.kept} repeat leads stay with their earlier owner` : ''}. Hot leads are spread evenly (numbers next to each name).</p>}
           <ErrorBox error={error} />
         </div>
       )}

@@ -1,41 +1,60 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Video, Download } from 'lucide-react'
+import { Plus, Video, Download, UserPlus, Trash2 } from 'lucide-react'
 import { downloadCsv, pct } from '../lib/report'
 import { fmtMoney } from '../lib/format'
 import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
+import { useDirectory, type Directory } from '../lib/directory'
 import { fmtDateTime } from '../lib/format'
 import type { Batch } from '../lib/types'
 import { Badge, Button, Card, Empty, ErrorBox, Field, Modal, PageHeader, Spinner } from '../components/ui'
 
 interface Row extends Batch { leads: number; attended: number }
 
+interface CardRow { id: string; name: string; kind: string; webinar_at: string; auto_created: boolean; zoom_uploaded: boolean
+  registered: number; assigned: number; unassigned: number; called: number; attended: number; hot: number; repeats: number }
+
 export default function Batches() {
   const { org, isManager } = useOrg()
   const [rows, setRows] = useState<Row[] | null>(null)
+  const [cards, setCards] = useState<CardRow[] | null>(null)
   const [showNew, setShowNew] = useState(false)
   const [archived, setArchived] = useState(false)
   const [view, setView] = useState<'list' | 'compare'>('list')
+  const [assignFor, setAssignFor] = useState<CardRow | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const dir = useDirectory(org.id)
 
   async function load() {
+    // Managers: one card per webinar with its numbers (one query).
+    if (isManager && !archived) {
+      const { data, error } = await supabase.rpc('batch_cards', { p_org: org.id })
+      if (error) return setError(errorText(error))
+      setCards(data as CardRow[]); return
+    }
     const { data, error } = await supabase.from('batches').select('*').eq('org_id', org.id).eq('is_archived', archived)
       .order('webinar_at', { ascending: false }).limit(200)
     if (error) return setError(errorText(error))
     const batches = (data ?? []) as Batch[]
-    // Lead and attendee counts per batch.
     const counts = await Promise.all(batches.map(b => Promise.all([
       supabase.from('batch_leads').select('lead_id', { count: 'exact', head: true }).eq('batch_id', b.id),
       supabase.from('batch_leads').select('lead_id', { count: 'exact', head: true }).eq('batch_id', b.id).eq('attended', true),
     ])))
     setRows(batches.map((b, i) => ({ ...b, leads: counts[i][0].count ?? 0, attended: counts[i][1].count ?? 0 })))
   }
-  useEffect(() => { setRows(null); load() }, [org.id, archived]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setRows(null); setCards(null); load() }, [org.id, archived]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function del(c: CardRow) {
+    if (!confirm(`Delete "${c.name}"?\n\nThe ${c.registered} leads stay in Leads (with their calls and notes) — they just won't be in this webinar any more.`)) return
+    const { error } = await supabase.rpc('delete_batch', { p_batch: c.id })
+    if (error) return setError(errorText(error))
+    load()
+  }
 
   return (
     <>
-      <PageHeader title="Webinars / Sales Events" subtitle="Webinars, sales events or any group of leads — each with its own reminder and sales calls"
+      <PageHeader title="Webinars / Sales Events" subtitle="Each webinar with its registrations, reminder calls and sales calls"
         actions={<>
           <Button variant="ghost" onClick={() => setArchived(!archived)}>{archived ? 'Show active' : 'Show archived'}</Button>
           {isManager && <Button onClick={() => setShowNew(true)}><Plus className="h-4 w-4" /> New</Button>}
@@ -46,7 +65,43 @@ export default function Batches() {
           <button key={k} onClick={() => setView(k)} className={`rounded-md px-4 py-1.5 font-medium ${view === k ? 'bg-white shadow-sm' : 'text-slate-600'}`}>{l}</button>
         ))}
       </div>
-      {view === 'compare' ? <Compare /> : <Card className="overflow-x-auto">
+      {view === 'compare' ? <Compare /> : cards ? (
+        cards.length === 0 ? <Card><Empty icon={<Video className="h-6 w-6" />} title="No webinars yet"
+          text="Create one here — or let your Google Sheet create them: Lead sources → your sheet → “Which webinar do these leads join?” → From a column."
+          action={<Button onClick={() => setShowNew(true)}><Plus className="h-4 w-4" /> New</Button>} /></Card> : (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {cards.map(c => {
+            const past = new Date(c.webinar_at) < new Date()
+            const n = (v: number, show = true) => show ? v.toLocaleString('en-IN') : '—'
+            return (
+              <Card key={c.id} className="flex flex-col p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <Link to={`/webinars/${c.id}`} className="block truncate font-semibold text-slate-900 hover:text-brand-700">{c.name}</Link>
+                    <p className="text-xs text-slate-500">{kindLabel(c.kind)} · {fmtDateTime(c.webinar_at, org)}</p>
+                  </div>
+                  <div className="flex shrink-0 gap-1">
+                    {!past && <Badge color="blue">Upcoming</Badge>}
+                    {c.auto_created && <span title="Created from your sheet"><Badge>From sheet</Badge></span>}
+                  </div>
+                </div>
+                <div className="mt-3 grid grid-cols-5 gap-1 text-center">
+                  {([['Registered', n(c.registered)], ['Assigned', n(c.assigned)], ['Called', n(c.called)],
+                    ['Attended', n(c.attended, c.zoom_uploaded)], ['Hot', n(c.hot, c.zoom_uploaded)]] as const).map(([l, v]) => (
+                    <div key={l} className="rounded-lg bg-slate-50 px-1 py-1.5"><p className="text-base font-semibold tabular-nums text-slate-900">{v}</p><p className="text-[11px] text-slate-500">{l}</p></div>))}
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {c.unassigned > 0 && <Button className="!py-1.5" onClick={() => setAssignFor(c)}><UserPlus className="h-4 w-4" /> Unassigned {c.unassigned} → Assign</Button>}
+                  {past && <Link to={`/webinars/${c.id}?after=1`}><Button variant={c.unassigned > 0 ? 'secondary' : 'primary'} className="!py-1.5">
+                    <Video className="h-4 w-4" /> {c.zoom_uploaded ? 'Share out sales calls' : 'Upload Zoom reports → sales calls'}</Button></Link>}
+                  <Link to={`/webinars/${c.id}`} className="text-sm text-brand-700 hover:underline">Open</Link>
+                  <button onClick={() => del(c)} className="ml-auto text-xs text-slate-400 hover:text-red-600" title="Delete this webinar (leads stay)"><Trash2 className="h-4 w-4" /></button>
+                </div>
+              </Card>
+            )
+          })}
+        </div>)
+      ) : <Card className="overflow-x-auto">
         {!rows ? <Spinner /> : rows.length === 0 ? (
           <Empty icon={<Video className="h-6 w-6" />} title={archived ? 'Nothing archived' : 'No webinars or sales events yet'}
             text="Create one, add its registrations or leads, then (for webinars) upload the Zoom report afterwards."
@@ -67,7 +122,8 @@ export default function Batches() {
                     <td className="td text-slate-600">{fmtDateTime(b.webinar_at, org)} {!past && <Badge color="blue">Upcoming</Badge>}</td>
                     <td className="td tabular-nums">{b.leads.toLocaleString('en-IN')}</td>
                     <td className="td tabular-nums">{b.zoom_uploaded_at ? `${b.attended.toLocaleString('en-IN')} (${b.leads ? Math.round(b.attended / b.leads * 100) : 0}%)` : '—'}</td>
-                    <td className="td">{b.zoom_uploaded_at ? <Badge color="green">Uploaded</Badge> : past ? <Badge color="amber">Waiting</Badge> : <span className="text-slate-400">After webinar</span>}</td>
+                    <td className="td">{b.zoom_uploaded_at ? <Badge color="green">Uploaded</Badge> : past ? <Badge color="amber">Waiting</Badge> : <span className="text-slate-400">After webinar</span>}
+                      {isManager && <button onClick={() => del({ id: b.id, name: b.name, registered: b.leads } as CardRow)} className="ml-3 text-xs text-slate-400 hover:text-red-600">Delete</button>}</td>
                   </tr>
                 )
               })}
@@ -76,7 +132,43 @@ export default function Batches() {
         )}
       </Card>}
       {showNew && <BatchForm onClose={() => setShowNew(false)} onSaved={load} />}
+      {assignFor && dir && <AssignUnassigned batch={assignFor} dir={dir} onClose={() => setAssignFor(null)} onDone={load} />}
     </>
+  )
+}
+
+/** "Unassigned N → Assign": tick people, the webinar's unassigned leads are shared out in turns (hottest first). */
+function AssignUnassigned({ batch, dir, onClose, onDone }: { batch: CardRow; dir: Directory; onClose: () => void; onDone: () => void }) {
+  const active = dir.members.filter(m => m.status === 'active')
+  const past = new Date(batch.webinar_at) < new Date()
+  const team = active.filter(m => m.call_team === (past ? 'sales' : 'reminder')).map(m => m.user_id)
+  const [users, setUsers] = useState<string[]>(team)
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState<number | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  async function go() {
+    setBusy(true); setError(null)
+    const { data, error } = await supabase.rpc('assign_batch_leads', { p_batch: batch.id,
+      p: { only_unassigned: true, attendees: true, attendee_users: users, non_attendees: 'sales' } })
+    setBusy(false)
+    if (error) return setError(errorText(error))
+    setDone((data as { moved: number }).moved); onDone()
+  }
+  return (
+    <Modal open onClose={onClose} title={`Assign ${batch.unassigned} unassigned leads · ${batch.name}`} footer={done !== null ? <Button onClick={onClose}>Done</Button> : <>
+      <Button variant="secondary" onClick={onClose}>Cancel</Button>
+      <Button onClick={go} loading={busy} disabled={!users.length}>Share out to {users.length} {users.length === 1 ? 'person' : 'people'}</Button></>}>
+      {done !== null ? <p className="text-sm">✅ {done} leads assigned. They show in each person's app now.</p> : (
+        <div className="space-y-2 text-sm">
+          <p className="text-slate-600">Tick who gets them — they're shared out in turns{past ? ', hottest first' : ''}.</p>
+          <div className="grid gap-0.5 sm:grid-cols-2">{active.map(m => (
+            <label key={m.user_id} className="flex items-center gap-2 rounded px-2 py-1 hover:bg-slate-50">
+              <input type="checkbox" checked={users.includes(m.user_id)} onChange={() => setUsers(users.includes(m.user_id) ? users.filter(u => u !== m.user_id) : [...users, m.user_id])} />
+              {dir.nameOf(m.user_id)}{m.call_team && <span className="text-xs text-slate-400">{m.call_team} team</span>}
+            </label>))}</div>
+          <ErrorBox error={error} />
+        </div>)}
+    </Modal>
   )
 }
 

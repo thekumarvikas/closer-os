@@ -6,11 +6,13 @@ import { useDirectory, type Directory } from '../lib/directory'
 import { fmtDateTime } from '../lib/format'
 import type { Batch } from '../lib/types'
 import { Badge, Button, Card, Empty, ErrorBox, Field, Modal, PageHeader, Spinner } from '../components/ui'
+import { useLeadFields } from '../lib/leadFields'
 
 type Kind = 'facebook' | 'google_ads' | 'flexifunnels' | 'pabbly' | 'zapier' | 'webhook' | 'google_sheets' | 'indiamart'
 interface Source {
   id: string; org_id: string; name: string; kind: Kind; token: string; source_label: string | null; campaign: string | null
-  batch_id: string | null; assign_mode: 'rules' | 'user' | 'none'; assign_to: string | null; field_map: Record<string, string>
+  batch_id: string | null; assign_mode: 'rules' | 'user' | 'users' | 'none'; assign_to: string | null; field_map: Record<string, string>
+  webinar_mode?: 'fixed' | 'column'; webinar_column?: string | null; webinar_time?: string | null; webinar_prefix?: string | null; assign_users?: string[]
   google_key: string | null; api_key?: string | null; last_pull_at?: string | null; last_pull_error?: string | null; is_active: boolean; received_count: number; last_received_at: string | null; created_at: string
 }
 interface Event { id: number; received_at: string; payload: Record<string, unknown>; status: string; lead_id: string | null; error: string | null }
@@ -73,7 +75,8 @@ export default function LeadSources() {
                 </div>
                 <p className="mt-3 text-sm text-slate-600"><b>{s.received_count.toLocaleString('en-IN')}</b> leads received
                   {s.last_received_at ? <> · last {fmtDateTime(s.last_received_at, org)}</> : ' · waiting for the first lead'}</p>
-                {s.batch_id && <p className="mt-1 text-xs text-slate-500">Webinar: {batches.find(b => b.id === s.batch_id)?.name ?? '—'}</p>}
+                {s.webinar_mode === 'column' && s.webinar_column ? <p className="mt-1 text-xs text-slate-500">Webinar: from column “{s.webinar_column}”</p>
+                  : s.batch_id && <p className="mt-1 text-xs text-slate-500">Webinar: {batches.find(b => b.id === s.batch_id)?.name ?? '—'}</p>}
               </button>
             )
           })}
@@ -106,20 +109,47 @@ function SourceForm({ kind, source, dir, batches, onClose, onSaved }:
   { kind: Kind; source?: Source; dir: Directory; batches: Batch[]; onClose: () => void; onSaved: (id: string) => void }) {
   const { org, session } = useOrg()
   const k = kindOf(kind)
+  const fields = useLeadFields(org.id)
   const [name, setName] = useState(source?.name ?? k.title)
   const [label, setLabel] = useState(source?.source_label ?? k.label)
   const [campaign, setCampaign] = useState(source?.campaign ?? '')
+  const [more, setMore] = useState(false)
+  // 2 · Webinar: from a column of the sheet, or picked by hand.
+  const [wMode, setWMode] = useState<'fixed' | 'column'>(source?.webinar_mode ?? 'fixed')
   const [batch, setBatch] = useState(source?.batch_id ?? '')
-  const [mode, setMode] = useState(source?.assign_mode ?? 'rules')
-  const [to, setTo] = useState(source?.assign_to ?? '')
+  const [wCol, setWCol] = useState(source?.webinar_column ?? '')
+  const [wTime, setWTime] = useState((source?.webinar_time ?? '19:00').slice(0, 5))
+  const [wPrefix, setWPrefix] = useState(source?.webinar_prefix ?? 'Webinar')
+  // 3 · Who gets new leads: tick people (in turns) — or the company's rules / nobody.
+  const [mode, setMode] = useState<Source['assign_mode']>(source?.assign_mode ?? 'users')
+  const [users, setUsers] = useState<string[]>(source?.assign_users?.length ? source.assign_users : source?.assign_to ? [source.assign_to] : [])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [apiKey, setApiKey] = useState(source?.api_key ?? '')
+  // Columns of this source (from what it last sent) — else every field the company has.
+  const [cols, setCols] = useState<[string, string][]>([])
+  useEffect(() => {
+    if (!source) return
+    supabase.from('lead_source_events').select('payload').eq('source_id', source.id).neq('status', 'test').order('received_at', { ascending: false }).limit(1)
+      .then(({ data }) => { const p = data?.[0]?.payload as Record<string, unknown> | undefined
+        if (p) setCols(Object.entries(p).filter(([, v]) => v == null || typeof v !== 'object').map(([key, v]) => [key.trim().replace(/\s+/g, ' '), String(v ?? '')])) })
+  }, [source])
+  const colChoices: [string, string][] = cols.length ? cols : fields.map(f => [f.label, ''])
+  // Auto-pick the webinar column ("Webinar Date", "Batch", "Event date"…).
+  useEffect(() => {
+    if (wCol || wMode !== 'column') return
+    const hit = colChoices.find(([c]) => /webinar|batch|event|session/i.test(c) && !/attend/i.test(c))
+    if (hit) setWCol(hit[0])
+  }, [wMode, colChoices.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  const active = dir.members.filter(m => m.status === 'active')
 
   async function save(e: FormEvent) {
     e.preventDefault(); setBusy(true); setError(null)
-    const row = { name: name.trim(), source_label: label.trim() || null, campaign: campaign.trim() || null, batch_id: batch || null,
-      assign_mode: mode, assign_to: mode === 'user' ? to || null : null,
+    const row = { name: name.trim(), source_label: label.trim() || null, campaign: campaign.trim() || null,
+      webinar_mode: wMode, batch_id: wMode === 'fixed' ? batch || null : null, webinar_column: wMode === 'column' ? wCol || null : null,
+      webinar_time: wTime || '19:00', webinar_prefix: wPrefix.trim() || 'Webinar',
+      assign_mode: mode === 'users' && users.length === 1 ? 'user' : mode, assign_to: mode === 'users' && users.length === 1 ? users[0] : null,
+      assign_users: mode === 'users' ? users : [],
       ...(kind === 'indiamart' ? { api_key: apiKey.trim() || null } : {}) }
     const res = source
       ? await supabase.from('lead_sources').update(row).eq('id', source.id).select().single()
@@ -130,39 +160,68 @@ function SourceForm({ kind, source, dir, batches, onClose, onSaved }:
     if (res.error) return setError(errorText(res.error))
     onSaved(res.data.id); onClose()
   }
+  const sample = cols.find(([c]) => c === wCol)?.[1]
   return (
-    <Modal open onClose={onClose} title={source ? 'Edit lead source' : `Connect ${k.title}`} footer={<>
+    <Modal open onClose={onClose} title={source ? 'Lead source settings' : `Connect ${k.title}`} footer={<>
       <Button variant="secondary" onClick={onClose}>Cancel</Button>
-      <Button type="submit" form="src-form" loading={busy} disabled={mode === 'user' && !to}>{source ? 'Save' : 'Create link'}</Button>
+      <Button type="submit" form="src-form" loading={busy} disabled={mode === 'users' && users.length === 0}>{source ? 'Save' : 'Create link'}</Button>
     </>}>
-      <form id="src-form" onSubmit={save} className="space-y-3">
-        <Field label="Name (for you)"><input className="input" required value={name} onChange={e => setName(e.target.value)} /></Field>
-        {kind === 'indiamart' && <Field label="IndiaMART CRM key" hint="IndiaMART seller panel → Lead Manager → CRM Integration / API key → Generate key. Paste it here.">
-          <input className="input font-mono" required value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="Paste the key" autoComplete="off" />
-        </Field>}
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Lead source shown on leads"><input className="input" value={label} onChange={e => setLabel(e.target.value)} /></Field>
-          <Field label="Campaign (if the lead has none)"><input className="input" value={campaign} onChange={e => setCampaign(e.target.value)} placeholder="optional" /></Field>
+      <form id="src-form" onSubmit={save} className="space-y-5">
+        <div>
+          <p className="mb-1 text-sm font-semibold">1 · Name</p>
+          <input className="input" required value={name} onChange={e => setName(e.target.value)} />
+          {kind === 'indiamart' && <Field label="IndiaMART CRM key" hint="IndiaMART seller panel → Lead Manager → CRM Integration / API key → Generate key. Paste it here.">
+            <input className="input font-mono" required value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="Paste the key" autoComplete="off" />
+          </Field>}
+          <button type="button" className="mt-1 text-xs text-brand-700 hover:underline" onClick={() => setMore(!more)}>{more ? '▴ Fewer options' : '▾ Source name on leads, campaign'}</button>
+          {more && <div className="mt-2 grid gap-3 sm:grid-cols-2">
+            <Field label="Lead source shown on leads"><input className="input" value={label} onChange={e => setLabel(e.target.value)} /></Field>
+            <Field label="Campaign (if the lead has none)"><input className="input" value={campaign} onChange={e => setCampaign(e.target.value)} placeholder="optional" /></Field>
+          </div>}
         </div>
-        <Field label="Add leads to webinar / event / batch" hint="Registrations from this source join this webinar. Change it when you start a new webinar.">
-          <select className="input" value={batch} onChange={e => setBatch(e.target.value)}>
-            <option value="">None</option>
-            {batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </select>
-        </Field>
-        <Field label="Who gets new leads?">
-          <select className="input" value={mode} onChange={e => setMode(e.target.value as typeof mode)}>
-            <option value="rules">My distribution rules (round-robin / rules in Settings)</option>
-            <option value="user">Always one person</option>
-            <option value="none">Leave unassigned</option>
-          </select>
-        </Field>
-        {mode === 'user' && (
-          <select className="input" value={to} onChange={e => setTo(e.target.value)}>
-            <option value="">Choose…</option>
-            {dir.members.filter(m => m.status === 'active').map(m => <option key={m.user_id} value={m.user_id}>{dir.nameOf(m.user_id)}</option>)}
-          </select>
-        )}
+
+        <div>
+          <p className="mb-1 text-sm font-semibold">2 · Which webinar do these leads join?</p>
+          <div className="space-y-2 text-sm">
+            <label className="flex items-start gap-2"><input type="radio" className="mt-1" checked={wMode === 'column'} onChange={() => setWMode('column')} />
+              <span><b>From a column of the sheet / form</b> <span className="text-slate-500">— e.g. "Webinar Date" = "4th Oct - 2026". The webinar is created by itself the first time a date appears.</span></span></label>
+            {wMode === 'column' && <div className="ml-6 grid gap-2 rounded-lg bg-slate-50 p-3 sm:grid-cols-3">
+              <Field label="Column">
+                <select className="input" value={wCol} onChange={e => setWCol(e.target.value)}>
+                  <option value="">Choose…</option>
+                  {colChoices.map(([c]) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </Field>
+              <Field label="Start time" hint="Used when the column has only a date"><input type="time" className="input" value={wTime} onChange={e => setWTime(e.target.value)} /></Field>
+              <Field label="Name starts with" hint={`e.g. "${wPrefix || 'Webinar'} · 4 Oct 2026"`}><input className="input" value={wPrefix} onChange={e => setWPrefix(e.target.value)} /></Field>
+              {sample && <p className="text-xs text-slate-500 sm:col-span-3">Last lead had: <b>{sample}</b></p>}
+              {!cols.length && <p className="text-xs text-slate-500 sm:col-span-3">Columns appear here after the first lead arrives — you can set this later too.</p>}
+            </div>}
+            <label className="flex items-start gap-2"><input type="radio" className="mt-1" checked={wMode === 'fixed'} onChange={() => setWMode('fixed')} />
+              <span><b>I'll pick it myself</b> <span className="text-slate-500">— every new lead joins the webinar chosen here (change it when the next webinar starts).</span></span></label>
+            {wMode === 'fixed' && <select className="input ml-6 !w-[calc(100%-1.5rem)]" value={batch} onChange={e => setBatch(e.target.value)}>
+              <option value="">No webinar</option>
+              {batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>}
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-1 text-sm font-semibold">3 · Who gets new leads?</p>
+          <div className="mb-2 flex flex-wrap gap-3 text-sm">
+            <label className="flex items-center gap-1.5"><input type="radio" checked={mode === 'users' || mode === 'user'} onChange={() => setMode('users')} /> These people, in turns</label>
+            <label className="flex items-center gap-1.5"><input type="radio" checked={mode === 'rules'} onChange={() => setMode('rules')} /> My distribution rules</label>
+            <label className="flex items-center gap-1.5"><input type="radio" checked={mode === 'none'} onChange={() => setMode('none')} /> Nobody (I assign later)</label>
+          </div>
+          {(mode === 'users' || mode === 'user') && <div className="grid gap-1 rounded-lg border border-slate-200 p-2 sm:grid-cols-2">
+            {active.map(m => (
+              <label key={m.user_id} className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-slate-50">
+                <input type="checkbox" checked={users.includes(m.user_id)} onChange={() => setUsers(users.includes(m.user_id) ? users.filter(u => u !== m.user_id) : [...users, m.user_id])} />
+                {dir.nameOf(m.user_id)}{m.call_team && <span className="text-xs text-slate-400">{m.call_team === "reminder" ? "reminder team" : "sales team"}</span>}
+              </label>))}
+          </div>}
+          <p className="mt-1.5 text-xs text-slate-500">If the sheet has a "Team Member" column with a team member's name, the lead goes to that person instead.</p>
+        </div>
         <ErrorBox error={error} />
       </form>
     </Modal>
@@ -251,7 +310,8 @@ function SourceDrawer({ s, dir, batches, onClose, onChanged }: { s: Source; dir:
       <div className="h-full w-full max-w-2xl overflow-y-auto bg-white shadow-2xl" onMouseDown={e => e.stopPropagation()}>
         <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-200 bg-white px-5 py-4">
           <div><h2 className="text-lg font-semibold">{s.name}</h2><p className="text-sm text-slate-500">{kindOf(s.kind).title} · source “{s.source_label ?? s.name}”
-            {s.batch_id ? ` · webinar ${batches.find(b => b.id === s.batch_id)?.name ?? ''}` : ''}</p></div>
+            {s.webinar_mode === 'column' && s.webinar_column ? ` · webinar from column "${s.webinar_column}"` : s.batch_id ? ` · webinar ${batches.find(b => b.id === s.batch_id)?.name ?? ''}` : ''}
+            {s.assign_users?.length ? ` · ${s.assign_users.length} people in turns` : ''}</p></div>
           <button onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100" aria-label="Close"><X className="h-5 w-5" /></button>
         </div>
         <div className="space-y-6 p-5">

@@ -45,7 +45,7 @@ export default function Team() {
 
       <Card className="mb-6 overflow-x-auto">
         <table className="min-w-full divide-y divide-slate-100">
-          <thead className="bg-slate-50"><tr><th className="th">Name</th><th className="th">Phone</th><th className="th">Email</th><th className="th">Role</th><th className="th">Teams</th><th className="th">Joined</th><th className="th">Status</th></tr></thead>
+          <thead className="bg-slate-50"><tr><th className="th">Name</th><th className="th">Phone</th><th className="th">Email</th><th className="th">Role</th><th className="th" title="Only matters if you work with a separate reminder team and sales team">Calling team</th><th className="th">Teams</th><th className="th">Joined</th><th className="th">Status</th></tr></thead>
           <tbody className="divide-y divide-slate-100">
             {dir.members.map(m => {
               const me = m.user_id === session?.user.id
@@ -66,6 +66,14 @@ export default function Team() {
                         {roles.map(r => <option key={r} value={r}>{roleLabel[r]}</option>)}
                       </select>
                     ) : roleLabel[m.role]}
+                  </td>
+                  <td className="td">
+                    {isAdmin ? (
+                      <select className="input !w-36 !py-1" value={m.call_team ?? ''}
+                        onChange={e => run(supabase.from('org_members').update({ call_team: e.target.value || null }).eq('org_id', org.id).eq('user_id', m.user_id))}>
+                        <option value="">Both / not set</option><option value="reminder">Reminder team</option><option value="sales">Sales team</option>
+                      </select>
+                    ) : m.call_team === 'reminder' ? 'Reminder team' : m.call_team === 'sales' ? 'Sales team' : '—'}
                   </td>
                   <td className="td text-slate-600">{dir.teamMembers.filter(t => t.user_id === m.user_id).map(t =>
                     dir.teams.find(x => x.id === t.team_id)?.name + (t.is_manager ? ' (mgr)' : '')).join(', ') || '—'}</td>

@@ -1,4 +1,4 @@
--- In-app import: also return the leads of the file (new + already-mine, in file order), so the app can offer
+-- In-app import (rows may carry a "tag"): also return the leads of the file (new + already-mine, in file order), so the app can offer
 -- "Call these now" and "Start a WhatsApp sequence" straight after the import.
 CREATE OR REPLACE FUNCTION public.import_my_leads(p_org uuid, p_rows jsonb, p_batch uuid DEFAULT NULL::uuid, p_source text DEFAULT NULL::text)
  RETURNS jsonb
@@ -23,7 +23,13 @@ begin
     if v_id is not null then
       v_already := v_already + 1;
       -- Leads already in the list still go into "call / message these now" when this person can work them.
-      if public.lead_visible(v_id) then v_ids := v_ids || v_id; end if;
+      if public.lead_visible(v_id) then
+        v_ids := v_ids || v_id;
+        -- the file's tag (e.g. "Pune list · 16 Nov") goes on leads already in the list too
+        if nullif(trim(r->>'tag'), '') is not null then
+          update public.leads set tags = (select array_agg(distinct t) from unnest(coalesce(tags, '{}') || trim(r->>'tag')) t), updated_at = now() where id = v_id;
+        end if;
+      end if;
       perform public.lead_arrived(v_id, 'app', coalesce(nullif(trim(r->>'source'), ''), p_source, 'Imported in app'), nullif(trim(r->>'campaign'), ''), p_batch, r);
       if p_batch is not null then
         insert into public.batch_leads (batch_id, lead_id, org_id, is_repeat) values (p_batch, v_id, p_org, true) on conflict do nothing;
@@ -31,10 +37,11 @@ begin
       end if;
       continue;
     end if;
-    insert into public.leads (org_id, name, phone, email, city, state, profession, company, notes, source, campaign, assigned_to)
+    insert into public.leads (org_id, name, phone, email, city, state, profession, company, notes, source, campaign, assigned_to, tags)
     values (p_org, coalesce(trim(r->>'name'), ''), v_phone, nullif(lower(trim(r->>'email')), ''), nullif(trim(r->>'city'), ''),
       nullif(trim(r->>'state'), ''), nullif(trim(r->>'profession'), ''), nullif(trim(r->>'company'), ''), nullif(trim(r->>'notes'), ''),
-      coalesce(nullif(trim(r->>'source'), ''), p_source, 'Imported in app'), nullif(trim(r->>'campaign'), ''), auth.uid())
+      coalesce(nullif(trim(r->>'source'), ''), p_source, 'Imported in app'), nullif(trim(r->>'campaign'), ''), auth.uid(),
+      case when nullif(trim(r->>'tag'), '') is not null then array[trim(r->>'tag')] else '{}' end)
     returning id into v_id;
     if p_batch is not null then insert into public.batch_leads (batch_id, lead_id, org_id, is_repeat) values (p_batch, v_id, p_org, false) on conflict do nothing; end if;
     v_ins := v_ins + 1;
@@ -43,3 +50,14 @@ begin
   return jsonb_build_object('inserted', v_ins, 'already', v_already, 'joined', v_joined, 'invalid', v_bad, 'ids', to_jsonb(v_ids));
 end $function$
 ;
+
+-- Every tag used on the company's leads, most used first (filters on the dashboard and in the app).
+create or replace function public.lead_tag_list(p_org uuid) returns table (tag text, leads int)
+language sql stable security definer set search_path = '' as $$
+  select t, count(*)::int from public.leads l, unnest(l.tags) t
+  where l.org_id = p_org and l.deleted_at is null and public.is_org_member(p_org)
+    and (public.is_org_manager(p_org) or public.lead_visible(l.id))
+  group by t order by count(*) desc, t limit 300
+$$;
+revoke execute on function public.lead_tag_list(uuid) from anon, public;
+grant execute on function public.lead_tag_list(uuid) to authenticated;

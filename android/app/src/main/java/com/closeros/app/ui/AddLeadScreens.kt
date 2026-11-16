@@ -47,8 +47,12 @@ fun AddMenuDialog(vm: AppViewModel) {
                 }
             }
             Option("✍️", "Add one lead", "Name, number, profession, city") { vm.showAddMenu = false; vm.showAddLead = true }
-            Option("📄", "Import from a file", "CSV or Excel (.xlsx)" + if (free) " · free plan: 50 per file" else "") {
-                vm.showAddMenu = false; vm.importData = null; vm.importResult = null; vm.showImport = true }
+            val lim = if (free) " · free plan: 50 per file" else ""
+            Option("📞", "Call a list from a file", "CSV / Excel → start calling. Kept on this phone, not added as leads$lim") { vm.openImport("call") }
+            Option("💬", "WhatsApp a list from a file", "CSV / Excel → send one by one. Kept on this phone, not added as leads$lim") { vm.openImport("wa") }
+            Option("📄", "Add leads from a file", "CSV / Excel → saved as leads with a tag$lim") { vm.openImport("add") }
+            val lists = remember(vm.callListsTick) { com.closeros.app.data.CallLists.all(ctx) }
+            if (lists.isNotEmpty()) Option("📋", "My lists (${lists.size})", "Call or WhatsApp a list again") { vm.showAddMenu = false; vm.showCallLists = true }
             Option("👥", "Pick from phone contacts", "Tick several contacts at once") { vm.showAddMenu = false; vm.showContactsPick = true }
         } },
         confirmButton = {}, dismissButton = { TextButton(onClick = { vm.showAddMenu = false }) { Text("Close") } })
@@ -111,7 +115,18 @@ fun AddLeadDialog(vm: AppViewModel) {
                 OutlinedTextField(company, { company = it }, label = { Text("Company") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(notes, { notes = it }, label = { Text("Notes") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
             }
-            EventChoice(vm, event) { event = it }
+            OutlinedTextField(vm.importTag, { vm.importTag = it.take(40) }, label = { Text("Tag — to find this list later") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            if (vm.importMode == "add") EventChoice(vm, event) { event = it }
+            else Text("These people stay on this phone only — they are not added as leads. Tap \"+ Add as lead\" after a call to add someone.", fontSize = 13.sp, color = Brand.muted)
+            val askContacts = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { vm.importToContacts = it }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable {
+                if (vm.importToContacts) vm.importToContacts = false
+                else if (PhoneCalls.has(ctx, android.Manifest.permission.WRITE_CONTACTS)) vm.importToContacts = true
+                else askContacts.launch(android.Manifest.permission.WRITE_CONTACTS)
+            }) {
+                Checkbox(vm.importToContacts, null)
+                Column { Text("Also save to phone contacts"); Text("Helps WhatsApp: messages to saved numbers are less likely to be blocked", fontSize = 12.sp, color = Brand.muted) }
+            }
             error?.let { Text(it, color = Brand.red, fontSize = 13.sp) }
         } },
         confirmButton = { Button(enabled = !busy && phone.count { it.isDigit() } >= 6, onClick = {
@@ -132,7 +147,7 @@ fun ImportScreen(vm: AppViewModel) {
     var event by remember { mutableStateOf<String?>(null) }
     val free = com.closeros.app.data.Unlocks.adsOn(ctx)
     Scaffold(topBar = {
-        TopAppBar(title = { Text("Import leads") },
+        TopAppBar(title = { Text(when (vm.importMode) { "call" -> "Call a list"; "wa" -> "WhatsApp a list"; else -> "Add leads from a file" }) },
             navigationIcon = { IconButton(onClick = { vm.showImport = false; vm.importData = null; vm.importResult = null }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } })
     }) { pad ->
         Column(Modifier.fillMaxSize().padding(pad).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -142,7 +157,13 @@ fun ImportScreen(vm: AppViewModel) {
                         Text("✓ ${r.inserted} new lead${if (r.inserted == 1) "" else "s"} added", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Brand.green)
                         if (r.already > 0) Text("${r.already} were already in your leads (not added twice — marked 🔁 Repeated)" + if (r.joined > 0) " · ${r.joined} joined the event" else "")
                         if (r.invalid > 0) Text("${r.invalid} rows had no valid phone number", color = Brand.muted)
-                        Button(onClick = { vm.showImport = false; vm.importData = null; vm.importResult = null; vm.tab = Tab.Leads }, modifier = Modifier.padding(top = 8.dp)) { Text("See my leads") }
+                        if (r.ids.isNotEmpty()) {
+                            Spacer(Modifier.height(8.dp))
+                            Button(onClick = { vm.actOnImported("call") }, modifier = Modifier.fillMaxWidth().height(50.dp)) { Text("📞 Call these ${r.ids.size} now") }
+                            OutlinedButton(onClick = { vm.actOnImported("wa") }, modifier = Modifier.fillMaxWidth()) { Text("💬 Send them a WhatsApp message") }
+                            OutlinedButton(onClick = { vm.actOnImported("seq") }, modifier = Modifier.fillMaxWidth()) { Text("Start a WhatsApp sequence") }
+                        }
+                        TextButton(onClick = { vm.showImport = false; vm.importData = null; vm.importResult = null; vm.tab = Tab.Leads }) { Text("See my leads") }
                     }
                 }
             }
@@ -182,7 +203,8 @@ fun ImportScreen(vm: AppViewModel) {
             if (phoneCol < 0) Text("Choose the column with the phone number.", color = Brand.red)
             if (free && count > vm.importLimit) Text("Free plan: the first ${vm.importLimit} of $count leads will be added. Closer OS Pro adds all.", fontSize = 13.sp, color = Color(0xFF92400E))
             Button(onClick = { vm.runImport(event) }, enabled = phoneCol >= 0 && count > 0 && vm.importBusy == null, modifier = Modifier.fillMaxWidth().height(52.dp)) {
-                Text(vm.importBusy ?: "Import ${minOf(count, vm.importLimit)} lead${if (count == 1) "" else "s"}")
+                val n = minOf(count, vm.importLimit)
+                Text(vm.importBusy ?: when (vm.importMode) { "call" -> "Start calling $n"; "wa" -> "Start WhatsApp for $n"; else -> "Add $n lead${if (n == 1) "" else "s"}" })
             }
             Text("Numbers already in your leads are not added twice.", fontSize = 12.sp, color = Brand.muted)
             TextButton(onClick = { vm.importData = null }) { Text("Choose another file") }
@@ -238,4 +260,67 @@ fun ContactsPickScreen(vm: AppViewModel) {
             }
         }
     }
+}
+
+
+/** After a call to someone from a phone-only list: no outcome needed. "+ Add as lead" makes them a lead (then the usual outcome form). */
+@Composable
+fun ListCallScreen(vm: AppViewModel) {
+    val p = vm.pending ?: return
+    val ctx = LocalContext.current
+    val log = vm.pendingLog
+    val found = remember(p.phone) { com.closeros.app.data.CallLists.find(ctx, p.phone) }
+    BackHandler { vm.skipListCall() }
+    Column(Modifier.fillMaxSize().background(Brand.bg).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Spacer(Modifier.height(12.dp))
+        Text(p.leadName.ifBlank { fmtPhone(p.phone) }, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(listOfNotNull(fmtPhone(p.phone), found?.second?.profession, found?.second?.city).filter { it.isNotBlank() }.joinToString(" · "), color = Brand.muted)
+        Text(when {
+            log == null -> "Call not in the phone's history yet"
+            log.durationSec > 0 -> "Talked ${fmtDur(log.durationSec)}"
+            else -> "Not answered"
+        }, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+        found?.first?.let { Text("📋 From the list \"${it.tag}\" · not a lead", fontSize = 13.sp, color = Brand.muted) }
+        Spacer(Modifier.weight(1f))
+        Button(onClick = { vm.addListCallAsLead() }, modifier = Modifier.fillMaxWidth().height(54.dp)) { Text("+ Add as lead", fontSize = 17.sp) }
+        OutlinedButton(onClick = { vm.skipListCall() }, modifier = Modifier.fillMaxWidth().height(54.dp)) {
+            Text(if (vm.queueActive) "Next" else "Done", fontSize = 17.sp) }
+        Text("Adding makes them a lead, then you save the outcome and next call as usual.", fontSize = 12.sp, color = Brand.muted)
+    }
+}
+
+/** My lists kept on this phone ("Call a list" / "WhatsApp a list" from a file): use again or delete. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CallListsScreen(vm: AppViewModel) {
+    val ctx = LocalContext.current
+    BackHandler { vm.showCallLists = false }
+    val lists = remember(vm.callListsTick) { com.closeros.app.data.CallLists.all(ctx) }
+    var askDelete by remember { mutableStateOf<com.closeros.app.data.CallList?>(null) }
+    Scaffold(topBar = { TopAppBar(title = { Text("My lists") },
+        navigationIcon = { IconButton(onClick = { vm.showCallLists = false }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }) }) { pad ->
+        Column(Modifier.fillMaxSize().padding(pad).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Lists from your files, kept on this phone only (not leads).", color = Brand.muted, fontSize = 13.sp)
+            if (lists.isEmpty()) Text("No lists yet.", color = Brand.muted)
+            lists.forEach { l ->
+                Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("📋 " + l.tag, fontWeight = FontWeight.SemiBold)
+                        Text("${l.people.size} people · ${l.called.size} called" + (if (l.added.isNotEmpty()) " · ${l.added.size} added as leads" else ""), fontSize = 13.sp, color = Brand.muted)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { vm.startList(l, "call") }, contentPadding = PaddingValues(horizontal = 12.dp)) { Text("📞 Call") }
+                            OutlinedButton(onClick = { vm.startList(l, "wa") }, contentPadding = PaddingValues(horizontal = 12.dp)) { Text("💬 WhatsApp") }
+                            if (l.called.size < l.people.size && l.called.isNotEmpty()) OutlinedButton(onClick = {
+                                vm.startList(l.copy(people = l.people.filter { it.phone !in l.called }), "call") }, contentPadding = PaddingValues(horizontal = 12.dp)) { Text("Not called (${l.people.size - l.called.size})") }
+                        }
+                        TextButton(onClick = { askDelete = l }, contentPadding = PaddingValues(0.dp)) { Text("Delete list", color = Brand.muted, fontSize = 13.sp) }
+                    }
+                }
+            }
+        }
+    }
+    askDelete?.let { l -> AlertDialog(onDismissRequest = { askDelete = null }, title = { Text("Delete \"${l.tag}\"?") },
+        text = { Text("Only the list goes. Leads you added from it stay.") },
+        confirmButton = { TextButton(onClick = { com.closeros.app.data.CallLists.delete(ctx, l.id); vm.callListsTick++; askDelete = null }) { Text("Delete") } },
+        dismissButton = { TextButton(onClick = { askDelete = null }) { Text("Cancel") } }) }
 }

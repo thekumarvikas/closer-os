@@ -1866,3 +1866,19 @@ intelligence → Play Store launch.
   Sales, journey, sale modal, Training, countdown) — passed, no browser errors. Hooks must stay above early returns (SaleModal crash found).
 - Not done / later: Training inside the app Playbook for reps; "live webinar" number entry (dropped by owner); per-webinar override of
   one-owner vs two-team (the wizard's checkboxes cover it); Sales trend chart (data is returned, no chart yet).
+
+## Files → call / WhatsApp lists (v0.26.2, migration 0085, Nov 16 2026)
+- Owner: from a CSV/Excel file, start a power-dialling queue or WhatsApp in one go; leads tagged for later search;
+  company leads ONLY when added — numbers just called from a list are NOT company leads (decision 1a: a list person becomes
+  a lead only via "+ Add as lead"); optional "Also save to phone contacts" (yes).
+- App Leads → "+ Add": 📞 Call a list from a file · 💬 WhatsApp a list from a file · 📄 Add leads from a file · 📋 My lists.
+  vm.openImport(mode add|call|wa), importTag (default "<file name> · 16 Nov"), importToContacts (WRITE_CONTACTS, new permission).
+  "add" → import_my_leads (rows carry "tag"; returns ids in file order) → result card: Call these N now / Send them a WhatsApp
+  message / Start a WhatsApp sequence (vm.actOnImported). "call"/"wa" → data/CallLists.kt (LocalDb "call_lists", phone only,
+  max 30 lists): queue items are real leads when the number is already mine (LeadIndex), else Lead(id = "list:<number>").
+  List calls: no pop-up (AfterCall skips when pendingCall.leadId is a list id), MainActivity shows ListCallScreen
+  (+ Add as lead → import_my_leads single row with the list tag → pending switches to the real lead → normal outcome form;
+  Next → markLogged + discardAndContinue). WhatsApp queue logs list people with lead_id null; waSentToday skips list ids;
+  GlanceCard skips server lookups for list ids. CallListsScreen: Call / WhatsApp / Not called (N) / Delete.
+- Tags: app filter sheet "Tag" section (tags on my leads, most used); dashboard Leads "Tag: any" filter (lead_tag_list RPC).
+- Sequences need real leads → only for "Add leads from a file". Play data-safety: app now also WRITES contacts (only when ticked).

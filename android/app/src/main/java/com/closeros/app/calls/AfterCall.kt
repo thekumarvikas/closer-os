@@ -113,6 +113,9 @@ object AfterCall {
         if (store.orgId == null) return trace(ctx, "not signed in")
         val co = company(ctx) ?: return trace(ctx, "company not loaded yet — open Closer OS once")
         val mode = store.afterCallMode
+        // A call to someone from a phone-only list (not a lead): the app's own list card handles it — no pop-up,
+        // nothing added as a lead unless the rep taps "+ Add as lead".
+        if (com.closeros.app.data.CallLists.isListId(store.pendingCall?.leadId)) return trace(ctx, "no pop-up: call from a list (handled in the app)")
         fun ms() = System.currentTimeMillis() - endedAtMs
         val blockedBy = when {
             mode == "off" -> "pop-up turned off in Profile"

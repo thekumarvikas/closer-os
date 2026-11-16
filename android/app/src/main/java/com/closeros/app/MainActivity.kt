@@ -167,13 +167,14 @@ fun Root(vm: AppViewModel) {
             vm.access?.state == "expired" -> PlanEndedScreen(vm)
             vm.needsSetup -> SetupScreen(vm)
             vm.showSetup -> SetupChecklistScreen(vm) { vm.showSetup = false }
-            vm.pending != null -> OutcomeScreen(vm)
+            vm.pending != null -> if (com.closeros.app.data.CallLists.isListId(vm.pending?.leadId)) com.closeros.app.ui.ListCallScreen(vm) else OutcomeScreen(vm)
             vm.announcements.isNotEmpty() -> AnnouncementScreen(vm, vm.announcements.first())
             vm.checkIn != null -> vm.checkIn?.let { CheckInScreen(vm, it) }
             vm.showRemoveAds -> RemoveAdsScreen(vm)
             vm.waActive -> WaQueueScreen(vm)
             vm.editSequence != null -> vm.editSequence?.let { s -> SequenceEditor(vm, s) }
             vm.showImport -> ImportScreen(vm)
+            vm.showCallLists -> com.closeros.app.ui.CallListsScreen(vm)
             vm.showContactsPick -> ContactsPickScreen(vm)
             vm.showNoteSettings -> NoteSettingsScreen(vm)
             vm.showMySales -> MySalesScreen(vm)

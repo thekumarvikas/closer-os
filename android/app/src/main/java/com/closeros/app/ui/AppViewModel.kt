@@ -825,7 +825,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun startWaQueue(leads: List<Lead>, t: Template) = viewModelScope.launch {
         val m = membership ?: return@launch
         var list = leads.filter { it.phone.isNotBlank() }.distinctBy { it.id }
-        val already = runCatching { Repo.waSentToday(m.org_id, t.id, list.map { it.id }) }.getOrDefault(emptySet())
+        val already = runCatching { Repo.waSentToday(m.org_id, t.id, list.map { it.id }.filterNot { com.closeros.app.data.CallLists.isListId(it) }) }.getOrDefault(emptySet())
         if (already.isNotEmpty()) { list = list.filter { it.id !in already }; message = "${already.size} already got this message today — skipped" }
         if (list.isEmpty()) { message = "Everyone in this list already got this message today"; return@launch }
         require(com.closeros.app.data.Feature.WA_QUEUE) {
@@ -868,7 +868,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
             runCatching { if (seq.kind == "scheduled") com.closeros.app.data.Seqs.markScheduled(seq.id, true) else com.closeros.app.data.Seqs.mark(seq.id, true) }.onFailure { message = com.closeros.app.data.Seqs.friendly(it) + " — not marked yet"; return@launch }
             waCanUndo = false
         } else {
-            waLastId = Repo.logWa(m.org_id, l.id, l.phone, waTemplate?.id, waTemplate?.name, "queue")
+            waLastId = Repo.logWa(m.org_id, l.id.takeUnless { com.closeros.app.data.CallLists.isListId(it) }, l.phone, waTemplate?.id, waTemplate?.name, "queue")
             waCanUndo = true
         }
         waSent++
@@ -1042,6 +1042,18 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     var showImport by mutableStateOf(false)
     var showContactsPick by mutableStateOf(false)
     var importData by mutableStateOf<com.closeros.app.data.SheetData?>(null)
+    /** What the file is for: "add" = save as my leads · "call" / "wa" = a list kept on this phone only (not company leads). */
+    var importMode by mutableStateOf("add")
+    /** Tag put on every lead / list person from the file, e.g. "Pune list · 16 Nov" — to find them again later. */
+    var importTag by mutableStateOf("")
+    var importToContacts by mutableStateOf(false)
+    var showCallLists by mutableStateOf(false)
+    var callListsTick by mutableStateOf(0)
+    fun openImport(mode: String) { importMode = mode; importData = null; importResult = null; importTag = ""; importToContacts = false; showAddMenu = false; showImport = true }
+    fun defaultTag(fileName: String?): String {
+        val base = fileName?.substringBeforeLast('.')?.replace('_', ' ')?.trim()?.take(30)?.ifBlank { null } ?: "List"
+        return base + " · " + java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("d MMM"))
+    }
     var importMap by mutableStateOf<List<String>>(emptyList())
     var importBusy by mutableStateOf<String?>(null)
     var importResult by mutableStateOf<com.closeros.app.data.ImportResult?>(null)
@@ -1065,6 +1077,9 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         waSched = WaSchedDraft(l, existing)
     }
 
+    private fun fileName(uri: android.net.Uri): String? = runCatching {
+        ctx.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+    }.getOrNull()
     fun onFilePicked(uri: android.net.Uri?) {
         val target = filePickFor; filePickFor = null
         if (uri == null || target == null) return
@@ -1072,7 +1087,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
             target == "import" -> viewModelScope.launch {
                 importBusy = "Reading the file…"
                 runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.closeros.app.data.LeadImport.read(ctx, uri) } }
-                    .onSuccess { d -> importData = d; importResult = null; importMap = d.headers.map { com.closeros.app.data.LeadFields.guess(it) }.let { g ->
+                    .onSuccess { d -> importData = d; importResult = null; if (importTag.isBlank()) importTag = defaultTag(fileName(uri)); importMap = d.headers.map { com.closeros.app.data.LeadFields.guess(it) }.let { g ->
                         // only one column per field: keep the first guess
                         val seen = mutableSetOf<String>(); g.map { f -> if (f.isNotEmpty() && !seen.add(f)) "" else f } } }
                     .onFailure { message = it.message?.takeIf { m -> m.length < 160 && !m.contains("http") } ?: "Couldn't read this file — use a .csv or .xlsx file" }
@@ -1117,7 +1132,81 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         val rows = d.rows.map { r -> importMap.mapIndexedNotNull { i, f -> if (f.isEmpty()) null else f to r.getOrElse(i) { "" } }.toMap() }
             .filter { it["phone"].orEmpty().any(Char::isDigit) }
         if (rows.isEmpty()) { message = "No phone numbers found in that column"; return }
-        importRows(rows.take(importLimit), batchId, rows.size)
+        val tag = importTag.trim().ifBlank { defaultTag(null) }
+        if (importMode == "add") importRows(rows.take(importLimit).map { it + ("tag" to tag) }, batchId, rows.size)
+        else startFileList(rows.take(importLimit), tag, importMode, rows.size)
+    }
+
+    /** "Call a list" / "WhatsApp a list": kept on this phone only, then the queue starts at once (file order). */
+    private fun startFileList(rows: List<Map<String, String>>, tag: String, kind: String, asked: Int) {
+        val m = membership ?: return
+        require(com.closeros.app.data.Feature.IMPORT, always = true) {
+            viewModelScope.launch {
+                com.closeros.app.data.Unlocks.use(ctx, com.closeros.app.data.Feature.IMPORT)
+                val people = rows.map { r -> com.closeros.app.data.ListPerson(r["name"].orEmpty().trim(), normalizePhone(r["phone"].orEmpty(), prefix),
+                    r["city"]?.trim()?.ifBlank { null }, r["profession"]?.trim()?.ifBlank { null }, r["email"]?.trim()?.ifBlank { null },
+                    r["company"]?.trim()?.ifBlank { null }) }.filter { it.phone.count(Char::isDigit) >= 7 }.distinctBy { it.phone }
+                if (people.isEmpty()) { message = "No phone numbers found in that column"; return@launch }
+                val list = com.closeros.app.data.CallList(java.util.UUID.randomUUID().toString(), tag, System.currentTimeMillis(), kind, people)
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    com.closeros.app.data.CallLists.save(ctx, list)
+                    if (importToContacts) saveContacts(people.map { it.name to it.phone }, tag)
+                }
+                callListsTick++
+                showImport = false; importData = null
+                if (asked > rows.size) message = "Free plan: the first ${rows.size} only"
+                startList(list, kind)
+            }
+        }
+    }
+    fun startList(l: com.closeros.app.data.CallList, kind: String) {
+        val m = membership ?: return
+        val leads = com.closeros.app.data.CallLists.asLeads(ctx, m.org_id, l)
+        showCallLists = false
+        if (kind == "wa") waChooseFor = leads else startQueue(leads, "sales")
+    }
+    private suspend fun saveContacts(people: List<Pair<String, String>>, tag: String) {
+        if (!com.closeros.app.calls.PhoneCalls.has(ctx, android.Manifest.permission.WRITE_CONTACTS)) return
+        val n = com.closeros.app.data.CallLists.saveToContacts(ctx, people, tag)
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { if (n > 0) message = "📇 $n saved to phone contacts" }
+    }
+
+    /** Right after "Add leads from a file": call them / WhatsApp them in one tap. */
+    fun actOnImported(kind: String) = viewModelScope.launch {
+        val ids = importResult?.ids.orEmpty(); if (ids.isEmpty()) { message = "No leads to use"; return@launch }
+        when (kind) {
+            "seq" -> { seqPick = SeqPick(ids, "${ids.size} lead${if (ids.size == 1) "" else "s"} from the file"); return@launch }
+        }
+        val leads = runCatching { Repo.leadsByIds(ids) }.getOrNull() ?: run { message = "Couldn't load the leads — check internet"; return@launch }
+        val ordered = ids.mapNotNull { id -> leads.firstOrNull { it.id == id } }
+        showImport = false; importData = null; importResult = null
+        if (kind == "call") startQueue(ordered, "sales") else waChooseFor = ordered
+    }
+
+    /** A call to someone from a phone-only list: "+ Add as lead" makes them a company lead, then the normal outcome form shows. */
+    fun addListCallAsLead() = viewModelScope.launch {
+        val p = pending ?: return@launch; val m = membership ?: return@launch
+        val found = com.closeros.app.data.CallLists.find(ctx, p.phone)
+        val person = found?.second
+        runCatching { com.closeros.app.data.LeadImport.import(m.org_id, listOf(buildMap {
+            put("name", person?.name ?: p.leadName); put("phone", p.phone); found?.first?.tag?.let { put("tag", it); put("source", it) }
+            person?.city?.let { put("city", it) }; person?.profession?.let { put("profession", it) }; person?.email?.let { put("email", it) }
+            person?.company?.let { put("company", it) } }), null) { } }
+            .onSuccess { r ->
+                val id = r.ids.firstOrNull() ?: run { message = "This number is already someone else's lead"; return@onSuccess }
+                com.closeros.app.data.CallLists.markAdded(ctx, p.phone); callListsTick++
+                val np = p.copy(leadId = id)
+                store.pendingCall = np; pending = np
+                queue = queue.map { if (it.phone == p.phone && com.closeros.app.data.CallLists.isListId(it.id)) it.copy(id = id) else it }
+                message = "✓ Added as a lead"; reloadLeads(); CallSync.syncNow(ctx)
+            }.onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't add the lead") }
+    }
+    /** A list call that doesn't need anything saved: move on (the call itself still counts in my call history). */
+    fun skipListCall() {
+        pending?.let { com.closeros.app.data.CallLists.markCalled(ctx, it.phone) }
+        pendingLog?.let { store.markLogged(it.id) }
+        callListsTick++
+        discardAndContinue()
     }
     /** Phone contacts picked in the app → leads (same rules as a file import). */
     fun importContacts(picked: List<Pair<String, String>>, batchId: String?) =

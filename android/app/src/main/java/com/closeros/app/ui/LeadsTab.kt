@@ -112,6 +112,7 @@ fun LeadsTab(vm: AppViewModel, onCall: (Lead) -> Unit) {
 @Composable
 private fun FilterSheet(vm: AppViewModel, onClose: () -> Unit) {
     var f by remember { mutableStateOf(vm.leadFilters) }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     val o = vm.filterOptions
     val enabled = o?.enabled ?: (defaultLeadFilters + (o?.custom?.map { "custom.${it.key}" } ?: emptyList()))
     fun <T> Set<T>.flip(v: T) = if (v in this) this - v else this + v
@@ -149,6 +150,13 @@ private fun FilterSheet(vm: AppViewModel, onClose: () -> Unit) {
             vm.membership?.organization?.tagGroups?.forEach { g ->
                 Section(g.name) { g.tags.forEach { t -> FilterChip(t in f.tags, { f = f.copy(tags = f.tags.flip(t)) }, { Text(t) }) } }
             }
+            // Tags on my leads (e.g. the tag of an imported file "Pune list · 16 Nov"), most used first.
+            val groupTags = vm.membership?.organization?.tagGroups.orEmpty().flatMap { it.tags }.toSet()
+            var myTags by remember { mutableStateOf(emptyList<String>()) }
+            LaunchedEffect(Unit) { myTags = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.closeros.app.data.LocalLeads.all(ctx).flatMap { it.tags.orEmpty() }.filter { it !in groupTags }
+                    .groupingBy { it }.eachCount().entries.sortedByDescending { it.value }.take(30).map { it.key } } }
+            if (myTags.isNotEmpty()) Section("Tag") { myTags.forEach { t -> FilterChip(t in f.tags, { f = f.copy(tags = f.tags.flip(t)) }, { Text(t) }) } }
             enabled.forEach { key ->
                 when {
                     key == "followup" -> Section("Next call") {

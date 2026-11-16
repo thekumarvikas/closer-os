@@ -13,7 +13,9 @@ import java.util.zip.ZipInputStream
 
 /** Adding leads from the app: one lead, a CSV / Excel file, or phone contacts. */
 @Serializable data class AddLeadResult(val id: String, val existing: Boolean = false)
-@Serializable data class ImportResult(val inserted: Int = 0, val already: Int = 0, val joined: Int = 0, val invalid: Int = 0)
+@Serializable data class ImportResult(val inserted: Int = 0, val already: Int = 0, val joined: Int = 0, val invalid: Int = 0,
+    /** The file's leads (new + already mine), in file order — for "Call these now" / WhatsApp right after the import. */
+    val ids: List<String> = emptyList())
 
 /** A file read into a header row + data rows. */
 class SheetData(val headers: List<String>, val rows: List<List<String>>)
@@ -56,7 +58,7 @@ object LeadImport {
                 put("p_org", orgId); batchId?.let { put("p_batch", it) }
                 put("p_rows", buildJsonArray { chunk.forEach { row -> add(buildJsonObject { row.forEach { (k, v) -> put(k, v) } }) } })
             }).data)
-            total = ImportResult(total.inserted + r.inserted, total.already + r.already, total.joined + r.joined, total.invalid + r.invalid)
+            total = ImportResult(total.inserted + r.inserted, total.already + r.already, total.joined + r.joined, total.invalid + r.invalid, total.ids + r.ids)
         }
         return total
     }

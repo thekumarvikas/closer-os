@@ -44,7 +44,7 @@ fun TargetsCard(p: Progress) {
 @Composable
 fun GlanceCard(vm: AppViewModel, base: Lead) {
     var lead by remember(base.id) { mutableStateOf(base) }
-    LaunchedEffect(base.id) { runCatching { Repo.lead(base.id) }.getOrNull()?.let { lead = it } }
+    LaunchedEffect(base.id) { if (!com.closeros.app.data.CallLists.isListId(base.id)) runCatching { Repo.lead(base.id) }.getOrNull()?.let { lead = it } }
     val l = lead
     val tags = leadTags(vm, l)
     Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
@@ -63,7 +63,7 @@ fun GlanceCard(vm: AppViewModel, base: Lead) {
                 Text("📌 $it", fontSize = 14.sp, modifier = Modifier.fillMaxWidth().background(Color(0xFFFFFBEB), RoundedCornerShape(8.dp)).padding(10.dp))
             }
             // Before-call brief: why now, profile, pinned notes, last time, their objection + best answer, first line, signals.
-            BriefCard(vm, l)
+            if (!com.closeros.app.data.CallLists.isListId(l.id)) BriefCard(vm, l)
         }
     }
 }

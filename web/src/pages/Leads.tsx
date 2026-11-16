@@ -38,8 +38,8 @@ const TALK_BANDS = [
   { key: 'm30', label: '30 min+', from: 1800, until: null },
 ] as const
 
-type LeadFilter = { q: string; assignee: string; stage: string; source: string; talk: string; util: '' | 'used' | 'unused'; rep: '' | 'yes'; batch: string; field: string; fieldVal: string }
-const NO_FILTERS: LeadFilter = { q: '', assignee: '', stage: '', source: '', talk: '', util: '', rep: '', batch: '', field: '', fieldVal: '' }
+type LeadFilter = { q: string; assignee: string; stage: string; source: string; talk: string; util: '' | 'used' | 'unused'; rep: '' | 'yes'; batch: string; field: string; fieldVal: string; tag: string }
+const NO_FILTERS: LeadFilter = { tag: '', q: '', assignee: '', stage: '', source: '', talk: '', util: '', rep: '', batch: '', field: '', fieldVal: '' }
 
 /** Extra columns anyone can switch on: standard ones + every field from the sheets / forms ("custom:<key>"). */
 const STD_COLS: [string, string][] = [['signup_at', 'Signed up'], ['email', 'Email'], ['profession', 'Profession'], ['company', 'Company'], ['campaign', 'Campaign'], ['state', 'State']]
@@ -70,6 +70,8 @@ export default function Leads() {
   const [openLead, setOpenLead] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  const [tags, setTags] = useState<{ tag: string; leads: number }[]>([])
+  useEffect(() => { supabase.rpc('lead_tag_list', { p_org: org.id }).then(({ data }) => setTags((data ?? []) as typeof tags)) }, [org.id, version])
   useEffect(() => {
     supabase.from('batches').select('id,name,webinar_at').eq('org_id', org.id).eq('is_archived', false).order('webinar_at', { ascending: false }).limit(200)
       .then(({ data }) => setBatches((data ?? []) as typeof batches))
@@ -88,11 +90,12 @@ export default function Leads() {
     else if (a.util === 'unused') query = query.eq('dial_count', 0)
     if (a.rep === 'yes') query = query.gt('arrivals', 1)
     if (a.batch) query = query.eq('batch_leads.batch_id', a.batch)
+    if (a.tag) query = query.contains('tags', [a.tag])
     if (a.field && a.fieldVal.trim()) query = query.ilike(`custom->>${a.field}`, `%${a.fieldVal.trim()}%`)
     const b = TALK_BANDS.find(x => x.key === a.talk)
     if (b) { query = query.gte('total_talk_sec', b.from); if (b.until != null) query = query.lt('total_talk_sec', b.until) }
     return query
-  }, [a.assignee, a.stage, a.source, a.talk, a.util, a.rep, a.batch, a.field, a.fieldVal])
+  }, [a.assignee, a.stage, a.source, a.talk, a.util, a.rep, a.batch, a.field, a.fieldVal, a.tag])
   const searchIds = useCallback(async (): Promise<string[] | null> => {
     const term = a.q.trim()
     if (term.length < 2) return null
@@ -173,6 +176,7 @@ export default function Leads() {
     a.q && { label: `Search: ${a.q}`, onRemove: () => f.reset('q') },
     a.assignee && { label: a.assignee === 'none' ? 'Unassigned' : `Assigned to ${dir?.nameOf(a.assignee) ?? ''}`, onRemove: () => f.reset('assignee') },
     a.batch && { label: `Webinar: ${batchName(a.batch)}`, onRemove: () => f.reset('batch') },
+    a.tag && { label: `Tag: ${a.tag}`, onRemove: () => f.reset('tag') },
     a.util && { label: a.util === 'used' ? 'Called at least once' : 'Never called', onRemove: () => f.reset('util') },
     a.rep && { label: 'Repeated', onRemove: () => f.reset('rep') },
     a.stage && { label: `Stage: ${dir?.stageOf(a.stage)?.name ?? ''}`, onRemove: () => f.reset('stage') },
@@ -236,6 +240,8 @@ export default function Leads() {
             <option value="">Webinar: any</option>
             {batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
+          {tags.length > 0 && <select className="input !w-auto max-w-[200px]" value={f.draft.tag} onChange={e => f.set({ tag: e.target.value })} title="Tags on leads, e.g. the tag of an imported file">
+            <option value="">Tag: any</option>{tags.map(t => <option key={t.tag} value={t.tag}>{t.tag} ({t.leads})</option>)}</select>}
           <select className="input !w-auto" value={f.draft.util} onChange={e => f.set({ util: e.target.value as LeadFilter['util'] })}>
             <option value="">Called: any</option><option value="used">Called at least once</option><option value="unused">Never called</option>
           </select>

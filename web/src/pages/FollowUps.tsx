@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { usePersisted } from '../lib/persist'
+import { useFilters, FilterActions } from '../lib/filters'
 import { CalendarClock, Download } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
@@ -26,7 +27,8 @@ export default function FollowUps() {
   const { org, isManager } = useOrg()
   const dir = useDirectory(org.id)
   const [tab, setTab] = usePersisted<Tab>('followups.tab', 'today')
-  const [user, setUser] = usePersisted('followups.user', '')
+  const uf = useFilters('followups.f', { user: '' })
+  const user = uf.applied.user
   const [rows, setRows] = useState<(FollowUp & { dialled_at: string | null; lead: { name: string; phone: string } | null })[] | null>(null)
   const [counts, setCounts] = useState<Partial<Record<Tab, number>>>({})
   const [error, setError] = useState<string | null>(null)
@@ -75,10 +77,10 @@ export default function FollowUps() {
             f.reason ?? '', f.notes ?? '', f.status, f.dialled_at ? new Date(f.dialled_at).toLocaleString('en-IN', { timeZone: org.timezone }) : '', timing(f).text]))}>
           <Download className="h-4 w-4" /> Export CSV</Button>
         {isManager && (
-        <select className="input !w-auto" value={user} onChange={e => setUser(e.target.value)}>
-          <option value="">Everyone</option>
+        <><select className="input !w-auto" value={uf.draft.user} onChange={e => uf.set({ user: e.target.value })}>
+          <option value="">Team member: everyone</option>
           {dir?.members.map(m => <option key={m.user_id} value={m.user_id}>{dir.nameOf(m.user_id)}</option>)}
-        </select>
+        </select><FilterActions f={uf} /></>
       )}</>} />
       <div className="mb-4 flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1 text-sm">
         {tabs.map(([k, label]) => (

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { SampleLink } from '../lib/samples'
 import { MessageBox } from '../components/FillIns'
 import Papa from 'papaparse'
 import readXlsxFile from 'read-excel-file'
@@ -136,6 +137,7 @@ function BuyersUpload({ onClose, onDone }: { onClose: () => void; onDone: () => 
           <span className="mt-3 font-medium">Choose a CSV or Excel file of buyers</span>
           <span className="mt-1 text-sm text-slate-500">Needs a phone or email, and the product they bought.</span>
           <input type="file" accept=".csv,.xlsx" className="hidden" onChange={e => e.target.files?.[0] && read(e.target.files[0])} />
+          <SampleLink kind="buyers" className="mt-3" />
           {error && <span className="mt-3 text-sm text-red-600">{error}</span>}
         </label>
       ) : (

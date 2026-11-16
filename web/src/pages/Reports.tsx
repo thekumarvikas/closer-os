@@ -71,7 +71,8 @@ export default function Reports() {
               ))}
             </div>
           </div>
-          <Button onClick={() => setApplied(draft)}>Apply</Button>
+          <Button onClick={() => setApplied(draft)} disabled={JSON.stringify(draft) === JSON.stringify(applied)}>Apply filters{JSON.stringify(draft) !== JSON.stringify(applied) ? ' •' : ''}</Button>
+          <button type="button" className="pb-2 text-sm text-slate-600 hover:underline" onClick={() => apply({ from: addDays(today, -6), to: today, users: [], dir: 'all', ch: 'all' })}>Clear filters</button>
           <div className="flex flex-wrap gap-1.5 pb-1.5">
             {quick.map(([l, f, t]) => (
               <button key={l} onClick={() => apply({ ...draft, from: f, to: t })}

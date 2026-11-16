@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { SampleLink } from '../lib/samples'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import Papa from 'papaparse'
 import readXlsxFile from 'read-excel-file'
@@ -526,6 +527,7 @@ function ZoomUpload({ batch, dir, file, onClose, onDone }: { batch: Batch; dir: 
           <span className="mt-3 font-medium">Choose the Zoom attendee report (CSV or XLSX)</span>
           <span className="mt-1 max-w-md text-sm text-slate-500">Zoom → Reports → Webinar → Attendee report → Export. Attendees are matched to your leads by email first, then phone. Multiple joins are added up.</span>
           <input type="file" accept=".csv,.xlsx" className="hidden" onChange={e => e.target.files?.[0] && read(e.target.files[0])} />
+          <SampleLink kind="zoom" className="mt-3" />
           {error && <span className="mt-3 text-sm text-red-600">{error}</span>}
         </label>
       ) : (
@@ -669,6 +671,7 @@ function ChatUpload({ batch, file, onClose, onDone }: { batch: Batch; file?: Fil
           <span className="mt-3 font-medium">Choose the Zoom chat file (.txt) — or a CSV</span>
           <span className="mt-1 max-w-md text-sm text-slate-500">In Zoom during the webinar: Chat → ⋯ → Save chat. Or from the recording: Recordings → the webinar → chat file. Messages are matched to leads by the name they used in Zoom (from the attendance report), then by lead name. Upload attendance first.</span>
           <input type="file" accept=".txt,.csv,.xlsx" className="hidden" onChange={e => e.target.files?.[0] && read(e.target.files[0])} />
+          <SampleLink kind="chat" className="mt-3" />
           {error && <span className="mt-3 text-sm text-red-600">{error}</span>}
         </label>
       ) : (
@@ -725,6 +728,7 @@ function PollUpload({ batch, file, onClose, onDone }: { batch: Batch; file?: Fil
           <span className="mt-3 font-medium">Choose the Zoom poll report (CSV or XLSX)</span>
           <span className="mt-1 max-w-md text-sm text-slate-500">Zoom → Reports → Webinar → Poll report → Export. Answers are matched to leads by email, then by Zoom name.</span>
           <input type="file" accept=".csv,.xlsx" className="hidden" onChange={e => e.target.files?.[0] && read(e.target.files[0])} />
+          <SampleLink kind="polls" className="mt-3" />
           {error && <span className="mt-3 text-sm text-red-600">{error}</span>}
         </label>
       ) : (
@@ -790,6 +794,8 @@ function AfterWebinar({ batch, onClose, onGo, onAssign }: { batch: Batch; onClos
           <span className="mt-1 max-w-md text-xs text-slate-500">Closer OS works out which file is which. Zoom → Reports → Webinar → Attendee report / Poll report (CSV or XLSX), and the chat file (.txt).</span>
           <input type="file" multiple accept=".csv,.xlsx,.txt" className="hidden" onChange={e => pick(e.target.files)} />
         </label>
+        <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs"><span className="text-slate-500">Sample files:</span>
+          <SampleLink kind="zoom" label="Attendee report" className="!text-xs" /><SampleLink kind="chat" label="Chat" className="!text-xs" /><SampleLink kind="polls" label="Polls" className="!text-xs" /></p>
         <div className="space-y-2">
           {row('zoom', 'Attendee report', '(needed)', batch.zoom_uploaded_at)}
           {row('chat', 'Chat', '(optional)', batch.chat_uploaded_at)}

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { SampleLink } from '../lib/samples'
 import Papa from 'papaparse'
 import readXlsxFile from 'read-excel-file'
 import { Upload, Download, Copy, RefreshCw } from 'lucide-react'
@@ -113,6 +114,7 @@ function ImportTab({ onDone }: { onDone: () => void }) {
         <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50">
           <Upload className="h-4 w-4" /> Choose file<input type="file" accept=".csv,.xlsx,.xls,.tsv,.txt" className="hidden" onChange={e => e.target.files?.[0] && pick(e.target.files[0])} />
         </label>
+        <SampleLink kind="buyers" className="ml-4" />
         {rows.length > 0 && <div className="mt-4">
           <p className="mb-2 text-sm"><b>{file}</b> · {rows.length.toLocaleString('en-IN')} rows. Check which column is which:</p>
           <div className="space-y-1.5">{headers.map(h => (

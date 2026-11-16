@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { SampleLink } from '../lib/samples'
 import Papa from 'papaparse'
 import readXlsxFile from 'read-excel-file'
 import { Upload, CheckCircle2 } from 'lucide-react'
@@ -146,6 +147,7 @@ export default function LeadImport({ orgId, dir, onClose, onDone, batchId }:
           <span className="mt-3 font-medium">Choose a CSV or Excel (.xlsx) file</span>
           <span className="mt-1 text-sm text-slate-500">First row must be the column names. Up to 50,000 rows.</span>
           <input type="file" accept=".csv,.xlsx" className="hidden" onChange={e => e.target.files?.[0] && readFile(e.target.files[0])} />
+          <SampleLink kind="leads" className="mt-3" />
           {error && <span className="mt-3 text-sm text-red-600">{error}</span>}
         </label>
       ) : (

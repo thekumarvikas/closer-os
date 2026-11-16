@@ -7,6 +7,7 @@ import { fmtDateTime } from '../lib/format'
 import type { Batch } from '../lib/types'
 import { Badge, Button, Card, Empty, ErrorBox, Field, Modal, PageHeader, Spinner } from '../components/ui'
 import { useLeadFields } from '../lib/leadFields'
+import { SampleLink } from '../lib/samples'
 
 type Kind = 'facebook' | 'google_ads' | 'flexifunnels' | 'pabbly' | 'zapier' | 'webhook' | 'google_sheets' | 'indiamart'
 interface Source {
@@ -499,7 +500,7 @@ function startFromNow() {
     return (
       <div className="space-y-3">
         <Steps items={[
-          <>Open your Google Sheet. Row 1 must have column names (e.g. Name, Phone, Email).</>,
+          <>Open your Google Sheet. Row 1 must have column names (e.g. Name, Phone, Email). <SampleLink kind="sheet" label="See a sample sheet" /></>,
           <>Click <b>Extensions → Apps Script</b>, delete what's there and paste the script below. Click <b>Save</b>.</>,
           <>Optional: choose <b>startFromNow</b> at the top and click <b>Run</b> so old rows are not sent.</>,
           <>Click the <b>clock icon (Triggers)</b> → <b>Add Trigger</b> → function <b>sendNewRows</b>, event source <b>Time-driven</b>, <b>Minutes timer</b>, <b>Every 5 minutes</b> → Save and allow access.</>,

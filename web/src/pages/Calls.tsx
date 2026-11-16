@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react'
-import { usePersisted } from '../lib/persist'
+import { useFilters } from '../lib/filters'
 import { supabase } from '../lib/supabase'
 import { useOrg } from '../lib/session'
 import { useDirectory } from '../lib/directory'
@@ -11,9 +11,8 @@ import CallLog from '../components/CallLog'
 export default function Calls() {
   const { org, isManager } = useOrg()
   const dir = useDirectory(org.id)
-  const [from, setFrom] = usePersisted('calls.from', '', { session: true })
-  const [to, setTo] = usePersisted('calls.to', '', { session: true })
-  const [user, setUser] = usePersisted('calls.user', '')
+  const pf = useFilters('calls.page', { from: '', to: '', user: '' }, { session: true })
+  const { from, to, user } = pf.applied
   // Flag calls with talk time that never got a recording (from reps whose phones do upload recordings).
   useEffect(() => { if (isManager) supabase.rpc('mark_missing_recordings', { p_org: org.id }).then(() => undefined) }, [org.id, isManager])
   const f = useMemo(() => ({
@@ -28,17 +27,16 @@ export default function Calls() {
         <div className="flex flex-wrap items-end gap-2">
           {isManager && dir && (
             <label><span className="label">Team member</span>
-              <select className="input !w-auto" value={user} onChange={e => setUser(e.target.value)}>
+              <select className="input !w-auto" value={pf.draft.user} onChange={e => pf.set({ user: e.target.value })}>
                 <option value="">Everyone</option>
                 {dir.members.map(m => <option key={m.user_id} value={m.user_id}>{dir.nameOf(m.user_id)}</option>)}
               </select></label>
           )}
-          <label><span className="label">From</span><input type="date" className="input" value={from} max={to || undefined} onChange={e => setFrom(e.target.value)} /></label>
-          <label><span className="label">To</span><input type="date" className="input" value={to} min={from || undefined} onChange={e => setTo(e.target.value)} /></label>
-          {(from || to) && <button className="pb-2 text-sm text-slate-500 hover:underline" onClick={() => { setFrom(''); setTo('') }}>All time</button>}
+          <label><span className="label">From</span><input type="date" className="input" value={pf.draft.from} max={pf.draft.to || undefined} onChange={e => pf.set({ from: e.target.value })} /></label>
+          <label><span className="label">To</span><input type="date" className="input" value={pf.draft.to} min={pf.draft.from || undefined} onChange={e => pf.set({ to: e.target.value })} /></label>
         </div>
       } />
-      {!dir ? <Spinner /> : <CallLog org={org} dir={dir} f={f} fileTag={from || to ? `${from || 'start'}_to_${to || 'now'}` : 'all-time'} />}
+      {!dir ? <Spinner /> : <CallLog org={org} dir={dir} f={f} page={pf} fileTag={from || to ? `${from || 'start'}_to_${to || 'now'}` : 'all-time'} />}
     </>
   )
 }

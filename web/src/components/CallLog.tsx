@@ -9,6 +9,7 @@ import { Badge, Button, Card, Empty, ErrorBox, Spinner } from './ui'
 import { dur } from './terms'
 import AudioPlayer from './AudioPlayer'
 import { usePersisted } from '../lib/persist'
+import { useFilters } from '../lib/filters'
 import { SortTh, type SortDir } from '../lib/sort'
 import { CallColorKey, CallType, missingReason, type RecDevice } from './CallColors'
 
@@ -28,19 +29,18 @@ const PAGE = 100
 const SELECT = 'id,user_id,phone,direction,started_at,duration_sec,notes,outcome_id,recording_status,recording_path,sim_number,sim_slot,sim_label,channel,contact_name,lead:leads(name)'
 
 /** Complete, filterable call history (all time unless dates are given). */
-export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome }: {
+export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome, page: pageFilters }: {
   org: Organization; dir: Directory; f: CallLogFilters; fileTag: string; outcome?: string; setOutcome?: (v: string) => void
+  /** The page's own filters (team member, dates): their Apply / Clear is the same pair of buttons as this list's. */
+  page?: { dirty: boolean; active: number; apply: () => void; clear: () => void }
 }) {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [count, setCount] = useState(0)
   const [page, setPage] = useState(0)
-  const [q, setQ] = useState('')
-  const [type, setType] = useState('')
-  const [len, setLen] = useState('any')
-  const [via, setVia] = useState('')
-  const [localOutcome, setLocalOutcome] = useState(outcome)
-  const oc = setOutcome ? outcome : localOutcome
-  const setOc = setOutcome ?? setLocalOutcome
+  // Filters wait for "Apply filters" (owner's rule for every dashboard page).
+  const lf = useFilters('calllog.f', { q: '', type: '', len: 'any', via: '', oc: '' }, { session: true })
+  const { q, type, len, via } = lf.applied
+  const oc = setOutcome ? outcome : lf.applied.oc
   const [error, setError] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [playing, setPlaying] = useState<string | null>(null)
@@ -99,27 +99,37 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
         typeName[c.direction] ?? c.direction, c.duration_sec, dir.outcomeOf(c.outcome_id)?.label ?? '', c.notes ?? '', c.recording_status === 'uploaded' ? 'Yes' : '']))
   }
 
+  const dirty = lf.dirty || !!pageFilters?.dirty
+  const active = lf.active + (pageFilters?.active ?? 0) + (setOutcome && outcome ? 1 : 0)
+  const applyAll = () => { lf.apply(); pageFilters?.apply() }
+  const clearAll = () => { lf.clear(); pageFilters?.clear(); setOutcome?.('') }
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[200px] flex-1">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-          <input className="input pl-9" placeholder="Search name or number" value={q} onChange={e => setQ(e.target.value)} />
+          <input className="input pl-9" placeholder="Search name or number" value={lf.draft.q} onChange={e => lf.set({ q: e.target.value })}
+            onKeyDown={e => { if (e.key === 'Enter') applyAll() }} />
         </div>
-        <select className="input !w-auto" value={type} onChange={e => setType(e.target.value)}>
+        <select className="input !w-auto" value={lf.draft.type} onChange={e => lf.set({ type: e.target.value })}>
           <option value="">All types</option><option value="outgoing">Dialled</option><option value="incoming">Received</option>
           <option value="missed">Missed</option><option value="rejected">Declined</option>
         </select>
-        <select className="input !w-auto" value={via} onChange={e => setVia(e.target.value)}>
+        <select className="input !w-auto" value={lf.draft.via} onChange={e => lf.set({ via: e.target.value })}>
           <option value="">Phone + WhatsApp</option><option value="phone">Phone calls</option><option value="whatsapp">WhatsApp calls</option>
         </select>
-        <select className="input !w-auto" value={oc} onChange={e => setOc(e.target.value)}>
+        <select className="input !w-auto" value={setOutcome ? outcome : lf.draft.oc} onChange={e => setOutcome ? setOutcome(e.target.value) : lf.set({ oc: e.target.value })}>
           <option value="">All outcomes</option><option value="none">No outcome</option>
           {dir.outcomes.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
         </select>
-        <select className="input !w-auto" value={len} onChange={e => setLen(e.target.value)}>
+        <select className="input !w-auto" value={lf.draft.len} onChange={e => lf.set({ len: e.target.value })}>
           {durations.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
         </select>
+        <button type="button" onClick={applyAll} disabled={!dirty}
+          className={`rounded-lg px-3 py-2 text-sm font-medium transition ${dirty ? 'bg-brand-600 text-white shadow-sm hover:bg-brand-700' : 'bg-slate-100 text-slate-400'}`}>Apply filters{dirty ? ' •' : ''}</button>
+        <button type="button" onClick={clearAll} disabled={active === 0 && !dirty}
+          className="rounded-lg px-2 py-2 text-sm text-slate-600 hover:bg-slate-100 disabled:text-slate-300 disabled:hover:bg-transparent">Clear filters{active ? ` (${active})` : ''}</button>
         <Button variant="secondary" onClick={exportCsv} loading={exporting}><Download className="h-4 w-4" /> CSV</Button>
       </div>
       <ErrorBox error={error} />

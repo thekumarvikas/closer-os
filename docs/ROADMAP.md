@@ -140,3 +140,11 @@ Everything from the original product prompt plus the owner's feedback, with stat
   working minutes), pattern finder, gaps
 - ✅ Outcomes ordered by each rep's own usage (app + desk)
 - ✅ Per-SIM subscriptions: work SIM chosen in the app, only its calls tracked, second SIM / change approved by a manager
+
+## Built Nov 16 2026 (v0.26.1) — round 14
+- App: no-SIM handling, compact outcome screens, every save works offline, WhatsApp queue redesign, scheduled WhatsApp fixes,
+  phone setup order + recording settings, faster recording uploads, webinar chips in Leads.
+- Dashboard: lead fields from sheet headings, sign-up time, new Leads page, Apply / Clear filters, sample files, webinars from a
+  sheet column or by hand, webinar cards, After-the-webinar wizard + share out sales calls, delete webinars.
+- Sales: new Sales page (Overview · Buyers), buyers sheet v2 (payments joined into orders, edits update, GST, international),
+  Training library. WhatsApp sequences: ban warning, pre-webinar countdown, auto-start on registration.

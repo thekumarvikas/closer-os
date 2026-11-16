@@ -35,7 +35,20 @@ import java.time.LocalTime
     val id: String = "", val name: String = "", val owner_id: String? = null, val company: Boolean = false, val mine: Boolean = true,
     val owner_name: String? = null, val start_outcomes: List<String> = emptyList(), val messages: List<SeqMessage> = emptyList(),
     val active_mine: Int = 0, val active_all: Int = 0, val done_all: Int = 0,
+    /** Starts by itself when a lead joins a webinar / event (late joiners only get the messages still ahead). */
+    val auto_webinar: Boolean = false,
 )
+
+/** Ready-made "Pre-webinar countdown": welcome on joining, then 5 d / 3 d / 1 d / 5 h / 2 h / 15 min before. All editable. */
+val COUNTDOWN_SEQUENCE get() = Sequence(name = "Pre-webinar countdown", auto_webinar = true, messages = listOf(
+    SeqMessage(anchor = "start", body = "Hi {{leadName}}, thank you for registering for {{batchName}} on {{batchDate}}. Save this number so you get the joining link. See you there! — {{repName}}"),
+    SeqMessage(anchor = "event", minutes_before = 5 * 1440, body = "Hi {{leadName}}, 5 days to go for {{batchName}} ({{batchDate}}). Block your calendar — it will be worth it."),
+    SeqMessage(anchor = "event", minutes_before = 3 * 1440, body = "Hi {{leadName}}, just 3 days left for {{batchName}}. Reply YES if you are joining live."),
+    SeqMessage(anchor = "event", minutes_before = 1440, body = "Hi {{leadName}}, {{batchName}} is tomorrow ({{batchDate}}). Keep a notebook ready!"),
+    SeqMessage(anchor = "event", minutes_before = 300, body = "Hi {{leadName}}, we go live in 5 hours — {{batchName}}. Join from a laptop if you can."),
+    SeqMessage(anchor = "event", minutes_before = 120, body = "{{leadName}}, 2 hours to go! Here is your joining link: "),
+    SeqMessage(anchor = "event", minutes_before = 15, body = "{{leadName}}, we start in 15 minutes. Join now: "),
+))
 
 @Serializable data class SeqDue(
     /** sequence = a message of a WhatsApp sequence · scheduled = one message scheduled for this lead. */

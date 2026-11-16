@@ -28,6 +28,7 @@ export function SaleModal({ id, dir, onClose, onChanged, onOpenLead }: { id: str
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
   const [pay, setPay] = useState({ kind: 'payment', amount: '', method: 'upi', paid_at: new Date().toISOString().slice(0, 10), reference: '' })
+  const [edit, setEdit] = useState<{ product: string; amount: string; sold_at: string; credited_to: string; enrol_batch: string } | null>(null)
   const [playing, setPlaying] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -50,7 +51,6 @@ export function SaleModal({ id, dir, onClose, onChanged, onOpenLead }: { id: str
     const { error } = await supabase.rpc('add_sale_payment', { p_sale: id, p: { ...pay, paid_at: new Date(pay.paid_at + 'T12:00:00').toISOString() } })
     setBusy(false); if (error) return setError(errorText(error)); setPay({ ...pay, amount: '', reference: '' }); onChanged(); load()
   }
-  const [edit, setEdit] = useState<{ product: string; amount: string; sold_at: string; credited_to: string; enrol_batch: string } | null>(null)
   async function saveEdit() {
     if (!edit) return
     setBusy(true)

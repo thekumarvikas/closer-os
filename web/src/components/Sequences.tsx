@@ -11,7 +11,7 @@ import { MessageBox } from './FillIns'
  * in the app's WhatsApp queue — never automatic.
  */
 interface Msg { anchor: 'start' | 'event'; day_offset: number; send_time: string; minutes_before: number | null; body: string; media_path?: string | null; media_type?: string | null; media_name?: string | null }
-interface Seq { id: string; name: string; company: boolean; mine: boolean; owner_name: string | null; start_outcomes: string[]; messages: Msg[]; active_all: number; done_all: number }
+interface Seq { id: string; name: string; company: boolean; mine: boolean; owner_name: string | null; start_outcomes: string[]; messages: Msg[]; active_all: number; done_all: number; auto_webinar?: boolean }
 interface Outcome { id: string; label: string; purpose: string }
 interface Template { id: string; name: string; body: string; media_path: string | null; media_type: string | null; media_name: string | null }
 
@@ -25,6 +25,27 @@ function whenText(m: Msg) {
   }
   const [h, mi] = m.send_time.split(':').map(Number)
   return `Day ${m.day_offset} · ${((h + 11) % 12) + 1}:${String(mi).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`
+}
+
+/** Pre-webinar countdown: welcome on joining, then 5 d / 3 d / 1 d / 5 h / 2 h / 15 min before. Every time can be changed. */
+const COUNTDOWN: Msg[] = [
+  { anchor: 'start', day_offset: 0, send_time: '10:00', minutes_before: null, body: 'Hi {{leadName}}, thank you for registering for {{batchName}} on {{batchDate}}. Save this number so you get the joining link. See you there! — {{repName}}' },
+  { anchor: 'event', day_offset: 0, send_time: '10:00', minutes_before: 5 * 1440, body: 'Hi {{leadName}}, 5 days to go for {{batchName}} ({{batchDate}}). Block your calendar — it will be worth it.' },
+  { anchor: 'event', day_offset: 0, send_time: '10:00', minutes_before: 3 * 1440, body: 'Hi {{leadName}}, just 3 days left for {{batchName}}. Reply YES if you are joining live.' },
+  { anchor: 'event', day_offset: 0, send_time: '10:00', minutes_before: 1440, body: 'Hi {{leadName}}, {{batchName}} is tomorrow ({{batchDate}}). Keep a notebook ready!' },
+  { anchor: 'event', day_offset: 0, send_time: '10:00', minutes_before: 300, body: 'Hi {{leadName}}, we go live in 5 hours — {{batchName}}. Join from a laptop if you can.' },
+  { anchor: 'event', day_offset: 0, send_time: '10:00', minutes_before: 120, body: '{{leadName}}, 2 hours to go! Here is your joining link: ' },
+  { anchor: 'event', day_offset: 0, send_time: '10:00', minutes_before: 15, body: '{{leadName}}, we start in 15 minutes. Join now: ' },
+]
+
+/** WhatsApp can block numbers that message strangers in bulk — said plainly wherever sequences are set up. */
+export function BanWarning() {
+  return (
+    <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+      <b>⚠ Keep your WhatsApp number safe.</b> WhatsApp can restrict or ban a number that sends many messages to people who don't know it. Send sequences only to people who
+      registered with you, replied to you or saved your number; ask new leads to reply or save the number first; stop when someone asks. Closer OS opens each message for the rep to send — it can't control WhatsApp's limits.
+    </div>
+  )
 }
 
 export function CompanySequences() {
@@ -50,6 +71,7 @@ export function CompanySequences() {
     <Card className="p-5 lg:col-span-2">
       <h2 className="font-semibold">WhatsApp sequences</h2>
       <p className="mb-3 mt-1 text-sm text-slate-500">A set of messages sent to a lead over a few days — for example Day 0, Day 2, Day 5 — or around a webinar / event (e.g. 1 day before, 2 hours before). Every day the messages that are due appear in the rep's app, and WhatsApp opens with each one ready: the rep taps Send. A lead stops getting messages when it is won, lost / not interested or Do not call. Reps can also make their own sequences in the app. Up to 50 messages per sequence, up to Day 365.</p>
+      <BanWarning />
       <ErrorBox error={error} />
       {!rows ? <Spinner /> : <div className="space-y-2">
         {company.length === 0 && <p className="text-sm text-slate-500">No company sequences yet.</p>}
@@ -58,6 +80,7 @@ export function CompanySequences() {
             <div className="min-w-0 flex-1">
               <button className="font-medium text-brand-700 hover:underline" onClick={() => setViewing(s)}>{s.name}</button>
               <div className="text-xs text-slate-500">{s.messages.length} message{s.messages.length === 1 ? '' : 's'} · {s.messages.map(m => whenText(m).split(' · ')[0]).join(', ')}</div>
+              {s.auto_webinar && <div className="text-xs text-brand-700">🎥 Starts by itself when a lead registers for a webinar</div>}
               {s.start_outcomes.length > 0 && <div className="text-xs text-brand-700">🔁 Starts by itself after: {s.start_outcomes.map(label).filter(Boolean).join(', ')}</div>}
               <div className="text-xs text-slate-500">{s.active_all} leads on it now{s.done_all ? ` · ${s.done_all} finished` : ''}</div>
             </div>
@@ -71,6 +94,8 @@ export function CompanySequences() {
       <Button variant="secondary" className="mt-3" onClick={() => setEditing({ id: '', name: '', company: true, mine: false, owner_name: null, start_outcomes: [], active_all: 0, done_all: 0,
         messages: [{ anchor: 'start', day_offset: 0, send_time: '10:00', minutes_before: null, body: 'Hi {{leadName}}, ' }] })}>
         <Plus className="h-4 w-4" /> New sequence</Button>
+      <Button variant="secondary" className="ml-2 mt-3" onClick={() => setEditing({ id: '', name: 'Pre-webinar countdown', company: true, mine: false, owner_name: null, start_outcomes: [], active_all: 0, done_all: 0,
+        auto_webinar: true, messages: COUNTDOWN.map(m => ({ ...m })) })}>⏳ Ready-made: Pre-webinar countdown</Button>
       {viewing && <SequenceDetail seq={viewing} onClose={() => { setViewing(null); setVersion(v => v + 1) }} />}
       {editing && <SequenceEditor seq={editing} outcomes={outcomes} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); setVersion(v => v + 1) }} />}
     </Card>
@@ -82,6 +107,7 @@ function SequenceEditor({ seq, outcomes, onClose, onSaved }: { seq: Seq; outcome
   const [name, setName] = useState(seq.name)
   const [msgs, setMsgs] = useState<Msg[]>(seq.messages.map(m => ({ ...m })))
   const [starts, setStarts] = useState<string[]>(seq.start_outcomes)
+  const [autoWeb, setAutoWeb] = useState(!!seq.auto_webinar)
   const [templates, setTemplates] = useState<Template[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -100,7 +126,7 @@ function SequenceEditor({ seq, outcomes, onClose, onSaved }: { seq: Seq; outcome
     const bad = msgs.findIndex(m => !m.body.trim() && !m.media_path)
     if (bad >= 0) return setError(`Message ${bad + 1} is empty`)
     setBusy(true); setError(null)
-    const { error } = await supabase.rpc('save_sequence', { p_org: org.id, p: { id: seq.id || undefined, name, company: true, start_outcomes: starts, messages: msgs } })
+    const { error } = await supabase.rpc('save_sequence', { p_org: org.id, p: { id: seq.id || undefined, name, company: true, start_outcomes: starts, auto_webinar: autoWeb, messages: msgs } })
     setBusy(false)
     if (error) setError(errorText(error)); else onSaved()
   }
@@ -151,6 +177,10 @@ function SequenceEditor({ seq, outcomes, onClose, onSaved }: { seq: Seq; outcome
         {msgs.length < 50 ? <Button variant="secondary" onClick={() => setMsgs(ms => { const l = ms.at(-1); return [...ms, { anchor: l?.anchor ?? 'start', day_offset: Math.min(365, (l?.day_offset ?? 0) + 2), send_time: l?.send_time ?? '10:00', minutes_before: l?.minutes_before ?? null, body: '' }] })}>
           <Plus className="h-4 w-4" /> Add message</Button> : <p className="text-sm text-slate-500">Up to 50 messages per sequence.</p>}
         <p className="text-xs text-slate-500">Fill-ins: {variables.map(v => <code key={v} className="mr-1 rounded bg-slate-100 px-1">{v}</code>)}</p>
+        <label className="flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-sm">
+          <input type="checkbox" className="mt-1" checked={autoWeb} onChange={e => setAutoWeb(e.target.checked)} />
+          <span><b>Start by itself when a lead registers for a webinar</b><br /><span className="text-slate-500">The lead's reminder caller (or owner) sends the messages. Someone who registers late only gets the messages still ahead — e.g. joining 2 days before skips the "5 days before" one.</span></span>
+        </label>
         <div>
           <span className="label">Start automatically when a rep saves this outcome</span>
           <div className="flex flex-wrap gap-1.5">

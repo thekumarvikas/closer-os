@@ -134,8 +134,14 @@ fun SequencesScreen(vm: AppViewModel) {
                 Text("A WhatsApp sequence is a set of messages sent to a lead over a few days — for example Day 0, Day 2, Day 5. " +
                     "Each day, the messages that are due open one by one in WhatsApp: you just tap Send.", fontSize = 13.sp, color = Brand.muted)
             }
+            item { SeqBanWarning() }
             item {
                 Button(onClick = { vm.newSequence() }, modifier = Modifier.fillMaxWidth().height(50.dp)) { Text("+ New WhatsApp sequence") }
+                // Ready-made countdown to a webinar / event (7 messages → needs Pro in the free individual app).
+                OutlinedButton(onClick = {
+                    if (SeqLimits.free(vm.getApplication())) vm.proAsk = "The pre-webinar countdown has 7 messages. The free plan has up to 3 per sequence — Closer OS Pro has up to 50."
+                    else vm.openSequenceEditor(com.closeros.app.data.COUNTDOWN_SEQUENCE)
+                }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) { Text("⏳ Ready-made: countdown to a webinar / event") }
                 if (SeqLimits.free(LocalContext.current)) Text("Free plan: ${vm.mySequenceCount()} of 2 sequences · up to 3 messages each, last message by Day 7",
                     fontSize = 12.sp, color = Brand.muted, modifier = Modifier.padding(top = 4.dp))
             }
@@ -546,8 +552,9 @@ class SeqDraft(seq: Sequence, val openedAt: Long) {
     var name by mutableStateOf(seq.name)
     var company by mutableStateOf(seq.id.isNotEmpty() && seq.company)
     var outcomes by mutableStateOf(seq.start_outcomes.toSet())
+    var autoWebinar by mutableStateOf(seq.auto_webinar)
     val messages = mutableStateListOf<MsgDraft>().apply { addAll(seq.messages.ifEmpty { listOf(SeqMessage()) }.map { MsgDraft(it) }) }
-    fun toSequence() = original.copy(name = name, company = company, start_outcomes = outcomes.toList(), messages = messages.mapIndexed { i, m -> m.toMessage(i) })
+    fun toSequence() = original.copy(name = name, company = company, start_outcomes = outcomes.toList(), auto_webinar = autoWebinar, messages = messages.mapIndexed { i, m -> m.toMessage(i) })
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -623,6 +630,13 @@ fun SequenceEditor(vm: AppViewModel, seq: Sequence) {
             else Text(if (free) "The free plan has up to $maxMsg messages per sequence. Closer OS Pro: up to 50." else "Up to 50 messages per sequence.",
                 fontSize = 13.sp, color = Brand.muted, modifier = if (free) Modifier.clickable { vm.showRemoveAds = true } else Modifier)
 
+            if (!free) Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(if (vm.isSolo) "Start when I add a lead to an event" else "Start when a lead registers for a webinar", fontWeight = FontWeight.SemiBold)
+                    Text("Someone who joins late only gets the messages still ahead.", fontSize = 12.sp, color = Brand.muted)
+                }
+                Switch(dr.autoWebinar, { dr.autoWebinar = it })
+            }
             Text("Start automatically when I save this outcome", fontWeight = FontWeight.SemiBold)
             if (free) {
                 Text("🔒 Closer OS Pro — e.g. save \"Interested\" and the lead goes on this sequence by itself.", fontSize = 13.sp, color = Brand.muted)
@@ -643,7 +657,7 @@ fun SequenceEditor(vm: AppViewModel, seq: Sequence) {
                 busy = true; error = null
                 val p = buildJsonObject {
                     if (seq.id.isNotEmpty()) put("id", seq.id)
-                    put("name", dr.name.trim()); put("company", dr.company)
+                    put("name", dr.name.trim()); put("company", dr.company); put("auto_webinar", !free && dr.autoWebinar)
                     put("start_outcomes", if (free) JsonArray(emptyList()) else buildJsonArray { dr.outcomes.forEach { add(JsonPrimitive(it)) } })
                     put("messages", buildJsonArray { msgs.forEach { d -> add(buildJsonObject {
                         put("anchor", d.anchor); put("day_offset", d.day.toIntOrNull() ?: 0); put("send_time", d.time.toString())
@@ -691,5 +705,15 @@ private fun EventTiming(d: MsgDraft, maxDay: Int) {
             FilterChip(selected = before, onClick = { before = true; apply() }, label = { Text("before the event") })
             FilterChip(selected = !before, onClick = { before = false; apply() }, label = { Text("after it starts") })
         }
+    }
+}
+
+/** WhatsApp can restrict numbers that message strangers in bulk — said plainly wherever sequences are set up. */
+@Composable
+fun SeqBanWarning() {
+    Column(Modifier.fillMaxWidth().background(Color(0xFFFFFBEB), RoundedCornerShape(10.dp)).border(1.dp, Color(0xFFFCD34D), RoundedCornerShape(10.dp)).padding(10.dp)) {
+        Text("⚠ Keep your WhatsApp number safe", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color(0xFF92400E))
+        Text("WhatsApp can restrict or ban a number that sends many messages to people who don't know it. Message only people who registered with you, replied to you or saved your number — and stop when someone asks. Closer OS can't control WhatsApp's limits.",
+            fontSize = 12.sp, color = Color(0xFF92400E))
     }
 }

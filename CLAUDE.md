@@ -1810,3 +1810,59 @@ intelligence → Play Store launch.
   "Take the webinar from a column" (pick the column; date, or date + time if present) OR "Add webinars myself" (manager
   creates webinar with date + time on the dashboard and picks it for the source / import, as today). Both always available;
   manual edit of date/time on any auto-created webinar.
+
+## Round 14 — BUILT (v0.26.1, migrations 0080–0084, Nov 16 2026) — everything on the owner's "go" list
+- App (0.26.0 → 0.26.1, versionCode 85): PhoneCalls.cannotCallReason (no SIM / airplane mode → message, no outcome screen; queue pauses);
+  outcome screen + pop-up COMPACT: 6 outcomes + "More (N)", answered sections fold to one line (Folded / PopFolded, "Change"), note box
+  right under the outcome, tags + sentences behind "＋ Tags & quick sentences", extras behind "More details"; "Didn't pick" first for 0 s
+  dials (DIDNT_PICK); "This call didn't go through?" card (Skip / Call again) when the call isn't in the phone's history after 4 s.
+  Offline for every save: Ops.rpc / Ops.update / Ops.insert / sendOrKeep (generic ops "rpc" | "upd" | "ins" in data/Offline.kt) — claim sale,
+  DNC, events (ids made on the phone), scheduled calls (follow-up id made on the phone, list + alarm updated locally), scheduled WhatsApp
+  (schedule_wa p_new_id), sequence marks, pins (local fallback), org settings. Offline bar: "You're offline — keep working. Everything is
+  saved on your phone (N to sync)…". Sales by owner/manager/individual auto-verified (sale_auto_verified, t_call_sale_claim); personal
+  wording "₹X · N sales", "Add a sale". WhatsApp queue: big green countdown ring, "Not sent" → next lead, end screen "Try N again"
+  (vm.waNotSent / waDone / waRetry / waFinish). Scheduled WhatsApp: dialog state in the VM (vm.waSched, drawn in MainActivity) so the file
+  picker can't lose the attachment, Save blocked while uploading, one notification per message (WaSchedAlarms.markFired; SeqAlerts counts
+  only sequence messages), {{leadName}} filled (WaSchedAlarms.filled), attachment name on cards. Phone setup: pending first with "NEXT STEP",
+  done folded "Done (N)", scroll to top on return; recording switch = PhoneSetup.recordingSettingsIntent (MIUI CallRecordSetting screens →
+  TelecomManager.ACTION_SHOW_CALL_SETTINGS → Phone app) with brand steps; item hidden unless the maker's dialer is default. Recording
+  upload retries at 30 s / 2 min / 5 min after each call (CallSync.syncAfterCall); dashboard call log shows ⏳ for fresh calls. Leads tab:
+  webinar / event chips (newest 10) → LeadFilters.events. Sequences: SeqBanWarning, ready-made COUNTDOWN_SEQUENCE, "Start when a lead
+  registers" switch (auto_webinar).
+- 0081 leads from sheets: lead_fields (key, label = the sheet's own heading; registry filled by ingest_lead + buyers import),
+  leads.signup_at (sheet "Date & Time"/Timestamp, else created; default now; Leads default sort), lead_sources.webinar_mode fixed|column +
+  webinar_column / webinar_time / webinar_prefix, assign_mode 'users' + assign_users[] + rr_pos (in turns), member_column; batches.source_id
+  + auto_created; org_members.call_team reminder|sales (Team page "Calling team"). webinar_parse("4th Oct - 2026", …), batch_for_text (one
+  webinar per day, created "Webinar · 4 Oct 2026" at the source's default time), member_by_name ("Team Member" column → that person),
+  assign_batch_leads(batch, {attendees, attendee_users, non_attendees sales|reminder|none, non_attendee_users, only_unassigned, dry_run})
+  (hottest first dealt in turns, repeat leads keep their owner, non-attendees tagged "Non-attendee · 4 Oct"), delete_batch (leads stay),
+  batch_cards(org).
+- Dashboard: lib/filters.tsx useFilters / FilterActions / FilterChips = "Apply filters" + "Clear filters (n)" (Leads, Calls + call log,
+  Follow-ups, Reports, Sales, Training); lib/leadFields.ts; lib/samples.tsx SampleLink (leads, buyers = owner's master sheet, zoom, chat,
+  polls, sheet) next to every import. Leads: chips All leads / Unassigned (N) / latest webinars, filters incl. Webinar + any form field,
+  filter chips, "Select all N matching", "Assign / share out", Columns picker (form fields), sign-up time column, export with form fields.
+  LeadDrawer "Form / sheet answers" with the sheet's labels. Lead sources: 3 questions (name · webinar from a column OR picked by hand ·
+  tick who gets leads / rules / nobody). Webinars page = cards (Registered · Assigned · Called · Attended · Hot, "Unassigned N → Assign",
+  "Upload Zoom reports → sales calls", Delete). BatchDetail "After the webinar" wizard: pick all Zoom files at once (detectZoomFile) →
+  each report's own screen → AssignSalesCalls (member checkboxes, live preview via dry_run).
+- 0082 buyers v2 (owner's master sheet): one row = one PAYMENT; same buyer + program (+ batch) = one ORDER (Price Point = order value);
+  sale_payments.row_key / row_hash / source_id / removed_at / part_full; sales.enrol_batch / webinar_batch_id / webinar_on / sale_channel
+  webinar|team / country; "Live Webinar…" → channel webinar, no credit; "Sales Team…" → member_by_name(Team Member Name);
+  country_dial_code(Country) for numbers without a code; org_gst_pct (settings.sales.gst_pct, Settings → Products & prices); extra
+  columns → lead fields; buyer_sheet_push(…, p_ids) + script with "Closer OS ID" column (stable id → edits UPDATE), onEdit +
+  sendIfChanged every 5 min (≥ 7 min apart), rows gone from the sheet → removed_at ("keep or delete" card on Sales). update_sale,
+  delete_sale, update_sale_payment (managers). Old sheets must paste the new script once.
+- 0083 Sales page (pages/SalesHome.tsx, route /sales; old list page removed, SaleModal/AddSale/PriceList stay in Sales.tsx):
+  sales_dashboard(org, from, to, {users, product, webinar, enrol, channel}) → tiles (revenue excl. GST, sales, collected, pending, median
+  days sign-up → fully paid + from webinar), by_member (with calls / talk / WA per sale), by_webinar (conversion of registered, revenue,
+  days), by_product, by_enrol, trend, buyers (≤ 1000), to_verify; sales_missed (hot not bought / attended no call / never reached);
+  buyers_common (27 facts buyers vs others, UI shows 20 as sentences); training_library; removed_payments; buyer_timeline v2 (chat,
+  follow-ups, works for the credited rep). Tabs Overview · Buyers; every number drills into Buyers; Journey side drawer; header:
+  To verify (N) · Import buyers / Google Sheet (→ /buyers, no longer in the menu) · lock months · Add sale. New menu "Training"
+  (pages/Training.tsx: winning calls, play inline, download one / all as zip via lib/zip.ts).
+- 0084 sequences: wa_sequences.auto_webinar (starts when a lead joins an upcoming webinar or gets its caller; seq_auto_webinar, triggers on
+  batch_leads + leads.assigned_to), seq_advance skips event messages that were due before the lead joined (late joiners).
+- Test: web/tests/round14-test.cjs (temporary org; sheet leads, Leads page, source settings, webinar cards, buyers master-sheet import,
+  Sales, journey, sale modal, Training, countdown) — passed, no browser errors. Hooks must stay above early returns (SaleModal crash found).
+- Not done / later: Training inside the app Playbook for reps; "live webinar" number entry (dropped by owner); per-webinar override of
+  one-owner vs two-team (the wizard's checkboxes cover it); Sales trend chart (data is returned, no chart yet).

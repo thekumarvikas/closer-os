@@ -156,7 +156,7 @@ export default function Leads() {
   }
 
   useEffect(() => { const t = setTimeout(load, 150); return () => clearTimeout(t) }, [load])
-  useEffect(() => { setPage(0); setAllMatching(false) }, [JSON.stringify(a), sort]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setPage(0); setAllMatching(false); setSelected(new Set()) }, [JSON.stringify(a), sort]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const refresh = () => { setSelected(new Set()); setAllMatching(false); load(); setVersion(v => v + 1) }
   const targetIds = async () => allMatching ? await matchingIds() : [...selected]

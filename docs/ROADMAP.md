@@ -114,7 +114,7 @@ Everything from the original product prompt plus the owner's feedback, with stat
 
 ## Launch checklist — domain closeros.in (bought Nov 15 2026 on GoDaddy; owner: "do it later")
 - [ ] Vercel → Settings → Domains: add closeros.in (+ www) → DNS records in GoDaddy (A / CNAME)
-- [ ] Supabase Auth: Site URL + redirect list → closeros.in (keep the vercel.app address too)
+- [~] Supabase Auth: redirect list has closeros.in, www, app.closeros.in (done Nov 16); Site URL → app.closeros.in once DNS works
 - [ ] Play Console: website, privacy, delete-account URLs → closeros.in; Google OAuth consent Branding domain
 - [ ] app-ads.txt reachable at closeros.in/app-ads.txt; app links (WEB_URL) → closeros.in
 - [ ] Email sender on the domain (Resend, no-reply@closeros.in) → Supabase SMTP (ends the 2-emails/hour limit)

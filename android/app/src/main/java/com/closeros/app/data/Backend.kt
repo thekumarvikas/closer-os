@@ -307,7 +307,7 @@ object TalkBands {
     fun of(sec: Int) = all.first { sec >= it.from && (it.until == null || sec < it.until) }.key
 }
 
-@Serializable data class BoardRow(val user_id: String, val name: String = "", val calls: Int = 0, val conversations: Int = 0, val talk_sec: Int = 0, val sales: Int = 0)
+@Serializable data class BoardRow(val user_id: String, val name: String = "", val calls: Int = 0, val conversations: Int = 0, val talk_sec: Int = 0, val sales: Int = 0, val revenue: Double = 0.0)
 @Serializable data class BestTime(val hour: Int? = null, val source: String, val picked: Int? = null, val tries: Int? = null, val rate: Int? = null,
     val total_picked: Int? = null, val total_tries: Int? = null)
 
@@ -753,6 +753,15 @@ object Repo {
             put("p_org", orgId); put("p_from", from.toString()); put("p_to", to.toString()); put("p_reason", reason)
             put("p_users", users?.let { u -> buildJsonArray { u.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } } } ?: kotlinx.serialization.json.JsonNull)
         }).decodeList<String>()
+
+    /** Team performance (activity, results, CRM hygiene) for a period — rows for everyone I can see. */
+    suspend fun teamPerformance(orgId: String, from: Instant, to: Instant): JsonObject = json.parseToJsonElement(rpcR("team_performance", buildJsonObject {
+        put("p_org", orgId); put("p_from", from.toString()); put("p_to", to.toString()) }).data).jsonObject
+
+    /** The leads behind one Team performance number. */
+    suspend fun teamPerfLeads(orgId: String, from: Instant, to: Instant, user: String, metric: String): List<String> =
+        db.rpc("team_perf_leads", buildJsonObject { put("p_org", orgId); put("p_from", from.toString()); put("p_to", to.toString()); put("p_user", user); put("p_metric", metric) })
+            .decodeList<String>()
 
     /** A call as the server stores it — enough to show it in a call list. */
     @Serializable data class TeamCall(val id: String, val phone: String = "", val direction: String = "outgoing", val started_at: String = "",

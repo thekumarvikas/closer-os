@@ -3,6 +3,7 @@ package com.closeros.app.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -48,7 +49,7 @@ fun LeaderboardScreen(vm: AppViewModel) {
     var metric by remember { mutableStateOf("talk") }
     var rows by remember { mutableStateOf<List<BoardRow>?>(null) }
     LaunchedEffect(period) { rows = null; rows = vm.membership?.let { runCatching { Repo.leaderboard(it.organization, period) }.getOrNull() } ?: emptyList() }
-    val sorted = rows?.sortedByDescending { when (metric) { "conv" -> it.conversations; "calls" -> it.calls; "sales" -> it.sales; else -> it.talk_sec } }
+    val sorted = rows?.sortedByDescending { when (metric) { "conv" -> it.conversations.toDouble(); "calls" -> it.calls.toDouble(); "sales" -> it.sales.toDouble(); "revenue" -> it.revenue; else -> it.talk_sec.toDouble() } }
     Column(Modifier.fillMaxSize().background(Brand.bg)) {
         Row(Modifier.fillMaxWidth().padding(8.dp, 8.dp, 8.dp, 0.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { vm.showLeaderboard = false }) { Icon(Icons.Default.ArrowBack, "Back") }
@@ -57,8 +58,8 @@ fun LeaderboardScreen(vm: AppViewModel) {
         Row(Modifier.padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf("today" to "Today", "week" to "This week", "month" to "This month").forEach { (k, l) -> FilterChip(period == k, { period = k }, { Text(l) }) }
         }
-        Row(Modifier.padding(12.dp, 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("talk" to "Talk time", "conv" to "Conversations", "calls" to "Calls", "sales" to "Sales").forEach { (k, l) -> FilterChip(metric == k, { metric = k }, { Text(l) }) }
+        Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()).padding(12.dp, 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf("talk" to "Talk time", "conv" to "Conversations", "calls" to "Calls", "sales" to "Sales", "revenue" to "Sales value").forEach { (k, l) -> FilterChip(metric == k, { metric = k }, { Text(l) }) }
         }
         if (sorted == null) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }; return }
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -74,7 +75,7 @@ fun LeaderboardScreen(vm: AppViewModel) {
                         Text(r.name + if (mine) " (you)" else "", fontWeight = FontWeight.SemiBold)
                         Text("${fmtDur(r.talk_sec)} talk · ${r.conversations} conversations · ${r.calls} calls · ${r.sales} sales", fontSize = 12.sp, color = Brand.muted)
                     }
-                    Text(when (metric) { "conv" -> "${r.conversations}"; "calls" -> "${r.calls}"; "sales" -> "${r.sales}"; else -> fmtDur(r.talk_sec) }, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(when (metric) { "conv" -> "${r.conversations}"; "calls" -> "${r.calls}"; "sales" -> "${r.sales}"; "revenue" -> fmtMoney(r.revenue, vm.membership?.organization?.currency ?: "INR"); else -> fmtDur(r.talk_sec) }, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 }
             }
         }

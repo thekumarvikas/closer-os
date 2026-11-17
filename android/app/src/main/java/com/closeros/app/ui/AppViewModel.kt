@@ -1434,6 +1434,13 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         }.onSuccess { genericList = title to it }.onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't load these leads — check your internet") }
     }
 
+    /** The leads behind a CRM hygiene / performance number for one person. */
+    fun openPerfLeads(title: String, from: java.time.Instant, to: java.time.Instant, user: String, metric: String) = viewModelScope.launch {
+        val m = membership ?: return@launch
+        runCatching { val ids = Repo.teamPerfLeads(m.org_id, from, to, user, metric); val byId = Repo.leadsByIds(ids).associateBy { it.id }; ids.mapNotNull { byId[it] } }
+            .onSuccess { genericList = title to it }.onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't load these leads — check your internet") }
+    }
+
     fun openLeadsById(title: String, ids: List<String>) = viewModelScope.launch {
         runCatching { Repo.leadsByIds(ids) }.onSuccess { genericList = title to it }.onFailure { message = "Couldn't load — check internet" }
     }

@@ -92,6 +92,13 @@ const check = (ok, what) => { if (!ok) fails++; log(ok ? 'OK  ' : 'FAIL', what) 
     await p.waitForSelector("text=This doesn't look like a Zoom poll report"); await shot('9-bad-polls');
     check(await p.getByRole('button', { name: /^Save \d+ answers/ }).isDisabled(), 'Save is blocked for a non-poll file');
 
+    // Team performance: sortable, three views, numbers open their leads.
+    await p.keyboard.press('Escape');
+    await p.goto('http://localhost:4173/reports'); await p.click('button:has-text("Team performance")'); await p.waitForSelector('text=Activity & results'); await shot('10-team-results');
+    await p.click('button:has-text("CRM hygiene")'); await p.waitForSelector('text=Marks (of 100)'); await shot('11-team-hygiene');
+    await p.click('button:has-text("Reminder show-up")'); await p.waitForSelector('text=Show-up of those spoken to'); await shot('12-team-reminder');
+    const regCell = p.locator('tbody tr td:nth-child(2) button').first();
+    if (await regCell.count()) { await regCell.click(); await p.waitForSelector('.fixed tbody tr'); await shot('13-team-drill'); check(await p.locator('.fixed tbody tr').count() === 40, 'reminder registrants list = 40') }
     log('browser errors:', errors.length ? errors : 'none'); if (errors.length) fails++;
     await browser.close();
   } catch (e) { console.error('FAILED', e); fails++ } finally {

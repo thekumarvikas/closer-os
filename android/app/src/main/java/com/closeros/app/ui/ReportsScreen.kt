@@ -52,6 +52,7 @@ fun ReportsScreen(vm: AppViewModel) {
     var leadScope by remember { mutableStateOf("all") }   // all = every lead · period = leads assigned in this period
     var status by remember { mutableStateOf<JsonObject?>(null) }
     var lost by remember { mutableStateOf<JsonObject?>(null) }
+    var perf by remember { mutableStateOf<JsonObject?>(null) }
     var onPhone by remember { mutableStateOf(false) }   // true = worked out on this phone
     var compare by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { if (vm.isManager) team = runCatching { Repo.teamBrief(m.org_id) }.getOrDefault(emptyList()) }
@@ -82,6 +83,10 @@ fun ReportsScreen(vm: AppViewModel) {
             val tg = runCatching { Repo.targetsFor(m.org_id, from, to, users) }.getOrNull()
             Rep(cr, or, fu, tg)
         }.onSuccess { data = it }.onFailure { error = com.closeros.app.data.SafeError.forUser(it, "Couldn't load the report") }
+    }
+    LaunchedEffect(from, to) {
+        perf = null
+        perf = runCatching { Repo.teamPerformance(m.org_id, from.atStartOfDay(zone).toInstant(), to.plusDays(1).atStartOfDay(zone).toInstant()) }.getOrNull()
     }
     LaunchedEffect(from, to, who) {
         lost = null
@@ -249,6 +254,30 @@ fun ReportsScreen(vm: AppViewModel) {
                     }
                 }
             }
+            // CRM hygiene for one person (me, or the person picked): six facts, marks = their average. Rows open the leads.
+            val perfUser = when (who) { "all" -> null; "me" -> com.closeros.app.data.Backend.uid; else -> who }
+            perf?.get("rows")?.jsonArray?.map { it.jsonObject }?.firstOrNull { it.s("user_id") == perfUser }?.let { pr -> item {
+                val a = from.atStartOfDay(zone).toInstant(); val b = to.plusDays(1).atStartOfDay(zone).toInstant()
+                val uid = perfUser!!
+                fun pc(k: String) = pr[k]?.jsonPrimitive?.intOrNull
+                val t = perf?.get("target_min")?.jsonPrimitive?.intOrNull ?: 15
+                Section("CRM hygiene" + (pc("hygiene")?.let { " · $it marks of 100" } ?: "")) {
+                    listOf(
+                        Triple("Notes on conversations", "notes_pct", "${pr.i("conv_noted")} of ${pr.i("conv_lead")}") to "no_notes",
+                        Triple("Follow-ups called on time", "fu_pct", "${pr.i("fu_on_time")} of ${pr.i("fu_due")} due") to "fu_late",
+                        Triple("New leads called within $t min", "fast_pct", "${pr.i("live_fast")} of ${pr.i("live")}") to "slow",
+                        Triple("Assigned leads called", "called_pct", "${pr.i("assigned_called")} of ${pr.i("assigned")}") to "not_called",
+                        Triple("Profession + city filled", "profile_pct", "${pr.i("profile_filled")} of ${pr.i("profile_talked")} talked to") to "profile_missing",
+                        Triple("Days with 5+ calls", "active_pct", "${pr.i("active_days")} of ${pr.i("work_days")} working days") to null,
+                    ).forEach { (tr, metric) ->
+                        val (label, key, sub) = tr
+                        val v = pc(key)
+                        BarRow(label, (v ?: 0) / 100f, (v?.let { "$it%" } ?: "—") + " · $sub", Brand.primary,
+                            if (metric != null && v != null && v < 100) ({ vm.openPerfLeads("$label — what's missing", a, b, uid, metric) }) else null)
+                    }
+                    Text("Marks = the average of these six. Tap a row to see the leads that are missing it.", fontSize = 12.sp, color = Brand.muted)
+                }
+            } }
             // Why leads were lost (reason tapped with a lost outcome). Each row opens those leads.
             lost?.takeIf { it.i("leads") > 0 }?.let { lr -> item {
                 val n = lr.i("leads")

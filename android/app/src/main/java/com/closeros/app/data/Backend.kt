@@ -733,7 +733,62 @@ object Repo {
     }.decodeList<Category>() }
 
     suspend fun leadsByIds(ids: List<String>): List<Lead> = if (ids.isEmpty()) emptyList() else
-        Backend.client.from("leads").select(Columns.raw(LEAD_COLUMNS)) { filter { isIn("id", ids.distinct()) } }.decodeList()
+        ids.distinct().chunked(150).flatMap { chunk ->   // a long id list doesn't fit in one request address
+            Backend.client.from("leads").select(Columns.raw(LEAD_COLUMNS)) { filter { isIn("id", chunk) } }.decodeList<Lead>()
+        }
+
+    /** A call as the server stores it — enough to show it in a call list. */
+    @Serializable data class TeamCall(val id: String, val phone: String = "", val direction: String = "outgoing", val started_at: String = "",
+        val duration_sec: Int = 0, val sim_slot: Int? = null, val sim_number: String? = null, val channel: String = "phone",
+        val contact_name: String? = null, val lead_id: String? = null, val outcome_id: String? = null)
+
+    /** Calls of the team (or [users]) from [fromIso] until now, newest first, up to 5,000 — for "what's behind this number". */
+    suspend fun teamCalls(orgId: String, fromIso: String, users: List<String>?): List<TeamCall> {
+        val out = mutableListOf<TeamCall>()
+        var page = 0L
+        while (true) {
+            val rows = Backend.client.from("calls").select(Columns.raw("id,phone,direction,started_at,duration_sec,sim_slot,sim_number,channel,contact_name,lead_id,outcome_id")) {
+                filter {
+                    eq("org_id", orgId); gte("started_at", fromIso)
+                    users?.takeIf { it.isNotEmpty() }?.let { filter("user_id", FilterOperator.IN, "(" + it.joinToString(",") + ")") }
+                }
+                order("started_at", Order.DESCENDING)
+                range(page * 1000, page * 1000 + 999)
+            }.decodeList<TeamCall>()
+            out += rows
+            if (rows.size < 1000 || out.size >= 5000) break
+            page++
+        }
+        return out
+    }
+
+    /** Leads behind a team "where they stand" number (same kinds as [Drill.filterLeads]); period = assigned in it. */
+    suspend fun leadsWhere(orgId: String, users: List<String>?, from: java.time.Instant?, to: java.time.Instant?, kind: String, outcomes: List<Outcome>): List<Lead> {
+        fun inList(v: Collection<String>) = "(" + v.joinToString(",") + ")"
+        val k = kind.substringBefore(':')
+        val ids = when (k) {
+            "interested" -> outcomes.filter { it.category == "positive" }.map { it.id }
+            "won" -> outcomes.filter { it.category == "won" }.map { it.id }
+            "outcome" -> listOf(kind.substringAfter(':'))
+            else -> null
+        }
+        if (ids != null && ids.isEmpty()) return emptyList()
+        return Backend.client.from("leads").select(Columns.raw(LEAD_COLUMNS)) {
+            filter {
+                eq("org_id", orgId); filter("deleted_at", FilterOperator.IS, "null")
+                users?.takeIf { it.isNotEmpty() }?.let { filter("assigned_to", FilterOperator.IN, inList(it)) }
+                from?.let { gte("assigned_at", it.toString()) }; to?.let { lt("assigned_at", it.toString()) }
+                when (k) {
+                    "called" -> or { gt("call_count", 0); gt("last_call_at", "1970-01-01T00:00:00Z") }
+                    "reached" -> or { eq("has_talked", true); gt("conversation_count", 0) }
+                    "never" -> { eq("dial_count", 0); filter("last_call_at", FilterOperator.IS, "null") }
+                }
+                if (ids != null) filter("last_outcome_id", FilterOperator.IN, inList(ids))
+            }
+            order("updated_at", Order.DESCENDING)
+            limit(2000)
+        }.decodeList()
+    }
 
     /** Short-lived private link to play a recording; each play is written to the audit log. */
     /** Downloads a call recording to the phone's cache (once) and returns the file — playing a local file works on every phone. */
@@ -762,10 +817,29 @@ object Repo {
 
     suspend fun reportDevice(p: JsonObject) { db.rpc("report_device_status", buildJsonObject { put("p", p) }) }
 
-    suspend fun saveMyTemplate(orgId: String, name: String, body: String) {
+    suspend fun saveMyTemplate(orgId: String, name: String, body: String, media: Triple<String, String, String>? = null) {
         Backend.client.from("message_templates").insert(buildJsonObject {
             put("org_id", orgId); put("name", name); put("body", body); put("owner_id", Backend.uid); put("position", 1000)
+            media?.let { put("media_path", it.first); put("media_type", it.second); put("media_name", it.third) }
         })
+    }
+
+    /** Edits a saved message: my own, or a company one (managers, and the owner of a personal account). */
+    suspend fun updateTemplate(id: String, name: String, body: String, media: Triple<String, String, String>?) {
+        Backend.client.from("message_templates").update(buildJsonObject {
+            put("name", name); put("body", body)
+            put("media_path", media?.first); put("media_type", media?.second); put("media_name", media?.third)
+        }) { filter { eq("id", id) } }
+    }
+
+    /** Uploads a file (already copied into the app) for a saved message. My messages use my own folder. */
+    suspend fun uploadMessageFile(orgId: String, file: java.io.File, type: String, name: String, mine: Boolean): Triple<String, String, String> {
+        if (file.length() > 16L * 1024 * 1024) error("This file is bigger than 16 MB — WhatsApp messages here can carry files up to 16 MB")
+        val safe = name.replace(Regex("[^A-Za-z0-9._-]"), "_").take(80)
+        val id = java.util.UUID.randomUUID()
+        val path = if (mine) "$orgId/mine/${Backend.uid}/$id-$safe" else "$orgId/tpl/$id-$safe"
+        Backend.client.storage.from("template-media").upload(path, file.readBytes()) { upsert = false }
+        return Triple(path, type, name)
     }
 
     suspend fun deleteTemplate(id: String) { Backend.client.from("message_templates").delete { filter { eq("id", id) } } }

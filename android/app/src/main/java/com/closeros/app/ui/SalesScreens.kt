@@ -70,7 +70,8 @@ fun MySalesScreen(vm: AppViewModel) {
             item { MySalesCard(vm) }
             if (list.isEmpty()) item { Text("No sales this month yet. When you save a \"sale\" outcome or claim a sale, it shows here.", color = Brand.muted) }
             items(list, key = { it.id }) { s ->
-                Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Card(colors = CardDefaults.cardColors(containerColor = Color.White),
+                    modifier = Modifier.clickable(enabled = s.lead_id != null) { s.lead_id?.let { vm.openLeadId = it } }) {
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(s.lead_name?.ifBlank { null } ?: s.lead_phone?.let(::fmtPhone) ?: "Sale", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
@@ -105,6 +106,8 @@ fun ClaimSaleDialog(vm: AppViewModel, lead: Lead, onClose: () -> Unit) {
     var name by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
+    var part by remember { mutableStateOf(false) }
+    var paid by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     val instant = vm.isManager || vm.isSolo
     AlertDialog(onDismissRequest = onClose, title = { Text(if (instant) "💰 Add a sale" else "💰 Claim a sale") },
@@ -118,6 +121,15 @@ fun ClaimSaleDialog(vm: AppViewModel, lead: Lead, onClose: () -> Unit) {
                 if (product == null) OutlinedTextField(name, { name = it }, label = { Text("Product / course") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(amount, { amount = it.filter { c -> c.isDigit() || c == '.' } }, label = { Text("Order value") }, singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+                if (vm.isSolo) {
+                    // A personal sale counts as fully paid unless only part of it is in.
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { part = !part }) {
+                        Checkbox(part, { part = it })
+                        Text("Part payment — not all of it is paid yet", fontSize = 14.sp)
+                    }
+                    if (part) OutlinedTextField(paid, { paid = it.filter { c -> c.isDigit() || c == '.' } }, label = { Text("Paid so far") }, singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+                }
                 OutlinedTextField(note, { note = it }, label = { Text("Note (e.g. paid ₹5,000 by UPI)") }, modifier = Modifier.fillMaxWidth())
                 Text(if (instant) "Counts in your sales right away." else "Your manager checks it, then it counts in your numbers.", fontSize = 12.sp, color = Brand.muted)
             }
@@ -125,7 +137,7 @@ fun ClaimSaleDialog(vm: AppViewModel, lead: Lead, onClose: () -> Unit) {
         confirmButton = {
             Button(enabled = !busy && (amount.toDoubleOrNull() ?: 0.0) > 0, onClick = {
                 busy = true
-                vm.claimSale(lead, product, name.trim(), amount, note.trim()) { ok -> busy = false; if (ok) onClose() }
+                vm.claimSale(lead, product, name.trim(), amount, note.trim(), part = vm.isSolo && part, paid = if (vm.isSolo && part) paid else null) { ok -> busy = false; if (ok) onClose() }
             }) { Text(if (busy) "Saving…" else "Save") }
         },
         dismissButton = { TextButton(onClick = onClose) { Text("Cancel") } })

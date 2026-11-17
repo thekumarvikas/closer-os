@@ -145,7 +145,7 @@ fun Root(vm: AppViewModel) {
 
     // Back always closes the screen on top (inner screens with their own Back handling still go first).
     val secondary = vm.showWaToday || vm.showLeadWork || vm.showRecipe || vm.showPlaybook || vm.showFeedback || vm.showDialer || vm.showReports ||
-        vm.showLeaderboard || vm.showSequences || vm.showNoteSettings || vm.showMySales || vm.editSequence != null || vm.openSequenceId != null || vm.showImport || vm.showContactsPick || vm.openLeadId != null || vm.genericList != null || vm.openList != null || vm.showBatches || vm.todayFilter != null
+        vm.showLeaderboard || vm.showSequences || vm.showNoteSettings || vm.showMySales || vm.showMessages || vm.callDrill != null || vm.editSequence != null || vm.openSequenceId != null || vm.showImport || vm.showContactsPick || vm.openLeadId != null || vm.genericList != null || vm.openList != null || vm.showBatches || vm.todayFilter != null
     androidx.activity.compose.BackHandler(enabled = secondary && vm.pending == null) { vm.closeTop() }
     WaChooseDialog(vm)
     EventPickerDialog(vm)
@@ -177,12 +177,15 @@ fun Root(vm: AppViewModel) {
             vm.showCallLists -> com.closeros.app.ui.CallListsScreen(vm)
             vm.showContactsPick -> ContactsPickScreen(vm)
             vm.showNoteSettings -> NoteSettingsScreen(vm)
-            vm.showMySales -> MySalesScreen(vm)
+            vm.showMessages -> com.closeros.app.ui.MessagesScreen(vm)
             vm.showPlaybook -> WithBanner { PlaybookScreen(vm) }
-            vm.showFeedback -> FeedbackScreen(vm)
-            vm.showDialer -> DialerScreen(vm)
+            // A lead opened from any list below shows on top of it; Back returns to that list (closeTop follows this order).
             vm.openLeadId != null -> vm.openLeadId?.let { id -> LeadDetailScreen(vm, id) { call(it) } }
             vm.genericList != null -> LeadListScreen(vm) { call(it) }
+            vm.callDrill != null -> vm.callDrill?.let { (title, calls) -> CallListScreen(vm, title, calls) { vm.callDrill = null } }
+            vm.showMySales -> MySalesScreen(vm)
+            vm.showFeedback -> FeedbackScreen(vm)
+            vm.showDialer -> DialerScreen(vm)
             vm.showLeadWork -> WithBanner { LeadWorkScreen(vm) }
             vm.showRecipe -> WithBanner { RecipeScreen(vm) }
             vm.showWaToday -> WaTodayScreen(vm)
@@ -229,7 +232,9 @@ fun Root(vm: AppViewModel) {
                 confirmButton = { androidx.compose.material3.Button(onClick = { vm.dncAsk = null; vm.setDoNotCall(l, false) { u -> vm.callRequest = u } }) { Text("Remove and call") } },
                 dismissButton = { androidx.compose.material3.TextButton(onClick = { vm.dncAsk = null }) { Text("Cancel") } })
         }
-        vm.whatsappNext?.let { l -> if (vm.pending == null && vm.announcements.isEmpty()) WhatsAppPicker(vm, l) { vm.whatsappNext = null } }
+        vm.whatsappNext?.let { l -> if (vm.pending == null && vm.announcements.isEmpty()) { vm.whatsappNext = null; vm.openWhatsApp(l) } }
+        // One message box for the whole app; its draft lives in the view model, so it survives the file picker.
+        vm.waDraft?.let { d -> if (vm.pending == null && vm.announcements.isEmpty()) WhatsAppPicker(vm, d.lead) { } }
         simChoice?.let { (lead, sims) ->
             SimPicker(sims, onPick = { simChoice = null; vm.startCall(lead, it) }, onDismiss = { simChoice = null })
         }

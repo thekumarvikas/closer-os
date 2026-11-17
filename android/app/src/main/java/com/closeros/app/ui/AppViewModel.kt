@@ -198,8 +198,9 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         runCatching { com.closeros.app.data.SalesApi.summary(m.org_id) }.onSuccess { mySalesSummary = it }
         runCatching { com.closeros.app.data.SalesApi.mine(m.org_id) }.onSuccess { mySales = it }.onFailure { if (mySales == null) mySales = emptyList() }
     }
-    fun claimSale(lead: Lead, product: com.closeros.app.data.Product?, name: String, amount: String, note: String, done: (Boolean) -> Unit) = viewModelScope.launch {
-        runCatching { com.closeros.app.data.SalesApi.claim(lead.id, product?.id, product?.name ?: name, amount, note) }
+    fun claimSale(lead: Lead, product: com.closeros.app.data.Product?, name: String, amount: String, note: String,
+                  part: Boolean = false, paid: String? = null, done: (Boolean) -> Unit) = viewModelScope.launch {
+        runCatching { com.closeros.app.data.SalesApi.claim(lead.id, product?.id, product?.name ?: name, amount, note, part, paid) }
             .onSuccess { sent -> message = when {
                 !sent -> "💰 Sale saved on your phone — syncs when you're online"
                 isManager || isSolo -> "💰 Sale saved"
@@ -548,6 +549,11 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
             .onFailure { message = "Couldn't save the message" }
     }
 
+    fun reloadTemplates() = viewModelScope.launch {
+        val m = membership ?: return@launch
+        runCatching { Repo.templates(m.org_id) }.onSuccess { templates = it }
+    }
+
     fun deleteMyTemplate(id: String) = viewModelScope.launch {
         val m = membership ?: return@launch
         runCatching { Repo.deleteTemplate(id) }; runCatching { templates = Repo.templates(m.org_id) }
@@ -555,7 +561,10 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Fills a WhatsApp template for one lead. */
     fun fillTemplate(body: String, lead: Lead): String =
-        fillTemplateText(body, lead, membership?.organization?.name.orEmpty(), membership?.organization?.timezone ?: "Asia/Kolkata", profile?.full_name.orEmpty())
+        fillTemplateText(body, lead, fillCompanyName(membership?.organization), membership?.organization?.timezone ?: "Asia/Kolkata", profile?.full_name.orEmpty())
+
+    /** Fill-ins this message can't fill for this lead (see [missingFillIns]). */
+    fun missingFor(body: String, lead: Lead): List<String> = missingFillIns(body, lead, fillCompanyName(membership?.organization))
 
 
     private val prefix get() = membership?.organization?.phone_prefix ?: "+91"
@@ -1072,6 +1081,84 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         var body by mutableStateOf(existing?.body.orEmpty())
     }
     var waSched by mutableStateOf<WaSchedDraft?>(null)
+
+    /** A file picked on this phone for a WhatsApp message, copied into the app so it can't get lost. */
+    data class OwnFile(val path: String, val type: String, val name: String)
+    /** A WhatsApp message being written — kept here, not in the screen, so picking a file can't lose it. */
+    class WaDraft(val lead: Lead) {
+        var text by mutableStateOf<String?>(null)
+        var chosen by mutableStateOf<com.closeros.app.data.Template?>(null)
+        var picked by mutableStateOf<CompanyMedia?>(null)
+        var own by mutableStateOf<OwnFile?>(null)
+        var saving by mutableStateOf(false)
+        var saveName by mutableStateOf("")
+        var busy by mutableStateOf(false)
+    }
+    var waDraft by mutableStateOf<WaDraft?>(null)
+    /** Opens the WhatsApp message box for a lead (or any number). */
+    fun openWhatsApp(lead: Lead) { waDraft = WaDraft(lead) }
+
+    /** A saved WhatsApp message being added or edited (Settings → My WhatsApp messages). */
+    class TplEdit(val id: String?, val company: Boolean, name: String, body: String, media: Triple<String, String, String>?) {
+        var name by mutableStateOf(name)
+        var body by mutableStateOf(body)
+        var media by mutableStateOf(media)        // a file already saved with the message
+        var own by mutableStateOf<OwnFile?>(null) // a new file from this phone, uploaded on Save
+        var busy by mutableStateOf(false)
+    }
+    var tplEdit by mutableStateOf<TplEdit?>(null)
+    var showMessages by mutableStateOf(false)
+
+    /** Before the system file picker opens: note what the file is for, and keep the message in case Android closes the app meanwhile. */
+    fun beforeFilePick(target: String) {
+        filePickFor = target
+        val p = ctx.getSharedPreferences("pick", android.content.Context.MODE_PRIVATE).edit()
+        waDraft?.let { d -> p.putString("wa_lead", com.closeros.app.data.json.encodeToString(Lead.serializer(), d.lead)).putString("wa_text", d.text) }
+        p.apply()
+    }
+
+    /** Copies a picked file into the app (a phone's file link can stop working once the picker closes). */
+    private suspend fun copyIn(uri: android.net.Uri): OwnFile = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val name = fileName(uri) ?: "file"
+        val type = ctx.contentResolver.getType(uri) ?: "application/octet-stream"
+        val dir = java.io.File(ctx.cacheDir, "shared").apply { mkdirs() }
+        val f = java.io.File(dir, "out_" + System.currentTimeMillis() + "_" + name.replace(Regex("[^A-Za-z0-9._-]"), "_").takeLast(80))
+        (ctx.contentResolver.openInputStream(uri) ?: error("Couldn't open the file")).use { i -> f.outputStream().use { i.copyTo(it) } }
+        if (f.length() > 16L * 1024 * 1024) { f.delete(); error("This file is bigger than 16 MB") }
+        OwnFile(f.path, type, name)
+    }
+
+    /** Saves the message being added / edited in Settings; a new file from the phone is uploaded first. */
+    fun saveTplEdit() = viewModelScope.launch {
+        val e = tplEdit ?: return@launch; val m = membership ?: return@launch
+        if (e.body.isBlank()) { message = "Write the message first"; return@launch }
+        e.busy = true
+        runCatching {
+            val media = e.own?.let { o -> Repo.uploadMessageFile(m.org_id, java.io.File(o.path), o.type, o.name, mine = !e.company) } ?: e.media
+            if (e.id == null) Repo.saveMyTemplate(m.org_id, e.name.ifBlank { "My message" }, e.body, media)
+            else Repo.updateTemplate(e.id, e.name.ifBlank { "My message" }, e.body, media)
+            templates = Repo.templates(m.org_id)
+        }.onSuccess { tplEdit = null; message = "Saved ✓" }
+         .onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't save the message — check your internet") }
+        e.busy = false
+    }
+
+    /** "Save as my message" in the message box: the text with this lead's name made a fill-in, plus the attached file. */
+    fun saveDraftAsMine(d: WaDraft) = viewModelScope.launch {
+        val m = membership ?: return@launch
+        val first = d.lead.name.substringBefore(' ')
+        val cur = d.text.orEmpty()
+        val body = if (first.length >= 2) cur.replace(first, "{{leadName}}") else cur
+        d.busy = true
+        runCatching {
+            val media = d.own?.let { o -> Repo.uploadMessageFile(m.org_id, java.io.File(o.path), o.type, o.name, mine = true) }
+                ?: d.picked?.let { Triple(it.path, it.type.orEmpty(), it.name.orEmpty()) }
+            Repo.saveMyTemplate(m.org_id, d.saveName.ifBlank { "My message" }, body, media)
+            templates = Repo.templates(m.org_id)
+        }.onSuccess { d.saving = false; message = "Saved to My messages ✓" }
+         .onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't save the message — check your internet") }
+        d.busy = false
+    }
     fun openWaSchedule(l: Lead, existing: com.closeros.app.data.WaScheduled?) {
         waPickedFile = existing?.media_path?.let { Triple(it, existing.media_type.orEmpty(), existing.media_name.orEmpty()) }
         waSched = WaSchedDraft(l, existing)
@@ -1096,6 +1183,22 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
             target.startsWith("seq:") -> uploadPicked(uri) { f -> seqDraft?.messages?.firstOrNull { it.key == target.removePrefix("seq:") }?.let { d ->
                 d.mediaPath = f.first; d.mediaType = f.second; d.mediaName = f.third } ?: run { seqDraft?.messages?.lastOrNull()?.let { d -> d.mediaPath = f.first; d.mediaType = f.second; d.mediaName = f.third } } }
             target == "wa" -> { waUploading = true; uploadPicked(uri, done = { waUploading = false }) { waPickedFile = it } }
+            target == "wanow" -> viewModelScope.launch {
+                // Android may have closed the app while the picker was open: bring the message back first.
+                if (waDraft == null) {
+                    val p = ctx.getSharedPreferences("pick", android.content.Context.MODE_PRIVATE)
+                    p.getString("wa_lead", null)?.let { j -> runCatching { com.closeros.app.data.json.decodeFromString(Lead.serializer(), j) }.getOrNull() }
+                        ?.let { l -> waDraft = WaDraft(l).also { it.text = p.getString("wa_text", null) ?: "Hi ${l.name.substringBefore(' ').ifBlank { "there" }}, " } }
+                }
+                val d = waDraft ?: return@launch
+                runCatching { copyIn(uri) }.onSuccess { d.own = it; d.picked = null }
+                    .onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't read that file") }
+            }
+            target == "tpl" -> viewModelScope.launch {
+                val e = tplEdit ?: return@launch
+                runCatching { copyIn(uri) }.onSuccess { e.own = it }
+                    .onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't read that file") }
+            }
         }
     }
     private fun uploadPicked(uri: android.net.Uri, done: () -> Unit = {}, then: (Triple<String, String, String>) -> Unit) = viewModelScope.launch {
@@ -1268,6 +1371,51 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         com.closeros.app.data.AppEvents.bumpLeads(); loadRound9()
     }
 
+    /** Reports opened for one person (from the leaderboard); read once when Reports opens. */
+    var reportsWho by mutableStateOf<String?>(null)
+
+    /** A list of calls behind a report number (title, calls). */
+    var callDrill by mutableStateOf<Pair<String, List<HistoryItem>>?>(null)
+
+    /** Opens the calls behind one report number. Mine are worked out on this phone; the team's come from the server. */
+    fun openCallDrill(title: String, from: java.time.LocalDate, to: java.time.LocalDate, key: String, users: List<String>?, onPhone: Boolean) = viewModelScope.launch {
+        val m = membership ?: return@launch
+        val zone = runCatching { java.time.ZoneId.of(m.organization.timezone) }.getOrDefault(java.time.ZoneId.of("Asia/Kolkata"))
+        runCatching {
+            if (onPhone) kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val logs = com.closeros.app.data.LocalReports.drillCalls(ctx, from, to, zone, key, outcomes)
+                val phones = logs.map { normalizePhone(it.phone, prefix) }
+                val local = phones.distinct().mapNotNull { p -> com.closeros.app.data.LeadIndex.find(ctx, p)?.let { p to it } }.toMap()
+                logs.mapIndexed { i, l -> HistoryItem(l, phones[i], local[phones[i]]) }
+            } else {
+                val a = from.atStartOfDay(zone).toInstant()
+                val b = to.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+                val rows = Repo.teamCalls(m.org_id, a.toString(), users)
+                val byId = rows.associateBy { it.id }
+                val later = rows.mapNotNull { r ->
+                    val t = runCatching { com.closeros.app.data.parseInstant(r.started_at).toEpochMilli() }.getOrNull() ?: return@mapNotNull null
+                    com.closeros.app.calls.LogCall(r.id, r.phone, r.direction, t, r.duration_sec, r.sim_slot, null, r.sim_number, r.channel, r.contact_name)
+                }.sortedBy { it.startedAtMs }
+                val won = outcomes.filter { it.category == "won" }.map { it.id }.toSet()
+                val picked = com.closeros.app.data.Drill.filterCalls(later.filter { it.startedAtMs < b }, later, key, zone, { byId[it.id]?.outcome_id }, won)
+                val leads = Repo.leadsByIds(picked.mapNotNull { byId[it.id]?.lead_id }).associateBy { it.id }
+                picked.map { c -> HistoryItem(c, c.phone, byId[c.id]?.lead_id?.let { leads[it] }) }
+            }
+        }.onSuccess { callDrill = title to it }
+         .onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't load these calls — check your internet") }
+    }
+
+    /** Opens the leads behind a "where they stand" number. */
+    fun openLeadDrill(title: String, kind: String, users: List<String>?, from: java.time.Instant?, to: java.time.Instant?, onPhone: Boolean) = viewModelScope.launch {
+        val m = membership ?: return@launch
+        runCatching {
+            if (onPhone) kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.closeros.app.data.LocalReports.drillLeads(ctx, com.closeros.app.data.Backend.uid, outcomes, from, to, kind)
+            } else Repo.leadsWhere(m.org_id, users, from, to, kind, outcomes)
+        }.onSuccess { genericList = title to it }
+         .onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't load these leads — check your internet") }
+    }
+
     fun openLeadsById(title: String, ids: List<String>) = viewModelScope.launch {
         runCatching { Repo.leadsByIds(ids) }.onSuccess { genericList = title to it }.onFailure { message = "Couldn't load — check internet" }
     }
@@ -1279,30 +1427,31 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Back closes the screen on top (so Back never leaves the app from an inner screen). Returns false on the main tabs. */
     fun closeTop(): Boolean {
+        // Same order as the screens are stacked in MainActivity: whatever is drawn on top closes first.
         when {
-            showWaToday -> showWaToday = false
-            showNoteSettings -> showNoteSettings = false
-            showMySales -> showMySales = false
-            showLeadWork && genericList == null && openLeadId == null -> showLeadWork = false
-            showRecipe && genericList == null && openLeadId == null -> showRecipe = false
-            showPlaybook -> showPlaybook = false
             checkIn != null -> checkIn = null
-            showFeedback -> showFeedback = false
-            showDialer -> showDialer = false
-            showReports && openLeadId == null && genericList == null && !showLeadWork && !showRecipe -> showReports = false
-            showLeaderboard -> showLeaderboard = false
+            editSequence != null -> closeSequenceEditor()
+            showImport -> { showImport = false; importData = null; importResult = null }
+            showCallLists -> showCallLists = false
+            showContactsPick -> showContactsPick = false
+            showNoteSettings -> showNoteSettings = false
+            showMessages -> { showMessages = false; tplEdit = null }
+            showPlaybook -> showPlaybook = false
             openLeadId != null -> openLeadId = null
             genericList != null -> genericList = null
+            callDrill != null -> callDrill = null
+            showMySales -> showMySales = false
+            showFeedback -> showFeedback = false
+            showDialer -> showDialer = false
             showLeadWork -> showLeadWork = false
             showRecipe -> showRecipe = false
+            showWaToday -> showWaToday = false
             showReports -> showReports = false
+            showLeaderboard -> showLeaderboard = false
+            openSequenceId != null -> openSequenceId = null
+            showSequences -> showSequences = false
             openList != null -> openList = null
             showBatches -> showBatches = false
-            editSequence != null -> closeSequenceEditor()
-            openSequenceId != null -> openSequenceId = null
-            showImport -> { showImport = false; importData = null; importResult = null }
-            showContactsPick -> showContactsPick = false
-            showSequences -> showSequences = false
             todayFilter != null -> todayFilter = null
             else -> return false
         }
@@ -1570,19 +1719,47 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
 }
 
 /** Fills a WhatsApp message's {{variables}} for one lead (used in the app and in the after-call pop-up). */
+/** What {{companyName}} becomes: the company's name — in a personal account the optional business name, else nothing. */
+fun fillCompanyName(o: com.closeros.app.data.Org?): String = when {
+    o == null -> ""
+    o.is_individual || com.closeros.app.BuildConfig.SOLO ->
+        (o.settings?.get("business_name") as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it.isString }?.content?.trim().orEmpty()
+    else -> o.name
+}
+
+/** Fills a WhatsApp message for one lead. A fill-in this lead has nothing for is dropped together with its joining
+ *  word ("on {{batchDate}}", "from {{companyName}}", ", {{companyName}}"), so a message never reads "the session on . Please". */
 fun fillTemplateText(body: String, lead: Lead, companyName: String, timezone: String, repName: String): String {
     val b = lead.latestBatch?.batch
     val tz = runCatching { java.time.ZoneId.of(timezone) }.getOrDefault(java.time.ZoneId.systemDefault())
     val df = java.time.format.DateTimeFormatter.ofPattern("d MMM, h:mm a").withZone(tz)
     fun t(iso: String?) = iso?.let { runCatching { df.format(com.closeros.app.data.parseInstant(it)) }.getOrNull() } ?: ""
-    return body
-        .replace("{{leadName}}", lead.name.substringBefore(' ').ifBlank { "there" })
-        .replace("{{leadFullName}}", lead.name.ifBlank { "there" })
-        .replace("{{repName}}", repName.substringBefore(' '))
-        .replace("{{companyName}}", companyName)
-        .replace("{{batchName}}", b?.name ?: "the session")
-        .replace("{{batchDate}}", t(b?.webinar_at))
-        .replace("{{followUpTime}}", t(lead.next_follow_up_at).ifBlank { "a convenient time" })
-        .replace("{{city}}", lead.city ?: "")
-        .replace("{{profession}}", lead.profession ?: "")
+    val values = linkedMapOf(
+        "leadName" to lead.name.substringBefore(' ').ifBlank { "there" },
+        "leadFullName" to lead.name.ifBlank { "there" },
+        "repName" to repName.substringBefore(' '),
+        "companyName" to companyName.trim(),
+        "batchName" to (b?.name ?: "the session"),
+        "batchDate" to t(b?.webinar_at),
+        "followUpTime" to t(lead.next_follow_up_at).ifBlank { "a convenient time" },
+        "city" to lead.city.orEmpty().trim(),
+        "profession" to lead.profession.orEmpty().trim(),
+    )
+    var out = body
+    values.filterValues { it.isBlank() }.keys.forEach { k ->
+        out = out.replace(Regex("""\s*(?:\b(?:on|at|from|in|of|by|for|with)\s+|[,—–-]\s*)?\{\{$k\}\}""", RegexOption.IGNORE_CASE), "")
+    }
+    values.forEach { (k, v) -> out = out.replace("{{$k}}", v) }
+    return out.replace(Regex("[ \t]{2,}"), " ").replace(Regex("[ \t]+([,.!?])"), "$1").replace(Regex(",\\s*([.!?])"), "$1")
+}
+
+/** Fill-ins in [body] this lead has nothing for — shown before sending so the rep can add them by hand. */
+fun missingFillIns(body: String, lead: Lead, companyName: String): List<String> {
+    val b = lead.latestBatch?.batch
+    return listOfNotNull(
+        "webinar date".takeIf { "{{batchDate}}" in body && b?.webinar_at == null },
+        "business name".takeIf { "{{companyName}}" in body && companyName.isBlank() },
+        "city".takeIf { "{{city}}" in body && lead.city.isNullOrBlank() },
+        "profession".takeIf { "{{profession}}" in body && lead.profession.isNullOrBlank() },
+    )
 }

@@ -65,7 +65,10 @@ fun LeaderboardScreen(vm: AppViewModel) {
             if (sorted.isEmpty()) item { Text("No one to show yet.", color = Brand.muted) }
             itemsIndexed(sorted.distinctBy { it.user_id }, key = { _, r -> r.user_id }) { i, r ->
                 val mine = r.user_id == Backend.uid
-                Row(Modifier.fillMaxWidth().background(if (mine) Brand.light else Color.White, RoundedCornerShape(10.dp)).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                // Tap a person: their full report (managers), or my own report (me).
+                val canOpen = mine || (vm.isManager && !vm.isSolo)
+                Row(Modifier.fillMaxWidth().background(if (mine) Brand.light else Color.White, RoundedCornerShape(10.dp))
+                    .clickable(enabled = canOpen) { vm.reportsWho = if (mine) "me" else r.user_id; vm.showReports = true }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(medals.getOrNull(i) ?: "#${i + 1}", fontSize = 20.sp, modifier = Modifier.width(44.dp))
                     Column(Modifier.weight(1f)) {
                         Text(r.name + if (mine) " (you)" else "", fontWeight = FontWeight.SemiBold)

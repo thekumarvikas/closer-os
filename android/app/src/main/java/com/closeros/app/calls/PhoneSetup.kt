@@ -156,25 +156,24 @@ object PhoneSetup {
             intent = if (oppoFamily) appInfo else auto,
             steps = if (oppoFamily) appInfoSteps else "Find Closer OS in the list and turn its switch on, then come back and tap \"Done\".",
             fallback = appInfo, fallbackSteps = appInfoSteps)
-        list += Item("dialer", "Phone app that records calls", when {
-                google -> "This phone uses Google's Phone app, which keeps recordings private."
-                makerDialer(dialer) -> "Your phone's own Phone app is set as the default ✓"
-                else -> "Another app is set as your Phone app. Choose your phone's own Phone app so calls can be recorded."
-            }, makerDialer(dialer) && !google, Kind.Special, required = false,
-            intent = Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS),
-            steps = "This opens \"Default apps\": tap \"Phone app\" and choose your phone's own \"Phone\" (not a downloaded dialer). Then come back.",
-            warning = if (google) "Recordings can't be uploaded on this phone. Call history, talk time${if (com.closeros.app.BuildConfig.WA_TRACKING) " and WhatsApp calls" else ""} still work." else null)
-        // Recording only matters when the phone's own Phone app is the default (a downloaded dialer / Google Phone can't give us files).
+        // One simple step: switch on the phone's own automatic recording, then tap Done. Where that switch lives differs
+        // by brand, so the button opens the closest screen we can find and the text says what to look for.
         if (!google) {
             val rec = recordingSettingsIntent(ctx)
             val xiaomi = brand == "xiaomi" || brand == "redmi" || brand == "poco"
-            if (makerDialer(dialer)) list += Item("autorecord", "Auto call recording on", "Turn on automatic recording in your Phone app so every call is recorded.",
+            val downloaded = dialer.isNotBlank() && !makerDialer(dialer)
+            val dialerName = runCatching { ctx.packageManager.getApplicationLabel(ctx.packageManager.getApplicationInfo(dialer, 0)).toString() }
+                .getOrNull()?.takeIf { it.isNotBlank() } ?: "your current Phone app"
+            list += Item("autorecord", "Automatic call recording", "Turn on automatic call recording in your phone, then come back and tap Done.",
                 store.confirmed("autorecord"), Kind.Confirm, required = false,
-                intent = rec.first ?: ctx.packageManager.getLaunchIntentForPackage(dialer),
-                fallback = ctx.packageManager.getLaunchIntentForPackage(dialer),
-                fallbackSteps = recordingSteps(brand, opened = "app"),
-                steps = recordingSteps(brand, opened = if (rec.first == null) "app" else rec.second) +
-                    (if (xiaomi) "\nIf it isn't there: Settings → Apps → System app settings → Call settings → Call recording." else ""))
+                intent = rec.first ?: Intent(Settings.ACTION_SETTINGS),
+                fallback = Intent(Settings.ACTION_SETTINGS),
+                fallbackSteps = "In Settings, search for \"call recording\" and turn on automatic recording for all calls. Then come back and tap \"Done\".",
+                steps = if (rec.first == null) "In Settings, search for \"call recording\" and turn on automatic recording for all calls. Then come back and tap \"Done\"." +
+                        (if (xiaomi) "\nOn Xiaomi it's usually Settings → Apps → System app settings → Call settings → Call recording." else "")
+                    else recordingSteps(brand, opened = rec.second),
+                warning = if (downloaded) "Calls made through $dialerName can't be recorded — only your phone's own Phone app records calls. " +
+                    "To record them, set the phone's own Phone app as default (Settings → Apps → Default apps → Phone app)." else null)
             list += Item("recfolder", "Recordings folder", "Closer OS uploads your call recordings from this folder.",
                 recordingsFolder(ctx) != null, Kind.Special, required = false,
                 steps = if (brand == "xiaomi" || brand == "redmi" || brand == "poco") "Open MIUI → sound_recorder → call_rec, then tap \"Use this folder\" → Allow."

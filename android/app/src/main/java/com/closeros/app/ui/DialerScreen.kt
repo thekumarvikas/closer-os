@@ -43,7 +43,6 @@ fun DialerScreen(vm: AppViewModel) {
     var number by remember { mutableStateOf("") }
     var leads by remember { mutableStateOf<List<Lead>>(emptyList()) }
     var history by remember { mutableStateOf<List<LogCall>>(emptyList()) }
-    var wa by remember { mutableStateOf(false) }
     var adding by remember { mutableStateOf(false) }
     val sims = remember { vm.sims() }
     val digits = number.filter { it.isDigit() }
@@ -95,7 +94,7 @@ fun DialerScreen(vm: AppViewModel) {
             color = if (number.isEmpty()) Brand.muted else Color(0xFF0F172A), modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
         exactLead?.let { Text("Lead: ${it.name}", color = Brand.primary, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
         if (digits.length >= 6) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-            TextButton(onClick = { wa = true }) { Icon(Icons.Default.Send, null, tint = Color(0xFF16A34A)); Spacer(Modifier.width(4.dp)); Text("WhatsApp") }
+            TextButton(onClick = { vm.openWhatsApp(exactLead ?: Lead(id = "", org_id = vm.membership?.org_id ?: "", phone = number)) }) { Icon(Icons.Default.Send, null, tint = Color(0xFF16A34A)); Spacer(Modifier.width(4.dp)); Text("WhatsApp") }
             TextButton(onClick = { PhoneCalls.sms(ctx, number) }) { Icon(Icons.Default.Email, null); Spacer(Modifier.width(4.dp)); Text("SMS") }
             if (exactLead == null) TextButton(onClick = { adding = true }) { Text("+ Add lead") }
         }
@@ -127,7 +126,6 @@ fun DialerScreen(vm: AppViewModel) {
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A))) { Icon(Icons.Default.Call, null); Spacer(Modifier.width(6.dp)); Text("Call") }
         }
     }
-    if (wa) WhatsAppPicker(vm, exactLead ?: Lead(id = "", org_id = vm.membership?.org_id ?: "", phone = number)) { wa = false }
     if (adding) AddLeadQuick(vm, number) { adding = false }
 }
 

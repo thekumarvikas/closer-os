@@ -418,7 +418,9 @@ private fun WhatsAppStep(info: AfterCall.Info, savedLine: String?, sending: Bool
         CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)); Text("Getting the attachment…", fontSize = 14.sp, color = Brand.muted)
     }
     if (co.templates.isEmpty()) Text("No saved messages yet — tap \"Write a message\".", color = Brand.muted, fontSize = 14.sp)
-    listOf("Company messages" to company, "My messages" to mine).forEach { (title, list) ->
+    // Personal app: all messages are the person's own — never "company".
+    val solo = co.org?.is_individual == true || com.closeros.app.BuildConfig.SOLO
+    (if (solo) listOf("My messages" to (company + mine)) else listOf("Company messages" to company, "My messages" to mine)).forEach { (title, list) ->
         if (list.isNotEmpty()) Text(title, fontSize = 12.sp, color = Brand.muted, fontWeight = FontWeight.SemiBold)
         list.forEach { t ->
             Column(Modifier.fillMaxWidth().border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(12.dp)).clickable(enabled = !sending) { send(t) }.padding(12.dp)) {

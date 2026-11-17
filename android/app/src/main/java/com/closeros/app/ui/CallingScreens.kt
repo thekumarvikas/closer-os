@@ -296,15 +296,22 @@ fun SyncStatusLine(vm: AppViewModel, onlyProblems: Boolean = false, small: Boole
 }
 
 /** The calls behind one of today's numbers; leads among them can go straight into a calling queue. */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TodayListScreen(vm: AppViewModel, key: String) {
-    BackHandler { vm.todayFilter = null }
     val label = tiles.firstOrNull { it.key == key }?.label ?: "Calls"
     val items = vm.today.filter { todayMatches(key, it) }
+    CallListScreen(vm, "$label today", items) { vm.todayFilter = null }
+}
+
+/** A list of calls (behind a tile or a report number): every row opens its lead or offers "+ Add as lead";
+ *  leads among them can go straight into a calling queue. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CallListScreen(vm: AppViewModel, title: String, items: List<HistoryItem>, onBack: () -> Unit) {
+    BackHandler { onBack() }
     val leads = items.mapNotNull { it.lead }.distinctBy { it.id }
     Scaffold(topBar = {
-        TopAppBar(title = { Text("$label today (${items.size})") }, navigationIcon = { IconButton(onClick = { vm.todayFilter = null }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } })
+        TopAppBar(title = { Text("$title (${items.size})", maxLines = 1, overflow = TextOverflow.Ellipsis) }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } })
     }, bottomBar = {
         if (leads.isNotEmpty()) Surface(shadowElevation = 8.dp) {
             Button(onClick = { vm.startQueue(leads) }, modifier = Modifier.fillMaxWidth().padding(16.dp).height(52.dp)) {
@@ -313,21 +320,23 @@ fun TodayListScreen(vm: AppViewModel, key: String) {
         }
     }) { pad ->
         LazyColumn(Modifier.fillMaxSize().padding(pad), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (items.isEmpty()) item { Text("No calls here yet today.", color = Brand.muted) }
+            if (items.isEmpty()) item { Text("No calls here.", color = Brand.muted) }
             items(items.distinctBy { it.log.id }, key = { it.log.id }) { h -> HistoryRow(vm, h) }
             if (items.size > leads.size && leads.isNotEmpty()) item {
-                Text("Numbers that are not leads can't go in the queue — add them as leads from the Calls tab first.", fontSize = 12.sp, color = Brand.muted)
+                Text("Numbers not in your lead list can't go in the queue — tap one and choose \"+ Add as lead\" first.", fontSize = 12.sp, color = Brand.muted)
             }
         }
     }
 }
 
-/** One slim call row: direction arrow · name · one detail line · WhatsApp + Call. Tap for SMS / lead actions. */
+/** One slim call row: direction arrow · name · one detail line · WhatsApp + Call. Tap a lead's row to open the lead;
+ *  tap any other number for "+ Add as lead" and SMS. The same on every screen that lists calls. */
 @Composable
 fun HistoryRow(vm: AppViewModel, h: HistoryItem, onAdd: (() -> Unit)? = null, count: Int = 1, selected: Boolean? = null, onSelect: (() -> Unit)? = null) {
     val ctx = LocalContext.current
-    var wa by remember { mutableStateOf(false) }
     var open by remember { mutableStateOf(false) }
+    var adding by remember { mutableStateOf(false) }
+    val add: () -> Unit = onAdd ?: { adding = true }
     val missed = h.log.direction == "missed" || h.log.direction == "rejected"
     val arrow = CallColors.arrow(h.log.direction)
     val arrowColor = CallColors.of(h.log.direction, h.log.durationSec)
@@ -341,7 +350,13 @@ fun HistoryRow(vm: AppViewModel, h: HistoryItem, onAdd: (() -> Unit)? = null, co
     }
     // Select mode (Calls tab): a tick box instead of the arrow; tapping the row ticks it.
     val selecting = selected != null && onSelect != null
-    Column(Modifier.fillMaxWidth().clickable { if (selecting) onSelect!!() else open = !open }.padding(start = 4.dp, top = 6.dp, bottom = 6.dp)) {
+    Column(Modifier.fillMaxWidth().clickable {
+        when {
+            selecting -> onSelect!!()
+            h.lead != null -> vm.openLeadId = h.lead.id
+            else -> open = !open
+        }
+    }.padding(start = 4.dp, top = 6.dp, bottom = 6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (selecting) Checkbox(selected!!, { onSelect!!() }, enabled = h.phone.isNotBlank(), modifier = Modifier.size(28.dp))
             else Text(arrow, color = arrowColor, fontSize = 21.sp, fontWeight = FontWeight.Black, modifier = Modifier.width(28.dp))
@@ -363,7 +378,7 @@ fun HistoryRow(vm: AppViewModel, h: HistoryItem, onAdd: (() -> Unit)? = null, co
             if (!selecting) {
             if (rec != null) IconButton(onClick = { open = true }, modifier = Modifier.size(36.dp)) { Text("▶", color = Brand.primary, fontSize = 16.sp, fontWeight = FontWeight.Bold) }
             if (h.phone.isNotBlank()) {
-                IconButton(onClick = { wa = true }, modifier = Modifier.size(40.dp)) { Icon(Icons.Default.Send, "WhatsApp", tint = Color(0xFF16A34A), modifier = Modifier.size(20.dp)) }
+                IconButton(onClick = { vm.openWhatsApp(h.lead ?: Lead(id = "", org_id = vm.membership?.org_id ?: "", name = h.log.name ?: "", phone = h.phone)) }, modifier = Modifier.size(40.dp)) { Icon(Icons.Default.Send, "WhatsApp", tint = Color(0xFF16A34A), modifier = Modifier.size(20.dp)) }
                 IconButton(onClick = {
                     if (h.lead != null) vm.callRequest = h.lead
                     else PhoneCalls.call(ctx, h.phone, vm.sims().firstOrNull { it.slot == vm.store.preferredSim } ?: vm.sims().firstOrNull())
@@ -373,13 +388,13 @@ fun HistoryRow(vm: AppViewModel, h: HistoryItem, onAdd: (() -> Unit)? = null, co
         }
         if (open) vm.recordingPaths[h.log.id]?.let { p -> Box(Modifier.padding(start = 28.dp)) { RecordingPlayer(h.log.id, p) } }
         if (open && h.phone.isNotBlank()) Row(Modifier.padding(start = 26.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            TextButton(onClick = { PhoneCalls.sms(ctx, h.phone) }) { Text("✉️ SMS") }
             if (h.lead != null) TextButton(onClick = { vm.openLeadId = h.lead.id }) { Text("👤 Open lead") }
-            else if (onAdd != null) TextButton(onClick = onAdd) { Text("+ Add lead") }
+            else TextButton(onClick = add) { Text("+ Add as lead", fontWeight = FontWeight.SemiBold) }
+            TextButton(onClick = { PhoneCalls.sms(ctx, h.phone) }) { Text("✉️ SMS") }
             Text(fmtPhone(h.phone), fontSize = 12.sp, color = Brand.muted, modifier = Modifier.align(Alignment.CenterVertically))
         }
     }
-    if (wa) WhatsAppPicker(vm, h.lead ?: Lead(id = "", org_id = vm.membership?.org_id ?: "", name = h.log.name ?: "", phone = h.phone)) { wa = false }
+    if (adding) AddLeadDialog(h.phone, onDismiss = { adding = false }) { name, prof, notes -> vm.addLeadFromCall(h.phone, name, prof, notes) { adding = false } }
 }
 
 /** Groups calls by day ("Today", "Yesterday", "Mon 3 Nov") and folds repeat calls to the same number in a row. */
@@ -475,7 +490,6 @@ fun leadTags(vm: AppViewModel, l: Lead): List<Tag> {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun LeadCard(vm: AppViewModel, l: Lead, onCall: ((Lead) -> Unit)?) {
-    var wa by remember { mutableStateOf(false) }
     val tags = leadTags(vm, l)
     val hot = tags.any { it.text.startsWith("🔥") || it.text == "Interested" || it.text == "Won" }
     Card(Modifier.fillMaxWidth().clickable { vm.openLeadId = l.id },
@@ -509,11 +523,10 @@ fun LeadCard(vm: AppViewModel, l: Lead, onCall: ((Lead) -> Unit)?) {
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 if (onCall != null) FilledIconButton(onClick = { onCall(l) }) { Icon(Icons.Default.Call, "Call ${l.name}") }
-                IconButton(onClick = { wa = true }) { Icon(Icons.Default.Send, "WhatsApp", tint = Color(0xFF16A34A)) }
+                IconButton(onClick = { vm.openWhatsApp(l) }) { Icon(Icons.Default.Send, "WhatsApp", tint = Color(0xFF16A34A)) }
             }
         }
     }
-    if (wa) WhatsAppPicker(vm, l) { wa = false }
 }
 
 /**
@@ -524,78 +537,85 @@ fun LeadCard(vm: AppViewModel, l: Lead, onCall: ((Lead) -> Unit)?) {
 fun WhatsAppPicker(vm: AppViewModel, lead: Lead, onDismiss: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    var text by remember { mutableStateOf<String?>(null) }
-    var saving by remember { mutableStateOf(false) }
-    var saveName by remember { mutableStateOf("") }
-    var picked by remember { mutableStateOf<CompanyMedia?>(null) }   // company file: from a template or the file library
+    // The message lives in the view model, so Android closing the screen while a file is picked can't lose it.
+    if (vm.waDraft?.lead?.phone != lead.phone) SideEffect { vm.waDraft = AppViewModel.WaDraft(lead) }
+    val d = vm.waDraft?.takeIf { it.lead.phone == lead.phone } ?: return
     var showFiles by remember { mutableStateOf(false) }
-    var chosen by remember { mutableStateOf<com.closeros.app.data.Template?>(null) }   // which saved message (for the record)
-    var ownMedia by remember { mutableStateOf<android.net.Uri?>(null) }               // photo/video chosen on the phone
-    var sending by remember { mutableStateOf(false) }
-    val chooseMedia = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.GetContent()) { u -> if (u != null) ownMedia = u }
+    val main = remember(ctx) { generateSequence(ctx) { (it as? android.content.ContextWrapper)?.baseContext }.firstOrNull { it is com.closeros.app.MainActivity } as? com.closeros.app.MainActivity }
+    // Outside the main screen (after-call sheet) a local picker hands the file to the same place.
+    val local = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.GetContent()) { u -> vm.onFilePicked(u) }
+    fun pickFile() { vm.beforeFilePick("wanow"); runCatching { main?.pickFile?.launch("*/*") ?: local.launch("*/*") } }
+    fun close() { vm.waDraft = null; onDismiss() }
     val first = lead.name.substringBefore(' ')
-    val company = vm.templates.filter { it.owner_id == null }
-    val mine = vm.templates.filter { it.owner_id != null }
+    // Personal app: every message is the person's own — no "company" anywhere.
+    val company = if (vm.isSolo) emptyList() else vm.templates.filter { it.owner_id == null }
+    val mine = if (vm.isSolo) vm.templates else vm.templates.filter { it.owner_id != null }
     fun pick(t: com.closeros.app.data.Template) {
-        text = vm.fillTemplate(t.body, lead); ownMedia = null; chosen = t
-        picked = t.media_path?.let { CompanyMedia(it, t.media_type, t.media_name) }
+        d.text = vm.fillTemplate(t.body, lead); d.own = null; d.chosen = t
+        d.picked = t.media_path?.let { CompanyMedia(it, t.media_type, t.media_name) }
     }
-    AlertDialog(onDismissRequest = onDismiss,
+    val text = d.text
+    AlertDialog(onDismissRequest = { close() },
         title = { Text(if (text == null) "Choose a message" else "WhatsApp to ${first.ifBlank { fmtPhone(lead.phone) }}") },
         text = {
             if (text == null) Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (company.isNotEmpty()) Text("Company messages", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Brand.muted)
                 company.forEach { t -> TemplateRow(vm, (if (t.media_path != null) mediaIcon(t.media_type) + " " else "") + t.name, vm.fillTemplate(t.body, lead), null) { pick(t) } }
                 if (mine.isNotEmpty()) Text("My messages", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Brand.muted, modifier = Modifier.padding(top = 6.dp))
-                mine.forEach { t -> TemplateRow(vm, t.name, vm.fillTemplate(t.body, lead), onDelete = { vm.deleteMyTemplate(t.id) }) { pick(t) } }
-                TextButton(onClick = { text = "Hi ${first.ifBlank { "there" }}, "; picked = null }) { Text("Write a new message") }
-            } else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(text!!, { text = it }, modifier = Modifier.fillMaxWidth(), minLines = 4)
+                mine.forEach { t -> TemplateRow(vm, (if (t.media_path != null) mediaIcon(t.media_type) + " " else "") + t.name, vm.fillTemplate(t.body, lead), null) { pick(t) } }
+                TextButton(onClick = { d.text = "Hi ${first.ifBlank { "there" }}, "; d.picked = null; d.chosen = null }) { Text("✏️ Write a new message") }
+                TextButton(onClick = { close(); vm.showMessages = true }) { Text("⚙ Add or edit my messages", color = Brand.muted, fontSize = 13.sp) }
+            } else Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(text, { d.text = it }, modifier = Modifier.fillMaxWidth(), minLines = 4)
+                d.chosen?.let { t -> vm.missingFor(t.body, lead).takeIf { it.isNotEmpty() }?.let { miss ->
+                    Text("⚠ This lead has no ${miss.joinToString(" or ")} — that part was left out. Add it above if you need it.", fontSize = 12.sp, color = Color(0xFF92400E))
+                } }
                 when {
-                    picked != null -> Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("${mediaIcon(picked?.type)} ${picked?.name ?: "Attachment"}", fontSize = 13.sp, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { picked = null }) { Text("Remove") }
+                    d.picked != null -> Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("${mediaIcon(d.picked?.type)} ${d.picked?.name ?: "Attachment"}", fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { d.picked = null }) { Text("Remove") }
                     }
-                    ownMedia != null -> Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("📎 Photo/video from your phone", fontSize = 13.sp, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { ownMedia = null }) { Text("Remove") }
+                    d.own != null -> Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("${mediaIcon(d.own?.type)} ${d.own?.name}", fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { d.own = null }) { Text("Remove") }
                     }
                     else -> Column {
-                        TextButton(onClick = { showFiles = true }) { Text("📁 Company files (brochure, photos…)") }
-                        TextButton(onClick = { chooseMedia.launch("*/*") }) { Text("📎 A file from my phone") }
+                        if (!vm.isSolo) TextButton(onClick = { showFiles = true }) { Text("📁 Company files (brochure, photos…)") }
+                        TextButton(onClick = { pickFile() }) { Text("📎 Attach a file — photo, video, PDF, Excel…") }
                     }
                 }
-                if (saving) {
-                    OutlinedTextField(saveName, { saveName = it }, label = { Text("Name for this message") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    Button(onClick = {
-                        // Save with a placeholder instead of this lead's name, so it fills in for every lead.
-                        val cur = text.orEmpty()
-                        val body = if (first.length >= 2) cur.replace(first, "{{leadName}}") else cur
-                        vm.saveMyTemplate(saveName, body); saving = false
-                    }) { Text("Save to My messages") }
-                } else TextButton(onClick = { saving = true }) { Text("Save as my message for next time") }
+                if (d.saving) {
+                    OutlinedTextField(d.saveName, { d.saveName = it }, label = { Text("Name for this message") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Button(enabled = !d.busy, onClick = { vm.saveDraftAsMine(d) }) { Text(if (d.busy) "Saving…" else "Save to My messages" + if (d.own != null || d.picked != null) " (with the file)" else "") }
+                } else TextButton(onClick = { d.saving = true }) { Text("💾 Save this message for next time") }
             }
         },
         confirmButton = {
-            if (text != null) Button(enabled = !sending, onClick = {
-                val t = picked; val own = ownMedia; val msg = text ?: return@Button
-                vm.logWaSend(lead, chosen)   // counted as an interaction on this lead
+            if (text != null) Button(enabled = !d.busy, onClick = {
+                val t = d.picked; val own = d.own; val msg = d.text ?: return@Button
+                vm.logWaSend(lead, d.chosen)   // counted as an interaction on this lead
                 when {
-                    own != null -> { PhoneCalls.whatsappMedia(ctx, lead.phone, own, ctx.contentResolver.getType(own) ?: "*/*", msg); onDismiss() }
-                    t != null -> { sending = true; scope.launch {
+                    own != null -> {
+                        runCatching {
+                            val uri = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", java.io.File(own.path))
+                            PhoneCalls.whatsappMedia(ctx, lead.phone, uri, own.type, msg)
+                        }.onFailure { vm.message = "Couldn't attach the file"; PhoneCalls.whatsapp(ctx, lead.phone, msg) }
+                        close()
+                    }
+                    t != null -> { d.busy = true; scope.launch {
                         runCatching {
                             val f = com.closeros.app.data.Repo.templateMediaFile(ctx, t.path, t.name)
                             val uri = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
                             PhoneCalls.whatsappMedia(ctx, lead.phone, uri, t.type ?: "*/*", msg)
                         }.onFailure { vm.message = "Couldn't get the attachment — check internet"; PhoneCalls.whatsapp(ctx, lead.phone, msg) }
-                        sending = false; onDismiss()
+                        d.busy = false; close()
                     } }
-                    else -> { PhoneCalls.whatsapp(ctx, lead.phone, msg); onDismiss() }
+                    else -> { PhoneCalls.whatsapp(ctx, lead.phone, msg); close() }
                 }
-            }) { Text(if (sending) "Preparing…" else "Open WhatsApp") }
+            }) { Text(if (d.busy) "Preparing…" else "Open WhatsApp") }
         },
-        dismissButton = { TextButton(onClick = { if (text != null) { text = null; saving = false; picked = null; ownMedia = null } else onDismiss() }) { Text(if (text != null) "Back" else "Cancel") } })
-    if (showFiles) CompanyFilesDialog(vm, onDismiss = { showFiles = false }) { f -> picked = CompanyMedia(f.path, f.mime_type, f.name); ownMedia = null; showFiles = false }
+        dismissButton = { TextButton(onClick = { if (text != null) { d.text = null; d.saving = false; d.picked = null; d.own = null; d.chosen = null } else close() }) { Text(if (text != null) "Back" else "Cancel") } })
+    if (showFiles) CompanyFilesDialog(vm, onDismiss = { showFiles = false }) { f -> d.picked = CompanyMedia(f.path, f.mime_type, f.name); d.own = null; showFiles = false }
 }
 
 /** A company file to send on WhatsApp (stored on the server, downloaded when sending). */
@@ -632,7 +652,8 @@ fun CompanyFilesDialog(vm: AppViewModel, onDismiss: () -> Unit, onPick: (com.clo
         confirmButton = {}, dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } })
 }
 
-private fun mediaIcon(type: String?) = when { type == null -> "📎"; type.startsWith("image") -> "🖼️"; type.startsWith("video") -> "🎬"; type.contains("pdf") -> "📄"; else -> "📎" }
+internal fun mediaIcon(type: String?) = when { type == null -> "📎"; type.startsWith("image") -> "🖼️"; type.startsWith("video") -> "🎬"; type.contains("pdf") -> "📄"
+    type.contains("sheet") || type.contains("excel") || type.contains("csv") -> "📊"; else -> "📎" }
 
 @Composable
 private fun TemplateRow(vm: AppViewModel, name: String, preview: String, onDelete: (() -> Unit)?, onPick: () -> Unit) {

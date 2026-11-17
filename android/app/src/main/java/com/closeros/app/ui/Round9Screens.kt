@@ -67,8 +67,8 @@ fun WaChooseDialog(vm: AppViewModel) {
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Choose the message. Each lead's name and details are filled in.", fontSize = 13.sp, color = Brand.muted)
-                if (vm.templates.isEmpty()) Text("No saved messages yet — add company messages on the dashboard (Settings).", color = Brand.muted)
-                listOf("Company messages" to company, "My messages" to mine).forEach { (title, list) ->
+                if (vm.templates.isEmpty()) Text(if (vm.isSolo) "No saved messages yet — add them in Settings → My WhatsApp messages." else "No saved messages yet — add company messages on the dashboard (Settings).", color = Brand.muted)
+                (if (vm.isSolo) listOf("My messages" to (company + mine)) else listOf("Company messages" to company, "My messages" to mine)).forEach { (title, list) ->
                     if (list.isNotEmpty()) Text(title, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Brand.muted)
                     list.forEach { t ->
                         Column(Modifier.fillMaxWidth().border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(10.dp))

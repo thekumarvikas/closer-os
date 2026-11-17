@@ -189,11 +189,29 @@ object LocalReports {
     fun withMyActuals(ctx: Context, p: Progress?, from: LocalDate, to: LocalDate, zone: ZoneId, outcomeList: List<Outcome>): Progress? =
         p?.copy(actual = actuals(ctx, from, to, zone, outcomeList).copy(focus = p.actual.focus))
 
+    /** My leads on the phone; with a period, only those assigned in it. */
+    private fun myLeads(ctx: Context, uid: String?, from: Instant?, to: Instant?) = LocalLeads.all(ctx).filter { (uid == null || it.assigned_to == uid) &&
+        (from == null || it.assigned_at?.let { s -> runCatching { parseInstant(s) }.getOrNull() }?.let { t -> !t.isBefore(from) && (to == null || t.isBefore(to)) } == true) }
+
+    /** The leads behind one "where they stand" number (see [Drill.filterLeads]). */
+    fun drillLeads(ctx: Context, uid: String?, outcomeList: List<Outcome>, from: Instant?, to: Instant?, kind: String): List<Lead> {
+        val cat = outcomeList.associate { it.id to it.category }
+        return Drill.filterLeads(myLeads(ctx, uid, from, to), kind) { cat[it] }
+    }
+
+    /** The calls behind one of my report numbers (see [Drill.filterCalls]), newest first. */
+    fun drillCalls(ctx: Context, from: LocalDate, to: LocalDate, zone: ZoneId, key: String, outcomeList: List<Outcome>): List<LogCall> {
+        val (a, b) = range(from, to, zone)
+        val later = callsSince(ctx, a)
+        val oc = if (key.startsWith("outcome:") || key == "won") outcomes(ctx) else emptyMap()
+        val won = outcomeList.filter { it.category == "won" }.map { it.id }.toSet()
+        return Drill.filterCalls(later.filter { it.startedAtMs < b }, later, key, zone, { oc[it.id]?.outcome }, won)
+    }
+
     /** Same shape as lead_status_report for my own leads, from the lead copy on the phone. */
     fun leadStatus(ctx: Context, uid: String?, outcomeList: List<Outcome>, from: Instant?, to: Instant?): JsonObject {
         val cat = outcomeList.associate { it.id to it.category }
-        val mine = LocalLeads.all(ctx).filter { (uid == null || it.assigned_to == uid) &&
-            (from == null || it.assigned_at?.let { s -> runCatching { parseInstant(s) }.getOrNull() }?.let { t -> !t.isBefore(from) && (to == null || t.isBefore(to)) } == true) }
+        val mine = myLeads(ctx, uid, from, to)
         return buildJsonObject {
             put("total", mine.size)
             put("called", mine.count { it.call_count > 0 || it.last_call_at != null })

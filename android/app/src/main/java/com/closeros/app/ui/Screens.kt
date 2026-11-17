@@ -192,8 +192,6 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
         }
     }
     val outcomes = vm.outcomes.associateBy { it.id }
-    var waOpen by remember { mutableStateOf(false) }
-    if (waOpen && lead != null) WhatsAppPicker(vm, lead!!) { waOpen = false }
     var editing by remember { mutableStateOf(false) }
     var claimSale by remember { mutableStateOf(false) }
     if (claimSale && lead != null) ClaimSaleDialog(vm, lead!!) { claimSale = false }
@@ -227,7 +225,7 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
                     Button(onClick = { onCall(l) }, modifier = Modifier.weight(1f).height(52.dp)) {
                         Icon(Icons.Default.Call, null); Spacer(Modifier.width(6.dp)); Text("Call")
                     }
-                    OutlinedButton(onClick = { waOpen = true }, modifier = Modifier.weight(1.1f).height(52.dp), contentPadding = PaddingValues(horizontal = 6.dp)) {
+                    OutlinedButton(onClick = { lead?.let { vm.openWhatsApp(it) } }, modifier = Modifier.weight(1.1f).height(52.dp), contentPadding = PaddingValues(horizontal = 6.dp)) {
                         Icon(Icons.Default.Send, null, tint = Color(0xFF16A34A), modifier = Modifier.size(18.dp)); Spacer(Modifier.width(4.dp))
                         Text("WhatsApp", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
                     }
@@ -348,6 +346,7 @@ fun ProfileScreen(vm: AppViewModel) {
                 FilterChip(selected = sh == h, onClick = { com.closeros.app.data.SeqAlerts.setHour(ctx, h); sh = h }, label = { Text(l) }) }
         }
         TextButton(onClick = { vm.showSequences = true }) { SeqIcon(18.dp); Spacer(Modifier.width(6.dp)); Text("Open WhatsApp sequences") }
+        TextButton(onClick = { vm.showMessages = true }) { Text("💬 My WhatsApp messages" + if (vm.isSolo) " & business name" else "") }
         if (vm.isSolo || vm.isManager) TextButton(onClick = { vm.showNoteSettings = true }) { Text("📝 Notes & lead profile: sentences, tags, profile choices") }
         HorizontalDivider()
         Text("After-call pop-up", fontWeight = FontWeight.SemiBold)

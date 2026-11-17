@@ -3,6 +3,7 @@ package com.closeros.app.ui
 import android.app.DatePickerDialog
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -44,7 +45,7 @@ fun ReportsScreen(vm: AppViewModel) {
     val today = LocalDate.now(zone)
     var from by remember { mutableStateOf(today) }
     var to by remember { mutableStateOf(today) }
-    var who by remember { mutableStateOf(if (vm.isManager && !vm.isSolo) "all" else "me") }
+    var who by remember { mutableStateOf(vm.reportsWho?.also { vm.reportsWho = null } ?: if (vm.isManager && !vm.isSolo) "all" else "me") }
     var team by remember { mutableStateOf<List<IdName>>(emptyList()) }
     var data by remember { mutableStateOf<Rep?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -132,6 +133,18 @@ fun ReportsScreen(vm: AppViewModel) {
         if (error != null) Text(error!!, color = Brand.red, modifier = Modifier.padding(16.dp))
         if (d == null) { if (error == null) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }; return }
         val total = d.rows.firstOrNull { it.i("g") == 15 } ?: JsonObject(emptyMap())
+        // Every number below opens what's behind it: calls for call numbers, leads for lead numbers.
+        val drillUsers = when (who) { "all" -> null; "me" -> listOfNotNull(com.closeros.app.data.Backend.uid); else -> listOf(who) }
+        val period = when {
+            from == to && from == today -> "today"
+            from == to && from == today.minusDays(1) -> "yesterday"
+            from == to -> from.format(DateTimeFormatter.ofPattern("d MMM"))
+            else -> from.format(DateTimeFormatter.ofPattern("d MMM")) + " – " + to.format(DateTimeFormatter.ofPattern("d MMM"))
+        }
+        fun calls(label: String, key: String) = vm.openCallDrill("$label · $period", from, to, key, drillUsers, onPhone)
+        val leadFrom = if (leadScope == "all") null else from.atStartOfDay(zone).toInstant()
+        val leadTo = if (leadScope == "all") null else to.plusDays(1).atStartOfDay(zone).toInstant()
+        fun leads(label: String, kind: String) = vm.openLeadDrill(label, kind, drillUsers, leadFrom, leadTo, onPhone)
         val calls = total.i("calls"); val conn = total.i("conn"); val out = total.i("out")
         LazyColumn(contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
@@ -143,15 +156,19 @@ fun ReportsScreen(vm: AppViewModel) {
             }
             item {
                 val tiles = listOf(
-                    "All calls" to "$calls", "Dialled" to "$out", "Received" to "${total.i("inc")}", "Conversations" to "$conn",
-                    "Conversation rate" to (if (calls > 0) "${conn * 100 / calls}%" else "—"), "No answer" to "${total.i("not_picked")}",
-                    "Missed / declined" to "${total.i("missed") + total.i("rejected")}", "Never called back" to "${total.i("never_attended")}",
-                    "Talk time" to fmtDur(total.i("conn_dur")), "Avg. conversation" to (if (conn > 0) fmtDur(total.i("conn_dur") / conn) else "—"),
-                    "Unique contacts" to "${total.i("uniq")}", "Contacts reached" to "${total.i("uniq_conn")}")
+                    Triple("All calls", "$calls", "all"), Triple("Dialled", "$out", "dialled"), Triple("Received", "${total.i("inc")}", "received"),
+                    Triple("Conversations", "$conn", "conversations"),
+                    Triple("Conversation rate", if (calls > 0) "${conn * 100 / calls}%" else "—", "conversations"),
+                    Triple("No answer", "${total.i("not_picked")}", "noanswer"),
+                    Triple("Missed / declined", "${total.i("missed") + total.i("rejected")}", "missed"),
+                    Triple("Never called back", "${total.i("never_attended")}", "never"),
+                    Triple("Talk time", fmtDur(total.i("conn_dur")), "conversations"),
+                    Triple("Avg. conversation", if (conn > 0) fmtDur(total.i("conn_dur") / conn) else "—", "conversations"),
+                    Triple("Unique contacts", "${total.i("uniq")}", "uniq"), Triple("Contacts reached", "${total.i("uniq_conn")}", "reached"))
                 tiles.chunked(2).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(bottom = 10.dp)) {
-                        row.forEach { (l, v) ->
-                            Card(Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                        row.forEach { (l, v, key) ->
+                            Card(Modifier.weight(1f).clickable { calls(l, key) }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
                                 Column(Modifier.padding(12.dp)) {
                                     Text(l, fontSize = 13.sp, color = Brand.muted)
                                     Text(v, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = if (l.startsWith("Missed") || l.startsWith("Never") || l == "No answer") Brand.red else Color(0xFF0F172A))
@@ -168,7 +185,9 @@ fun ReportsScreen(vm: AppViewModel) {
                 if (sum[1] + sum[3] + sum[5] + sum[7] > 0) item {
                     Section("Targets (${t.work_days} working day${if (t.work_days == 1) "" else "s"})") {
                         listOf(Triple("Calls dialled", sum[0], sum[1]), Triple("Conversations", sum[2], sum[3]), Triple("Talk time (min)", sum[4], sum[5]), Triple("Sales", sum[6], sum[7]))
-                            .filter { it.third > 0 }.forEach { (l, a, tg) -> BarRow(l, a.toFloat() / tg, "$a / $tg · ${a * 100 / tg}%", if (a >= tg) Color(0xFF10B981) else if (a * 10 >= tg * 7) Color(0xFFF59E0B) else Brand.primary) }
+                            .filter { it.third > 0 }.forEach { (l, a, tg) ->
+                                val key = when (l) { "Calls dialled" -> "dialled"; "Sales" -> "won"; else -> "conversations" }
+                                BarRow(l, a.toFloat() / tg, "$a / $tg · ${a * 100 / tg}%", if (a >= tg) Color(0xFF10B981) else if (a * 10 >= tg * 7) Color(0xFFF59E0B) else Brand.primary) { calls(l, key) } }
                     }
                 }
             }
@@ -183,18 +202,21 @@ fun ReportsScreen(vm: AppViewModel) {
                         FilterChip(leadScope == "all", { leadScope = "all" }, { Text("All leads") })
                         FilterChip(leadScope == "period", { leadScope = "period" }, { Text("Assigned in this period") })
                     }
-                    Text("$total leads" + if (who == "all") " (whole team)" else "", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                    listOf(Triple("Called at least once", st.i("called"), Brand.primary), Triple("Talked to (reached)", st.i("reached"), Color(0xFF0EA5E9)),
-                        Triple("Interested now", interested, Color(0xFF34D399)), Triple("Sales (won)", won, Color(0xFF10B981)),
-                        Triple("Never called yet", st.i("never_called"), Color(0xFFF59E0B))).forEach { (l, n, c) ->
-                        BarRow(l, if (total > 0) n.toFloat() / total else 0f, "$n · ${pct(n)}", c)
+                    Text("$total leads" + if (who == "all") " (whole team)" else "", fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                        color = Brand.primary, modifier = Modifier.clickable { leads("All leads", "total") })
+                    listOf(Triple("Called at least once", st.i("called"), Brand.primary) to "called", Triple("Talked to (reached)", st.i("reached"), Color(0xFF0EA5E9)) to "reached",
+                        Triple("Interested now", interested, Color(0xFF34D399)) to "interested", Triple("Sales (won)", won, Color(0xFF10B981)) to "won",
+                        Triple("Never called yet", st.i("never_called"), Color(0xFFF59E0B)) to "never").forEach { (t, kind) ->
+                        val (l, n, c) = t
+                        BarRow(l, if (total > 0) n.toFloat() / total else 0f, "$n · ${pct(n)} of $total", c) { leads(l, kind) }
                     }
                     val byOut = st["by_outcome"]?.jsonArray?.map { it.jsonObject }.orEmpty()
                     if (byOut.isNotEmpty()) {
                         Text("Latest outcome of each lead (% of all $total leads)", fontSize = 13.sp, color = Brand.muted, modifier = Modifier.padding(top = 4.dp))
                         byOut.forEach { o ->
                             val oc = vm.outcomes.firstOrNull { it.id == o.s("outcome_id") }
-                            BarRow(oc?.label ?: "Other", if (total > 0) o.i("leads").toFloat() / total else 0f, "${o.i("leads")} · ${pct(o.i("leads"))}", Brand.primary)
+                            BarRow(oc?.label ?: "Other", if (total > 0) o.i("leads").toFloat() / total else 0f, "${o.i("leads")} · ${pct(o.i("leads"))}", Brand.primary) {
+                                leads("Latest outcome: ${oc?.label ?: "Other"}", "outcome:${o.s("outcome_id")}") }
                         }
                     }
                     val reps = st["by_rep"]?.jsonArray?.map { it.jsonObject }.orEmpty()
@@ -202,8 +224,9 @@ fun ReportsScreen(vm: AppViewModel) {
                         Text("Per person (leads · called · reached · interested · won · conversion)", fontSize = 13.sp, color = Brand.muted, modifier = Modifier.padding(top = 4.dp))
                         reps.forEach { r ->
                             val t = r.i("total").coerceAtLeast(1)
+                            // Tap a person: the whole report switches to them.
                             Text("${team.firstOrNull { it.id == r.s("assigned_to") }?.name ?: "Someone"}: ${r.i("total")} · ${r.i("called") * 100 / t}% · ${r.i("reached") * 100 / t}% · ${r.i("interested")} · ${r.i("won")} · ${r.i("won") * 100 / t}%",
-                                fontSize = 13.sp)
+                                fontSize = 13.sp, color = Brand.primary, modifier = Modifier.clickable { r.s("assigned_to")?.let { who = it } }.padding(vertical = 2.dp))
                         }
                     }
                 }
@@ -215,14 +238,16 @@ fun ReportsScreen(vm: AppViewModel) {
                     outs.forEach { o ->
                         val oc = vm.outcomes.firstOrNull { it.id == o.s("outcome_id") }
                         BarRow(oc?.label ?: "Other", o.i("calls").toFloat() / max, "${o.i("calls")} · ${o.i("leads")} leads",
-                            when (oc?.category) { "won" -> Color(0xFF10B981); "positive" -> Color(0xFF34D399); "lost", "invalid" -> Color(0xFFF87171); "not_connected" -> Color(0xFF94A3B8); else -> Brand.primary })
+                            when (oc?.category) { "won" -> Color(0xFF10B981); "positive" -> Color(0xFF34D399); "lost", "invalid" -> Color(0xFFF87171); "not_connected" -> Color(0xFF94A3B8); else -> Brand.primary }) {
+                            calls(oc?.label ?: "Other outcome", "outcome:${o.s("outcome_id")}") }
                     }
                 }
             }
             d.followUps?.let { f ->
                 if (f.i("due") > 0) item {
                     Section("Follow-ups due in this period") {
-                        Text("${f.i("due")} due · ${f.i("on_time")} on time · ${f.i("late")} late · ${f.i("missed")} not called · ${f.i("upcoming")} still upcoming", fontSize = 14.sp)
+                        Text("${f.i("due")} due · ${f.i("on_time")} on time · ${f.i("late")} late · ${f.i("missed")} not called · ${f.i("upcoming")} still upcoming", fontSize = 14.sp,
+                            color = Brand.primary, modifier = Modifier.clickable { vm.showReports = false; vm.tab = Tab.FollowUps })
                         val done = f.i("on_time") + f.i("late") + f.i("missed")
                         if (done > 0) BarRow("On time", f.i("on_time").toFloat() / done, "${f.i("on_time") * 100 / done}%", Color(0xFF10B981))
                     }
@@ -234,7 +259,7 @@ fun ReportsScreen(vm: AppViewModel) {
                 Section("Team — by talk time") {
                     users.forEach { u ->
                         val name = team.firstOrNull { it.id == u.s("user_id") }?.name ?: "Someone"
-                        BarRow(name, u.i("conn_dur").toFloat() / max, "${fmtDur(u.i("conn_dur"))} · ${u.i("conn")}/${u.i("calls")} calls", Brand.primary)
+                        BarRow(name, u.i("conn_dur").toFloat() / max, "${fmtDur(u.i("conn_dur"))} · ${u.i("conn")}/${u.i("calls")} calls", Brand.primary) { u.s("user_id")?.let { who = it } }
                     }
                 }
             }
@@ -244,7 +269,7 @@ fun ReportsScreen(vm: AppViewModel) {
                     Row { Text("Day", Modifier.weight(1.3f), fontSize = 12.sp, color = Brand.muted); Text("Calls", Modifier.weight(1f), fontSize = 12.sp, color = Brand.muted)
                         Text("Conv.", Modifier.weight(1f), fontSize = 12.sp, color = Brand.muted); Text("Talk", Modifier.weight(1.2f), fontSize = 12.sp, color = Brand.muted) }
                     days.forEach { r ->
-                        Row(Modifier.padding(vertical = 3.dp)) {
+                        Row(Modifier.fillMaxWidth().clickable { r.s("day")?.let { calls(runCatching { LocalDate.parse(it).format(DateTimeFormatter.ofPattern("EEE d MMM")) }.getOrDefault(it), "day:$it") } }.padding(vertical = 3.dp)) {
                             Text(runCatching { LocalDate.parse(r.s("day")).format(DateTimeFormatter.ofPattern("EEE dd MMM")) }.getOrDefault(r.s("day") ?: ""), Modifier.weight(1.3f), fontSize = 14.sp)
                             Text("${r.i("calls")}", Modifier.weight(1f), fontSize = 14.sp); Text("${r.i("conn")}", Modifier.weight(1f), fontSize = 14.sp)
                             Text(fmtDur(r.i("conn_dur")), Modifier.weight(1.2f), fontSize = 14.sp)
@@ -258,8 +283,8 @@ fun ReportsScreen(vm: AppViewModel) {
                 Section("By hour (calls · conversations)") {
                     (hours.keys.min()..hours.keys.max()).forEach { h ->
                         val r = hours[h]
-                        BarRow("${if (h % 12 == 0) 12 else h % 12} ${if (h < 12) "AM" else "PM"}", (r?.i("calls") ?: 0).toFloat() / max,
-                            "${r?.i("calls") ?: 0} · ${r?.i("conn") ?: 0}", Brand.primary)
+                        val hl = "${if (h % 12 == 0) 12 else h % 12} ${if (h < 12) "AM" else "PM"}"
+                        BarRow(hl, (r?.i("calls") ?: 0).toFloat() / max, "${r?.i("calls") ?: 0} · ${r?.i("conn") ?: 0}", Brand.primary) { calls("Calls at $hl", "hour:$h") }
                     }
                 }
             }
@@ -278,8 +303,8 @@ private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) 
 }
 
 @Composable
-private fun BarRow(label: String, frac: Float, value: String, color: Color) {
-    Column {
+private fun BarRow(label: String, frac: Float, value: String, color: Color, onClick: (() -> Unit)? = null) {
+    Column(if (onClick != null) Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 2.dp) else Modifier) {
         Row { Text(label, fontSize = 13.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis); Text(value, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
         Box(Modifier.fillMaxWidth().height(6.dp).background(Color(0xFFE2E8F0), RoundedCornerShape(3.dp))) {
             Box(Modifier.fillMaxWidth(frac.coerceIn(0f, 1f)).height(6.dp).background(color, RoundedCornerShape(3.dp)))

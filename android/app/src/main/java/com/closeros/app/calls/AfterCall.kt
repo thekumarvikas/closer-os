@@ -64,7 +64,7 @@ object AfterCall {
         val templates = db.get("templates")?.let { runCatching { com.closeros.app.data.json.decodeFromString<List<com.closeros.app.data.Template>>(it) }.getOrNull() }.orEmpty()
         val rep = db.get("profile")?.let { runCatching { com.closeros.app.data.json.decodeFromString<com.closeros.app.data.Profile>(it) }.getOrNull() }?.full_name.orEmpty()
         val fus = db.get("followUps")?.let { runCatching { com.closeros.app.data.json.decodeFromString<List<com.closeros.app.data.FollowUp>>(it) }.getOrNull() }.orEmpty()
-        return Company(m.org_id, m.organization.phone_prefix, m.organization.timezone, outcomes, m.organization.name, rep, templates, fus, m.organization)
+        return Company(m.org_id, m.organization.phone_prefix, m.organization.timezone, outcomes, com.closeros.app.ui.fillCompanyName(m.organization), rep, templates, fus, m.organization)
     }
 
     /**

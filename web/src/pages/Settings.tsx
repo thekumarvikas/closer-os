@@ -7,7 +7,7 @@ import type { Rule } from '../lib/types'
 import { Badge, Button, Card, ErrorBox, Field, PageHeader, Spinner } from '../components/ui'
 import { CompanySequences } from '../components/Sequences'
 import { PriceList } from './Sales'
-import { OutcomeNextSteps, WorkingCalendar, TagGroups, LeadFacts, CheckinSettings, ProfileChoices, NoteSentences, IntentLevelsSettings } from './SettingsRound9'
+import { OutcomeNextSteps, WorkingCalendar, TagGroups, LeadFacts, CheckinSettings, ProfileChoices, NoteSentences, IntentLevelsSettings, LostReasonsSettings } from './SettingsRound9'
 import { AppLeadFilters, Buyers, RecordingAndTeamSettings, ExcludedNumbers, ProfessionCategories, ReviewChecklist, WhatsAppTemplates, CompanyFiles } from './SettingsExtra'
 
 export default function Settings() {
@@ -134,6 +134,7 @@ export default function Settings() {
         <CompanySequences />
 
         <IntentLevelsSettings />
+        <LostReasonsSettings />
         <OutcomeNextSteps />
         <PriceList />
         <TagGroups />

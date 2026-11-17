@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import LostReasonsCard from '../components/LostReasons'
 import { Target } from 'lucide-react'
 import { errorText } from '../lib/supabase'
 import type { Directory } from '../lib/directory'
@@ -149,6 +150,7 @@ export default function OutcomeReportView({ org, dir, from, to, users, fileTag, 
           </tbody>
         </table>
       </Card>
+      <LostReasonsCard org={org} dir={dir} from={zonedMidnight(from, org).toISOString()} to={zonedMidnight(addDays(to, 1), org).toISOString()} users={users.length ? users : null} />
       <p className="text-xs text-slate-500">The table groups outcomes by type; the CSV has every outcome separately. Counts are calls. "Leads" counts each lead once even if called several times. Interested % = interested, qualified and won outcomes out of all filled outcomes.</p>
     </div>
   )

@@ -73,6 +73,7 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
     var product by remember { mutableStateOf("") }
     var productId by remember { mutableStateOf<String?>(null) }
     var interest by remember { mutableStateOf("") }
+    var lostReason by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var profession by remember { mutableStateOf(p.profession.orEmpty()) }
     var categoryId by remember { mutableStateOf(p.categoryId) }
@@ -182,6 +183,13 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
             }
         }
 
+        // Lost: one tap on why — the dashboard and Reports show what loses sales.
+        if (outcome?.category == "lost") {
+            Text("Why didn't they buy?", fontSize = 14.sp, color = Brand.muted)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                com.closeros.app.data.LostReasons.list(vm.membership?.organization).forEach { (k, l) -> Chip(l, lostReason == k) { lostReason = if (lostReason == k) null else k } }
+            }
+        }
         when (outcome?.form) {
             "interest" -> {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -297,6 +305,7 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
                     if (product.isNotBlank()) put("product", product)
                     productId?.let { put("product_id", it) }
                     if (interest.isNotBlank()) put("interest", interest)
+                    lostReason?.takeIf { o.category == "lost" }?.let { put("lost_reason", it) }
                     if (noteTags.isNotEmpty()) put("note_tags", kotlinx.serialization.json.JsonArray(noteTags.map { kotlinx.serialization.json.JsonPrimitive(it) }))
                     if (objPicked.isNotEmpty()) put("objections", com.closeros.app.data.Notes.objectionsJson(objPicked))
                 })

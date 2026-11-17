@@ -5,6 +5,7 @@ import { useOrg } from '../lib/session'
 import { useDirectory } from '../lib/directory'
 import { Button, Card, ErrorBox } from '../components/ui'
 import { DEFAULT_INTENTS, intentLevels, type IntentLevel } from '../lib/intents'
+import { DEFAULT_LOST_REASONS, lostReasons } from '../lib/lostReasons'
 
 const NEXT = [['', 'Rep chooses'], ['30m', 'In 30 min'], ['1h', 'In 1 hour'], ['2h', 'In 2 hours'], ['3h', 'In 3 hours'], ['today', 'Today (pick time)'],
   ['tomorrow', 'Tomorrow 11 AM'], ['2d', 'Day after 11 AM'], ['30d', 'In 30 days'], ['pick', 'Must pick a time'], ['none', 'No follow-up']] as const
@@ -377,6 +378,34 @@ export function IntentLevelsSettings() {
         <Button variant="secondary" onClick={() => setRows(r => [...r, { key: 'l' + Math.random().toString(36).slice(2, 8), short: 'New level', label: 'New level', color: '#64748B' }])}><Plus className="h-4 w-4" /> Add a level</Button>
         <Button variant="ghost" onClick={() => setRows(DEFAULT_INTENTS)}>Back to the standard list</Button>
         <Button onClick={() => save({ intent_levels: rows.filter(r => r.short.trim()).map(r => ({ ...r, short: r.short.trim(), label: r.label.trim() || r.short.trim() })) })}>Save</Button>
+        {saved && <span className="text-sm text-emerald-700">Saved ✓</span>}
+      </div>
+    </Card>
+  )
+}
+
+/** Reasons a rep can tap when a lead is lost (Reports → Outcomes shows which ones lose sales). */
+export function LostReasonsSettings() {
+  const { org, save, error, saved } = useSaveSettings()
+  const [rows, setRows] = useState(() => lostReasons(org))
+  useEffect(() => { setRows(lostReasons(org)) }, [org.settings]) // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <Card className="p-5">
+      <h2 className="font-semibold">Why leads are lost — reasons</h2>
+      <p className="mb-3 mt-1 text-sm text-slate-500">Shown when a rep saves a "not interested / lost" outcome (one tap, optional). Renaming keeps the reason on leads that already have it.</p>
+      <ErrorBox error={error} />
+      <div className="space-y-2">
+        {rows.map((r, i) => (
+          <div key={r.key} className="flex items-center gap-2">
+            <input className="input" value={r.label} onChange={e => setRows(x => x.map((y, j) => j === i ? { ...y, label: e.target.value } : y))} />
+            <Button variant="ghost" className="!px-2" onClick={() => setRows(x => x.filter((_, j) => j !== i))} title="Remove"><Trash2 className="h-4 w-4" /></Button>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Button variant="secondary" onClick={() => setRows(x => [...x, { key: 'r' + Math.random().toString(36).slice(2, 8), label: 'New reason' }])}><Plus className="h-4 w-4" /> Add a reason</Button>
+        <Button variant="ghost" onClick={() => setRows(DEFAULT_LOST_REASONS)}>Back to the standard list</Button>
+        <Button onClick={() => save({ lost_reasons: rows.filter(r => r.label.trim()).map(r => ({ key: r.key, label: r.label.trim() })) })}>Save</Button>
         {saved && <span className="text-sm text-emerald-700">Saved ✓</span>}
       </div>
     </Card>

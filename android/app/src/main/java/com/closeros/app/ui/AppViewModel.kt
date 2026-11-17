@@ -1425,6 +1425,15 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
          .onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't load these leads — check your internet") }
     }
 
+    /** The leads lost in a period for one reason ("none" = no reason given; null = all). */
+    fun openLostLeads(title: String, from: java.time.Instant, to: java.time.Instant, users: List<String>?, reason: String?) = viewModelScope.launch {
+        val m = membership ?: return@launch
+        runCatching {
+            val res = Repo.lostLeadIds(m.org_id, from, to, users, reason)
+            Repo.leadsByIds(res).let { ls -> val byId = ls.associateBy { it.id }; res.mapNotNull { byId[it] } }
+        }.onSuccess { genericList = title to it }.onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't load these leads — check your internet") }
+    }
+
     fun openLeadsById(title: String, ids: List<String>) = viewModelScope.launch {
         runCatching { Repo.leadsByIds(ids) }.onSuccess { genericList = title to it }.onFailure { message = "Couldn't load — check internet" }
     }

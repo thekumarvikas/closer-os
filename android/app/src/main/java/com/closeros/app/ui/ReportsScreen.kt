@@ -51,6 +51,7 @@ fun ReportsScreen(vm: AppViewModel) {
     var error by remember { mutableStateOf<String?>(null) }
     var leadScope by remember { mutableStateOf("all") }   // all = every lead · period = leads assigned in this period
     var status by remember { mutableStateOf<JsonObject?>(null) }
+    var lost by remember { mutableStateOf<JsonObject?>(null) }
     var onPhone by remember { mutableStateOf(false) }   // true = worked out on this phone
     var compare by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { if (vm.isManager) team = runCatching { Repo.teamBrief(m.org_id) }.getOrDefault(emptyList()) }
@@ -81,6 +82,11 @@ fun ReportsScreen(vm: AppViewModel) {
             val tg = runCatching { Repo.targetsFor(m.org_id, from, to, users) }.getOrNull()
             Rep(cr, or, fu, tg)
         }.onSuccess { data = it }.onFailure { error = com.closeros.app.data.SafeError.forUser(it, "Couldn't load the report") }
+    }
+    LaunchedEffect(from, to, who) {
+        lost = null
+        val users = when (who) { "all" -> null; "me" -> listOfNotNull(com.closeros.app.data.Backend.uid); else -> listOf(who) }
+        lost = runCatching { Repo.report("lost_report", m.org_id, from.atStartOfDay(zone).toInstant(), to.plusDays(1).atStartOfDay(zone).toInstant(), users).jsonObject }.getOrNull()
     }
     LaunchedEffect(from, to, who, leadScope) {
         status = null
@@ -243,6 +249,19 @@ fun ReportsScreen(vm: AppViewModel) {
                     }
                 }
             }
+            // Why leads were lost (reason tapped with a lost outcome). Each row opens those leads.
+            lost?.takeIf { it.i("leads") > 0 }?.let { lr -> item {
+                val n = lr.i("leads")
+                val a = from.atStartOfDay(zone).toInstant(); val b = to.plusDays(1).atStartOfDay(zone).toInstant()
+                Section("Why leads were lost ($n)") {
+                    lr["reasons"]?.jsonArray?.map { it.jsonObject }.orEmpty().forEach { r ->
+                        val key = r.s("reason") ?: "none"
+                        val label = com.closeros.app.data.LostReasons.label(m.organization, key) ?: key
+                        BarRow(label, r.i("leads").toFloat() / n, "${r.i("leads")} · ${r.i("leads") * 100 / n}% of lost", if (key == "none") Color(0xFF94A3B8) else Color(0xFFF87171)) {
+                            vm.openLostLeads("Lost: $label", a, b, drillUsers, key) }
+                    }
+                }
+            } }
             d.followUps?.let { f ->
                 if (f.i("due") > 0) item {
                     Section("Follow-ups due in this period") {

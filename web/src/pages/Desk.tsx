@@ -1,4 +1,5 @@
 import { tagGroupsFor, linesFor } from '../lib/notes'
+import { lostReasons } from '../lib/lostReasons'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { MessageCircle, Phone, PhoneCall, Search, StickyNote, X } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
@@ -236,6 +237,7 @@ function OutcomePanel({ call, dir, onClose, onSaved }: { call: NeedCall; dir: Di
   const [noFollow, setNoFollow] = useState(false)
   const [quickAt, setQuickAt] = useState<{ key: string; at: Date } | null>(null)
   const [amount, setAmount] = useState('')
+  const [lostReason, setLostReason] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Tags and ready-made sentences that fit the chosen outcome (Settings → Note tags / Quick note sentences).
@@ -279,7 +281,8 @@ function OutcomePanel({ call, dir, onClose, onSaved }: { call: NeedCall; dir: Di
     const payload: Record<string, unknown> = {
       id: call.id, org_id: org.id, lead_id: call.lead_id, phone: call.phone, direction: call.direction, purpose: call.purpose, batch_id: call.batch_id,
       started_at: call.started_at, duration_sec: call.duration_sec, device_id: 'web', outcome_id: outcome.id,
-      outcome_data: { ...(tags.length ? { note_tags: tags } : {}), ...(amount ? { [outcome.form === 'sale' ? 'amount' : 'deal_value']: Number(amount) } : {}) },
+      outcome_data: { ...(tags.length ? { note_tags: tags } : {}), ...(amount ? { [outcome.form === 'sale' ? 'amount' : 'deal_value']: Number(amount) } : {}),
+        ...(outcome.category === 'lost' && lostReason ? { lost_reason: lostReason } : {}) },
       notes: notes.trim() || null, ...(noFollow ? { no_follow_up: true } : { follow_up_at: fa!.toISOString() }),
     }
     const { error } = await supabase.rpc('log_call', { p: payload })
@@ -297,6 +300,7 @@ function OutcomePanel({ call, dir, onClose, onSaved }: { call: NeedCall; dir: Di
       </div>
       <ErrorBox error={error} />
       <div className="mb-3 flex flex-wrap gap-2">{choices.map(o => <button key={o.id} onClick={() => choose(o)} className={`rounded-full border px-3 py-1.5 text-sm ${outcome?.id === o.id ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-200 hover:bg-slate-50'}`}>{o.label}</button>)}</div>
+      {outcome?.category === 'lost' && <div className="mb-3"><p className="label">Why didn't they buy?</p><div className="flex flex-wrap gap-2">{lostReasons(org).map(r => <button key={r.key} onClick={() => setLostReason(lostReason === r.key ? null : r.key)} className={`rounded-full border px-3 py-1 text-sm ${lostReason === r.key ? 'border-red-600 bg-red-600 text-white' : 'border-slate-200 hover:bg-slate-50'}`}>{r.label}</button>)}</div></div>}
       {(outcome?.form === 'sale' || outcome?.form === 'interest') && <input className="input mb-3 !w-60" inputMode="numeric" placeholder={outcome.form === 'sale' ? 'Amount paid (₹) *' : 'Potential deal value (₹)'} value={amount} onChange={e => setAmount(e.target.value.replace(/\D/g, ''))} />}
       <p className="label">Next call</p>
       <div className="mb-2 flex flex-wrap gap-2">

@@ -747,6 +747,13 @@ object Repo {
             Backend.client.from("leads").select(Columns.raw(LEAD_COLUMNS)) { filter { isIn("id", chunk) } }.decodeList<Lead>()
         }
 
+    /** Leads lost in a period for one reason ("none" = no reason given; null = every reason), newest first. */
+    suspend fun lostLeadIds(orgId: String, from: Instant, to: Instant, users: List<String>?, reason: String?): List<String> =
+        db.rpc("lost_report_leads", buildJsonObject {
+            put("p_org", orgId); put("p_from", from.toString()); put("p_to", to.toString()); put("p_reason", reason)
+            put("p_users", users?.let { u -> buildJsonArray { u.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } } } ?: kotlinx.serialization.json.JsonNull)
+        }).decodeList<String>()
+
     /** A call as the server stores it — enough to show it in a call list. */
     @Serializable data class TeamCall(val id: String, val phone: String = "", val direction: String = "outgoing", val started_at: String = "",
         val duration_sec: Int = 0, val sim_slot: Int? = null, val sim_number: String? = null, val channel: String = "phone",

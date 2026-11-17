@@ -204,6 +204,9 @@ fun OutcomeScreen(vm: AppViewModel, popup: Boolean = false) {
             }
         }
 
+        // Where is this lead? — one line; only after a real conversation (saved straight away, separate from Save).
+        lead?.takeIf { outcome != null && outcome?.category !in setOf("not_connected", "invalid") }?.let { l -> IntentRow(vm, l) { lead = it } }
+
         // 2 · Notes: near the top, one box with the mic; tags + quick sentences fold away.
         OutlinedTextField(notes, { notes = it }, placeholder = { Text("Note (optional)") }, modifier = Modifier.fillMaxWidth(), minLines = 1, maxLines = 5,
             trailingIcon = { VoiceButton { spoken -> notes = if (notes.isBlank()) spoken else "$notes $spoken" } })

@@ -2,6 +2,7 @@ import LeadWebinars from '../components/LeadWebinars'
 import LeadShares from '../components/LeadShares'
 import { LeadSales } from './Sales'
 import { LeadProfileCard, PinnedNotes, LeadObjections, LeadOrigins, emailTypo, type Pin } from '../components/LeadProfile'
+import { IntentPicker } from '../components/Intent'
 import { PlayButton, RecordingPlayer } from '../components/CallLog'
 import { CallColorKey, CallType } from '../components/CallColors'
 import { useEffect, useState } from 'react'
@@ -148,6 +149,7 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
                 )}
               </div>
 
+              <IntentPicker leadId={leadId} value={(lead as any).intent ?? null} onChanged={() => { load(); onChanged() }} />
               {lead.response_sec != null && <p className="text-sm text-slate-600">⚡ First call {lead.response_sec < 60 ? 'within a minute' : `${Math.round(lead.response_sec / 60)} working min`} after it came in</p>}
               <LeadShares leadId={leadId} assignedTo={lead.assigned_to} sharedWith={lead.shared_with ?? []} onChanged={() => { load(); onChanged() }} />
               <LeadWebinars leadId={leadId} />

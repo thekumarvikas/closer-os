@@ -156,6 +156,10 @@ private fun FilterSheet(vm: AppViewModel, onClose: () -> Unit) {
             LaunchedEffect(Unit) { myTags = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 com.closeros.app.data.LocalLeads.all(ctx).flatMap { it.tags.orEmpty() }.filter { it !in groupTags }
                     .groupingBy { it }.eachCount().entries.sortedByDescending { it.value }.take(30).map { it.key } } }
+            Section("Where is this lead?") {
+                (com.closeros.app.data.Intents.levels(vm.membership?.organization).map { it.key to it.short } + ("none" to "Not set yet")).forEach { (k, l) ->
+                    FilterChip(k in f.intents, { f = f.copy(intents = f.intents.flip(k)) }, { Text(l) }) }
+            }
             if (myTags.isNotEmpty()) Section("Tag") { myTags.forEach { t -> FilterChip(t in f.tags, { f = f.copy(tags = f.tags.flip(t)) }, { Text(t) }) } }
             enabled.forEach { key ->
                 when {

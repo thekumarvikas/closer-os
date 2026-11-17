@@ -156,7 +156,7 @@ data class LeadFact(val key: String, val label: String, val options: List<String
     // Effort so far (kept up to date by the server): talk time, dials, real pick-ups, WhatsApp sent, score.
     val total_talk_sec: Int = 0, val call_count: Int = 0, val dial_count: Int = 0, val pickup_count: Int = 0, val wa_count: Int = 0,
     val last_call_status: String? = null, val has_talked: Boolean = false, val score: Int = 0, val won_at: String? = null,
-    val tags: List<String>? = null, val custom: JsonObject? = null, val created_at: String? = null, val best_hour: Int? = null,
+    val tags: List<String>? = null, val intent: String? = null, val intent_at: String? = null, val custom: JsonObject? = null, val created_at: String? = null, val best_hour: Int? = null,
     val conversation_count: Int = 0, val profession_category_id: String? = null,
     /** Lead profile: challenges / goals (lists + text), budget, budget_amount. */
     val profile: JsonObject? = null,
@@ -287,10 +287,12 @@ data class LeadFilters(
     val talk: Set<String> = emptySet(),
     /** In any of these events (batch ids). */
     val events: Set<String> = emptySet(),
+    /** "Where is this lead?" levels; "none" = no level set yet. */
+    val intents: Set<String> = emptySet(),
 ) {
     val count get() = (if (followup != "all") 1 else 0) + listOf(stages, outcomes, sources, campaigns, cities, categories, tags).count { it.isNotEmpty() } +
         (if (neverCalled) 1 else 0) + custom.count { it.value.isNotEmpty() } + (if (lastCall != "any") 1 else 0) + (if (messaged != "any") 1 else 0) + (if (hot) 1 else 0) +
-        (if (talk.isNotEmpty()) 1 else 0) + (if (events.isNotEmpty()) 1 else 0)
+        (if (talk.isNotEmpty()) 1 else 0) + (if (events.isNotEmpty()) 1 else 0) + (if (intents.isNotEmpty()) 1 else 0)
 }
 @Serializable data class IdOnly(val id: String)
 @Serializable data class LeadIdOnly(val lead_id: String)
@@ -493,6 +495,14 @@ object Repo {
                 if (f.talk.isNotEmpty()) or {
                     TalkBands.all.filter { it.key in f.talk }.forEach { b ->
                         and { gte("total_talk_sec", b.from); b.until?.let { lt("total_talk_sec", it) } }
+                    }
+                }
+                if (f.intents.isNotEmpty()) {
+                    val keys = f.intents - "none"
+                    when {
+                        "none" in f.intents && keys.isNotEmpty() -> or { filter("intent", FilterOperator.IS, "null"); filter("intent", FilterOperator.IN, inList(keys)) }
+                        "none" in f.intents -> filter("intent", FilterOperator.IS, "null")
+                        else -> filter("intent", FilterOperator.IN, inList(keys))
                     }
                 }
                 if (f.tags.isNotEmpty()) filter("tags", FilterOperator.OV, "{" + f.tags.joinToString(",") { "\"" + it.replace("\"", "") + "\"" } + "}")

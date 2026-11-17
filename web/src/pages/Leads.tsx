@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { intentLevels, intentOf } from '../lib/intents'
+import { IntentBadge } from '../components/Intent'
 import { usePersisted } from '../lib/persist'
 import { Plus, Upload, Search, Users, ChevronLeft, ChevronRight, UserPlus, Download, Columns3 } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
@@ -38,8 +40,8 @@ const TALK_BANDS = [
   { key: 'm30', label: '30 min+', from: 1800, until: null },
 ] as const
 
-type LeadFilter = { q: string; assignee: string; stage: string; source: string; talk: string; util: '' | 'used' | 'unused'; rep: '' | 'yes'; batch: string; field: string; fieldVal: string; tag: string }
-const NO_FILTERS: LeadFilter = { tag: '', q: '', assignee: '', stage: '', source: '', talk: '', util: '', rep: '', batch: '', field: '', fieldVal: '' }
+type LeadFilter = { q: string; assignee: string; stage: string; source: string; talk: string; util: '' | 'used' | 'unused'; rep: '' | 'yes'; batch: string; field: string; fieldVal: string; tag: string; intent: string }
+const NO_FILTERS: LeadFilter = { intent: '', tag: '', q: '', assignee: '', stage: '', source: '', talk: '', util: '', rep: '', batch: '', field: '', fieldVal: '' }
 
 /** Extra columns anyone can switch on: standard ones + every field from the sheets / forms ("custom:<key>"). */
 const STD_COLS: [string, string][] = [['signup_at', 'Signed up'], ['email', 'Email'], ['profession', 'Profession'], ['company', 'Company'], ['campaign', 'Campaign'], ['state', 'State']]
@@ -91,11 +93,13 @@ export default function Leads() {
     if (a.rep === 'yes') query = query.gt('arrivals', 1)
     if (a.batch) query = query.eq('batch_leads.batch_id', a.batch)
     if (a.tag) query = query.contains('tags', [a.tag])
+    if (a.intent === 'none') query = query.is('intent', null)
+    else if (a.intent) query = query.eq('intent', a.intent)
     if (a.field && a.fieldVal.trim()) query = query.ilike(`custom->>${a.field}`, `%${a.fieldVal.trim()}%`)
     const b = TALK_BANDS.find(x => x.key === a.talk)
     if (b) { query = query.gte('total_talk_sec', b.from); if (b.until != null) query = query.lt('total_talk_sec', b.until) }
     return query
-  }, [a.assignee, a.stage, a.source, a.talk, a.util, a.rep, a.batch, a.field, a.fieldVal, a.tag])
+  }, [a.assignee, a.stage, a.source, a.talk, a.util, a.rep, a.batch, a.field, a.fieldVal, a.tag, a.intent])
   const searchIds = useCallback(async (): Promise<string[] | null> => {
     const term = a.q.trim()
     if (term.length < 2) return null
@@ -177,6 +181,7 @@ export default function Leads() {
     a.assignee && { label: a.assignee === 'none' ? 'Unassigned' : `Assigned to ${dir?.nameOf(a.assignee) ?? ''}`, onRemove: () => f.reset('assignee') },
     a.batch && { label: `Webinar: ${batchName(a.batch)}`, onRemove: () => f.reset('batch') },
     a.tag && { label: `Tag: ${a.tag}`, onRemove: () => f.reset('tag') },
+    a.intent && { label: `Where: ${a.intent === 'none' ? 'not set' : intentOf(org, a.intent)?.short ?? a.intent}`, onRemove: () => f.reset('intent') },
     a.util && { label: a.util === 'used' ? 'Called at least once' : 'Never called', onRemove: () => f.reset('util') },
     a.rep && { label: 'Repeated', onRemove: () => f.reset('rep') },
     a.stage && { label: `Stage: ${dir?.stageOf(a.stage)?.name ?? ''}`, onRemove: () => f.reset('stage') },
@@ -240,6 +245,8 @@ export default function Leads() {
             <option value="">Webinar: any</option>
             {batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
+          <select className="input !w-auto max-w-[200px]" value={f.draft.intent} onChange={e => f.set({ intent: e.target.value })} title="Where is this lead? (set by the rep)">
+            <option value="">Where: any</option>{intentLevels(org).map(l => <option key={l.key} value={l.key}>{l.short}</option>)}<option value="none">Not set yet</option></select>
           {tags.length > 0 && <select className="input !w-auto max-w-[200px]" value={f.draft.tag} onChange={e => f.set({ tag: e.target.value })} title="Tags on leads, e.g. the tag of an imported file">
             <option value="">Tag: any</option>{tags.map(t => <option key={t.tag} value={t.tag}>{t.tag} ({t.leads})</option>)}</select>}
           <select className="input !w-auto" value={f.draft.util} onChange={e => f.set({ util: e.target.value as LeadFilter['util'] })}>
@@ -305,7 +312,7 @@ export default function Leads() {
                 {isManager && <input type="checkbox" className="mt-1" checked={allMatching || selected.has(l.id)} onClick={e => e.stopPropagation()} onChange={() => {
                   setAllMatching(false); const s = new Set(selected); if (s.has(l.id)) s.delete(l.id); else s.add(l.id); setSelected(s) }} />}
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5"><span className="truncate font-medium text-slate-900">{l.name || 'No name'}</span>{l.do_not_call && <Badge color="red">DNC</Badge>}{(l.arrivals ?? 1) > 1 && <Badge color="gray">🔁 ×{l.arrivals}</Badge>}</div>
+                  <div className="flex items-center gap-1.5"><span className="truncate font-medium text-slate-900">{l.name || 'No name'}</span>{l.do_not_call && <Badge color="red">DNC</Badge>}{(l.arrivals ?? 1) > 1 && <Badge color="gray">🔁 ×{l.arrivals}</Badge>}<IntentBadge level={intentOf(org, (l as any).intent)} /></div>
                   <div className="text-xs text-slate-500">{[fmtPhone(l.phone), l.city, l.assigned_to ? dir.nameOf(l.assigned_to) : 'Unassigned'].filter(Boolean).join(' · ')}</div>
                   <div className="text-xs text-brand-700">{(l.call_count ?? 0) === 0 ? 'Not called yet' : `${l.call_count} calls · ${l.conversation_count ?? 0} conversations`}{dir.outcomeOf(l.last_outcome_id) ? ` · ${dir.outcomeOf(l.last_outcome_id)!.label}` : ''}</div>
                   {l.next_follow_up_at && <div className={`text-xs ${new Date(l.next_follow_up_at) < new Date() ? 'font-medium text-red-600' : 'text-slate-500'}`}>Next call {fmtDate(l.next_follow_up_at, org)}</div>}
@@ -339,7 +346,7 @@ export default function Leads() {
                           setAllMatching(false); const s = new Set(selected); if (s.has(l.id)) s.delete(l.id); else s.add(l.id); setSelected(s)
                         }} /></td>}
                       <td className="td"><div className="font-medium text-slate-900">{l.name || <span className="text-slate-400">No name</span>}
-                        {l.do_not_call && <Badge color="red">DNC</Badge>}{(l.arrivals ?? 1) > 1 && <span title="Came in more than once"> <Badge color="gray">🔁 Repeated ×{l.arrivals}</Badge></span>}</div>
+                        {l.do_not_call && <Badge color="red">DNC</Badge>}{(l.arrivals ?? 1) > 1 && <span title="Came in more than once"> <Badge color="gray">🔁 Repeated ×{l.arrivals}</Badge></span>} <IntentBadge level={intentOf(org, (l as any).intent)} /></div>
                         <div className="text-xs tabular-nums text-slate-500">{[fmtPhone(l.phone), l.city].filter(Boolean).join(' · ')}</div></td>
                       <td className="td">{l.assigned_to ? dir.nameOf(l.assigned_to) : <span className="text-amber-700">Unassigned</span>}</td>
                       <td className="td whitespace-nowrap text-slate-600">{(l.call_count ?? 0) === 0 ? <span className="text-slate-400">Not called</span> : <>

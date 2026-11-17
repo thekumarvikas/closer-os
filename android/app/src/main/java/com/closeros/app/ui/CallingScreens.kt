@@ -464,6 +464,8 @@ data class Tag(val text: String, val bg: Color, val fg: Color)
 
 fun leadTags(vm: AppViewModel, l: Lead): List<Tag> {
     val out = mutableListOf<Tag>()
+    com.closeros.app.data.Intents.of(vm.membership?.organization, l.intent)?.let { lv ->
+        out += Tag("📍 ${lv.short}", Color(lv.color).copy(alpha = 0.14f), Color(lv.color)) }
     val cat = vm.outcomes.firstOrNull { it.id == l.last_outcome_id }?.category
     when (cat) {
         "won" -> out += Tag("Won", Color(0xFFDCFCE7), Color(0xFF166534))

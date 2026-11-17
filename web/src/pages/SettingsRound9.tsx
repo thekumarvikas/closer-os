@@ -4,6 +4,7 @@ import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
 import { useDirectory } from '../lib/directory'
 import { Button, Card, ErrorBox } from '../components/ui'
+import { DEFAULT_INTENTS, intentLevels, type IntentLevel } from '../lib/intents'
 
 const NEXT = [['', 'Rep chooses'], ['30m', 'In 30 min'], ['1h', 'In 1 hour'], ['2h', 'In 2 hours'], ['3h', 'In 3 hours'], ['today', 'Today (pick time)'],
   ['tomorrow', 'Tomorrow 11 AM'], ['2d', 'Day after 11 AM'], ['30d', 'In 30 days'], ['pick', 'Must pick a time'], ['none', 'No follow-up']] as const
@@ -342,6 +343,42 @@ export function NoteSentences() {
         <input className="input" placeholder="New sentence, e.g. Wants to start in [January/February/March]" value={draft} onChange={e => setDraft(e.target.value)} />
         <Button type="submit" variant="secondary"><Plus className="h-4 w-4" /> Add</Button>
       </form>
+    </Card>
+  )
+}
+
+/** "Where is this lead?" levels: what reps choose from in the app, the desk and the lead drawer. */
+export function IntentLevelsSettings() {
+  const { org, save, error, saved } = useSaveSettings()
+  const [rows, setRows] = useState<IntentLevel[]>(() => intentLevels(org))
+  useEffect(() => { setRows(intentLevels(org)) }, [org.settings]) // eslint-disable-line react-hooks/exhaustive-deps
+  const put = (i: number, p: Partial<IntentLevel>) => setRows(r => r.map((x, j) => j === i ? { ...x, ...p } : x))
+  const move = (i: number, d: -1 | 1) => setRows(r => { const n = [...r]; const j = i + d; if (j < 0 || j >= n.length) return r; [n[i], n[j]] = [n[j], n[i]]; return n })
+  return (
+    <Card className="p-5 lg:col-span-2">
+      <h2 className="font-semibold">📍 Where is this lead? — levels</h2>
+      <p className="mb-3 mt-1 text-sm text-slate-500">Reps set one level per lead with a single tap (app, desk and lead details), most likely to buy first. Leads can be filtered by it. Renaming a level keeps it on the leads that already have it.</p>
+      <ErrorBox error={error} />
+      <div className="space-y-2">
+        {rows.map((l, i) => (
+          <div key={l.key} className="grid items-center gap-2 sm:grid-cols-[auto_150px_1fr_auto]">
+            <input type="color" value={l.color} onChange={e => put(i, { color: e.target.value })} className="h-9 w-10 rounded border border-slate-200" title="Colour" />
+            <input className="input" value={l.short} onChange={e => put(i, { short: e.target.value })} placeholder="Short name" />
+            <input className="input" value={l.label} onChange={e => put(i, { label: e.target.value })} placeholder="What it means" />
+            <span className="flex gap-1">
+              <Button variant="ghost" className="!px-2" onClick={() => move(i, -1)} disabled={i === 0}>↑</Button>
+              <Button variant="ghost" className="!px-2" onClick={() => move(i, 1)} disabled={i === rows.length - 1}>↓</Button>
+              <Button variant="ghost" className="!px-2" onClick={() => setRows(r => r.filter((_, j) => j !== i))} title="Remove"><Trash2 className="h-4 w-4" /></Button>
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Button variant="secondary" onClick={() => setRows(r => [...r, { key: 'l' + Math.random().toString(36).slice(2, 8), short: 'New level', label: 'New level', color: '#64748B' }])}><Plus className="h-4 w-4" /> Add a level</Button>
+        <Button variant="ghost" onClick={() => setRows(DEFAULT_INTENTS)}>Back to the standard list</Button>
+        <Button onClick={() => save({ intent_levels: rows.filter(r => r.short.trim()).map(r => ({ ...r, short: r.short.trim(), label: r.label.trim() || r.short.trim() })) })}>Save</Button>
+        {saved && <span className="text-sm text-emerald-700">Saved ✓</span>}
+      </div>
     </Card>
   )
 }

@@ -216,6 +216,7 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
                     l.response_sec?.let { r -> Text("⚡ First call " + (if (r < 60) "within a minute" else "${r / 60} working min") + " after it came in", fontSize = 13.sp, color = Brand.muted) }
                 }
             }
+            item { IntentRow(vm, l) { lead = it } }
             item { BriefCard(vm, l, showProfile = false) }
             if (vm.isSolo) item { LeadEventsRow(vm, l) }
             else if (l.batch_leads.isNotEmpty()) item { LeadWebinarsCard(l) }

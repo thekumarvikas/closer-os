@@ -549,6 +549,15 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
             .onFailure { message = "Couldn't save the message" }
     }
 
+    /** Sets (or clears) a lead's "Where is this lead?" level; shown at once, saved in the background (queued offline). */
+    fun setIntent(lead: Lead, key: String?, done: (Lead) -> Unit = {}) = viewModelScope.launch {
+        val updated = lead.copy(intent = key, intent_at = java.time.Instant.now().toString())
+        replaceLead(updated); done(updated)
+        runCatching { com.closeros.app.data.Intents.set(lead.id, key) }
+            .onSuccess { sent -> message = if (sent) (com.closeros.app.data.Intents.of(membership?.organization, key)?.let { "📍 ${it.short}" } ?: "Level cleared") else "Saved on your phone — syncs when you're online" }
+            .onFailure { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't save — check your internet") }
+    }
+
     fun reloadTemplates() = viewModelScope.launch {
         val m = membership ?: return@launch
         runCatching { Repo.templates(m.org_id) }.onSuccess { templates = it }

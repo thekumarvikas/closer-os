@@ -1882,3 +1882,43 @@ intelligence → Play Store launch.
   GlanceCard skips server lookups for list ids. CallListsScreen: Call / WhatsApp / Not called (N) / Delete.
 - Tags: app filter sheet "Tag" section (tags on my leads, most used); dashboard Leads "Tag: any" filter (lead_tag_list RPC).
 - Sequences need real leads → only for "Add leads from a file". Play data-safety: app now also WRITES contacts (only when ticked).
+
+## Round 15 (v0.27.0, migrations 0086–0094, Nov 17 2026)
+- Import speed (0086–0088): 981-row import timed out (8 s limit on `authenticated`; measured 11.5 ms/lead). Fixes: assignee
+  chosen in BEFORE INSERT trigger t_lead_route (no INSERT-then-UPDATE), profession groups keep a prebuilt match_re per group
+  (categorize_profession was building 185 regexes per lead; verified identical on 682 professions), duplicate check via temp
+  table, import_leads runs find_lead's probes inline (a SECURITY DEFINER call costs ~1.3 ms). 981 rows: 3.8 s. Web sends
+  400-row batches and halves on timeout. Never re-add per-row UPDATEs on leads in insert triggers.
+- 0089: leads added from a call had no owner (app insert relied on prepare_lead, reps only) → t_lead_route: personal account
+  = owner always; company "Phone call" lead = the caller. Personal sale = fully paid unless "Part payment" (claim_sale p.part /
+  p.paid; won-outcome sales too). Repaired existing rows.
+- App: one HistoryRow everywhere (tap a lead → lead page; other numbers → "+ Add as lead" / SMS); Reports: every tile, bar,
+  outcome, day, hour opens its calls or leads (data/Drill.kt same rules as the report; LocalReports.drillCalls/drillLeads,
+  Repo.teamCalls/leadsWhere; vm.callDrill → CallListScreen), tap a person → report switches to them; leaderboard name →
+  that person's report (vm.reportsWho). MainActivity screen order and vm.closeTop are ONE stack (lead page above lists;
+  keep them in the same order). My sales rows open the lead.
+- WhatsApp: one message box for the app (vm.waDraft, drawn in MainActivity; call sites use vm.openWhatsApp); picked files go
+  through MainActivity.pickFile (target "wanow", draft kept in prefs "pick") and are copied into cache/shared — never use
+  rememberLauncherForActivityResult for files in a dialog. Settings → My WhatsApp messages (ui/MessagesScreen.kt: add/edit/
+  delete, fill-in chips, file); "Save this message" keeps the file (Repo.uploadMessageFile; reps upload to
+  template-media/<org>/mine/<uid>/, migration 0090). Personal app never says "company"; optional settings.business_name =
+  {{companyName}} (fillCompanyName). fillTemplateText drops an empty fill-in with its joining word; missingFillIns warns.
+- Recording setup = one confirm step "Turn on automatic call recording, then Done" (+ red note only when a downloaded dialer
+  is default; owner's 11T Pro uses HB Dialer → can't record).
+- Lead levels (0091): leads.intent/intent_at/intent_by, set_lead_intent, lead_intent_counts. "Where is this lead?" defaults:
+  Ready to pay · Hot · Interested · Needs approval · Price concern · Later · Cold · Not a fit (data/Intents.kt and
+  web/src/lib/intents.ts — keep in step); companies edit settings.intent_levels in dashboard Settings. App: lead page row,
+  outcome screen row (conversations only), card tag, filter; dashboard drawer picker, Leads badge + "Where" filter.
+- Webinars (0092–0094): batch_leads.registered (false = joined without registering: created from the Zoom file or added by
+  the Zoom report; a later registration flips it), prev_at/prev_minutes and is_repeat = "came to an earlier webinar"
+  (earlier attended batch or the file's previous-webinar columns; t_bl_prev). Leads joining after the Zoom report = 0 min
+  (t_bl_noshow); import ON CONFLICT never lets an incoming 0 wipe real minutes. Upload order no longer matters (tested).
+  batch_report / batch_lead_facts / batch_watch_bands take p_scope all|registered|walkin; batch_leads_list and
+  show_up_leads(filter) return the leads behind any number; show_up_report(batch, scope): groups, by_call (connected = a
+  reminder call > 30 s), by_caller, by_outcome, patterns (registrants only, never "Zoom attendee" as a source).
+  Dashboard: "Showing" switch, components/LeadDrill.tsx (scroll, CSV, lead details) behind every number, profession rows,
+  Assign-screen counts, poll-file check with the rows as read. Owner kept "Guided" (his sheet's word).
+- Owner decisions (Nov 17): option A switch; 30-second rule for "connected"; "Came to an earlier webinar" with date + minutes;
+  same registration twice is not "Repeated"; no colour-coding of performance (companies set their own targets);
+  Phase 2 (payment / renewal reminders) dropped for now; AI later. Still to build: lost reason, CRM hygiene score,
+  leaderboard + efficiency (tasks below).

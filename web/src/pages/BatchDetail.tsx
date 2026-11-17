@@ -3,30 +3,32 @@ import { SampleLink } from '../lib/samples'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import Papa from 'papaparse'
 import readXlsxFile from 'read-excel-file'
-import { ArrowLeft, Upload, UserPlus, Pencil, Download, X, CheckCircle2, Video } from 'lucide-react'
+import { ArrowLeft, Upload, UserPlus, Pencil, Download, CheckCircle2, Video } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
 import { useDirectory, type Directory } from '../lib/directory'
-import { fmtDateTime, fmtMoney, fmtPhone } from '../lib/format'
-import { downloadCsv, hms, pct } from '../lib/report'
+import { fmtDateTime, fmtMoney } from '../lib/format'
+import { downloadCsv, pct } from '../lib/report'
 import { cellText, isDayFirst, parseWall, wallToUtc, parseChat, parsePolls } from '../lib/zoom'
 import type { Batch, ProfessionCategory } from '../lib/types'
 import { Button, Card, Empty, ErrorBox, Field, Modal, Spinner } from '../components/ui'
 import { BatchForm } from './Batches'
 import LeadImport from './LeadImport'
-import LeadDrawer from './LeadDrawer'
 import ShowUpImpact from './ShowUp'
 import WatchBands from '../components/WatchBands'
+import { LeadDrill, type DrillRow } from '../components/LeadDrill'
 
 type Purpose = 'sales' | 'reminder'
 type View = Purpose | 'showup'
+/** Everyone · people who registered · people who joined without registering (owner's rule, Nov 17). */
+export type Scope = 'all' | 'registered' | 'walkin'
 interface RepRow {
   g: number; rep: string | null; assigned: number; attended: number; hot: number; called: number; picked: number
   picked_short: number; not_picked: number; not_picked_hot: number; over5: number; over5_hot: number
   left_to_dial: number; left_to_dial_hot: number; guided: number; professions: number; repeated: number
-  prev_enrolled: number; new_enrolled: number; won: number; revenue: number
+  prev_enrolled: number; new_enrolled: number; won: number; revenue: number; registered: number; walkin: number
 }
-type MetricKey = Exclude<keyof RepRow, 'g' | 'rep' | 'revenue'> | 'not_guided'
+type MetricKey = Exclude<keyof RepRow, 'g' | 'rep' | 'revenue' | 'registered' | 'walkin'> | 'not_guided'
 interface Metric { key: MetricKey; label: string; base: MetricKey | null; hint?: string; main?: boolean }
 
 const salesMetrics = (hot: number): Metric[] => [
@@ -34,14 +36,14 @@ const salesMetrics = (hot: number): Metric[] => [
   { key: 'attended', label: 'Attended webinar', base: 'assigned' },
   { key: 'hot', label: `Watched ${hot}+ min`, base: 'assigned', main: true, hint: 'From the Zoom report' },
   { key: 'called', label: 'Leads called', base: 'assigned', main: true },
-  { key: 'picked', label: 'Picked (>30 sec)', base: 'called', main: true, hint: 'Pick-up ratio: at least one call longer than 30 seconds' },
-  { key: 'picked_short', label: 'Picked, under 30 sec', base: 'called', hint: 'Answered, but every call was 30 seconds or less' },
-  { key: 'not_picked', label: "Didn't pick", base: 'called', main: true, hint: 'Called, but never answered' },
-  { key: 'not_picked_hot', label: `Didn't pick, watched ${hot}+`, base: 'assigned' },
-  { key: 'over5', label: 'Talked 5+ min (1 call)', base: 'assigned', main: true, hint: 'At least one single call longer than 5 minutes' },
-  { key: 'over5_hot', label: `5+ min & watched ${hot}+`, base: 'hot', main: true },
-  { key: 'left_to_dial_hot', label: `Left to dial, watched ${hot}+`, base: 'assigned', main: true },
-  { key: 'left_to_dial', label: 'Left to dial', base: 'assigned', main: true },
+  { key: 'picked', label: 'Answered (30+ sec)', base: 'called', main: true, hint: 'At least one call longer than 30 seconds' },
+  { key: 'picked_short', label: 'Answered, under 30 sec', base: 'called', hint: 'Answered, but every call was 30 seconds or less' },
+  { key: 'not_picked', label: "Didn't pick", base: 'called', main: true, hint: 'Called, but no call lasted more than 30 seconds' },
+  { key: 'not_picked_hot', label: `Didn't pick, watched ${hot}+ min`, base: 'hot' },
+  { key: 'over5', label: 'Talk time 5+ min', base: 'assigned', main: true, hint: 'At least one single call longer than 5 minutes' },
+  { key: 'over5_hot', label: `Watched ${hot}+ min and talked 5+ min`, base: 'hot', main: true },
+  { key: 'left_to_dial_hot', label: `Watched ${hot}+ min, not called yet`, base: 'hot', main: true },
+  { key: 'left_to_dial', label: 'Not called yet', base: 'assigned', main: true },
   { key: 'won', label: 'Sales closed', base: 'assigned', main: true },
 ]
 const reminderMetrics: Metric[] = [
@@ -51,7 +53,7 @@ const reminderMetrics: Metric[] = [
   { key: 'guided', label: 'Guided', base: 'assigned', main: true },
   { key: 'professions', label: 'Professions marked', base: 'assigned', main: true },
   { key: 'not_guided', label: 'Left to be guided', base: 'assigned', main: true },
-  { key: 'repeated', label: 'Repeated', base: 'assigned', main: true, hint: 'Already a lead before this webinar' },
+  { key: 'repeated', label: 'Came to an earlier webinar', base: 'assigned', main: true, hint: 'Attended one of your earlier webinars (or the file said so)' },
   { key: 'prev_enrolled', label: 'Previous batch enrolled', base: 'assigned', main: true, hint: 'In your buyers list, bought before this webinar' },
   { key: 'new_enrolled', label: 'New enrolled', base: 'assigned', main: true, hint: 'Bought on/after this webinar, or a "Sale Closed" call' },
 ]
@@ -62,6 +64,8 @@ export default function BatchDetail() {
   const dir = useDirectory(org.id)
   const [batch, setBatch] = useState<Batch | null>(null)
   const [purpose, setPurpose] = useState<View>('sales')
+  const [scope, setScope] = useState<Scope>(() => { try { return (sessionStorage.getItem('closeros.batchScope') as Scope) || 'all' } catch { return 'all' } })
+  const [groupCounts, setGroupCounts] = useState<{ reg: number; walk: number } | null>(null)
   const [version, setVersion] = useState(0)
   const [modal, setModal] = useState<'import' | 'zoom' | 'remind' | 'edit' | 'chat' | 'polls' | 'after' | 'assign' | null>(null)
   // "After the webinar": the files picked in one go, then each report is confirmed in turn, then sales calls are shared out.
@@ -78,6 +82,14 @@ export default function BatchDetail() {
   }, [id])
   useEffect(load, [load])
   useEffect(() => { if (batch) setPurpose(new Date(batch.webinar_at) > new Date() ? 'reminder' : 'sales') }, [batch?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!id) return
+    Promise.all([
+      supabase.from('batch_leads').select('lead_id', { count: 'exact', head: true }).eq('batch_id', id).eq('registered', true),
+      supabase.from('batch_leads').select('lead_id', { count: 'exact', head: true }).eq('batch_id', id).eq('registered', false),
+    ]).then(([r, w]) => setGroupCounts({ reg: r.count ?? 0, walk: w.count ?? 0 }))
+  }, [id, version])
+  function pickScope(s: Scope) { setScope(s); try { sessionStorage.setItem('closeros.batchScope', s) } catch { /* ignore */ } }
 
   if (error) return <ErrorBox error={error} />
   if (!batch || !dir) return <Spinner />
@@ -113,15 +125,27 @@ export default function BatchDetail() {
       </div>
 
       <div className="mb-4 flex rounded-lg bg-slate-100 p-1 text-sm sm:inline-flex">
-        {([['reminder', 'Reminder calls · before'], ['showup', 'Show-up impact'], ['sales', 'Sales calls · after']] as const).map(([k, l]) => (
+        {([['reminder', 'Reminder calls (before)'], ['showup', 'Show-up impact'], ['sales', 'Sales calls (after)']] as const).map(([k, l]) => (
           <button key={k} onClick={() => setPurpose(k)} className={`flex-1 whitespace-nowrap rounded-md px-4 py-1.5 font-medium ${purpose === k ? 'bg-white shadow-sm' : 'text-slate-600'}`}>{l}</button>
         ))}
       </div>
+      {/* One switch: every tile, table and list below follows it. */}
+      {groupCounts && groupCounts.walk > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2">
+          <span className="text-xs font-semibold text-brand-700">Showing</span>
+          <div className="flex flex-wrap gap-1 rounded-lg border border-slate-200 bg-white p-1 text-sm">
+            {([['all', `Everyone (${(groupCounts.reg + groupCounts.walk).toLocaleString('en-IN')})`], ['registered', `Registered (${groupCounts.reg.toLocaleString('en-IN')})`],
+              ['walkin', `Joined without registering (${groupCounts.walk.toLocaleString('en-IN')})`]] as const).map(([k, l]) => (
+              <button key={k} onClick={() => pickScope(k)} className={`whitespace-nowrap rounded-md px-3 py-1 ${scope === k ? 'bg-brand-600 font-semibold text-white' : 'text-slate-600 hover:bg-slate-50'}`}>{l}</button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {purpose === 'showup'
-        ? <ShowUpImpact key={'s' + version} batch={batch} dir={dir} />
-        : <BatchReport key={purpose + version} batch={batch} purpose={purpose} dir={dir} />}
-      {purpose === 'sales' && <WatchBands key={'w' + version} batch={batch} dir={dir} onSetPitch={isManager ? () => setModal('edit') : undefined} />}
+        ? <ShowUpImpact key={'s' + version + scope} batch={batch} dir={dir} scope={scope} />
+        : <BatchReport key={purpose + version + scope} batch={batch} purpose={purpose} dir={dir} scope={scope} />}
+      {purpose === 'sales' && <WatchBands key={'w' + version + scope} batch={batch} dir={dir} scope={scope} onSetPitch={isManager ? () => setModal('edit') : undefined} />}
 
       {modal === 'import' && <LeadImport orgId={org.id} dir={dir} batchId={batch.id} onClose={() => setModal(null)} onDone={refresh} />}
       {modal === 'zoom' && <ZoomUpload batch={batch} dir={dir} file={after?.zoom} onClose={nextAfter} onDone={refresh} />}
@@ -139,41 +163,37 @@ export default function BatchDetail() {
 
 /* ───────────── Report ───────────── */
 
-function BatchReport({ batch, purpose, dir }: { batch: Batch; purpose: Purpose; dir: Directory }) {
+function BatchReport({ batch, purpose, dir, scope }: { batch: Batch; purpose: Purpose; dir: Directory; scope: Scope }) {
   const { org } = useOrg()
   const [data, setData] = useState<{ reps: RepRow[]; outcomes: { g: number; rep: string | null; outcome_id: string | null; leads: number }[]; categories: { category_id: string | null; leads: number }[] } | null>(null)
   const [cats, setCats] = useState<ProfessionCategory[]>([])
-  const [pctMode, setPctMode] = useState<'sheet' | 'assigned'>(() => { try { return (localStorage.getItem('closeros.pct') as 'sheet') || 'sheet' } catch { return 'sheet' } })
   const [more, setMore] = useState(false)
   const [outcomeRep, setOutcomeRep] = useState<string>('')
-  const [drill, setDrill] = useState<{ title: string; metric: string; rep: string | null; outcome?: string | null } | null>(null)
+  const [drill, setDrill] = useState<{ title: string; metric: string; rep: string | null; arg?: string | null } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    supabase.rpc('batch_report', { p_batch: batch.id, p_purpose: purpose }).then(({ data, error }) => error ? setError(errorText(error)) : setData(data))
+    supabase.rpc('batch_report', { p_batch: batch.id, p_purpose: purpose, p_scope: scope }).then(({ data, error }) => error ? setError(errorText(error)) : setData(data))
     supabase.from('profession_categories').select('*').eq('org_id', org.id).order('position').then(({ data }) => setCats((data ?? []) as ProfessionCategory[]))
-  }, [batch.id, purpose, org.id])
+  }, [batch.id, purpose, org.id, scope])
 
   if (error) return <ErrorBox error={error} />
   if (!data) return <Spinner />
   const total = data.reps.find(r => r.g === 1)
-  if (!total || total.assigned === 0) return <Card><Empty icon={<Video className="h-6 w-6" />} title="No leads here yet" text="Use “Add registrations” to import the people who registered." /></Card>
+  if (!total || total.assigned === 0) return <Card><Empty icon={<Video className="h-6 w-6" />} title={scope === 'all' ? 'No leads here yet' : 'No leads in this group'}
+    text={scope === 'all' ? 'Use “Add registrations” to import the people who registered.' : 'Switch “Showing” back to Everyone.'} /></Card>
 
   const metrics = purpose === 'sales' ? salesMetrics(batch.hot_minutes) : reminderMetrics
   const shown = metrics.filter(m => more || m.main)
   const val = (r: RepRow, k: MetricKey) => k === 'not_guided' ? r.assigned - r.guided : (r[k] as number)
-  const pctOf = (r: RepRow, m: Metric) => {
-    const base = pctMode === 'assigned' ? (m.base ? 'assigned' : null) : m.base
-    return base ? pct(val(r, m.key), val(r, base)) : null
-  }
-  const baseLabel = (m: Metric) => {
-    const b = pctMode === 'assigned' ? (m.base ? 'assigned' : null) : m.base
-    return b ? `% of ${metrics.find(x => x.key === b)?.label.toLowerCase() ?? b}` : ''
-  }
+  // Every percentage says what it is a percentage of.
+  const pctOf = (r: RepRow, m: Metric) => m.base ? pct(val(r, m.key), val(r, m.base)) : null
+  const baseName = (m: Metric) => m.base ? (metrics.find(x => x.key === m.base)?.label.toLowerCase() ?? '') : ''
   const reps = data.reps.filter(r => r.g === 0).sort((a, b) => b.assigned - a.assigned)
   const repName = (id: string | null) => id ? dir.nameOf(id) : 'Unassigned'
   const target = batch.guided_target_pct
   const toneFor = (m: Metric, r: RepRow) => m.key === 'guided' ? (pct(r.guided, r.assigned) >= target ? 'text-emerald-700' : 'text-red-600') : ''
+  const scopeName = scope === 'registered' ? ' · registered' : scope === 'walkin' ? ' · joined without registering' : ''
 
   const purposeOutcomes = dir.outcomes.filter(o => o.purpose === purpose || o.purpose === 'both')
   const outs = data.outcomes.filter(o => outcomeRep ? o.g === 0 && o.rep === outcomeRep : o.g === 1)
@@ -185,40 +205,35 @@ function BatchReport({ batch, purpose, dir }: { batch: Batch; purpose: Purpose; 
 
   function exportCsv() {
     downloadCsv(`${batch.name}_${purpose}.csv`, ['Metric', ...reps.map(r => repName(r.rep)), 'Total'],
-      metrics.map(m => [m.label, ...[...reps, total!].map(r => { const p = pctOf(r, m); return p === null ? String(val(r, m.key)) : `${val(r, m.key)} (${p}%)` })]))
+      metrics.map(m => [m.label, ...[...reps, total!].map(r => { const p = pctOf(r, m); return p === null ? String(val(r, m.key)) : `${val(r, m.key)} (${p}% of ${baseName(m)})` })]))
   }
 
   return (
     <div className="space-y-4">
-      {/* Headline numbers for the whole team */}
+      {/* Headline numbers: label, number, then "% of what" — the same three rows in every tile, so they line up. */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
         {metrics.filter(m => m.main).slice(0, purpose === 'sales' ? 12 : 9).map(m => {
           const p = pctOf(total, m)
           return (
-            <button key={m.key} onClick={() => setDrill({ title: m.label, metric: m.key, rep: null })}
-              className="rounded-xl border border-slate-200 bg-white p-3.5 text-left shadow-sm transition hover:border-brand-300 hover:shadow">
-              <p className="text-xs font-medium text-slate-500" title={m.hint}>{m.label}</p>
-              <p className={`mt-1 text-2xl font-semibold tabular-nums ${toneFor(m, total) || 'text-slate-900'}`}>{val(total, m.key).toLocaleString('en-IN')}</p>
-              {p !== null && <p className="text-xs text-slate-500">{p}% <span className="text-slate-400">{baseLabel(m).replace('% ', '')}</span></p>}
-              {m.key === 'guided' && (
-                <div className="mt-1.5 h-1.5 rounded bg-slate-100"><div className="h-full rounded" style={{ width: `${Math.min(100, p ?? 0)}%`, background: (p ?? 0) >= target ? '#059669' : '#e34948' }} /></div>
-              )}
-              {m.key === 'guided' && <p className="mt-1 text-[11px] text-slate-500">Target {target}%</p>}
-              {m.key === 'won' && total.revenue > 0 && <p className="text-xs text-emerald-700">{fmtMoney(total.revenue, org)}</p>}
+            <button key={m.key} onClick={() => setDrill({ title: m.label + scopeName, metric: m.key, rep: null })}
+              className="grid grid-rows-[2.25rem_auto_2rem] rounded-xl border border-slate-200 bg-white p-3.5 text-left shadow-sm transition hover:border-brand-300 hover:shadow">
+              <span className="text-xs font-medium leading-tight text-slate-500" title={m.hint}>{m.label}</span>
+              <span className={`text-2xl font-semibold tabular-nums ${toneFor(m, total) || 'text-slate-900'}`}>{val(total, m.key).toLocaleString('en-IN')}</span>
+              <span className="self-end text-xs leading-tight text-slate-500">
+                {p !== null ? <><b className="font-semibold tabular-nums text-slate-600">{p}%</b> of {baseName(m)}</> : <>&nbsp;</>}
+                {m.key === 'guided' && <span className="block">Target {target}%</span>}
+                {m.key === 'won' && total.revenue > 0 && <span className="block text-emerald-700">{fmtMoney(total.revenue, org)}</span>}
+              </span>
             </button>
           )
         })}
       </div>
 
-      {/* Per rep */}
+      {/* Per team member */}
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
           <h3 className="font-semibold">By team member <span className="text-sm font-normal text-slate-500">· click any number to see the leads</span></h3>
           <div className="flex flex-wrap items-center gap-2 text-sm">
-            <select className="input !w-auto !py-1.5" value={pctMode} onChange={e => { const v = e.target.value as 'sheet'; setPctMode(v); try { localStorage.setItem('closeros.pct', v) } catch { /* ignore */ } }}>
-              <option value="sheet">% like my sheet (each row's own base)</option>
-              <option value="assigned">% of leads assigned</option>
-            </select>
             {purpose === 'sales' && <Button variant="ghost" onClick={() => setMore(!more)}>{more ? 'Fewer columns' : 'More columns'}</Button>}
             <Button variant="secondary" onClick={exportCsv}><Download className="h-4 w-4" /> CSV</Button>
           </div>
@@ -227,7 +242,7 @@ function BatchReport({ batch, purpose, dir }: { batch: Batch; purpose: Purpose; 
           <table className="min-w-full divide-y divide-slate-100">
             <thead className="bg-slate-50"><tr>
               <th className="th sticky left-0 z-10 bg-slate-50">{purpose === 'reminder' ? 'Reminder caller' : 'Sales rep'}</th>
-              {shown.map(m => <th key={m.key} className="th !whitespace-normal !normal-case !tracking-normal min-w-[84px] align-bottom" title={m.hint}>{m.label}</th>)}
+              {shown.map(m => <th key={m.key} className="th !whitespace-normal !normal-case !tracking-normal min-w-[84px] text-right align-bottom" title={m.hint}>{m.label}</th>)}
             </tr></thead>
             <tbody className="divide-y divide-slate-100">
               {[...reps, total].map(r => {
@@ -238,10 +253,10 @@ function BatchReport({ batch, purpose, dir }: { batch: Batch; purpose: Purpose; 
                     {shown.map(m => {
                       const p = pctOf(r, m)
                       return (
-                        <td key={m.key} className="td !py-1.5">
-                          <button className="text-left hover:underline" onClick={() => setDrill({ title: `${m.label} — ${isTotal ? 'all' : repName(r.rep)}`, metric: m.key, rep: isTotal ? null : r.rep ?? '00000000-0000-0000-0000-000000000000' })}>
+                        <td key={m.key} className="td !py-1.5 text-right">
+                          <button className="hover:underline" onClick={() => setDrill({ title: `${m.label} — ${isTotal ? 'everyone' : repName(r.rep)}${scopeName}`, metric: m.key, rep: isTotal ? null : r.rep ?? '00000000-0000-0000-0000-000000000000' })}>
                             <span className={`tabular-nums ${toneFor(m, r)}`}>{val(r, m.key).toLocaleString('en-IN')}</span>
-                            {p !== null && <span className="block text-[11px] font-normal text-slate-500">{p}%</span>}
+                            {p !== null && <span className="block text-[11px] font-normal tabular-nums text-slate-500" title={`% of ${baseName(m)}`}>{p}%</span>}
                           </button>
                         </td>
                       )
@@ -252,6 +267,7 @@ function BatchReport({ batch, purpose, dir }: { batch: Batch; purpose: Purpose; 
             </tbody>
           </table>
         </div>
+        <p className="border-t border-slate-100 px-4 py-2 text-xs text-slate-500">Small % under a number = share of that row's {shown.filter(m => m.base).slice(0, 2).map(m => `“${baseName(m)}”`).join(', ')}… (hover a column for its base).</p>
       </Card>
 
       <div className={`grid gap-4 ${purpose === 'reminder' ? 'lg:grid-cols-2' : ''}`}>
@@ -268,11 +284,11 @@ function BatchReport({ batch, purpose, dir }: { batch: Batch; purpose: Purpose; 
             <ul className="space-y-0.5">
               {outList.map(x => (
                 <li key={x.id ?? 'none'}>
-                  <button disabled={!x.n} onClick={() => setDrill({ title: x.label, metric: 'outcome', rep: outcomeRep || null, outcome: x.id })}
-                    className="grid w-full grid-cols-[minmax(120px,190px)_1fr_80px] items-center gap-3 rounded px-1.5 py-1 text-left text-sm hover:bg-slate-50 disabled:hover:bg-transparent">
-                    <span className={`truncate ${x.id ? 'text-slate-700' : 'text-red-600'} ${x.n ? '' : 'text-slate-400'}`}>{x.label}</span>
+                  <button onClick={() => setDrill({ title: x.label + scopeName, metric: 'outcome', rep: outcomeRep || null, arg: x.id })}
+                    className="grid w-full grid-cols-[minmax(120px,190px)_1fr_96px] items-center gap-3 rounded px-1.5 py-1 text-left text-sm hover:bg-slate-50">
+                    <span className={`truncate ${x.id ? 'text-slate-700' : 'text-red-600'}`}>{x.label}</span>
                     <span className="h-2.5 rounded bg-slate-100"><span className="block h-2.5 rounded" style={{ width: `${(x.n / outMax) * 100}%`, minWidth: x.n ? 3 : 0, background: x.id ? '#156D63' : '#e34948' }} /></span>
-                    <span className="text-right tabular-nums"><b>{x.n}</b> <span className="text-xs text-slate-500">{pct(x.n, outTotal)}%</span></span>
+                    <span className="text-right tabular-nums"><b>{x.n}</b> <span className="text-xs text-slate-500">{pct(x.n, outTotal)}% of called</span></span>
                   </button>
                 </li>
               ))}
@@ -282,7 +298,7 @@ function BatchReport({ batch, purpose, dir }: { batch: Batch; purpose: Purpose; 
 
         {purpose === 'reminder' && (
           <Card className="p-5">
-            <h3 className="mb-3 font-semibold">Lead quality by profession</h3>
+            <h3 className="mb-3 font-semibold">Lead quality by profession <span className="text-sm font-normal text-slate-500">· click a group to see who</span></h3>
             {(() => {
               const list = [...cats.map(c => ({ id: c.id as string | null, label: c.name, n: data.categories.find(x => x.category_id === c.id)?.leads ?? 0 })),
                 { id: null, label: 'Not categorised', n: data.categories.find(x => x.category_id === null)?.leads ?? 0 }]
@@ -290,10 +306,13 @@ function BatchReport({ batch, purpose, dir }: { batch: Batch; purpose: Purpose; 
               const max = Math.max(1, ...list.map(x => x.n))
               return list.length === 0 ? <p className="text-sm text-slate-500">No professions yet.</p> : (
                 <ul className="space-y-0.5">{list.map(x => (
-                  <li key={x.id ?? 'none'} className="grid grid-cols-[minmax(120px,190px)_1fr_80px] items-center gap-3 px-1.5 py-1 text-sm">
-                    <span className={`truncate ${x.id ? 'text-slate-700' : 'text-slate-400'}`}>{x.label}</span>
-                    <span className="h-2.5 rounded bg-slate-100"><span className="block h-2.5 rounded" style={{ width: `${(x.n / max) * 100}%`, minWidth: 3, background: x.id ? '#2a78d6' : '#94a3b8' }} /></span>
-                    <span className="text-right tabular-nums"><b>{x.n}</b> <span className="text-xs text-slate-500">{pct(x.n, total.assigned)}%</span></span>
+                  <li key={x.id ?? 'none'}>
+                    <button onClick={() => setDrill({ title: `Profession: ${x.label}${scopeName}`, metric: 'category', rep: null, arg: x.id ?? 'none' })}
+                      className="grid w-full grid-cols-[minmax(120px,190px)_1fr_96px] items-center gap-3 rounded px-1.5 py-1 text-left text-sm hover:bg-slate-50">
+                      <span className={`truncate ${x.id ? 'text-slate-700' : 'text-slate-500'}`}>{x.label}</span>
+                      <span className="h-2.5 rounded bg-slate-100"><span className="block h-2.5 rounded" style={{ width: `${(x.n / max) * 100}%`, minWidth: 3, background: x.id ? '#2a78d6' : '#94a3b8' }} /></span>
+                      <span className="text-right tabular-nums"><b>{x.n}</b> <span className="text-xs text-slate-500">{pct(x.n, total.assigned)}% of leads</span></span>
+                    </button>
                   </li>))}
                 </ul>
               )
@@ -303,63 +322,16 @@ function BatchReport({ batch, purpose, dir }: { batch: Batch; purpose: Purpose; 
         )}
       </div>
 
-      {drill && <LeadList batch={batch} purpose={purpose} dir={dir} {...drill} onClose={() => setDrill(null)} />}
-    </div>
-  )
-}
-
-/* ───────────── Click-through list of leads ───────────── */
-
-interface FactRow { lead_id: string; rep: string | null; name: string; phone: string; watch_minutes: number | null; attempts: number; max_dur: number; last_outcome_id: string | null }
-
-function LeadList({ batch, purpose, dir, title, metric, rep, outcome, onClose }:
-  { batch: Batch; purpose: Purpose; dir: Directory; title: string; metric: string; rep: string | null; outcome?: string | null; onClose: () => void }) {
-  const [rows, setRows] = useState<FactRow[] | null>(null)
-  const [open, setOpen] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  useEffect(() => {
-    const unassigned = rep === '00000000-0000-0000-0000-000000000000'
-    supabase.rpc('batch_report_leads', { p_batch: batch.id, p_purpose: purpose, p_metric: metric, p_rep: unassigned ? null : rep, p_outcome: outcome ?? null })
-      .then(({ data, error }) => {
-        if (error) return setError(errorText(error))
-        setRows(((data ?? []) as FactRow[]).filter(r => !unassigned || r.rep === null))
-      })
-  }, [batch.id, purpose, metric, rep, outcome])
-
-  return (
-    <div className="fixed inset-0 z-40 flex justify-end bg-slate-900/30" onMouseDown={onClose}>
-      <div className="flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl" onMouseDown={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-          <div><h2 className="font-semibold">{title}</h2><p className="text-sm text-slate-500">{rows ? `${rows.length} leads` : 'Loading…'}</p></div>
-          <div className="flex items-center gap-2">
-            {rows && rows.length > 0 && <Button variant="secondary" onClick={() => downloadCsv(`${batch.name}_${metric}.csv`, ['Name', 'Phone', 'Rep', 'Watched (min)', 'Calls', 'Longest call', 'Last outcome'],
-              rows.map(r => [r.name, r.phone, r.rep ? dir.nameOf(r.rep) : 'Unassigned', r.watch_minutes ?? '', r.attempts, hms(r.max_dur), dir.outcomeOf(r.last_outcome_id)?.label ?? '']))}>
-              <Download className="h-4 w-4" /> CSV</Button>}
-            <button onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100" aria-label="Close"><X className="h-5 w-5" /></button>
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          <ErrorBox error={error} />
-          {!rows ? <Spinner /> : rows.length === 0 ? <Empty title="No leads here" /> : (
-            <table className="min-w-full divide-y divide-slate-100">
-              <thead className="sticky top-0 bg-slate-50"><tr><th className="th">Lead</th><th className="th">Rep</th><th className="th">Watched</th><th className="th">Calls</th><th className="th">Longest</th><th className="th">Last outcome</th></tr></thead>
-              <tbody className="divide-y divide-slate-100">
-                {rows.map(r => (
-                  <tr key={r.lead_id} className="cursor-pointer hover:bg-slate-50" onClick={() => setOpen(r.lead_id)}>
-                    <td className="td"><p className="font-medium">{r.name || 'No name'}</p><p className="text-xs text-slate-500">{fmtPhone(r.phone)}</p></td>
-                    <td className="td">{r.rep ? dir.nameOf(r.rep) : <span className="text-amber-700">Unassigned</span>}</td>
-                    <td className="td tabular-nums">{r.watch_minutes == null ? '—' : `${r.watch_minutes} min`}</td>
-                    <td className="td tabular-nums">{r.attempts}</td>
-                    <td className="td tabular-nums">{r.attempts ? hms(r.max_dur) : '—'}</td>
-                    <td className="td">{dir.outcomeOf(r.last_outcome_id)?.label ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
-      {open && <div onMouseDown={e => e.stopPropagation()}><LeadDrawer leadId={open} dir={dir} onClose={() => setOpen(null)} onChanged={() => { /* list refreshes on reopen */ }} /></div>}
+      {drill && <LeadDrill title={drill.title} dir={dir} ownerLabel={purpose === 'reminder' ? 'Reminder caller' : 'Sales rep'} fileName={`${batch.name} ${drill.title}`}
+        onClose={() => setDrill(null)}
+        load={async () => {
+          const { data, error } = await supabase.rpc('batch_leads_list', { p_batch: batch.id, p_purpose: purpose, p_scope: scope, p_metric: drill.metric,
+            p_rep: drill.rep, p_arg: drill.arg ?? null })
+          if (error) throw error
+          return ((data ?? []) as { lead_id: string; rep: string | null; name: string; phone: string; registered: boolean; watch_minutes: number | null; attempts: number; max_dur: number; last_outcome_id: string | null; prev_at: string | null; prev_minutes: number | null }[])
+            .map(r => ({ lead_id: r.lead_id, name: r.name, phone: r.phone, owner: r.rep, registered: r.registered, watch_minutes: r.watch_minutes,
+              calls: r.attempts, longest: r.max_dur, outcome_id: r.last_outcome_id, prev_at: r.prev_at, prev_minutes: r.prev_minutes } as DrillRow))
+        }} />}
     </div>
   )
 }
@@ -713,10 +685,25 @@ function PollUpload({ batch, file, onClose, onDone }: { batch: Batch; file?: Fil
     setResult(data); onDone()
   }
   const qs = answers ? [...new Set(answers.map(a => a.question))] : []
+  // Does this look like a Zoom poll report? Say exactly what's wrong, and show the rows as they were read.
+  const problems = useMemo(() => {
+    if (!answers?.length) return []
+    const out: string[] = []
+    const emailOk = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e.trim())
+    const withEmail = answers.filter(a => a.email).length
+    const goodEmail = answers.filter(a => a.email && emailOk(a.email)).length
+    const people = new Set(answers.map(a => (a.email || a.name).toLowerCase())).size
+    const longQ = qs.filter(q => q.length > 160).length
+    if (withEmail > 0 && goodEmail < withEmail / 2) out.push(`The "email" column doesn't hold email addresses (only ${goodEmail} of ${withEmail} look like one) — e.g. "${answers.find(a => a.email && !emailOk(a.email))?.email.slice(0, 40)}".`)
+    if (qs.length > 0 && longQ >= Math.ceil(qs.length / 2)) out.push(`The "questions" are long sentences (${longQ} of ${qs.length} are longer than 160 letters) — a poll question is usually short.`)
+    if (people < 3) out.push(`Only ${people} ${people === 1 ? 'person' : 'people'} found — a poll report normally has many attendees.`)
+    return out
+  }, [answers]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [anyway, setAnyway] = useState(false)
   return (
     <Modal open wide onClose={onClose} title="Upload Zoom poll report" footer={result ? <Button onClick={onClose}>Done</Button> : <>
       <Button variant="secondary" onClick={onClose}>Cancel</Button>
-      <Button onClick={apply} loading={busy} disabled={!answers?.length}>Save {answers?.length ?? ''} answers</Button></>}>
+      <Button onClick={apply} loading={busy} disabled={!answers?.length || (problems.length > 0 && !anyway)}>Save {answers?.length ?? ''} answers</Button></>}>
       {result ? (
         <div className="space-y-3 text-sm">
           <p className="rounded-lg bg-emerald-50 p-3 text-emerald-900">✅ {result.answers} answers to {result.questions} questions saved · <b>{result.people}</b> leads answered. Attendees who didn't answer show “Didn't answer the polls” in their profile.</p>
@@ -733,8 +720,26 @@ function PollUpload({ batch, file, onClose, onDone }: { batch: Batch; file?: Fil
         </label>
       ) : (
         <div className="space-y-3 text-sm">
+          {problems.length > 0 && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-red-900">
+              <p className="font-semibold">This doesn't look like a Zoom poll report</p>
+              <ul className="mt-1 list-disc pl-5">{problems.map(p => <li key={p}>{p}</li>)}</ul>
+              <p className="mt-2">Check you picked the right file: Zoom → Reports → Webinar → <b>Poll report</b> → Export. The rows below are exactly as Closer OS read them.</p>
+              <label className="mt-2 flex items-center gap-2 text-xs"><input type="checkbox" checked={anyway} onChange={e => setAnyway(e.target.checked)} /> It's the right file — save it anyway</label>
+            </div>
+          )}
           <p>Found <b>{answers.length}</b> answers from <b>{new Set(answers.map(a => (a.email || a.name).toLowerCase())).size}</b> people to <b>{qs.length}</b> questions:</p>
-          <ul className="list-disc pl-5 text-slate-700">{qs.slice(0, 10).map(q => <li key={q}>{q}</li>)}</ul>
+          <ul className="list-disc pl-5 text-slate-700">{qs.slice(0, 10).map(q => <li key={q}>{q.length > 160 ? q.slice(0, 160) + '…' : q}</li>)}</ul>
+          <div className="overflow-x-auto rounded-lg border border-slate-200">
+            <table className="min-w-full text-xs">
+              <thead className="bg-slate-50"><tr><th className="th">Name</th><th className="th">Email</th><th className="th">Question</th><th className="th">Answer</th></tr></thead>
+              <tbody className="divide-y divide-slate-100">{answers.slice(0, 8).map((a, i) => (
+                <tr key={i}><td className="td max-w-[120px] truncate">{a.name || '—'}</td><td className="td max-w-[160px] truncate">{a.email || '—'}</td>
+                  <td className="td max-w-[220px] truncate" title={a.question}>{a.question}</td><td className="td max-w-[160px] truncate" title={a.answer}>{a.answer}</td></tr>
+              ))}</tbody>
+            </table>
+            <p className="px-3 py-1.5 text-[11px] text-slate-500">First {Math.min(8, answers.length)} of {answers.length} rows, as read from the file.</p>
+          </div>
           {batch.polls_uploaded_at && <p className="text-xs text-amber-700">This replaces the polls uploaded earlier for this webinar.</p>}
           <ErrorBox error={error} />
         </div>
@@ -821,6 +826,7 @@ function AssignSalesCalls({ batch, dir, onClose, onDone }: { batch: Batch; dir: 
   const [counts, setCounts] = useState<{ att: number; non: number } | null>(null)
   const [preview, setPreview] = useState<{ per_person: Record<string, number>; moved: number; kept: number } | null>(null)
   const [done, setDone] = useState<{ moved: number; kept: number; tagged: number } | null>(null)
+  const [see, setSee] = useState<{ title: string; joined: boolean } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
@@ -859,11 +865,11 @@ function AssignSalesCalls({ batch, dir, onClose, onDone }: { batch: Batch; dir: 
           {!twoTeams && <p className="rounded-lg bg-slate-50 p-3 text-slate-600">Each lead stays with the person who has it, unless you share leads out here. (Working with a separate reminder team and sales team? Mark them on the Team page.)</p>}
           <div>
             <label className="flex items-center gap-2 font-medium"><input type="checkbox" checked={att} onChange={e => setAtt(e.target.checked)} />
-              Attendees{counts ? ` (${counts.att})` : ''} → these people, in turns, hottest first</label>
+              Attendees{counts ? <> (<button type="button" className="text-brand-700 underline" onClick={e => { e.preventDefault(); setSee({ title: 'Attendees', joined: true }) }}>{counts.att}</button>)</> : ''} → these people, in turns, hottest first</label>
             {att && <People list={attUsers} set={setAttUsers} />}
           </div>
           <div>
-            <p className="font-medium">Didn't attend{counts ? ` (${counts.non})` : ''}</p>
+            <p className="font-medium">Didn't attend{counts ? <> (<button type="button" className="text-brand-700 underline" onClick={() => setSee({ title: "Didn't attend", joined: false })}>{counts.non}</button>)</> : ''}</p>
             <div className="ml-1 mt-1 space-y-1">
               <label className="flex items-center gap-2"><input type="radio" checked={non === 'none'} onChange={() => setNon('none')} /> Keep with the person who has them</label>
               <label className="flex items-center gap-2"><input type="radio" checked={non === 'sales'} onChange={() => setNon('sales')} /> Share out with the attendees (same people)</label>
@@ -871,6 +877,13 @@ function AssignSalesCalls({ batch, dir, onClose, onDone }: { batch: Batch; dir: 
             </div>
             {non === 'reminder' && <People list={nonUsers} set={setNonUsers} />}
           </div>
+          {see && <LeadDrill title={see.title} dir={dir} ownerLabel="Has them now" fileName={`${batch.name} ${see.title}`} onClose={() => setSee(null)}
+            load={async () => {
+              const { data, error } = await supabase.rpc('show_up_leads', { p_batch: batch.id, p_scope: 'all', p_filter: { joined: see.joined } })
+              if (error) throw error
+              return ((data ?? []) as { lead_id: string; name: string; phone: string; caller: string | null; registered: boolean; watch_minutes: number | null; calls: number; longest: number; outcome_id: string | null; prev_at: string | null; prev_minutes: number | null }[])
+                .map(r => ({ lead_id: r.lead_id, name: r.name, phone: r.phone, owner: r.caller, registered: r.registered, watch_minutes: r.watch_minutes, calls: r.calls, longest: r.longest, outcome_id: r.outcome_id, prev_at: r.prev_at, prev_minutes: r.prev_minutes }))
+            }} />}
           {preview && <p className="rounded-lg bg-brand-50 p-3 text-brand-900">{preview.moved + preview.kept} leads: {preview.moved} change owner{preview.kept ? `, ${preview.kept} repeat leads stay with their earlier owner` : ''}. Hot leads are spread evenly (numbers next to each name).</p>}
           <ErrorBox error={error} />
         </div>

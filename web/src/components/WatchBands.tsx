@@ -16,11 +16,11 @@ interface Pick { title: string; from: number | null; to: number | null; absent?:
 interface Row { watch_minutes: number | null; warmth: number; warm_reason: string | null; saw_pitch: boolean | null; chat_count: number; poll_answered: number; lead: { id: string; name: string | null; phone: string; city: string | null; assigned_to: string | null; dial_count: number; has_talked: boolean; total_talk_sec: number } }
 
 /** Webinar leads grouped by watch time (10-minute steps) and by whether they stayed for the pitch. */
-export default function WatchBands({ batch, dir, onSetPitch }: { batch: Batch; dir: Directory; onSetPitch?: () => void }) {
+export default function WatchBands({ batch, dir, onSetPitch, scope = 'all' }: { batch: Batch; dir: Directory; onSetPitch?: () => void; scope?: 'all' | 'registered' | 'walkin' }) {
   const [data, setData] = useState<Data | null>(null)
   const [pick, setPick] = useState<Pick | null>(null)
   const [error, setError] = useState<string | null>(null)
-  useEffect(() => { supabase.rpc('batch_watch_bands', { p_batch: batch.id }).then(({ data, error }) => error ? setError(errorText(error)) : setData(data)) }, [batch.id, batch.pitch_minute])
+  useEffect(() => { supabase.rpc('batch_watch_bands', { p_batch: batch.id, p_scope: scope }).then(({ data, error }) => error ? setError(errorText(error)) : setData(data)) }, [batch.id, batch.pitch_minute, scope])
 
   if (error) return <ErrorBox error={error} />
   if (!data) return <Spinner />
@@ -86,25 +86,26 @@ export default function WatchBands({ batch, dir, onSetPitch }: { batch: Batch; d
         })}
       </div>
 
-      {pick && <BandLeads batch={batch} dir={dir} pick={pick} onClose={() => setPick(null)} />}
+      {pick && <BandLeads batch={batch} dir={dir} pick={pick} scope={scope} onClose={() => setPick(null)} />}
     </Card>
   )
 }
 
-function BandLeads({ batch, dir, pick, onClose }: { batch: Batch; dir: Directory; pick: Pick; onClose: () => void }) {
+function BandLeads({ batch, dir, pick, onClose, scope }: { batch: Batch; dir: Directory; pick: Pick; onClose: () => void; scope: 'all' | 'registered' | 'walkin' }) {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [open, setOpen] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
     let q = supabase.from('batch_leads').select('watch_minutes, warmth, warm_reason, saw_pitch, chat_count, poll_answered, lead:leads!inner(id, name, phone, city, assigned_to, dial_count, has_talked, total_talk_sec, deleted_at)')
       .eq('batch_id', batch.id).is('lead.deleted_at', null).order(pick.warm || pick.pitch ? 'warmth' : 'watch_minutes', { ascending: false }).limit(5000)
+    if (scope !== 'all') q = q.eq('registered', scope === 'registered')
     if (pick.absent) q = q.eq('watch_minutes', 0)
     else if (pick.pitch === 'saw') q = q.eq('saw_pitch', true)
     else if (pick.pitch === 'missed') q = q.eq('saw_pitch', false).gt('watch_minutes', 0)
     else if (pick.warm) q = q.gte('warmth', pick.warm[0]).lte('warmth', pick.warm[1])
     else { if (pick.from != null) q = q.gte('watch_minutes', pick.from); if (pick.to != null) q = q.lte('watch_minutes', pick.to) }
     q.then(({ data, error }) => error ? setError(errorText(error)) : setRows((data ?? []) as unknown as Row[]))
-  }, [batch.id, pick])
+  }, [batch.id, pick, scope])
   return (
     <Modal open wide onClose={onClose} title={`${pick.title}${rows ? ` · ${rows.length} leads` : ''}`} footer={rows && rows.length > 0 ? (
       <Button variant="secondary" onClick={() => downloadCsv(`${batch.name}_${pick.title}.csv`, ['Name', 'Phone', 'City', 'Rep', 'Watched (min)', 'Saw the pitch', 'Chat messages', 'Polls answered', 'Warmth', 'Calls', 'Talked', 'Talk time'],

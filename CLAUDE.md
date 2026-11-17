@@ -1951,3 +1951,8 @@ intelligence → Play Store launch.
   email + password (EmailSignIn) is hidden — long-press the "Closer OS" title — for Play reviewers / old test logins.
   GoogleButton no longer hidden in company builds: needs a Google Cloud ANDROID OAuth client for com.closeros.app with
   the dev-test SHA-1 (owner creates it). Website: "Continue with Google" on by default (VITE_GOOGLE_SIGNIN=off hides it).
+- Zoom report for a company with NO leads (Nov 17, "Cancer Consultation Circle", migration 0099): the result now says
+  "None of them are in your leads yet — add them below"; after "Add N as new leads" the report is applied again (sessions,
+  exact minutes). apply_zoom_report: Zoom's "Registration Time" → registered = true ONLY when the webinar has no
+  registrations from elsewhere; fallback match via find_lead (last 10 digits, typo-fixed email). Web: overlapping sessions
+  (two devices) counted once; note-taker bots (Fireflies, Otter, Read.ai…) skipped. Test: web/tests/zoom-empty-test.cjs.

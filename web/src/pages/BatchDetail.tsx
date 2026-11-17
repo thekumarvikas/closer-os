@@ -338,7 +338,7 @@ function BatchReport({ batch, purpose, dir, scope }: { batch: Batch; purpose: Pu
 
 /* ───────────── Zoom report upload ───────────── */
 
-type ZoomCol = 'name' | 'email' | 'phone' | 'minutes' | 'join' | 'leave'
+type ZoomCol = 'name' | 'email' | 'phone' | 'minutes' | 'join' | 'leave' | 'regtime'
 const zoomGuess: Record<ZoomCol, RegExp> = {
   name: /^(name|user name|name \(original name\)|user name \(original name\)|attendee name|first name)/i,
   email: /e-?mail/i,
@@ -346,12 +346,15 @@ const zoomGuess: Record<ZoomCol, RegExp> = {
   minutes: /(duration|time in session|minutes)/i,
   join: /join time/i,
   leave: /leave time/i,
+  regtime: /registration time/i,
 }
+// Meeting note-taker bots that join webinars — never counted as attendees.
+const ZOOM_BOT = /notetaker|note taker|fireflies|otter\.ai|read\.ai|fathom|tl;?dv|meetgeek|bluedot/i
 
 function ZoomUpload({ batch, dir, file, onClose, onDone }: { batch: Batch; dir: Directory; file?: File; onClose: () => void; onDone: () => void }) {
   const { org } = useOrg()
   const [table, setTable] = useState<string[][] | null>(null)
-  const [cols, setCols] = useState<Record<ZoomCol, number>>({ name: -1, email: -1, phone: -1, minutes: -1, join: -1, leave: -1 })
+  const [cols, setCols] = useState<Record<ZoomCol, number>>({ name: -1, email: -1, phone: -1, minutes: -1, join: -1, leave: -1, regtime: -1 })
   const [started, setStarted] = useState('')   // actual start, wall time in the company time zone (yyyy-mm-ddThh:mm)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -381,7 +384,7 @@ function ZoomUpload({ batch, dir, file, onClose, onDone }: { batch: Batch; dir: 
         body.push(r)
       }
       const find = (k: ZoomCol) => head.findIndex(h => zoomGuess[k].test(h))
-      setCols({ name: find('name'), email: find('email'), phone: find('phone'), minutes: find('minutes'), join: find('join'), leave: find('leave') })
+      setCols({ name: find('name'), email: find('email'), phone: find('phone'), minutes: find('minutes'), join: find('join'), leave: find('leave'), regtime: find('regtime') })
       // The summary at the top has the webinar's actual start time ("Actual Start Time" / "Start Time").
       let st = ''
       for (let i = 0; i < start && !st; i++) {
@@ -405,20 +408,32 @@ function ZoomUpload({ batch, dir, file, onClose, onDone }: { batch: Batch; dir: 
   // One entry per person; Zoom lists a row per join, so minutes are added up.
   const attendees = useMemo(() => {
     if (!table) return []
-    const map = new Map<string, { name: string; email: string; phone: string; minutes: number; sessions?: { join: string; leave: string }[] }>()
+    const map = new Map<string, { name: string; email: string; phone: string; minutes: number; registered?: boolean; sessions?: { join: string; leave: string }[] }>()
     const dmy = isDayFirst(table.slice(1).flatMap(r => [cols.join >= 0 ? String(r[cols.join] ?? '') : '', cols.leave >= 0 ? String(r[cols.leave] ?? '') : '']))
     for (const r of table.slice(1)) {
       const g = (k: ZoomCol) => cols[k] >= 0 ? String(r[cols[k]] ?? '').trim() : ''
       const email = g('email').toLowerCase(), phone = g('phone').replace(/[^\d+]/g, ''), name = g('name').replace(/\s*\(.*\)\s*$/, '')
       const key = email || phone || name.toLowerCase()
-      if (!key) continue
+      if (!key || ZOOM_BOT.test(name) || ZOOM_BOT.test(g('name'))) continue
+      // Zoom's own registration list: a registration time means this person registered for the webinar.
+      const reg = cols.regtime >= 0 && /\d/.test(g('regtime'))
       const minutes = Number(g('minutes').replace(/[^\d.]/g, '')) || 0
       // Join / leave times → one session, in UTC.
       const jw = cols.join >= 0 ? parseWall(g('join'), dmy) : null, lw = cols.leave >= 0 ? parseWall(g('leave'), dmy) : null
       const sess = jw && lw ? { join: wallToUtc(jw, org.timezone), leave: wallToUtc(lw, org.timezone) } : null
       const cur = map.get(key)
-      if (cur) { cur.minutes += minutes; if (sess) cur.sessions = [...(cur.sessions ?? []), sess] }
-      else map.set(key, { name, email, phone, minutes, ...(sess ? { sessions: [sess] } : {}) })
+      if (cur) { cur.minutes += minutes; if (sess) cur.sessions = [...(cur.sessions ?? []), sess]; if (reg) cur.registered = true; if (!cur.phone && phone) cur.phone = phone }
+      else map.set(key, { name, email, phone, minutes, ...(reg ? { registered: true } : {}), ...(sess ? { sessions: [sess] } : {}) })
+    }
+    // Someone on two devices at once has overlapping sessions: count the time once, not twice.
+    for (const a of map.values()) {
+      if (!a.sessions || a.sessions.length < 2) continue
+      const iv = a.sessions.map(x => [Date.parse(x.join), Date.parse(x.leave)] as [number, number]).filter(([j, l]) => l > j).sort((x, y) => x[0] - y[0])
+      let total = 0, cs = -1, ce = -1
+      for (const [j, l] of iv) { if (j > ce) { if (ce > cs) total += ce - cs; cs = j; ce = l } else ce = Math.max(ce, l) }
+      if (ce > cs) total += ce - cs
+      const merged = Math.round(total / 60000)
+      if (merged + a.sessions.length < a.minutes) a.minutes = merged
     }
     return [...map.values()]
   }, [table, cols, org.timezone])
@@ -441,7 +456,11 @@ function ZoomUpload({ batch, dir, file, onClose, onDone }: { batch: Batch; dir: 
       p_assign_mode: assignMode, p_assign_to: assignMode === 'user' ? assignTo : null, p_batch: batch.id })
     setBusy(false)
     if (error) return setError(errorText(error))
-    setImported(`${data.inserted} new leads added${data.joined ? `, ${data.joined} matched existing leads` : ''}${data.invalid ? `, ${data.invalid} skipped (no valid phone)` : ''}.`)
+    setImported(`${data.inserted} new leads added${data.joined ? `, ${data.joined} matched existing leads` : ''}${data.invalid ? `, ${data.invalid} skipped (no valid phone)` : ''}. Their watch time is saved.`)
+    // Run the report again: the new leads now match, so join/leave times, exact minutes and Zoom registrations are saved too.
+    const sw = started ? parseWall(started.replace('T', ' '), false) : null
+    const again = await supabase.rpc('apply_zoom_report', { p_batch: batch.id, p_rows: attendees, p_started_at: sw ? wallToUtc(sw, org.timezone) : null })
+    if (!again.error) setResult(again.data)
     onDone()
   }
 
@@ -449,19 +468,21 @@ function ZoomUpload({ batch, dir, file, onClose, onDone }: { batch: Batch; dir: 
   return (
     <Modal open onClose={onClose} title="Upload Zoom attendance report" wide footer={result ? <Button onClick={onClose}>Done</Button> : <>
       <Button variant="secondary" onClick={onClose}>Cancel</Button>
-      <Button onClick={apply} loading={busy} disabled={!attendees.length || cols.minutes < 0 || (cols.email < 0 && cols.phone < 0)}>Match {attendees.length || ''} attendees</Button>
+      <Button onClick={apply} loading={busy} disabled={!attendees.length || cols.minutes < 0 || (cols.email < 0 && cols.phone < 0)}>Save watch time for {attendees.length || ''} people</Button>
     </>}>
       {result ? (
         <div className="space-y-4 text-sm">
           <div className="flex items-start gap-3 rounded-lg bg-emerald-50 p-3 text-emerald-900">
             <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
+            {result.by_email + result.by_phone === 0 && !imported ? <p>The report was read: <b>{attendees.length}</b> people, <b>{attendees.filter(a => a.minutes > 0).length}</b> of them joined.
+              None of them are in your leads yet — add them below and their watch time is saved straight away.</p> :
             <p>Watch time saved for <b>{result.by_email + result.by_phone}</b> leads ({result.by_email} matched by email, {result.by_phone} by phone).
               {result.added_to_batch > 0 && <> {result.added_to_batch} of them were existing leads not registered for this webinar — they were added to it.</>}
-              {' '}Registered leads who didn't join now show 0 minutes.</p>
+              {' '}Registered leads who didn't join now show 0 minutes.</p>}
           </div>
           {result.unmatched.length > 0 && (
             <div>
-              <p className="mb-2 font-medium">{result.unmatched.length} attendees are new — not in your leads yet:</p>
+              <p className="mb-2 font-medium">{imported ? `${result.unmatched.length} couldn't be added — no valid phone number (download the CSV to fix them):` : `${result.unmatched.length} people are new — not in your leads yet:`}</p>
               <div className="max-h-56 overflow-y-auto rounded-lg border border-slate-200">
                 <table className="min-w-full divide-y divide-slate-100 text-sm">
                   <thead className="sticky top-0 bg-slate-50"><tr><th className="th">Name</th><th className="th">Email</th><th className="th">Phone</th><th className="th">Watched</th></tr></thead>
@@ -491,6 +512,7 @@ function ZoomUpload({ batch, dir, file, onClose, onDone }: { batch: Batch; dir: 
               {noPhone > 0 && !imported && <p className="mt-2 text-xs text-slate-500">{noPhone} have no phone number in the Zoom report, so they can't be added as leads. Use CSV to download them.</p>}
             </div>
           )}
+          {imported && result.unmatched.length === 0 && <p className="rounded-lg bg-emerald-50 p-3 text-emerald-900">✅ {imported}</p>}
           <ErrorBox error={error} />
         </div>
       ) : !table ? (
@@ -506,8 +528,8 @@ function ZoomUpload({ batch, dir, file, onClose, onDone }: { batch: Batch; dir: 
         <div className="space-y-4 text-sm">
           <p>Found <b>{table.length - 1}</b> rows → <b>{attendees.length}</b> different people. Check the columns:</p>
           <div className="grid gap-3 sm:grid-cols-3">
-            {(['name', 'email', 'phone', 'minutes', 'join', 'leave'] as ZoomCol[]).map(k => (
-              <Field key={k} label={{ name: 'Name', email: 'Email', phone: 'Phone', minutes: 'Minutes watched', join: 'Join time', leave: 'Leave time' }[k]}>
+            {(['name', 'email', 'phone', 'minutes', 'join', 'leave', 'regtime'] as ZoomCol[]).map(k => (
+              <Field key={k} label={{ name: 'Name', email: 'Email', phone: 'Phone', minutes: 'Minutes watched', join: 'Join time', leave: 'Leave time', regtime: 'Registration time' }[k]}>
                 <select className="input" value={cols[k]} onChange={e => setCols({ ...cols, [k]: Number(e.target.value) })}>
                   <option value={-1}>— none —</option>
                   {table[0].map((h, i) => <option key={i} value={i}>{h || `Column ${i + 1}`}</option>)}

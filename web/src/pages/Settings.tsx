@@ -20,6 +20,7 @@ export default function Settings() {
   const [company, setCompany] = useState({ name: org.name, phone_prefix: org.phone_prefix, currency: org.currency, timezone: org.timezone, date_format: org.date_format })
   const [tracking, setTracking] = useState<'all' | 'leads'>(org.settings?.call_tracking ?? 'all')
   const [whatsapp, setWhatsapp] = useState<boolean>(org.settings?.track_whatsapp ?? true)
+  const [events, setEvents] = useState<boolean>(org.settings?.sells_via_events ?? true)
   const reload = () => setVersion(v => v + 1)
 
   useEffect(() => {
@@ -33,7 +34,7 @@ export default function Settings() {
 
   async function saveCompany(e: FormEvent) {
     e.preventDefault()
-    const { error } = await supabase.from('organizations').update({ ...company, settings: { ...(org.settings ?? {}), call_tracking: tracking, track_whatsapp: whatsapp } }).eq('id', org.id)
+    const { error } = await supabase.from('organizations').update({ ...company, settings: { ...(org.settings ?? {}), call_tracking: tracking, track_whatsapp: whatsapp, sells_via_events: events } }).eq('id', org.id)
     if (error) return setError(errorText(error))
     setSaved(true); setTimeout(() => setSaved(false), 2000); refresh()
   }
@@ -58,6 +59,10 @@ export default function Settings() {
                 {['DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD'].map(f => <option key={f}>{f}</option>)}
               </select>
             </Field>
+            {!org.is_individual && <label className="flex items-start gap-2 text-sm sm:col-span-2">
+              <input type="checkbox" className="mt-0.5" checked={events} onChange={e => setEvents(e.target.checked)} />
+              <span>Sales are done through webinars / sales events / workshops<span className="block text-xs text-slate-500">Off = the Webinars / Sales Events menu is hidden for everyone.</span></span>
+            </label>}
             <div className="sm:col-span-2">
               <span className="label">Call history to track</span>
               <div className="mb-3 flex flex-wrap gap-4 text-sm">

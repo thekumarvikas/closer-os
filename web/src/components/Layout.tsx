@@ -47,7 +47,7 @@ export default function Layout() {
         <p className="mx-5 mb-3 truncate text-sm text-brand-200">{org?.name}{solo && <span className="block text-xs text-brand-300">Personal account · Closer OS app</span>}</p>
       )}
       <nav className="flex-1 space-y-0.5 px-3">
-        {nav.filter(n => (!('team' in n) || !solo) && (!n.admin || isAdmin) && (!n.manager || isManager) && (!('superAdmin' in n) || profile?.is_super_admin)).map(n => (
+        {nav.filter(n => (!('team' in n) || !solo) && (n.to !== '/webinars' || solo || org?.settings?.sells_via_events !== false) && (!n.admin || isAdmin) && (!n.manager || isManager) && (!('superAdmin' in n) || profile?.is_super_admin)).map(n => (
           <NavLink key={n.to} to={n.to} end={n.end} onClick={() => setOpen(false)}
             className={({ isActive }) => `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${isActive ? 'bg-white/15 text-white' : 'text-brand-100 hover:bg-white/10 hover:text-white'}`}>
             <n.icon className="h-4 w-4" /> {solo && n.to === '/webinars' ? 'Events' : n.label}

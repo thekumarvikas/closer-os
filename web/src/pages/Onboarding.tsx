@@ -20,6 +20,7 @@ export default function Onboarding() {
   const [error, setError] = useState<string | null>(null)
   // Company with a team, or one person using the Closer OS app on their own.
   const [kind, setKind] = useState<'company' | 'solo' | null>(null)
+  const [events, setEvents] = useState(false)
   const [myName, setMyName] = useState(profile?.full_name ?? '')
 
   async function create(e: FormEvent) {
@@ -27,7 +28,7 @@ export default function Onboarding() {
     const c = countries.find(x => x.code === country)!
     setBusy(true); setError(null)
     const { data, error } = await supabase.rpc('create_organization', {
-      p_name: name, p_country_code: c.code, p_phone_prefix: c.prefix, p_currency: c.currency, p_timezone: c.tz,
+      p_name: name, p_country_code: c.code, p_phone_prefix: c.prefix, p_currency: c.currency, p_timezone: c.tz, p_sells_events: events,
     })
     if (error) { setError(errorText(error)); setBusy(false); return }
     selectOrg(data as string)
@@ -79,6 +80,8 @@ export default function Onboarding() {
           <form onSubmit={create} className="space-y-4">
             <Field label="Company name"><input className="input" required minLength={2} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Kumar Coaching" /></Field>
             {countryField}
+            <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-0.5" checked={events} onChange={e => setEvents(e.target.checked)} />
+              <span>Sales are done through webinars / sales events / workshops<span className="block text-xs text-slate-500">Turns on webinar registrations, reminder calls, Zoom reports and show-up. You can change this later in Settings.</span></span></label>
             <ErrorBox error={error} />
             <div className="flex gap-2"><Button type="submit" loading={busy}>Create company</Button><Button variant="secondary" type="button" onClick={() => setKind(null)}>Back</Button></div>
           </form>

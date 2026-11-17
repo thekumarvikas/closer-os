@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Building2, Copy, Pencil, Plus } from 'lucide-react'
+import { CompanyHealth, AddCompany, CompanyDetails, type CompanyExtra } from '../components/SuperAdminCompanies'
 import { supabase, errorText } from '../lib/supabase'
 import { Badge, Button, Card, ErrorBox, Field, Modal, PageHeader, Spinner } from '../components/ui'
 import { featureNames } from './Billing'
 
-interface Company { id: string; name: string; created_at: string; owner: string | null; users: number; calls_7d: number; last_call: string | null
+interface Company extends CompanyExtra { id: string; name: string; created_at: string; owner: string | null; users: number; calls_7d: number; last_call: string | null
   status: string | null; plan: string | null; plan_id: string | null; seats: number | null; cycle: string | null; trial_ends_at: string | null; current_period_end: string | null; note: string | null; paid_total: number }
 interface Plan { id: string; name: string; description: string | null; price_month: number; price_year: number; features: Record<string, boolean>; min_seats: number; is_public: boolean; position: number }
 interface Settings { trial_days: number; grace_days: number; razorpay_key_id: string | null; seller_name: string | null; seller_address: string | null }
@@ -15,13 +16,14 @@ const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/billing/we
 
 /** Closer OS Super Admin: every company, plans & prices, payment setup, revenue. */
 export default function SuperAdmin() {
-  const [tab, setTab] = useState<'companies' | 'plans' | 'settings' | 'revenue' | 'errors'>('companies')
+  const [tab, setTab] = useState<'companies' | 'health' | 'plans' | 'settings' | 'revenue' | 'errors'>('companies')
   const [companies, setCompanies] = useState<Company[] | null>(null)
   const [plans, setPlans] = useState<Plan[]>([])
   const [settings, setSettings] = useState<Settings | null>(null)
   const [secrets, setSecrets] = useState<{ key_secret: boolean; webhook_secret: boolean } | null>(null)
   const [revenue, setRevenue] = useState<{ month: string; amount: number; payments: number }[]>([])
   const [editCo, setEditCo] = useState<Company | null>(null)
+  const [adding, setAdding] = useState(false)
   const [editPlan, setEditPlan] = useState<Partial<Plan> | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [q, setQ] = useState('')
@@ -46,7 +48,7 @@ export default function SuperAdmin() {
     if (c.status === 'active') return live ? <Badge color="green">Paid · till {d(end)}</Badge> : <Badge color="red">Expired {d(end)}</Badge>
     return <Badge>{c.status ?? '—'}</Badge>
   }
-  const shown = companies.filter(c => !q || `${c.name} ${c.owner}`.toLowerCase().includes(q.toLowerCase()))
+  const shown = companies.filter(c => !q || `${c.name} ${c.owner} ${c.invited_owner} ${c.contact_name} ${c.contact_email} ${c.contact_phone}`.toLowerCase().includes(q.toLowerCase()))
   const thisMonth = revenue[0]?.month === new Date().toISOString().slice(0, 7) ? revenue[0].amount : 0
 
   return (
@@ -59,19 +61,22 @@ export default function SuperAdmin() {
           <Card key={l as string} className="p-4"><div className="text-sm text-slate-500">{l}</div><div className="text-2xl font-semibold">{v}</div></Card>))}
       </div>
       <div className="mb-4 flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1 text-sm sm:inline-flex">
-        {([['companies', 'Companies'], ['plans', 'Plans & prices'], ['settings', 'Payments setup'], ['revenue', 'Revenue'], ['errors', 'App errors']] as const).map(([k, l]) =>
+        {([['companies', 'Companies'], ['health', 'Health'], ['plans', 'Plans & prices'], ['settings', 'Payments setup'], ['revenue', 'Revenue'], ['errors', 'App errors']] as const).map(([k, l]) =>
           <button key={k} onClick={() => setTab(k)} className={`rounded-md px-3 py-1.5 font-medium ${tab === k ? 'bg-white shadow-sm' : 'text-slate-600'}`}>{l}</button>)}
       </div>
 
       {tab === 'companies' && (
         <Card className="overflow-hidden">
-          <div className="p-3"><input className="input max-w-xs" placeholder="Search company or owner email" value={q} onChange={e => setQ(e.target.value)} /></div>
+          <div className="flex flex-wrap items-center justify-between gap-2 p-3"><input className="input max-w-xs" placeholder="Search company, owner or contact" value={q} onChange={e => setQ(e.target.value)} />
+            <Button onClick={() => setAdding(true)}><Plus className="h-4 w-4" /> Add a company</Button></div>
           <table className="w-full table-fixed text-sm">
             <thead className="bg-slate-50"><tr><th className="th w-[24%]">Company</th><th className="th">Plan</th><th className="th w-[22%]">Status</th><th className="th w-[9%]">Users</th><th className="th w-[11%]">Calls (7 days)</th><th className="th w-[10%]">Paid total</th><th className="th w-[6%]"></th></tr></thead>
             <tbody className="divide-y divide-slate-100">
               {shown.map(c => (
                 <tr key={c.id} className="align-top">
-                  <td className="truncate px-3 py-2"><span className="font-medium">{c.name}</span><span className="block truncate text-xs text-slate-500">{c.owner} · since {d(c.created_at)}</span></td>
+                  <td className="truncate px-3 py-2"><span className="font-medium">{c.name}</span>{c.is_individual && <span className="ml-1 text-xs text-slate-400">personal</span>}
+                    <span className="block truncate text-xs text-slate-500">{c.owner ?? (c.invited_owner ? <span className="text-amber-700">{c.invited_owner} · not signed in yet</span> : '—')} · since {d(c.starts_at ?? c.created_at)}</span>
+                    {(c.contact_name || c.contact_phone) && <span className="block truncate text-xs text-slate-500">{[c.contact_name, c.contact_phone].filter(Boolean).join(' · ')}</span>}</td>
                   <td className="px-3 py-2">{c.plan ?? '—'}{c.seats ? <span className="block text-xs text-slate-500">{c.seats} seats · {c.cycle === 'year' ? 'yearly' : 'monthly'}</span> : null}</td>
                   <td className="px-3 py-2">{stateOf(c)}{c.note && <span className="block text-xs text-slate-500">{c.note}</span>}</td>
                   <td className="px-3 py-2">{c.users}</td>
@@ -84,6 +89,8 @@ export default function SuperAdmin() {
           </table>
         </Card>
       )}
+
+      {tab === 'health' && <CompanyHealth onOpen={id => { const c = companies.find(x => x.id === id); if (c) setEditCo(c) }} />}
 
       {tab === 'plans' && (
         <>
@@ -115,6 +122,7 @@ export default function SuperAdmin() {
       {tab === 'errors' && <AppErrors />}
 
       {editCo && <EditCompany c={editCo} plans={plans} onClose={() => { setEditCo(null); reload() }} />}
+      {adding && <AddCompany onClose={() => { setAdding(false); reload() }} />}
       {editPlan && <EditPlan p={editPlan} onClose={() => { setEditPlan(null); reload() }} />}
     </>
   )
@@ -124,8 +132,10 @@ function EditCompany({ c, plans, onClose }: { c: Company; plans: Plan[]; onClose
   const [f, setF] = useState({ status: c.status ?? 'trialing', plan_id: c.plan_id ?? '', seats: c.seats ?? 1, cycle: c.cycle ?? 'month',
     trial_ends_at: c.trial_ends_at?.slice(0, 10) ?? '', current_period_end: c.current_period_end?.slice(0, 10) ?? '', note: c.note ?? '' })
   const [error, setError] = useState<string | null>(null)
+  const [details, setDetails] = useState<Record<string, unknown> | null>(null)
   const addDays = (iso: string, n: number) => { const t = iso ? new Date(iso) : new Date(); if (t.getTime() < Date.now()) t.setTime(Date.now()); t.setDate(t.getDate() + n); return t.toISOString().slice(0, 10) }
   async function save() {
+    if (details) { const r = await supabase.rpc('sa_update_company', { p_org: c.id, p: details }); if (r.error) return setError(errorText(r.error)) }
     const { error } = await supabase.rpc('sa_update_subscription', { p_org: c.id, p: { ...f,
       trial_ends_at: f.trial_ends_at ? new Date(f.trial_ends_at + 'T23:59:00+05:30').toISOString() : '',
       current_period_end: f.current_period_end ? new Date(f.current_period_end + 'T23:59:00+05:30').toISOString() : '' } })
@@ -133,15 +143,17 @@ function EditCompany({ c, plans, onClose }: { c: Company; plans: Plan[]; onClose
     onClose()
   }
   return (
-    <Modal open onClose={onClose} title={c.name} footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button onClick={save}>Save</Button></>}>
+    <Modal open onClose={onClose} title={c.name} wide footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button onClick={save}>Save</Button></>}>
       <ErrorBox error={error} />
+      {!c.is_individual && <CompanyDetails c={c} onChange={setDetails} />}
+      <p className="label mt-1">Plan & access</p>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Status"><select className="input" value={f.status} onChange={e => setF({ ...f, status: e.target.value })}>
-          <option value="trialing">Trial</option><option value="active">Paid</option><option value="complimentary">Free (no expiry)</option><option value="cancelled">Cancelled</option></select></Field>
+          <option value="trialing">Trial / free until a date</option><option value="active">Paid</option><option value="complimentary">Free (no expiry)</option><option value="cancelled">Cancelled</option></select></Field>
         <Field label="Plan"><select className="input" value={f.plan_id} onChange={e => setF({ ...f, plan_id: e.target.value })}>{plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
         <Field label="Seats"><input type="number" className="input" min={1} value={f.seats} onChange={e => setF({ ...f, seats: +e.target.value })} /></Field>
         <Field label="Billing"><select className="input" value={f.cycle} onChange={e => setF({ ...f, cycle: e.target.value })}><option value="month">Monthly</option><option value="year">Yearly</option></select></Field>
-        <Field label="Trial ends"><input type="date" className="input" value={f.trial_ends_at} onChange={e => setF({ ...f, trial_ends_at: e.target.value })} />
+        <Field label="End date (trial / free access)"><input type="date" className="input" value={f.trial_ends_at} onChange={e => setF({ ...f, trial_ends_at: e.target.value })} />
           <span className="mt-1 flex gap-2 text-xs">{[7, 14].map(n => <button key={n} type="button" className="text-brand-700 hover:underline" onClick={() => setF({ ...f, status: 'trialing', trial_ends_at: addDays(f.trial_ends_at, n) })}>+{n} days</button>)}</span></Field>
         <Field label="Paid until"><input type="date" className="input" value={f.current_period_end} onChange={e => setF({ ...f, current_period_end: e.target.value })} /></Field>
         <div className="sm:col-span-2"><Field label="Note (only you see it)"><input className="input" value={f.note} onChange={e => setF({ ...f, note: e.target.value })} placeholder="e.g. Paid by bank transfer, extended trial for demo" /></Field></div>

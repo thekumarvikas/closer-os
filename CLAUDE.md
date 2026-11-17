@@ -1930,3 +1930,20 @@ intelligence → Play Store launch.
   of notes on conversations, follow-ups on time, new leads within response target, assigned leads called, profession+city
   filled, days with 5+ dials (none for someone who worked no leads). Conversation = call > 30 s. Leaderboard has revenue
   (app sort "Sales value"); app Reports shows my CRM hygiene, rows open what's missing. tests/round15-test.cjs covers it.
+
+## Super Admin: add a company + health card (migration 0098, Nov 17 2026)
+- Owner decisions: sign-in with Google only for companies, reps and individuals (built later — hidden email login kept
+  for Play reviewers); company join link for reps (later, not built); user guide in Settings for management / rep /
+  individual (later, not built); never use the word "pilot".
+- organizations.contact_name / contact_email / contact_phone / added_by_admin; subscriptions.starts_at.
+  settings.sells_via_events (missing = true): "Sales are done through webinars / sales events / workshops" — website
+  sign-up checkbox (create_organization p_sells_events, default off on the form), Settings → Company, Super Admin; off =
+  "Webinars / Sales Events" menu hidden (Layout). App side not done yet.
+- org_seed_basics(org) = stages + outcomes (used by create_organization and sa_create_company).
+- sa_create_company(p): company + trial (status trialing, trial_ends_at = end date, starts_at) + owner INVITATION for the
+  Gmail (accept_my_invitations at sign-in makes them owner; an existing login with that email is made owner at once).
+  Welcome message (copy / WhatsApp) = site URL + "Continue with Google" with that email. After the end date: grace days
+  → plan page (standard rules). sa_update_company (name, contact, start, webinars switch, owner email while not joined).
+- sa_company_health(): per company team, invites, phones (synced 24 h, setup steps off, recordings folder), leads, calls
+  today / 7 d, callers, outcomes, recordings, last activity. Super Admin → Health tab (components/SuperAdminCompanies.tsx:
+  plain-sentence problems, "Need attention" filter, click → edit). Test: web/tests/superadmin-test.cjs.

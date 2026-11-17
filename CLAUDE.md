@@ -1956,3 +1956,8 @@ intelligence → Play Store launch.
   exact minutes). apply_zoom_report: Zoom's "Registration Time" → registered = true ONLY when the webinar has no
   registrations from elsewhere; fallback match via find_lead (last 10 digits, typo-fixed email). Web: overlapping sessions
   (two devices) counted once; note-taker bots (Fireflies, Otter, Read.ai…) skipped. Test: web/tests/zoom-empty-test.cjs.
+- Domain (Nov 18 2026, in progress): Vercel project has app.closeros.in only (closeros.in + www removed → reserved for
+  FlexiFunnels landing pages; root forwarded/A per FlexiFunnels later). GoDaddy (nameservers ns41/ns42.domaincontrol.com)
+  still needs CNAME app → d26ff502152a2576.vercel-dns-017.com; owner must finish .IN KYC first (~1 day). After it
+  resolves: Supabase site_url → https://app.closeros.in (allow-list already has it), app BuildConfig.WEB_URL + web links,
+  Google Auth Platform branding/authorized domain, Play Console privacy/delete URLs → app.closeros.in/privacy etc.

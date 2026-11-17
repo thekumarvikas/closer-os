@@ -28,6 +28,12 @@ const targets: { key: string; label: string; guesses: string[] }[] = [
 const CUSTOM = '__custom'
 const SKIP = '__skip'
 
+/** The database gave up on this batch for taking too long — send a smaller one. */
+function isTooSlow(e: unknown) {
+  const x = e as { code?: string; message?: string }
+  return x?.code === '57014' || /statement timeout|canceling statement/i.test(x?.message ?? '')
+}
+
 type Row = Record<string, string>
 
 export default function LeadImport({ orgId, dir, onClose, onDone, batchId }:
@@ -100,17 +106,27 @@ export default function LeadImport({ orgId, dir, onClose, onDone, batchId }:
     setBusy(true); setError(null)
     const total = { inserted: 0, joined: 0, duplicates: 0, invalid: 0 }
     try {
-      const chunk = 1000
-      for (let i = 0; i < rows.length; i += chunk) {
-        setProgress(`Importing ${Math.min(i + chunk, rows.length).toLocaleString('en-IN')} of ${rows.length.toLocaleString('en-IN')}…`)
+      // The database cancels any single request after 8 seconds. A batch of 400 takes
+      // about 1.5 s on a busy company, so it fits several times over; if a company is
+      // slower still, the batch halves itself and that part is sent again. Nothing is
+      // half-saved: a batch that fails is rolled back whole.
+      let chunk = 400
+      let done = 0
+      while (done < rows.length) {
+        const slice = rows.slice(done, done + chunk)
+        setProgress(`Importing ${(done + slice.length).toLocaleString('en-IN')} of ${rows.length.toLocaleString('en-IN')}…`)
         const { data, error } = await supabase.rpc('import_leads', {
-          p_org: orgId, p_rows: rows.slice(i, i + chunk).map(toPayload),
+          p_org: orgId, p_rows: slice.map(toPayload),
           p_source: source || null, p_campaign: campaign || null,
           p_assign_mode: assignMode, p_assign_to: assignMode === 'user' ? assignTo : null, p_batch: batch || null,
         })
-        if (error) throw error
+        if (error) {
+          if (isTooSlow(error) && chunk > 25) { chunk = Math.max(25, Math.floor(chunk / 2)); continue }
+          throw error
+        }
         const d = data as typeof total
         total.inserted += d.inserted; total.joined += d.joined ?? 0; total.duplicates += d.duplicates; total.invalid += d.invalid
+        done += slice.length
       }
       setResult(total)
       onDone()

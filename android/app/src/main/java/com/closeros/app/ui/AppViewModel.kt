@@ -733,7 +733,13 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun signInWithGoogle(activity: android.app.Activity, onError: (String) -> Unit) = viewModelScope.launch {
         runCatching { Repo.signInWithGoogle(activity) }.onSuccess { com.closeros.app.calls.DeviceGuard.claim(ctx) }.onFailure {
-            if (it is androidx.credentials.exceptions.GetCredentialCancellationException) return@onFailure onError("")
+            // Picking an account and then "cancelled" with [16] / reauth = Google doesn't know this app yet (package + SHA-1
+            // not registered as an Android OAuth client). Say so instead of doing nothing.
+            val m = it.message.orEmpty()
+            if (it is androidx.credentials.exceptions.GetCredentialCancellationException && !m.contains("[16]") && !m.contains("reauth", true)) return@onFailure onError("")
+            com.closeros.app.data.AppLog.error(ctx, "google sign-in", it); com.closeros.app.data.AppLog.flush(ctx)
+            if (it is androidx.credentials.exceptions.GetCredentialCancellationException)
+                return@onFailure onError("Google didn't let this app sign in yet (the app isn't registered with Google). Ask Closer OS support — it takes 2 minutes to fix.")
             com.closeros.app.data.AppLog.error(ctx, "google sign-in", it)
             onError(if (it is androidx.credentials.exceptions.NoCredentialException) "No Google account found on this phone — add one in Settings → Accounts"
                     else "Couldn't sign in with Google. Check your internet and try again.")

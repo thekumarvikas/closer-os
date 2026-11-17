@@ -1947,3 +1947,7 @@ intelligence → Play Store launch.
 - sa_company_health(): per company team, invites, phones (synced 24 h, setup steps off, recordings folder), leads, calls
   today / 7 d, callers, outcomes, recordings, last activity. Super Admin → Health tab (components/SuperAdminCompanies.tsx:
   plain-sentence problems, "Need attention" filter, click → edit). Test: web/tests/superadmin-test.cjs.
+- v0.27.2 (versionCode 89): app sign-in = Google ONLY (both apps). LoginScreen shows one "Continue with Google" button;
+  email + password (EmailSignIn) is hidden — long-press the "Closer OS" title — for Play reviewers / old test logins.
+  GoogleButton no longer hidden in company builds: needs a Google Cloud ANDROID OAuth client for com.closeros.app with
+  the dev-test SHA-1 (owner creates it). Website: "Continue with Google" on by default (VITE_GOOGLE_SIGNIN=off hides it).

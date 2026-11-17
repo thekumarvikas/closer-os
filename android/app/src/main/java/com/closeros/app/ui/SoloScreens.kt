@@ -173,13 +173,12 @@ fun SignUpForm(vm: AppViewModel, onSignIn: (email: String?, note: String?) -> Un
 /** "Continue with Google" — one tap, no password, no confirmation email. Hidden until Google sign-in is set up. */
 @Composable
 fun GoogleButton(vm: AppViewModel) {
-    // Google only knows the individual app's package so far (Android client com.closeros.solo); company builds keep email login.
-    if (BuildConfig.GOOGLE_WEB_CLIENT_ID.isBlank() || !BuildConfig.SOLO) return
+    if (BuildConfig.GOOGLE_WEB_CLIENT_ID.isBlank()) return
     val ctx = LocalContext.current
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(enabled = !busy, modifier = Modifier.fillMaxWidth().height(50.dp), onClick = {
+        OutlinedButton(enabled = !busy, modifier = Modifier.fillMaxWidth().height(54.dp), colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White), onClick = {
             val a = ctx as? Activity ?: return@OutlinedButton
             busy = true; error = null
             vm.signInWithGoogle(a) { busy = false; error = it.ifBlank { null } }
@@ -189,8 +188,5 @@ fun GoogleButton(vm: AppViewModel) {
             Text(if (busy) "Opening Google…" else "Continue with Google", fontSize = 16.sp)
         }
         error?.let { Text(it, color = Brand.red, fontSize = 13.sp) }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            HorizontalDivider(Modifier.weight(1f)); Text("  or with email  ", fontSize = 12.sp, color = Brand.muted); HorizontalDivider(Modifier.weight(1f))
-        }
     }
 }

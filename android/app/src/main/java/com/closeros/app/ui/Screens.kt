@@ -29,6 +29,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -74,43 +76,58 @@ fun fmtPhone(p: String): String = Regex("^\\+91(\\d{5})(\\d{5})$").find(p)?.let 
 
 @Composable
 fun LoginScreen(vm: AppViewModel) {
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf<String?>(null) }
-    var busy by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
-    // Individual app: new users create their account right here; others sign in.
-    var creating by remember { mutableStateOf(BuildConfig.SOLO) }
+    // Google is the only way in (owner, Nov 17 2026). Email + password stays reachable only by long-pressing the title —
+    // for Google Play's reviewers, who sign in with a test email account.
+    var emailMode by remember { mutableStateOf(false) }
     var info by remember { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize().background(Brand.primary).verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.Center) {
-        Text("Closer OS", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+        Text("Closer OS", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.pointerInput(Unit) { detectTapGestures(onLongPress = { emailMode = !emailMode }) })
         Text("Make more calls. Close more sales.", color = Color.White.copy(alpha = .8f))
         Spacer(Modifier.height(32.dp))
         Card(shape = RoundedCornerShape(16.dp)) {
-            if (creating) Column(Modifier.padding(20.dp)) { SignUpForm(vm) { e, note -> creating = false; if (e != null) email = e; info = note } }
-            else Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 info?.let { Text(it, fontSize = 14.sp, color = Brand.primaryDark, modifier = Modifier.background(Brand.light, RoundedCornerShape(8.dp)).padding(10.dp)) }
-                GoogleButton(vm)
-                OutlinedTextField(email, { email = it }, label = { Text("Email") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
-                OutlinedTextField(password, { password = it }, label = { Text("Password") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                    visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
                 remember { com.closeros.app.data.LocalStore(ctx).kickedReason }?.let {
                     Text("🔒 $it", fontSize = 14.sp, color = Color(0xFF92400E), modifier = Modifier.background(Color(0xFFFEF3C7), RoundedCornerShape(8.dp)).padding(10.dp))
                 }
-                error?.let { Text(it, color = Brand.red, fontSize = 14.sp) }
-                Button(onClick = { busy = true; error = null; vm.signIn(email, password) { error = it; busy = false } },
-                    enabled = !busy && email.isNotBlank() && password.isNotBlank(), modifier = Modifier.fillMaxWidth().height(50.dp)) {
-                    if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp) else Text("Sign in", fontSize = 16.sp)
-                }
-                TextButton(enabled = email.contains('@'), onClick = { vm.resetPassword(email) }, modifier = Modifier.fillMaxWidth()) { Text("Forgot password? Type your email above, then tap here") }
-                if (BuildConfig.SOLO) TextButton(onClick = { creating = true; info = null }, modifier = Modifier.fillMaxWidth()) { Text("New here? Create a free account") }
-                else TextButton(onClick = { safeStart(ctx, Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.WEB_URL))) }, modifier = Modifier.fillMaxWidth()) {
-                    Text("No account? Ask your manager to invite you, then sign up on the website")
+                if (emailMode) EmailSignIn(vm) { info = it }
+                else {
+                    Text(if (BuildConfig.SOLO) "Sign in or create your free account" else "Sign in", fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+                    GoogleButton(vm)
+                    Text(if (BuildConfig.SOLO) "New here? The same button creates your account — no password, no email to confirm."
+                         else "Use the Gmail your company added on the Closer OS dashboard (Team → Invite). No password needed.",
+                        fontSize = 13.sp, color = Brand.muted)
+                    if (BuildConfig.SOLO) Row {
+                        TextButton(onClick = { safeStart(ctx, Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.WEB_URL + "/terms"))) }) { Text("Terms", fontSize = 12.sp) }
+                        TextButton(onClick = { safeStart(ctx, Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.WEB_URL + "/privacy"))) }) { Text("Privacy policy", fontSize = 12.sp) }
+                    }
                 }
             }
         }
     }
+}
+
+/** Hidden email + password sign-in (long-press the title): only for Google Play's reviewers and old test logins. */
+@Composable
+private fun EmailSignIn(vm: AppViewModel, onInfo: (String?) -> Unit) {
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    Text("Sign in with email", fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+    OutlinedTextField(email, { email = it }, label = { Text("Email") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
+    OutlinedTextField(password, { password = it }, label = { Text("Password") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+        visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
+    error?.let { Text(it, color = Brand.red, fontSize = 14.sp) }
+    Button(onClick = { busy = true; error = null; vm.signIn(email, password) { error = it; busy = false } },
+        enabled = !busy && email.isNotBlank() && password.isNotBlank(), modifier = Modifier.fillMaxWidth().height(50.dp)) {
+        if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp) else Text("Sign in", fontSize = 16.sp)
+    }
+    TextButton(enabled = email.contains('@'), onClick = { vm.resetPassword(email); onInfo("If that email has a password, a reset link is on its way.") },
+        modifier = Modifier.fillMaxWidth()) { Text("Forgot password?") }
 }
 
 @Composable

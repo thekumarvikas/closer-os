@@ -120,6 +120,20 @@ Everything from the original product prompt plus the owner's feedback, with stat
 - [ ] Email sender on the domain (Resend, no-reply@closeros.in) → Supabase SMTP (ends the 2-emails/hour limit)
 - [ ] Later: business email (hello@closeros.in), landing page on closeros.in, dashboard on app.closeros.in
 
+## Built Nov 17 2026 (v0.27.1) — round 15
+- [x] Lead import never times out (981 rows: 11 s → 3.8 s; 400-row batches that shrink on timeout)
+- [x] Leads added from a call get an owner; personal sale = fully paid unless "part payment"; Sales insights fixed
+- [x] Everything opens its list: call rows (open lead / + Add as lead), every Reports number, My sales, leaderboard names
+- [x] WhatsApp: attachments can't be lost, "Save this message" keeps its file, Settings → My WhatsApp messages,
+      no "company" in the personal app, optional business name, empty fill-ins dropped cleanly
+- [x] Recording setup = one simple step
+- [x] "Where is this lead?" levels (Ready to pay · Hot · Interested · Needs approval · Price concern · Later · Cold · Not a fit)
+- [x] Webinars: registered vs joined-without-registering, upload order doesn't matter, "Came to an earlier webinar",
+      Showing switch, show-up by call result (30-second rule), every number opens a scrollable list with CSV, poll-file check
+- [x] Why leads were lost (one-tap reason, report)
+- [x] Team performance: activity, results, reminder show-up, CRM hygiene marks; leaderboard by sales value
+- [ ] Later: payment / renewal reminders (owner: not now); AI call summaries (next rollout)
+
 ## Built Nov 14 2026 (v0.25.0) — owner feedback on 0.22.1
 - [x] "Call N follow-ups" dials only follow-ups due up to now (future ones never)
 - [x] Readable with large text / display size (whole app)

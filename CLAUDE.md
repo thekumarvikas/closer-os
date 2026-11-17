@@ -1920,5 +1920,13 @@ intelligence → Play Store launch.
   Assign-screen counts, poll-file check with the rows as read. Owner kept "Guided" (his sheet's word).
 - Owner decisions (Nov 17): option A switch; 30-second rule for "connected"; "Came to an earlier webinar" with date + minutes;
   same registration twice is not "Repeated"; no colour-coding of performance (companies set their own targets);
-  Phase 2 (payment / renewal reminders) dropped for now; AI later. Still to build: lost reason, CRM hygiene score,
-  leaderboard + efficiency (tasks below).
+  Phase 2 (payment / renewal reminders) dropped for now; AI later.
+- Lost reasons (0095, v0.27.1): optional one-tap reason on lost outcomes (app outcome screen, pop-up, My desk) →
+  calls.outcome_data.lost_reason, leads.lost_reason/lost_at; defaults price · timing · noneed · decider · noshow ·
+  competitor · trust · other (data/LostReasons.kt + web lib/lostReasons.ts; settings.lost_reasons). lost_report /
+  lost_report_leads; dashboard Reports → Outcomes "Why leads were lost", app Reports section.
+- Team performance (0096–0097): team_performance(org, from, to) + team_perf_leads; dashboard Reports → "Team performance"
+  (Activity & results · CRM hygiene · Reminder show-up; sortable; Sales/Reminder team switch). CRM hygiene marks = average
+  of notes on conversations, follow-ups on time, new leads within response target, assigned leads called, profession+city
+  filled, days with 5+ dials (none for someone who worked no leads). Conversation = call > 30 s. Leaderboard has revenue
+  (app sort "Sales value"); app Reports shows my CRM hygiene, rows open what's missing. tests/round15-test.cjs covers it.

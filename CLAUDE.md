@@ -1961,3 +1961,30 @@ intelligence → Play Store launch.
   still needs CNAME app → d26ff502152a2576.vercel-dns-017.com; owner must finish .IN KYC first (~1 day). After it
   resolves: Supabase site_url → https://app.closeros.in (allow-list already has it), app BuildConfig.WEB_URL + web links,
   Google Auth Platform branding/authorized domain, Play Console privacy/delete URLs → app.closeros.in/privacy etc.
+
+## Owner feedback round 16 (Nov 18–19 2026) — NOT built, waiting for "go"
+- Replace ALL browser alert()/confirm() on the dashboard with own toasts (what changed + to whom, Undo where possible),
+  styled confirm dialogs and plain-language errors (never raw DB text like "statement timeout").
+- Reports → Outcomes: bars never overflow the card, numbers beside (not on) bars, full outcome names, hide unused outcomes
+  ("+ N not used"), "Outcome not filled" = light notice row with clickable count.
+- Calls made before the app was installed / outside the app: auto-attribute to the lead's webinar (before start =
+  reminder, after = sales) for all calls incl. backfill; show "Before Closer OS" grey instead of red "not filled"; optional
+  bulk fill. Open questions to owner: how far back, which webinar if two, sales window after webinar.
+- By-hour table: slots "9 AM – 10 AM", empty hours shown, best hour highlighted, Total row; EVERY number in every report
+  opens its calls/leads list (click less, get more).
+- Google sign-in shows "tdbqgox….supabase.co" → Supabase custom auth domain (Pro + add-on) after final brand name; fill
+  Google Auth Platform branding + publish. Sheet script consent ("Untitled project", all sheets) → name "Closer OS Sync",
+  @OnlyCurrentDoc; preferred: "Publish to web" CSV link polled by Closer OS (no script); later verified Sheets connect.
+- Call history: richer rows (lead name, profession·city, webinar + reminder/sales, outcome + next follow-up, note, ▶ or
+  missing reason, "5th call · 2 conversations", formatted numbers) + filters (date/hour, member/team, call type, talk
+  length, outcome incl. not filled, webinar/purpose, recording, source/profession/city/intent/tag, first vs repeat,
+  search, saved views) + clickable summary line.
+- Recordings (Nov 19 device_status): Nikhil Lava LZG414 uses Google Phone app → 0 files (can't record); owner K20 Pro
+  company app 5 files/3 uploaded; personal app 0 files (wrong folder?); 11T Pro HB Dialer can't record. Manager-facing
+  per-phone "can't record" explanation + day-one warning in setup.
+- Lead source field matching: driven by the customer's OWN sheet headers — one row per column with sample value; choices
+  = a Closer OS field (name, phone, email, …, assign-to-member, webinar, sign-up time), keep as its own field, or don't
+  import; only phone (or email) required; suggestions pre-filled. Owner answers: client can RENAME fields (rename shows
+  everywhere); Closer OS GUESSES the type (text/number/date/choice) from values, client can change. New columns detected
+  later → kept + "how should we use it?". Same screen for Sheets, webhooks and CSV/XLSX import; custom fields everywhere
+  (drawer, app, columns, filters, sort, fill-ins, export).

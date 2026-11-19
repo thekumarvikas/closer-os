@@ -51,10 +51,21 @@ Deno.serve(async (req) => {
   const items = Array.isArray(body) ? body : [body]
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } })
 
-  const results = []
-  for (const item of items.slice(0, 100)) {
-    const payload = { ...query, ...(item && typeof item === 'object' ? item as Record<string, unknown> : { value: item }) }
-    const { data, error } = await supabase.rpc('ingest_lead', { p_token: token, p_payload: payload })
+  // The Google Sheets script reports itself (sheet, rows, how far it has sent, timer on) — no lead in this call.
+  if (url.searchParams.get('hello') === '1') {
+    const { data, error } = await supabase.rpc('sheet_hello', { p_token: token, p: body && typeof body === 'object' ? body : {} })
+    return reply(error ? { ok: false, error: 'Server error' } : data, data?.ok === false ? 404 : 200)
+  }
+
+  const results: { ok?: boolean; error?: string }[] = []
+  const list = items.slice(0, 200).map(item => ({ ...query, ...(item && typeof item === 'object' ? item as Record<string, unknown> : { value: item }) }))
+  if (list.length > 1) {
+    // A batch (Google Sheets script): one database call for all rows.
+    const { data, error } = await supabase.rpc('ingest_leads', { p_token: token, p_rows: list })
+    if (error) return reply({ ok: false, error: 'Server error — try again' }, 503)
+    results.push(...(data as typeof results))
+  } else {
+    const { data, error } = await supabase.rpc('ingest_lead', { p_token: token, p_payload: list[0] ?? {} })
     results.push(error ? { ok: false, error: 'Server error' } : data)
   }
   const res = results.length === 1 ? results[0] : { ok: results.every(r => r?.ok), results }

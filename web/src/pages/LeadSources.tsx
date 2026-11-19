@@ -7,14 +7,15 @@ import { fmtDateTime } from '../lib/format'
 import type { Batch } from '../lib/types'
 import { Badge, Button, Card, Empty, ErrorBox, Field, Modal, PageHeader, Spinner } from '../components/ui'
 import { useLeadFields } from '../lib/leadFields'
-import { SampleLink } from '../lib/samples'
+import { SourceCounts, SheetHealth, SheetGuide, ColumnMatch, AssignByColumn, type SourceStats } from '../components/SourceSheets'
 
 type Kind = 'facebook' | 'google_ads' | 'flexifunnels' | 'pabbly' | 'zapier' | 'webhook' | 'google_sheets' | 'indiamart'
 interface Source {
   id: string; org_id: string; name: string; kind: Kind; token: string; source_label: string | null; campaign: string | null
   batch_id: string | null; assign_mode: 'rules' | 'user' | 'users' | 'none'; assign_to: string | null; field_map: Record<string, string>
   webinar_mode?: 'fixed' | 'column'; webinar_column?: string | null; webinar_time?: string | null; webinar_prefix?: string | null; assign_users?: string[]
-  google_key: string | null; api_key?: string | null; last_pull_at?: string | null; last_pull_error?: string | null; is_active: boolean; received_count: number; last_received_at: string | null; created_at: string
+  google_key: string | null; api_key?: string | null; member_column?: string | null; n_created: number; n_duplicate: number; n_invalid: number; n_skipped: number; n_failed: number
+  last_success_at?: string | null; last_attempt_at?: string | null; last_error?: string | null; sheet?: SourceStats['sheet']; last_pull_at?: string | null; last_pull_error?: string | null; is_active: boolean; received_count: number; last_received_at: string | null; created_at: string
 }
 interface Event { id: number; received_at: string; payload: Record<string, unknown>; status: string; lead_id: string | null; error: string | null }
 
@@ -74,8 +75,9 @@ export default function LeadSources() {
                   </div>
                   <Badge color={s.is_active ? 'green' : 'gray'}>{s.is_active ? 'Active' : 'Paused'}</Badge>
                 </div>
-                <p className="mt-3 text-sm text-slate-600"><b>{s.received_count.toLocaleString('en-IN')}</b> leads received
-                  {s.last_received_at ? <> · last {fmtDateTime(s.last_received_at, org)}</> : ' · waiting for the first lead'}</p>
+                <SourceCounts s={s} compact />
+                <p className="text-xs text-slate-500">{s.last_success_at || s.last_received_at ? <>Last lead {fmtDateTime((s.last_success_at ?? s.last_received_at)!, org)}</> : 'Waiting for the first lead'}
+                  {s.kind === 'google_sheets' && s.sheet?.at && (Date.now() - new Date(s.sheet.at).getTime() < 5 * 60000 ? ' · sheet connected ✓' : ' · sheet not checking in')}</p>
                 {s.webinar_mode === 'column' && s.webinar_column ? <p className="mt-1 text-xs text-slate-500">Webinar: from column “{s.webinar_column}”</p>
                   : s.batch_id && <p className="mt-1 text-xs text-slate-500">Webinar: {batches.find(b => b.id === s.batch_id)?.name ?? '—'}</p>}
               </button>
@@ -304,7 +306,8 @@ function SourceDrawer({ s, dir, batches, onClose, onChanged }: { s: Source; dir:
   }
 
   const statusBadge = (st: string) => ({ created: <Badge color="green">New lead</Badge>, joined: <Badge color="blue">Joined webinar</Badge>,
-    duplicate: <Badge color="amber">Already a lead</Badge>, test: <Badge>Test</Badge>, error: <Badge color="red">Not saved</Badge> } as Record<string, ReactNode>)[st] ?? st
+    duplicate: <Badge color="amber">Already a lead</Badge>, test: <Badge>Test</Badge>, error: <Badge color="red">Failed</Badge>,
+    invalid: <Badge color="amber">Invalid phone</Badge>, skipped: <Badge>Not a lead</Badge>, already: <Badge>Sent again — ignored</Badge> } as Record<string, ReactNode>)[st] ?? st
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end bg-slate-900/30" onMouseDown={onClose}>
@@ -317,6 +320,9 @@ function SourceDrawer({ s, dir, batches, onClose, onChanged }: { s: Source; dir:
         </div>
         <div className="space-y-6 p-5">
           <ErrorBox error={error} />
+          {s.kind === 'google_sheets' && <SheetHealth s={s} onChanged={() => { setVersion(v => v + 1); onChanged() }} />}
+          <SourceCounts s={s} />
+          <AssignByColumn orgId={s.org_id} column={s.member_column ?? keys.map(([k]) => k).find(k => /assign|team.?member|sales.?person|agent|counsell?or/i.test(k))} onDone={onChanged} />
           {s.kind === 'indiamart' && (
             <section className="rounded-lg bg-slate-50 p-3 text-sm">
               <p><b>Status:</b> {!s.api_key ? <span className="text-red-600">CRM key missing — click Edit settings</span>
@@ -348,6 +354,11 @@ function SourceDrawer({ s, dir, batches, onClose, onChanged }: { s: Source; dir:
           </section>
 
           <section>
+            <h3 className="font-semibold">Your columns</h3>
+            <p className="mb-2 text-sm text-slate-500">Every column of your sheet / form, with what Closer OS does with it. Rename fields and pick types here.</p>
+            <ColumnMatch s={s} onSaved={onChanged} />
+          </section>
+          {false && <section>
             <h3 className="font-semibold">Match fields</h3>
             <p className="mb-2 text-sm text-slate-500">Closer OS recognises common field names automatically (name, phone, mobile, email…). If a field isn't picked up, choose it here. {keys.length === 0 && 'Fields appear after the first lead arrives.'}</p>
             {keys.length > 0 && (
@@ -366,10 +377,11 @@ function SourceDrawer({ s, dir, batches, onClose, onChanged }: { s: Source; dir:
                 <Button className="mt-3" variant="secondary" onClick={() => update({ field_map: Object.fromEntries(Object.entries(map).filter(([, v]) => v)) })}>Save field matching</Button>
               </>
             )}
-          </section>
+
+          </section>}
 
           <section>
-            <h3 className="mb-2 font-semibold">Last leads received</h3>
+            <h3 className="mb-2 font-semibold">Activity · last 25</h3>
             {!events ? <Spinner /> : events.length === 0 ? <p className="text-sm text-slate-500">Nothing yet. Use “Send test” or submit your form once.</p> : (
               <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 text-sm">
                 {events.map(e => {
@@ -471,46 +483,7 @@ function Guide({ kind, url }: { kind: Kind; url: string; googleKey?: string | nu
   )
   if (kind === 'pabbly') return <Steps items={pabbly('the app your leads come from (e.g. Facebook Lead Ads, Flexifunnels, Google Forms, Razorpay)')} />
   if (kind === 'zapier') return <Steps items={zapier('the app your leads come from (e.g. Facebook Lead Ads, Typeform, Google Forms)')} />
-  if (kind === 'google_sheets') {
-    const script = `// Closer OS — sends new rows of this sheet as leads.
-const CLOSER_OS_URL = '${url}';
-
-function sendNewRows() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
-  const props = PropertiesService.getDocumentProperties();
-  const data = sheet.getDataRange().getValues();
-  const head = data[0];
-  let next = Number(props.getProperty('closerOsNextRow') || 1);
-  for (let r = next; r < data.length; r++) {
-    const row = {};
-    head.forEach((h, i) => row[String(h)] = data[r][i]);
-    if (Object.values(row).some(v => v !== '')) {
-      UrlFetchApp.fetch(CLOSER_OS_URL, { method: 'post', contentType: 'application/json',
-        payload: JSON.stringify(row), muteHttpExceptions: true });
-    }
-    props.setProperty('closerOsNextRow', String(r + 1));
-  }
-}
-
-// Run once if you DON'T want the rows already in the sheet to be sent.
-function startFromNow() {
-  const rows = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0].getLastRow();
-  PropertiesService.getDocumentProperties().setProperty('closerOsNextRow', String(rows));
-}`
-    return (
-      <div className="space-y-3">
-        <Steps items={[
-          <>Open your Google Sheet. Row 1 must have column names (e.g. Name, Phone, Email). <SampleLink kind="sheet" label="See a sample sheet" /></>,
-          <>Click <b>Extensions → Apps Script</b>, delete what's there and paste the script below. Click <b>Save</b>.</>,
-          <>Optional: choose <b>startFromNow</b> at the top and click <b>Run</b> so old rows are not sent.</>,
-          <>Click the <b>clock icon (Triggers)</b> → <b>Add Trigger</b> → function <b>sendNewRows</b>, event source <b>Time-driven</b>, <b>Minutes timer</b>, <b>Every 5 minutes</b> → Save and allow access.</>,
-          <>New rows now arrive in Closer OS within 5 minutes.</>,
-        ]} />
-        <div className="relative"><pre className="max-h-64 overflow-auto rounded-lg bg-slate-900 p-3 text-xs text-slate-100">{script}</pre>
-          <div className="absolute right-2 top-2"><CopyMini value={script} /></div></div>
-      </div>
-    )
-  }
+  if (kind === 'google_sheets') return <SheetGuide url={url} />
   return (
     <div className="space-y-3 text-sm">
       <p>Send a <b>POST</b> request to your link with the lead's fields as JSON or as a normal form post. Field names like <code>name</code>, <code>phone</code>, <code>mobile</code>, <code>email</code>, <code>city</code>, <code>profession</code> are recognised automatically.</p>
@@ -524,9 +497,4 @@ function startFromNow() {
       <p className="text-slate-500">The link also works with Make (Integromat), WordPress / Elementor form webhooks, Typeform, Tally and most tools with a “Webhook” option.</p>
     </div>
   )
-}
-
-function CopyMini({ value }: { value: string }) {
-  const [c, setC] = useState(false)
-  return <button className="rounded bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/20" onClick={() => { navigator.clipboard.writeText(value); setC(true); setTimeout(() => setC(false), 1500) }}>{c ? 'Copied' : 'Copy'}</button>
 }

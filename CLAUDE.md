@@ -1988,3 +1988,20 @@ intelligence → Play Store launch.
   everywhere); Closer OS GUESSES the type (text/number/date/choice) from values, client can change. New columns detected
   later → kept + "how should we use it?". Same screen for Sheets, webhooks and CSV/XLSX import; custom fields everywhere
   (drawer, app, columns, filters, sort, fill-ins, export).
+- Nov 19 owner spec (written with ChatGPT; full text in chat) "Google Sheets integration, real-time webhooks, automated
+  webinars" — NOT built. P0: row validation + honest counting (rows scanned / valid / imported / duplicate / invalid phone /
+  skipped / failed, must reconcile; blank rows, headers, name-only rows never counted; "N leads received" today counts every
+  SEND incl. re-sends), webhook reliability (source = spreadsheet id + source id + token; reinstalling the script keeps the
+  source; multiple sheets independent; idempotent re-sends), EVENT-DRIVEN sync (installable onEdit/onChange/onFormSubmit
+  triggers installed + verified by the script, batch send, retries, ack, no silent loss; NO 5–15 min polling as the main
+  path → "Publish to web" CSV polling idea dropped as primary), delivery tracking. P1: auto webinar from a date column
+  (exists: batch_for_text/webinar_parse — extend: date serials, explicit date format/locale for ambiguous dates, default
+  start time + duration in Settings, timing change keeps registrations, identity = org + source + date or explicit event
+  id), auto-registration (batch_leads), webinar-level calling dashboard with calls tied to the REGISTRATION (calls.batch_id
+  set at call time / attribution — not the lead's latest webinar), in-app "How to connect Google Sheets" guide (copy code,
+  step images, reconnect, reinstall, troubleshooting, Regenerate script), Integration Health (status, sheet id, last
+  success/attempt, pending/failed, auth, triggers; Test / Reconnect / Retry failed) + activity log with masked PII.
+  Acceptance list of 15 scenarios (1,700 valid rows → exactly 1,700; reinstall restores; multi-sheet; dates in different
+  formats → same webinar; history intact). Audit existing first, extend, no duplicate systems.
+  Real limit to tell the owner: rows written by Pabbly/Zapier/API/IMPORTRANGE don't fire any Sheets trigger → for those,
+  send the same tool's output straight to the Closer OS webhook (already supported); Google Forms → onFormSubmit.

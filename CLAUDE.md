@@ -2024,3 +2024,4 @@ intelligence → Play Store launch.
   Changing a webinar's time re-plans everything tied to it: reminder-call window/cut-off, pending reminder follow-ups
   (stale-closing), WhatsApp sequence messages anchored to the event (minutes_before → recompute next_due_at for active
   enrollments), app lists/notifications. Registrations kept. Zoom report "Actual Start Time" still overrides for reports.
+- Owner: NO notification to reps when a webinar's time changes (everything just re-plans silently).

@@ -2013,3 +2013,8 @@ intelligence → Play Store launch.
   arriving by webhook/sheet: show the received list with clickable profile (drawer) + key details.
   Proposed delivery: A) Pabbly also POSTs to the Closer OS webhook (instant, recommended); B) script on the sheet with a
   1-minute time trigger comparing a row-count/hash bookmark (catches Pabbly + IMPORTRANGE rows, ~1 min) as the sheet path.
+- Owner decisions (Nov 19): go with OPTION B (script on the sheet checks for new rows every minute) for now. Client must
+  NEVER pick/set a trigger: the script installs + repairs its own triggers on first run (one "Connect" menu click /
+  authorise once), self-heals after reinstall. No default webinar time/duration settings for now: webinar = date (+ name /
+  time column when present); actual start time + duration filled later from the Zoom attendee report ("Actual Start Time",
+  "Actual Duration").

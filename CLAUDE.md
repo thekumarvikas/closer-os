@@ -2005,3 +2005,11 @@ intelligence → Play Store launch.
   formats → same webinar; history intact). Audit existing first, extend, no duplicate systems.
   Real limit to tell the owner: rows written by Pabbly/Zapier/API/IMPORTRANGE don't fire any Sheets trigger → for those,
   send the same tool's output straight to the Closer OS webhook (already supported); Google Forms → onFormSubmit.
+- Owner answers (Nov 19): leads reach sheet 1 via PABBLY; sheet 2 and sheet 3 are fed by IMPORTRANGE (works for him for 4
+  years — sheet-to-sheet copying is fine; the point is only that Apps Script triggers don't fire for Pabbly/API writes or
+  IMPORTRANGE updates). Same company can run several webinars on one date → sheet may carry webinar NAME + TIME columns
+  used for identity. Reminder attribution rule: a call to a lead registered for a webinar counts as that webinar's REMINDER
+  call from sign-up (or max 7 days before) until the webinar starts → live reminder status in the webinar page. Leads
+  arriving by webhook/sheet: show the received list with clickable profile (drawer) + key details.
+  Proposed delivery: A) Pabbly also POSTs to the Closer OS webhook (instant, recommended); B) script on the sheet with a
+  1-minute time trigger comparing a row-count/hash bookmark (catches Pabbly + IMPORTRANGE rows, ~1 min) as the sheet path.

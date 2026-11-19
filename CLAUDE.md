@@ -2018,3 +2018,9 @@ intelligence → Play Store launch.
   authorise once), self-heals after reinstall. No default webinar time/duration settings for now: webinar = date (+ name /
   time column when present); actual start time + duration filled later from the Zoom attendee report ("Actual Start Time",
   "Actual Duration").
+- REVISED (Nov 19, owner): webinar timing IS needed (reminder calls = before START). Default start time chosen per lead
+  source / import ("Default webinar time", e.g. 7 PM) → auto-created webinars get date + that time; manager edits the time
+  of any single webinar in Webinars / Sales Events (case: Sunday 7 PM moved to Wednesday 3 PM, sheet only has the date).
+  Changing a webinar's time re-plans everything tied to it: reminder-call window/cut-off, pending reminder follow-ups
+  (stale-closing), WhatsApp sequence messages anchored to the event (minutes_before → recompute next_due_at for active
+  enrollments), app lists/notifications. Registrations kept. Zoom report "Actual Start Time" still overrides for reports.

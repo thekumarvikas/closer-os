@@ -21,7 +21,7 @@ function makeSheet(rows) {
   return { triggers, props, ctx: {
     SpreadsheetApp: { getActiveSpreadsheet: () => ss, getActive: () => ss, getUi: () => ({ alert: () => {}, createMenu: () => ({ addItem() { return this }, addToUi() {} }) }) },
     ScriptApp: { getProjectTriggers: () => triggers, deleteTrigger: t => triggers.splice(triggers.indexOf(t), 1), newTrigger: tb, EventType: { CLOCK: 'CLOCK' } },
-    PropertiesService: { getDocumentProperties: () => ({ getProperty: k => props[k] ?? null, setProperty: (k, v) => { props[k] = v } }) },
+    PropertiesService: { getDocumentProperties: () => ({ getProperty: k => props[k] ?? null, setProperty: (k, v) => { props[k] = v }, setProperties: o => Object.assign(props, o), deleteProperty: k => { delete props[k] } }) },
     LockService: { getDocumentLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
     Utilities: { formatDate: (d, tz, f) => { const p = n => String(n).padStart(2, '0'); const ist = new Date(d.getTime() + 5.5 * 3600e3)
         if (f === 'HH:mm:ss') return `${p(ist.getUTCHours())}:${p(ist.getUTCMinutes())}:${p(ist.getUTCSeconds())}`; const s = `${ist.getUTCFullYear()}-${p(ist.getUTCMonth() + 1)}-${p(ist.getUTCDate())}`; return f.includes('HH') && f.includes('yyyy') ? `${s} ${p(ist.getUTCHours())}:${p(ist.getUTCMinutes())}:${p(ist.getUTCSeconds())}` : s },
@@ -37,7 +37,7 @@ function makeSheet(rows) {
   try {
     const { data: u } = await admin.auth.admin.createUser({ email: 'sheet-owner@closeros-test.dev', password: 'Test-12345-abc', email_confirm: true, user_metadata: { full_name: 'Sheet Owner' } }); uid = u.user.id
     const { data: rep } = await admin.auth.admin.createUser({ email: 'sheet-rep@closeros-test.dev', password: 'Test-12345-abc', email_confirm: true, user_metadata: { full_name: 'Nikhil Yadav' } })
-    const { data: org } = await admin.from('organizations').insert({ name: 'Sheet Co (TEST)', created_by: uid }).select().single(); orgId = org.id
+    const { data: org, error: oe } = await admin.from('organizations').insert({ name: 'Sheet Co (TEST)', created_by: uid }).select().single(); if (oe) throw oe; orgId = org.id
     await admin.from('org_members').insert([{ org_id: orgId, user_id: uid, role: 'owner' }, { org_id: orgId, user_id: rep.user.id, role: 'rep' }])
     const { data: src } = await admin.from('lead_sources').insert({ org_id: orgId, name: 'Webinar Leads', kind: 'google_sheets', assign_mode: 'none', webinar_mode: 'column', webinar_column: 'Webinar Date', webinar_time: '19:00', created_by: uid }).select().single()
     const hook = `${URL}/functions/v1/lead-webhook/${src.token}`
@@ -62,7 +62,7 @@ function makeSheet(rows) {
     const { data: bs } = await admin.from('batches').select('name, webinar_at').eq('org_id', orgId).order('webinar_at')
     check(bs.length === 2 && bs.every(b => b.webinar_at.includes('13:30:00')), `webinars ${bs.map(b => b.name + ' @ ' + b.webinar_at).join(' | ')}`)
     // Reinstall: properties lost, run again → nothing counted twice.
-    sheet.props.closerOsSent = undefined; delete sheet.props.closerOsSent; sheet.triggers.length = 0
+    for (const k of Object.keys(sheet.props)) delete sheet.props[k]; sheet.triggers.length = 0
     vm.runInContext('connectCloserOS()', sheet.ctx)
     ;({ data: s1 } = await admin.from('lead_sources').select('*').eq('id', src.id).single())
     check(s1.n_created === 1000 && s1.n_duplicate <= 1, `after reinstall + resend: created ${s1.n_created}, already-leads ${s1.n_duplicate}`)
@@ -71,6 +71,11 @@ function makeSheet(rows) {
     vm.runInContext('sendToCloserOS()', sheet.ctx)
     ;({ data: s1 } = await admin.from('lead_sources').select('*').eq('id', src.id).single())
     check(s1.n_created === 1001, `new row picked up → created ${s1.n_created}`)
+    // A new row appears at the TOP (sheet sorted newest first / IMPORTRANGE) → still picked up.
+    rows.splice(1, 0, [new Date(Date.UTC(2026, 10, 25, -5, -30)), new Date(), 'Top Person', 'tp@ex.com', '9123456781', 'Nikhil'])
+    const t1 = Date.now(); vm.runInContext('sendToCloserOS()', sheet.ctx); log('minute check took', Date.now() - t1, 'ms')
+    ;({ data: s1 } = await admin.from('lead_sources').select('*').eq('id', src.id).single())
+    check(s1.n_created === 1002, `row added at the top picked up → created ${s1.n_created}`)
   } catch (e) { console.error('FAILED', e); fails++ } finally {
     if (orgId) await admin.from('organizations').delete().eq('id', orgId)
     const { data: us } = await admin.auth.admin.listUsers({ perPage: 200 })

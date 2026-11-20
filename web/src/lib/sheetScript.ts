@@ -1,7 +1,7 @@
 /** The Closer OS Google Sheets script (version 2). The client pastes it once and presses Run — it sets up its own
  *  every-minute check and its "on change" trigger, repairs itself, sends new rows in batches with a stable row key
  *  (re-sends are ignored by Closer OS) and reports its health. No trigger to choose by hand. */
-export const SHEET_SCRIPT_VERSION = 2
+export const SHEET_SCRIPT_VERSION = 3
 
 export function sheetScript(url: string, tab = ''): string {
   return `// Closer OS Sync — version ${SHEET_SCRIPT_VERSION}
@@ -33,8 +33,25 @@ function installCloserOS_() {
 }
 
 function resendAllToCloserOS() {
-  PropertiesService.getDocumentProperties().setProperty('closerOsSent', '1');
+  saveSeen_(PropertiesService.getDocumentProperties(), {});
   sendToCloserOS();
+}
+
+// Rows already sent are remembered by a short fingerprint, so new rows are found wherever they appear
+// (top, middle or bottom of the sheet — Pabbly, IMPORTRANGE and sorting all work).
+function loadSeen_(props) {
+  const n = Number(props.getProperty('closerOsSeenParts') || 0), seen = {};
+  for (let i = 0; i < n; i++) (props.getProperty('closerOsSeen' + i) || '').split(',').forEach(function (k) { if (k) seen[k] = 1; });
+  return seen;
+}
+function saveSeen_(props, seen) {
+  const keys = Object.keys(seen), parts = [];
+  for (let i = 0; i < keys.length; i += 700) parts.push(keys.slice(i, i + 700).join(','));
+  const old = Number(props.getProperty('closerOsSeenParts') || 0);
+  const all = {}; parts.forEach(function (p, i) { all['closerOsSeen' + i] = p; });
+  all.closerOsSeenParts = String(parts.length);
+  props.setProperties(all);
+  for (let i = parts.length; i < old; i++) props.deleteProperty('closerOsSeen' + i);
 }
 
 function sendToCloserOS() {
@@ -52,12 +69,9 @@ function sendToCloserOS() {
     const values = sh.getDataRange().getValues();
     const head = values[0].map(function (h) { return String(h).trim(); });
     const props = PropertiesService.getDocumentProperties();
-    let from = Number(props.getProperty('closerOsSent') || 1);
-    if (from > values.length) from = 1;                 // the sheet got shorter — check it all again
-    from = Math.max(1, from - 25);                      // look back: rows filled in a little later are caught too
-
-    const rows = [];
-    for (let r = from; r < values.length; r++) {
+    const seen = loadSeen_(props);
+    const rows = [], fresh = {};
+    for (let r = 1; r < values.length; r++) {
       const row = {}; let filled = 0;
       head.forEach(function (h, i) {
         if (!h) return;
@@ -72,23 +86,29 @@ function sendToCloserOS() {
       });
       if (filled === 0) continue;
       const digest = Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify(row)));
+      const short = digest.slice(0, 10);
+      fresh[short] = 1;
+      if (seen[short]) continue;
       row._row_key = ss.getId() + ':' + sh.getSheetId() + ':' + digest;
       row._row = r + 1;
       rows.push(row);
     }
-    let upTo = from;
+    // Send (Closer OS ignores rows it already has, so a re-send never makes duplicates).
     for (let i = 0; i < rows.length; i += 100) {
       const part = rows.slice(i, i + 100);
       const res = UrlFetchApp.fetch(CLOSER_OS_URL, { method: 'post', contentType: 'application/json', payload: JSON.stringify(part), muteHttpExceptions: true });
       if (res.getResponseCode() !== 200) { problem = 'Closer OS answered ' + res.getResponseCode(); break; }
       sent += part.length;
-      upTo = part[part.length - 1]._row;
-      props.setProperty('closerOsSent', String(upTo));
+      part.forEach(function (x) { seen[String(x._row_key).split(':')[2].slice(0, 10)] = 1; });
     }
-    if (!problem && rows.length === 0) props.setProperty('closerOsSent', String(values.length));
+    // Remember only rows still in the sheet (keeps the memory small).
+    const keep = {}; Object.keys(fresh).forEach(function (k) { if (seen[k]) keep[k] = 1; });
+    saveSeen_(props, keep);
+    props.setProperty('closerOsSent', String(values.length));
+    const waiting = rows.length - sent;
     UrlFetchApp.fetch(CLOSER_OS_URL + '?hello=1', { method: 'post', contentType: 'application/json', muteHttpExceptions: true,
       payload: JSON.stringify({ sheet_id: ss.getId(), sheet_name: ss.getName(), tab: sh.getName(), rows: values.length - 1,
-        sent_up_to: Number(props.getProperty('closerOsSent') || 1) - 1, version: ${SHEET_SCRIPT_VERSION}, timer: true, problem: problem }) });
+        sent_up_to: values.length - 1 - waiting, waiting: waiting, version: ${SHEET_SCRIPT_VERSION}, timer: true, problem: problem }) });
   } catch (e) {
     problem = String(e);
   } finally {

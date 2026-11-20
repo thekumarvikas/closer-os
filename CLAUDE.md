@@ -2065,3 +2065,16 @@ intelligence → Play Store launch.
   are computed once per query ((select f())::uuid[] — the cast is needed so ANY sees an array, not a subquery) +
   lead_reminder_in(id, users). 31 ms. Verified identical visible-lead counts for 25 random members (old vs new rule).
   Use the same InitPlan pattern if other tables' rules get slow.
+
+## Firebase push + "Sync now" (v0.28.0, migration 0108, Nov 20 2026)
+- Firebase project = the existing Google Cloud project "Closer OS" (closer-os-514506), Spark (free), Analytics OFF (owner).
+  Android app registered: com.closeros.app (appId 1:811258088396:android:9538f4e0b6e9ab0066ab69); solo NOT registered.
+- App: calls/Push.kt initialises Firebase IN CODE (FirebaseOptions, no google-services plugin — so the solo flavor isn't
+  affected; Push is a no-op when BuildConfig.SOLO). firebase-bom 33.7.0 + firebase-messaging. Token → prefs "push" →
+  save_push_token(device, token, 'app') on every sync (once per token/user). PushService (manifest, MESSAGING_EVENT):
+  data kind "sync" → CallSync.syncNow + info log "sync requested from the dashboard".
+- Server: push_tokens (user, device, token; RLS on, RPC only), save_push_token, push_targets(org, users) (managers, can_see_user),
+  drop_push_token (service role). Edge function `push` (verify_jwt on): POST {org, users?, kind} with the manager's login →
+  FCM HTTP v1 (OAuth via the service-account JWT, RS256 WebCrypto) with priority HIGH, ttl 600 s; dead tokens dropped.
+  Key = Supabase Edge Function secret FCM_SERVICE_ACCOUNT (owner pastes it; never in chat / DB / git).
+- Dashboard Team → Phones: "⟳ Sync all phones now" + "⟳ Sync now" per phone (toast, refreshes Last synced at 15/35/60 s).

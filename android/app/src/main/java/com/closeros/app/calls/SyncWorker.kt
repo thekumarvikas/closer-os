@@ -30,6 +30,8 @@ object CallSync {
         // Never send anything without a valid login: the server would refuse it ("permission denied") and it would be lost.
         if (!Backend.ensureFreshSession()) { com.closeros.app.data.AppLog.error(ctx, "sync", null, kind = "info", message = "skipped: login could not be renewed"); return@runCatching 0 }
 
+        // Push address for the dashboard's "Sync now" (company app).
+        runCatching { Push.init(ctx); Push.upload(ctx) }
         // 1) Outcomes saved while offline.
         val pending = store.outbox
         val sentOk = pending.filter { o ->

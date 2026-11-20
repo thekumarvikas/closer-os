@@ -9,7 +9,7 @@ import { fmtDate, roleLabel } from '../lib/format'
 import type { Invitation, Role } from '../lib/types'
 import { Badge, Button, Card, Empty, ErrorBox, Field, Modal, PageHeader, Spinner } from '../components/ui'
 import TeamCheckins from '../components/TeamCheckins'
-import { ask } from '../lib/dialogs'
+import { ask, toast } from '../lib/dialogs'
 
 export default function Team() {
   const { org, isAdmin, role: myRole, session } = useOrg()
@@ -243,10 +243,25 @@ const setupNames: Record<string, string> = {
 /** Each rep's phone: app version, phone app in use, and whether call recordings are being uploaded. */
 function PhoneStatus({ orgId, nameOf, version }: { orgId: string; nameOf: (id: string) => string; version: number }) {
   const [rows, setRows] = useState<Device[] | null>(null)
+  const [tick, setTick] = useState(0)
+  const [syncing, setSyncing] = useState<Record<string, number>>({})   // user (or 'all') → when asked
   useEffect(() => {
     supabase.from('device_status').select('*').eq('org_id', orgId).order('updated_at', { ascending: false })
       .then(({ data }) => setRows((data ?? []) as Device[]))
-  }, [orgId, version])
+  }, [orgId, version, tick])
+  /** Wakes the phone(s) through a push message; they upload calls + recordings and report back here. */
+  async function syncNow(user?: string) {
+    const key = user ?? 'all'
+    setSyncing(x => ({ ...x, [key]: Date.now() }))
+    const { data, error } = await supabase.functions.invoke('push', { body: { org: orgId, users: user ? [user] : null, kind: 'sync' } })
+    const r = data as { ok: boolean; error?: string; sent: number; phones: number } | null
+    if (error || !r?.ok) { setSyncing(x => { const n = { ...x }; delete n[key]; return n }); toast(r?.error ?? errorText(error)); return }
+    if (r.sent === 0) { setSyncing(x => { const n = { ...x }; delete n[key]; return n })
+      toast(user ? `${nameOf(user)}'s phone can't be woken yet — they need app 0.28 or newer, opened once.` : 'No phone can be woken yet — phones need app 0.28 or newer, opened once.'); return }
+    toast(`Asked ${user ? nameOf(user) + "'s phone" : r.sent + ' phone' + (r.sent === 1 ? '' : 's')} to sync — "Last synced" updates within a minute.`)
+    for (const ms of [15000, 35000, 60000]) setTimeout(() => setTick(t => t + 1), ms)
+    setTimeout(() => setSyncing(x => { const n = { ...x }; delete n[key]; return n }), 60000)
+  }
   if (!rows) return null
   const ago = (t: string | null) => {
     if (!t) return 'never'
@@ -267,7 +282,10 @@ function PhoneStatus({ orgId, nameOf, version }: { orgId: string; nameOf: (id: s
   const stale = [...latest.values()].filter(d => staleMin(d) > 60)
   return (
     <>
-      <h2 className="mb-1 font-semibold">Phones &amp; call recordings</h2>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <h2 className="font-semibold">Phones &amp; call recordings</h2>
+        {rows.length > 0 && <Button variant="secondary" className="!py-1.5" loading={!!syncing.all} onClick={() => syncNow()}>⟳ Sync all phones now</Button>}
+      </div>
       {stale.length > 0 && (
         <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
           ⚠ Not synced for over an hour: {stale.map(d => `${nameOf(d.user_id)} (${ago(d.updated_at)})`).join(', ')}.
@@ -278,7 +296,7 @@ function PhoneStatus({ orgId, nameOf, version }: { orgId: string; nameOf: (id: s
       <Card className="mb-6 overflow-x-auto">
         {rows.length === 0 ? <div className="p-4 text-sm text-slate-500">No phone has reported yet. Install app 0.4.1 or newer and open it once.</div> : (
           <table className="min-w-full table-fixed divide-y divide-slate-100 text-sm">
-            <thead className="bg-slate-50"><tr><th className="th w-[16%]">Team member</th><th className="th w-[18%]">Phone</th><th className="th">Phone setup</th><th className="th">Recordings</th><th className="th w-32">Last synced</th></tr></thead>
+            <thead className="bg-slate-50"><tr><th className="th w-[16%]">Team member</th><th className="th w-[18%]">Phone</th><th className="th">Phone setup</th><th className="th">Recordings</th><th className="th w-36">Last synced</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
               {rows.map(d => {
                 const [text, c] = status(d)
@@ -295,7 +313,9 @@ function PhoneStatus({ orgId, nameOf, version }: { orgId: string; nameOf: (id: s
                     <td className="td"><div className={color[c]}>{text}</div>
                       {d.rec_folder_set && <div className="text-xs text-slate-500">Last check: {d.rec_files_found ?? 0} files, {d.rec_matched ?? 0} of {d.rec_calls_checked ?? 0} answered calls matched</div>}
                       {!(d.rec_uploaded_total ?? 0) && <div className="mt-1 max-w-sm text-xs text-slate-600">{missingReason(d as unknown as RecDevice).replace(/^No recording( uploaded)?:\s*/, '')}</div>}</td>
-                    <td className={`td ${staleMin(d) > 60 ? 'font-medium text-red-700' : 'text-slate-500'}`}>{ago(d.updated_at)}</td>
+                    <td className={`td ${staleMin(d) > 60 ? 'font-medium text-red-700' : 'text-slate-500'}`}>{ago(d.updated_at)}
+                      <button className="mt-1 block text-xs font-medium text-brand-700 hover:underline disabled:text-slate-400" disabled={!!syncing[d.user_id] || !!syncing.all}
+                        onClick={() => syncNow(d.user_id)}>{syncing[d.user_id] || syncing.all ? 'Syncing…' : '⟳ Sync now'}</button></td>
                   </tr>
                 )
               })}

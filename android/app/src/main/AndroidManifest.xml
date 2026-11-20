@@ -71,6 +71,9 @@
         <receiver android:name=".calls.CallEndReceiver" android:exported="true" android:permission="android.permission.READ_PHONE_STATE">
             <intent-filter><action android:name="android.intent.action.PHONE_STATE" /></intent-filter>
         </receiver>
+        <service android:name=".calls.PushService" android:exported="false">
+            <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter>
+        </service>
         <receiver android:name=".calls.FollowUpReceiver" android:exported="false" />
         <receiver android:name=".calls.CheckInReceiver" android:exported="false" />
         <receiver android:name=".data.WaScheduledReceiver" android:exported="false" />

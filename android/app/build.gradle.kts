@@ -12,8 +12,8 @@ android {
         applicationId = "com.closeros.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 91
-        versionName = "0.27.4"
+        versionCode = 92
+        versionName = "0.28.0"
         // Public values: the publishable key is meant to be in apps; data is protected by database rules.
         buildConfigField("String", "SUPABASE_URL", "\"https://tdbqgoxxxfkfttdznzhb.supabase.co\"")
         buildConfigField("String", "SUPABASE_KEY", "\"sb_publishable_aXH8Wr7Lq1YeOWxhvxEdGQ_ePS1GYTY\"")
@@ -106,6 +106,9 @@ dependencies {
     implementation("androidx.credentials:credentials:1.3.0")
     implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+    // Push messages from Closer OS ("Sync now" from the dashboard). Set up in code (calls/Push.kt), no google-services plugin.
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation("com.google.firebase:firebase-messaging")
     // Individual app only: Google ads (with the privacy-consent form) and Google Play subscriptions.
     "soloImplementation"("com.google.android.gms:play-services-ads:23.6.0")
     "soloImplementation"("com.android.billingclient:billing-ktx:8.0.0")

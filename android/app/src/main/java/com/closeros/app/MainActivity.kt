@@ -45,6 +45,7 @@ class CloserApp : Application() {
         com.closeros.app.data.AppLog.install(this)
         com.closeros.app.data.AppCtx.ctx = this
         com.closeros.app.data.Net.init(this)   // knows when there's no internet (app keeps working from the phone's copy)
+        com.closeros.app.calls.Push.init(this)  // dashboard can wake this phone ("Sync now")
     }
 }
 

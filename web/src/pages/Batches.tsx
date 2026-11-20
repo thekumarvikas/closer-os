@@ -13,7 +13,8 @@ import { Badge, Button, Card, Empty, ErrorBox, Field, Modal, PageHeader, Spinner
 interface Row extends Batch { leads: number; attended: number }
 
 interface CardRow { id: string; name: string; kind: string; webinar_at: string; auto_created: boolean; zoom_uploaded: boolean
-  registered: number; assigned: number; unassigned: number; called: number; attended: number; hot: number; repeats: number }
+  registered: number; assigned: number; unassigned: number; called: number; attended: number; hot: number; repeats: number
+  rem_called: number; rem_talked: number; rem_calls: number; rem_by: { user_id: string; leads: number; calls: number; talked: number }[] }
 
 export default function Batches() {
   const { org, isManager } = useOrg()
@@ -90,6 +91,7 @@ export default function Batches() {
                     ['Attended', n(c.attended, c.zoom_uploaded)], ['Hot', n(c.hot, c.zoom_uploaded)]] as const).map(([l, v]) => (
                     <div key={l} className="rounded-lg bg-slate-50 px-1 py-1.5"><p className="text-base font-semibold tabular-nums text-slate-900">{v}</p><p className="text-[11px] text-slate-500">{l}</p></div>))}
                 </div>
+                {(!past || c.rem_calls > 0) && c.registered > 0 && <ReminderStatus c={c} dir={dir} past={past} />}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   {c.unassigned > 0 && <Button className="!py-1.5" onClick={() => setAssignFor(c)}><UserPlus className="h-4 w-4" /> Unassigned {c.unassigned} → Assign</Button>}
                   {past && <Link to={`/webinars/${c.id}?after=1`}><Button variant={c.unassigned > 0 ? 'secondary' : 'primary'} className="!py-1.5">
@@ -134,6 +136,29 @@ export default function Batches() {
       {showNew && <BatchForm onClose={() => setShowNew(false)} onSaved={load} />}
       {assignFor && dir && <AssignUnassigned batch={assignFor} dir={dir} onClose={() => setAssignFor(null)} onDone={load} />}
     </>
+  )
+}
+
+/** Live reminder-call status: how many registrations were called before the start, how many are left, and by whom. */
+function ReminderStatus({ c, dir, past }: { c: CardRow; dir: Directory | null; past: boolean }) {
+  const [open, setOpen] = useState(false)
+  const left = Math.max(0, c.registered - c.rem_called)
+  const p = c.registered ? Math.round(c.rem_called / c.registered * 100) : 0
+  return (
+    <div className="mt-3 rounded-lg border border-slate-100 p-2 text-xs">
+      <button onClick={() => setOpen(!open)} className="w-full text-left">
+        <div className="flex justify-between text-slate-700">
+          <span className="font-medium">📞 Reminder calls{past ? ' (before the start)' : ''}</span>
+          <span className="tabular-nums">{c.rem_called.toLocaleString('en-IN')} of {c.registered.toLocaleString('en-IN')} called · {p}%</span>
+        </div>
+        <div className="mt-1 h-1.5 overflow-hidden rounded bg-slate-100"><div className="h-full bg-brand-600" style={{ width: `${p}%` }} /></div>
+        <p className="mt-1 text-slate-500">{!past && <><b className="text-slate-700">{left.toLocaleString('en-IN')}</b> left to call · </>}{c.rem_talked.toLocaleString('en-IN')} talked (30 s+) · {c.rem_calls.toLocaleString('en-IN')} calls {c.rem_by.length > 0 && <span className="text-brand-700">{open ? '▲' : '▼ by caller'}</span>}</p>
+      </button>
+      {open && c.rem_by.length > 0 && <table className="mt-1 w-full tabular-nums"><tbody>
+        <tr className="text-slate-400"><td>Caller</td><td className="text-right">Leads</td><td className="text-right">Talked</td><td className="text-right">Calls</td></tr>
+        {c.rem_by.map(r => <tr key={r.user_id}><td className="truncate">{dir?.nameOf(r.user_id) ?? '—'}</td><td className="text-right">{r.leads}</td><td className="text-right">{r.talked}</td><td className="text-right">{r.calls}</td></tr>)}
+      </tbody></table>}
+    </div>
   )
 }
 

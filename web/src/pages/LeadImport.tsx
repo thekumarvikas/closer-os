@@ -1,3 +1,4 @@
+import { useOrg } from '../lib/session'
 import { useEffect, useMemo, useState } from 'react'
 import { SampleLink } from '../lib/samples'
 import Papa from 'papaparse'
@@ -36,6 +37,14 @@ function isTooSlow(e: unknown) {
 
 type Row = Record<string, string>
 
+/** "2026-11-23T19:00" typed in the company's time zone → UTC ISO. */
+function zonedToUtc(local: string, tz: string): string {
+  const asUtc = new Date(local + ':00Z')
+  const inTz = new Date(asUtc.toLocaleString('en-US', { timeZone: tz }))
+  const utc = new Date(asUtc.toLocaleString('en-US', { timeZone: 'UTC' }))
+  return new Date(asUtc.getTime() - (inTz.getTime() - utc.getTime())).toISOString()
+}
+
 export default function LeadImport({ orgId, dir, onClose, onDone, batchId }:
   { orgId: string; dir: Directory; onClose: () => void; onDone: () => void; batchId?: string }) {
   const [rows, setRows] = useState<Row[]>([])
@@ -52,6 +61,10 @@ export default function LeadImport({ orgId, dir, onClose, onDone, batchId }:
   const [result, setResult] = useState<{ inserted: number; joined: number; duplicates: number; invalid: number } | null>(null)
   const [batch, setBatch] = useState(batchId ?? '')
   const [batches, setBatches] = useState<Batch[]>([])
+  const [newDay, setNewDay] = useState('')
+  const [newTime, setNewTime] = useState(() => { try { return localStorage.getItem('import.webinarTime') || '19:00' } catch { return '19:00' } })
+  const [newName, setNewName] = useState('')
+  const { org } = useOrg()
   useEffect(() => {
     supabase.from('batches').select('*').eq('org_id', orgId).eq('is_archived', false).order('webinar_at', { ascending: false }).limit(50)
       .then(({ data }) => setBatches((data ?? []) as Batch[]))
@@ -106,6 +119,16 @@ export default function LeadImport({ orgId, dir, onClose, onDone, batchId }:
     setBusy(true); setError(null)
     const total = { inserted: 0, joined: 0, duplicates: 0, invalid: 0 }
     try {
+      let batchUse = batch
+      if (batch === 'new') {
+        if (!newDay) throw new Error('Pick the webinar date')
+        try { localStorage.setItem('import.webinarTime', newTime) } catch { /* ignore */ }
+        const at = zonedToUtc(`${newDay}T${newTime || '19:00'}`, org.timezone)
+        const label = newName.trim() || `Webinar · ${new Date(newDay + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
+        const { data: b, error: be } = await supabase.from('batches').insert({ org_id: orgId, name: label, kind: 'webinar', webinar_at: at }).select('id').single()
+        if (be) throw be
+        batchUse = (b as { id: string }).id; setBatch(batchUse)
+      }
       // The database cancels any single request after 8 seconds. A batch of 400 takes
       // about 1.5 s on a busy company, so it fits several times over; if a company is
       // slower still, the batch halves itself and that part is sent again. Nothing is
@@ -118,7 +141,7 @@ export default function LeadImport({ orgId, dir, onClose, onDone, batchId }:
         const { data, error } = await supabase.rpc('import_leads', {
           p_org: orgId, p_rows: slice.map(toPayload),
           p_source: source || null, p_campaign: campaign || null,
-          p_assign_mode: assignMode, p_assign_to: assignMode === 'user' ? assignTo : null, p_batch: batch || null,
+          p_assign_mode: assignMode, p_assign_to: assignMode === 'user' ? assignTo : null, p_batch: batchUse || null,
         })
         if (error) {
           if (isTooSlow(error) && chunk > 25) { chunk = Math.max(25, Math.floor(chunk / 2)); continue }
@@ -192,9 +215,15 @@ export default function LeadImport({ orgId, dir, onClose, onDone, batchId }:
           <Field label="Add to webinar / event / batch" hint="With a batch, numbers already in Closer OS join the batch (marked Repeated) instead of being skipped.">
             <select className="input" value={batch} onChange={e => setBatch(e.target.value)} disabled={!!batchId}>
               <option value="">None</option>
+              <option value="new">＋ New webinar on a date…</option>
               {batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>
           </Field>
+          {batch === 'new' && <div className="grid gap-3 sm:grid-cols-3">
+            <Field label="Webinar date"><input type="date" className="input" value={newDay} onChange={e => setNewDay(e.target.value)} /></Field>
+            <Field label="Start time" hint="Reminder calls count until this time. You can change it later in Webinars."><input type="time" className="input" value={newTime} onChange={e => setNewTime(e.target.value)} /></Field>
+            <Field label="Name"><input className="input" value={newName} onChange={e => setNewName(e.target.value)} placeholder={newDay ? `Webinar · ${newDay}` : 'Webinar'} /></Field>
+          </div>}
           <Field label="Who gets these leads?">
             <select className="input" value={assignMode} onChange={e => setAssignMode(e.target.value as typeof assignMode)}>
               <option value="rules">Use my distribution rules (round-robin / rule-based)</option>

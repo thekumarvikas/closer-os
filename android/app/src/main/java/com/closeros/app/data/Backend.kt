@@ -409,14 +409,17 @@ object Repo {
     suspend fun deviceCheck(device: String, name: String): JsonObject =
         json.parseToJsonElement(db.rpc("device_check", buildJsonObject { put("p_device", device); put("p_name", name) }).data).jsonObject
 
-    /** Joins companies that invited this email, then returns the first active membership. */
+    /** Joins companies that invited this email, then returns the active membership: the company app prefers a company,
+     *  the individual app a personal account (a login can belong to both). */
     suspend fun membership(): Membership? {
         val uid = Backend.uid ?: return null
         runCatching { db.rpc("accept_my_invitations") }
         return Backend.client.from("org_members")
             .select(Columns.raw("org_id, role, organization:organizations(id, name, phone_prefix, currency, timezone, settings, is_individual)")) {
                 filter { eq("user_id", uid); eq("status", "active") }
-            }.decodeList<Membership>().firstOrNull()
+            }.decodeList<Membership>()
+            .sortedBy { if ((it.organization.is_individual) == com.closeros.app.BuildConfig.SOLO) 0 else 1 }
+            .firstOrNull()
     }
 
     suspend fun profile(): Profile? {

@@ -2086,3 +2086,5 @@ intelligence → Play Store launch.
   their numbers, shown in the company app until the rep has an active/pending work SIM (vm.workSimsKnown after the server
   answers; "Later" = until next app open). Before, the choice only appeared in first-time setup (2-SIM phones) or deep in
   Settings, so existing reps never saw it.
+- App 0.28.2: Repo.membership() picks the company membership in company builds and the personal one in the solo build
+  (a login in both used whichever came first — owner's K20 reported to its personal account). Sign out + in after updating.

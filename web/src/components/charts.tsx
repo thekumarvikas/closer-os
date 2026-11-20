@@ -54,8 +54,8 @@ export function Meter({ value, max, label, valueText, maxText }: { value: number
 }
 
 /** Vertical bars for one series over time (days or hours), with a hover tooltip. */
-export function Bars({ data, height = 160, unit = 'calls' }: {
-  data: { label: string; short: string; value: number; tip?: ReactNode }[]; height?: number; unit?: string
+export function Bars({ data, height = 160, unit = 'calls', onClick }: {
+  data: { label: string; short: string; value: number; tip?: ReactNode }[]; height?: number; unit?: string; onClick?: (i: number) => void
 }) {
   const [hover, setHover] = useState<number | null>(null)
   const max = Math.max(1, ...data.map(d => d.value))
@@ -71,7 +71,7 @@ export function Bars({ data, height = 160, unit = 'calls' }: {
           {[0, 0.5, 1].map(f => <div key={f} className="absolute inset-x-0 border-t border-slate-100" style={{ top: `${f * 100}%` }} />)}
           <div className="absolute inset-0 flex items-end gap-[2px]">
             {data.map((d, i) => (
-              <div key={d.label} className="flex h-full flex-1 items-end" onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
+              <div key={d.label} className={`flex h-full flex-1 items-end ${onClick && d.value ? 'cursor-pointer' : ''}`} onClick={onClick && d.value ? () => onClick(i) : undefined} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
                 <div className="w-full rounded-t transition-opacity"
                   style={{ height: `${(d.value / nice) * 100}%`, minHeight: d.value ? 2 : 0, background: BAR, opacity: hover === null || hover === i ? 1 : 0.5 }} />
               </div>

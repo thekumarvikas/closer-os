@@ -5,7 +5,7 @@ import { errorText } from '../lib/supabase'
 import type { Directory } from '../lib/directory'
 import { fetchOutcomeReport, zonedMidnight, addDays, fmtYmd, pct, downloadCsv, type OutcomeCell, type OutcomeReport, type Dir, type Channel } from '../lib/report'
 import { fmtMoney } from '../lib/format'
-import type { Organization, Outcome } from '../lib/types'
+import type { Organization } from '../lib/types'
 import { Badge, Button, Card, Empty, ErrorBox, Spinner } from '../components/ui'
 import { Download } from 'lucide-react'
 
@@ -18,6 +18,8 @@ const categoryInfo: Record<string, { label: string; color: 'gray' | 'green' | 'r
   invalid: { label: 'Invalid', color: 'amber' },
 }
 const BAR = '#156D63'
+/** Calls read from the phone's history (made before Closer OS / outside the app) — no outcome expected. */
+export const HIST = '00000000-0000-0000-0000-000000000001'
 
 export default function OutcomeReportView({ org, dir, from, to, users, fileTag, onOpenOutcome, callDir = 'all', channel = 'all' }: {
   org: Organization; dir: Directory; from: string; to: string; users: string[]; fileTag: string; callDir?: Dir; channel?: Channel
@@ -26,6 +28,7 @@ export default function OutcomeReportView({ org, dir, from, to, users, fileTag, 
   const [r, setR] = useState<OutcomeReport | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [view, setView] = useState<'employees' | 'days'>('employees')
+  const [unused, setUnused] = useState(false)
 
   useEffect(() => {
     setR(null); setError(null)
@@ -39,19 +42,20 @@ export default function OutcomeReportView({ org, dir, from, to, users, fileTag, 
   // Outcomes in the company's order; hidden ones still appear if they were used.
   const used = dir.outcomes.filter(o => o.is_active || r.byOutcome.has(o.id))
   const get = (m: Map<string | null, OutcomeCell>, id: string | null) => m.get(id) ?? { calls: 0, leads: 0, amount: 0, deal_value: 0, dur: 0 }
-  const filled = r.total.calls - get(r.byOutcome, null).calls
+  const hist = get(r.byOutcome, HIST).calls
+  const filled = r.total.calls - get(r.byOutcome, null).calls - hist
+  const [showUnused, setShowUnused] = [unused, setUnused]
   const sumCat = (m: Map<string | null, OutcomeCell>, cats: string[]) =>
     dir.outcomes.filter(o => cats.includes(o.category)).reduce((s, o) => s + get(m, o.id).calls, 0)
   const revenue = (m: Map<string | null, OutcomeCell>) => dir.outcomes.filter(o => o.category === 'won').reduce((s, o) => s + get(m, o.id).amount, 0)
   const pipeline = (m: Map<string | null, OutcomeCell>) => dir.outcomes.filter(o => o.category === 'positive').reduce((s, o) => s + get(m, o.id).deal_value, 0)
-  const max = Math.max(1, ...used.map(o => get(r.byOutcome, o.id).calls))
   const cols = used.filter(o => get(r.byOutcome, o.id).calls > 0)
   const groups: [string, string[]][] = [['Not connected', ['not_connected']], ['Follow-up', ['connected']], ['Interested', ['positive']],
     ['Won', ['won']], ['Lost', ['lost']], ['Invalid', ['invalid']]]
 
   const tiles: [string, string, string?, ('red' | 'green')?][] = [
     ['Calls with outcome', r.total.calls.toLocaleString('en-IN'), `${r.total.leads.toLocaleString('en-IN')} different leads`],
-    ['Outcome filled', `${pct(filled, r.total.calls)}%`, `${get(r.byOutcome, null).calls} not filled yet`, get(r.byOutcome, null).calls ? 'red' : undefined],
+    ['Outcome filled', `${pct(filled, r.total.calls - hist)}%`, `${get(r.byOutcome, null).calls} not filled yet${hist ? ` · ${hist.toLocaleString('en-IN')} before Closer OS` : ''}`, get(r.byOutcome, null).calls ? 'red' : undefined],
     ['Interested / qualified', sumCat(r.byOutcome, ['positive']).toLocaleString('en-IN'), pipeline(r.byOutcome) ? `Potential ${fmtMoney(pipeline(r.byOutcome), org)}` : `${pct(sumCat(r.byOutcome, ['positive']), filled)}% of outcomes`],
     ['Sales closed', sumCat(r.byOutcome, ['won']).toLocaleString('en-IN'), fmtMoney(revenue(r.byOutcome), org), 'green'],
     ['Lost / not interested', sumCat(r.byOutcome, ['lost']).toLocaleString('en-IN'), `${pct(sumCat(r.byOutcome, ['lost']), filled)}% of outcomes`],
@@ -83,29 +87,36 @@ export default function OutcomeReportView({ org, dir, from, to, users, fileTag, 
 
       <Card className="p-5">
         <h3 className="font-semibold">Outcomes</h3>
-        <p className="mb-4 mt-0.5 text-sm text-slate-500">Click an outcome to see those calls.</p>
-        <ul className="space-y-1">
-          {[...used.map(o => ({ o, c: get(r.byOutcome, o.id) })), { o: null as Outcome | null, c: get(r.byOutcome, null) }]
-            .filter(x => x.o || x.c.calls > 0)
-            .map(({ o, c }) => (
-              <li key={o?.id ?? 'none'}>
-                <button onClick={() => onOpenOutcome(o?.id ?? 'none')} className="grid w-full grid-cols-[minmax(140px,220px)_1fr_auto] items-center gap-3 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-slate-50">
-                  <span className="flex items-center gap-2 truncate">
-                    <span className={`truncate ${o ? 'font-medium text-slate-800' : 'font-medium text-red-600'}`}>{o?.label ?? 'Outcome not filled'}</span>
-                    {o && <Badge color={categoryInfo[o.category]?.color}>{categoryInfo[o.category]?.label}</Badge>}
-                  </span>
-                  <span className="h-3 rounded bg-slate-100">
-                    <span className="block h-3 rounded" style={{ width: `${(c.calls / max) * 100}%`, minWidth: c.calls ? 3 : 0, background: o ? BAR : '#e34948' }} />
-                  </span>
-                  <span className="w-44 text-right tabular-nums">
-                    <b className="text-slate-900">{c.calls.toLocaleString('en-IN')}</b>
-                    <span className="text-slate-500"> · {pct(c.calls, r.total.calls)}% · {c.leads} leads</span>
-                    {o?.category === 'won' && c.amount > 0 && <span className="block text-xs text-emerald-700">{fmtMoney(c.amount, org)}</span>}
-                  </span>
-                </button>
-              </li>
-            ))}
-        </ul>
+        <p className="mb-4 mt-0.5 text-sm text-slate-500">Click an outcome to see those calls. % = share of calls with an outcome.</p>
+        {(() => {
+          const rows = used.map(o => ({ o, c: get(r.byOutcome, o.id) }))
+          const shown = rows.filter(x => x.c.calls > 0), idle = rows.filter(x => x.c.calls === 0)
+          const nf = get(r.byOutcome, null), hc = get(r.byOutcome, HIST)
+          const max2 = Math.max(1, ...shown.map(x => x.c.calls))
+          return <>
+            <ul className="space-y-0.5">
+              {[...shown, ...(showUnused ? idle : [])].map(({ o, c }) => (
+                <li key={o.id}>
+                  <button onClick={() => onOpenOutcome(o.id)} className="grid w-full min-w-0 grid-cols-[minmax(0,2fr)_minmax(0,3fr)_auto] items-center gap-3 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-slate-50">
+                    <span className="min-w-0"><span className="font-medium text-slate-800">{o.label}</span>{' '}<Badge color={categoryInfo[o.category]?.color}>{categoryInfo[o.category]?.label}</Badge></span>
+                    <span className="block h-3 min-w-0 overflow-hidden rounded bg-slate-100">
+                      <span className="block h-3 rounded" style={{ width: `${(c.calls / max2) * 100}%`, minWidth: c.calls ? 3 : 0, background: BAR }} />
+                    </span>
+                    <span className="whitespace-nowrap text-right tabular-nums">
+                      <b className="text-slate-900">{c.calls.toLocaleString('en-IN')}</b>
+                      <span className="text-xs text-slate-500"> · {pct(c.calls, filled)}% · {c.leads} leads</span>
+                      {o.category === 'won' && c.amount > 0 && <span className="block text-xs text-emerald-700">{fmtMoney(c.amount, org)}</span>}
+                    </span>
+                  </button>
+                </li>))}
+            </ul>
+            {idle.length > 0 && <button onClick={() => setShowUnused(!showUnused)} className="mt-1 px-2 text-xs text-slate-500 hover:underline">{showUnused ? 'Hide outcomes not used' : `+ ${idle.length} outcomes not used in this period`}</button>}
+            {nf.calls > 0 && <button onClick={() => onOpenOutcome('none')} className="mt-3 flex w-full items-center justify-between rounded-lg bg-amber-50 px-3 py-2 text-left text-sm text-amber-900 hover:bg-amber-100">
+              <span>⚠ <b>{nf.calls.toLocaleString('en-IN')}</b> calls made with Closer OS have no outcome yet ({nf.leads} leads)</span><span className="text-xs font-medium underline">See them</span></button>}
+            {hc.calls > 0 && <button onClick={() => onOpenOutcome(HIST)} className="mt-2 flex w-full items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-left text-sm text-slate-600 hover:bg-slate-100">
+              <span><b>{hc.calls.toLocaleString('en-IN')}</b> calls from the phone's history (before Closer OS / outside the app) — no outcome needed</span><span className="text-xs font-medium underline">See them</span></button>}
+          </>
+        })()}
       </Card>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -126,7 +137,7 @@ export default function OutcomeReportView({ org, dir, from, to, users, fileTag, 
           </tr></thead>
           <tbody className="divide-y divide-slate-100">
             {[...(view === 'employees' ? r.byUser : r.byDay)].sort((a, b) => view === 'employees' ? b[1].total.calls - a[1].total.calls : 0).map(([k, v]) => {
-              const f = v.total.calls - get(v.outcomes, null).calls
+              const f = v.total.calls - get(v.outcomes, null).calls - get(v.outcomes, HIST).calls
               return (
                 <tr key={k} className="hover:bg-slate-50">
                   <td className="td sticky left-0 bg-white font-medium">{view === 'employees' ? dir.nameOf(k) : fmtYmd(k, true)}</td>

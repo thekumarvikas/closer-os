@@ -8,7 +8,7 @@ import { useOrg } from '../lib/session'
 import Targets from './Targets'
 import LeadStatus from '../components/LeadStatus'
 import { useDirectory, type Directory } from '../lib/directory'
-import { fetchReport, zonedMidnight, zonedYmd, addDays, fmtYmd, pct, downloadCsv, type Bucket, type Report, type Dir, type Channel } from '../lib/report'
+import { fetchReport, zonedMidnight, zonedYmd, addDays, fmtYmd, pct, downloadCsv, type Bucket, type Metrics, type Report, type Dir, type Channel } from '../lib/report'
 import type { Organization } from '../lib/types'
 import { Button, Card, Empty, ErrorBox, PageHeader, Spinner } from '../components/ui'
 import { Bars, Meter, SegmentBar, callColors } from '../components/charts'
@@ -23,6 +23,18 @@ type Tab = 'perf' | 'compare' | 'overview' | 'outcomes' | 'targets' | 'team' | '
 const tabs: [Tab, string][] = [['overview', 'Overview'], ['perf', 'Team performance'], ['compare', 'Compare periods'], ['outcomes', 'Outcomes'], ['targets', 'Targets'], ['team', 'Team'], ['daily', 'Daily'], ['hourly', 'By hour'], ['followups', 'Follow-ups'], ['response', 'Response time'], ['leadwork', 'Lead work'], ['sales', 'Sales insights'], ['sequences', 'WhatsApp sequences'], ['log', 'Call log']]
 interface Filters { from: string; to: string; users: string[]; dir: Dir; ch: Channel }
 
+type Kind = '' | 'conn' | 'not_picked' | 'missed' | 'rejected' | 'out' | 'in'
+interface Drill { label?: string; user?: string; day?: string; hour?: number; kind?: Kind }
+type OnDrill = (d: Drill) => void
+const hourLabel = (h: number) => `${h % 12 || 12} ${h < 12 ? 'AM' : 'PM'}`
+const hourSlot = (h: number) => `${hourLabel(h)} – ${hourLabel((h + 1) % 24)}`
+const kindName: Record<string, string> = { '': 'All calls', conn: 'Conversations', not_picked: 'Not picked up', missed: 'Missed', rejected: 'Declined', out: 'Dialled', in: 'Received' }
+/** A number that opens its calls. */
+function N({ children, onClick }: { children: ReactNode; onClick?: () => void }) {
+  if (!onClick) return <>{children}</>
+  return <button onClick={onClick} className="text-left hover:text-brand-700 hover:underline">{children}</button>
+}
+
 export default function Reports() {
   const { org, isManager } = useOrg()
   const dir = useDirectory(org.id)
@@ -32,10 +44,16 @@ export default function Reports() {
   const [tabRaw, setTab] = usePersisted<Tab>('reports.tab', 'overview')
   const tab: Tab = (tabRaw as string) === 'works' || (tabRaw as string) === 'insights' ? 'sales' : (tabRaw as string) === 'efficiency' ? 'overview' : tabRaw
   const [logOutcome, setLogOutcome] = useState('')
+  const [drill, setDrill] = useState<Drill | null>(null)
+  const open = (d: Drill) => { setDrill(d); setLogOutcome(''); setTab('log'); window.scrollTo({ top: 0 }) }
   const [report, setReport] = useState<Report | null>(null)
   const [error, setError] = useState<string | null>(null)
   const range = useMemo(() => ({ from: zonedMidnight(applied.from, org), to: zonedMidnight(addDays(applied.to, 1), org) }), [applied, org])
-  const logFilters = useMemo(() => ({ from: range.from.toISOString(), to: range.to.toISOString(), users: applied.users, dir: applied.dir, ch: applied.ch }), [range, applied.users, applied.dir, applied.ch])
+  const logFilters = useMemo(() => ({
+    from: drill?.day ? zonedMidnight(drill.day, org).toISOString() : range.from.toISOString(),
+    to: drill?.day ? zonedMidnight(addDays(drill.day, 1), org).toISOString() : range.to.toISOString(),
+    users: drill?.user ? [drill.user] : applied.users, dir: applied.dir, ch: applied.ch, hour: drill?.hour, kind: drill?.kind,
+  }), [range, applied.users, applied.dir, applied.ch, drill, org])
 
   useEffect(() => {
     setReport(null); setError(null)
@@ -85,7 +103,7 @@ export default function Reports() {
 
       <div className="mb-4 flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1 text-sm sm:inline-flex">
         {tabs.map(([k, l]) => (
-          <button key={k} onClick={() => { setTab(k); if (k !== 'log') setLogOutcome('') }}
+          <button key={k} onClick={() => { setTab(k); setDrill(null); if (k !== 'log') setLogOutcome('') }}
             className={`rounded-md px-3 py-1.5 font-medium ${tab === k ? 'bg-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>{l}</button>
         ))}
       </div>
@@ -101,16 +119,16 @@ export default function Reports() {
         tab === 'sequences' ? <SequenceReport from={applied.from} to={applied.to} /> :
         tab === 'perf' ? (dir ? <TeamPerformance dir={dir} from={range.from} to={range.to} users={applied.users} /> : <Spinner />) :
         tab === 'response' ? <ResponseTime dir={dir} from={applied.from} to={applied.to} /> :
-        tab === 'log' ? <CallLog org={org} dir={dir} f={logFilters} fileTag={fileTag} outcome={logOutcome} setOutcome={setLogOutcome} /> :
+        tab === 'log' ? <>{drill && <div className="mb-2 flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-800">Showing: {[drill.label, drill.user && dir.nameOf(drill.user), drill.day && fmtYmd(drill.day, true), drill.hour !== undefined && hourSlot(drill.hour)].filter(Boolean).join(' · ')}<button className="ml-auto text-xs underline" onClick={() => setDrill(null)}>Show all calls</button></div>}<CallLog org={org} dir={dir} f={logFilters} fileTag={fileTag} outcome={logOutcome} setOutcome={setLogOutcome} /></> :
         tab === 'outcomes' ? <><LeadStatus orgId={org.id} dir={dir} users={applied.users} from={range.from} to={range.to} /><OutcomeReportView org={org} dir={dir} from={applied.from} to={applied.to} users={applied.users} callDir={applied.dir} channel={applied.ch} fileTag={fileTag} onOpenOutcome={id => { setLogOutcome(id); setTab('log') }} /></> :
         tab === 'targets' ? <Targets dir={dir} from={applied.from} to={applied.to} users={applied.users} fileTag={fileTag} /> :
         tab === 'followups' ? <FollowUpDiscipline org={org} dir={dir} from={range.from} to={range.to} users={applied.users} fileTag={fileTag} /> :
         !report ? <Spinner /> :
         report.total.calls === 0 ? <Card><Empty icon={<BarChart3 className="h-6 w-6" />} title="No calls in this period" text="Try a longer date range." /></Card> :
         tab === 'overview' ? <Overview r={report} fileTag={fileTag} /> :
-        tab === 'team' ? <Team r={report} dir={dir} fileTag={fileTag} /> :
-        tab === 'daily' ? <Daily r={report} dir={dir} fileTag={fileTag} /> :
-        <Hourly r={report} fileTag={fileTag} />}
+        tab === 'team' ? <Team r={report} dir={dir} fileTag={fileTag} onDrill={open} /> :
+        tab === 'daily' ? <Daily r={report} dir={dir} fileTag={fileTag} onDrill={open} /> :
+        <Hourly r={report} fileTag={fileTag} onDrill={open} />}
     </>
   )
 }
@@ -195,13 +213,13 @@ function Overview({ r, fileTag }: { r: Report; fileTag: string }) {
 
 /* ───────────── Team (one row per person, fits one screen) ───────────── */
 
-const teamCols: { label: string; sort: (b: Bucket) => number; cell: (b: Bucket) => ReactNode; csv: (b: Bucket) => (string | number)[]; csvHead: string[] }[] = [
-  { label: T.calls, sort: b => b.calls, cell: b => <Two a={num(b.calls)} b={`${b.out} out · ${b.inc} in`} />, csv: b => [b.calls, b.out, b.inc], csvHead: [T.calls, T.dialled, T.received] },
-  { label: T.conversations, sort: b => b.conn, cell: b => <Two a={num(b.conn)} b={`${pct(b.conn, b.calls)}%`} />, csv: b => [b.conn, pct(b.conn, b.calls)], csvHead: [T.conversations, `${T.convRate} %`] },
-  { label: T.talk, sort: b => b.conn_dur, cell: b => <Two a={dur(b.conn_dur)} b={`avg ${dur(b.conn ? b.conn_dur / b.conn : 0)}`} />, csv: b => [dur(b.conn_dur), dur(b.conn ? b.conn_dur / b.conn : 0)], csvHead: [T.talk, T.avgConv] },
-  { label: T.noAnswer, sort: b => b.not_picked, cell: b => <Two a={num(b.not_picked)} />, csv: b => [b.not_picked], csvHead: [T.noAnswer] },
-  { label: `${T.missed} / ${T.declined}`, sort: b => b.missed + b.rejected, cell: b => <Two a={`${b.missed} / ${b.rejected}`} b={b.never_attended ? `${b.never_attended} never called back` : undefined} />, csv: b => [b.missed, b.rejected, b.never_attended], csvHead: [T.missed, T.declined, T.neverCalledBack] },
-  { label: T.contacts, sort: b => b.uniq, cell: b => <Two a={num(b.uniq)} b={`${b.uniq_conn} reached`} />, csv: b => [b.uniq, b.uniq_conn], csvHead: [T.contacts, T.reached] },
+const teamCols: { label: string; kind: Kind; sort: (b: Bucket) => number; cell: (b: Bucket) => ReactNode; csv: (b: Bucket) => (string | number)[]; csvHead: string[] }[] = [
+  { label: T.calls, kind: '', sort: b => b.calls, cell: b => <Two a={num(b.calls)} b={`${b.out} out · ${b.inc} in`} />, csv: b => [b.calls, b.out, b.inc], csvHead: [T.calls, T.dialled, T.received] },
+  { label: T.conversations, kind: 'conn', sort: b => b.conn, cell: b => <Two a={num(b.conn)} b={`${pct(b.conn, b.calls)}%`} />, csv: b => [b.conn, pct(b.conn, b.calls)], csvHead: [T.conversations, `${T.convRate} %`] },
+  { label: T.talk, kind: 'conn', sort: b => b.conn_dur, cell: b => <Two a={dur(b.conn_dur)} b={`avg ${dur(b.conn ? b.conn_dur / b.conn : 0)}`} />, csv: b => [dur(b.conn_dur), dur(b.conn ? b.conn_dur / b.conn : 0)], csvHead: [T.talk, T.avgConv] },
+  { label: T.noAnswer, kind: 'not_picked', sort: b => b.not_picked, cell: b => <Two a={num(b.not_picked)} />, csv: b => [b.not_picked], csvHead: [T.noAnswer] },
+  { label: `${T.missed} / ${T.declined}`, kind: 'missed', sort: b => b.missed + b.rejected, cell: b => <Two a={`${b.missed} / ${b.rejected}`} b={b.never_attended ? `${b.never_attended} never called back` : undefined} />, csv: b => [b.missed, b.rejected, b.never_attended], csvHead: [T.missed, T.declined, T.neverCalledBack] },
+  { label: T.contacts, kind: '', sort: b => b.uniq, cell: b => <Two a={num(b.uniq)} b={`${b.uniq_conn} reached`} />, csv: b => [b.uniq, b.uniq_conn], csvHead: [T.contacts, T.reached] },
 ]
 
 const compareMetrics: { label: string; value: (b: Bucket) => number; show: (n: number) => string }[] = [
@@ -246,7 +264,7 @@ function TeamCompare({ r, dir }: { r: Report; dir: Directory }) {
   )
 }
 
-function Team({ r, dir, fileTag }: { r: Report; dir: Directory; fileTag: string }) {
+function Team({ r, dir, fileTag, onDrill }: { r: Report; dir: Directory; fileTag: string; onDrill: OnDrill }) {
   const [sort, setSort] = useState(0)
   const rows = useMemo(() => [...r.byUser].sort((a, b) => teamCols[sort].sort(b.total) - teamCols[sort].sort(a.total)), [r, sort])
   return (
@@ -264,21 +282,21 @@ function Team({ r, dir, fileTag }: { r: Report; dir: Directory; fileTag: string 
             {rows.map(u => (
               <tr key={u.user_id} className="align-top hover:bg-slate-50">
                 <td className="truncate px-3 py-2"><span className="font-medium">{dir.nameOf(u.user_id)}</span>{dir.phoneOf(u.user_id) && <span className="block truncate text-xs text-slate-500">{dir.phoneOf(u.user_id)}</span>}</td>
-                {teamCols.map(c => <td key={c.label} className="px-3 py-2">{c.cell(u.total)}</td>)}
+                {teamCols.map(c => <td key={c.label} className="px-3 py-2"><N onClick={() => onDrill({ user: u.user_id, kind: c.kind, label: kindName[c.kind] })}>{c.cell(u.total)}</N></td>)}
               </tr>
             ))}
-            <tr className="bg-slate-50 align-top font-semibold"><td className="px-3 py-2">Total</td>{teamCols.map(c => <td key={c.label} className="px-3 py-2">{c.cell(r.total)}</td>)}</tr>
+            <tr className="bg-slate-50 align-top font-semibold"><td className="px-3 py-2">Total</td>{teamCols.map(c => <td key={c.label} className="px-3 py-2"><N onClick={() => onDrill({ kind: c.kind, label: kindName[c.kind] })}>{c.cell(r.total)}</N></td>)}</tr>
           </tbody>
         </table>
       </Card>
-      <p className="text-xs text-slate-500">Click a column name to sort. The CSV has every number in its own column.</p>
+      <p className="text-xs text-slate-500">Click a column name to sort, or any number to see those calls. The CSV has every number in its own column.</p>
     </div>
   )
 }
 
 /* ───────────── Daily ───────────── */
 
-function Daily({ r, dir, fileTag }: { r: Report; dir: Directory; fileTag: string }) {
+function Daily({ r, dir, fileTag, onDrill }: { r: Report; dir: Directory; fileTag: string; onDrill: OnDrill }) {
   const [split, setSplit] = useState(false)
   const days = [...r.byDay].reverse()
   return (
@@ -295,10 +313,10 @@ function Daily({ r, dir, fileTag }: { r: Report; dir: Directory; fileTag: string
             {days.map(d => split ? [
               <tr key={d.day} className="bg-brand-50/50"><td colSpan={teamCols.length + 1} className="px-3 py-1.5 text-xs font-semibold text-brand-700">{fmtYmd(d.day, true)}</td></tr>,
               ...d.users.map(u => (
-                <tr key={d.day + u.user_id} className="align-top"><td className="truncate px-3 py-2 pl-6">{dir.nameOf(u.user_id)}</td>{teamCols.map(c => <td key={c.label} className="px-3 py-2">{c.cell(u.total)}</td>)}</tr>
+                <tr key={d.day + u.user_id} className="align-top"><td className="truncate px-3 py-2 pl-6">{dir.nameOf(u.user_id)}</td>{teamCols.map(c => <td key={c.label} className="px-3 py-2"><N onClick={() => onDrill({ day: d.day, user: u.user_id, kind: c.kind, label: kindName[c.kind] })}>{c.cell(u.total)}</N></td>)}</tr>
               )),
             ] : (
-              <tr key={d.day} className="align-top hover:bg-slate-50"><td className="px-3 py-2 font-medium text-brand-700">{fmtYmd(d.day, true)}</td>{teamCols.map(c => <td key={c.label} className="px-3 py-2">{c.cell(d.total)}</td>)}</tr>
+              <tr key={d.day} className="align-top hover:bg-slate-50"><td className="px-3 py-2 font-medium text-brand-700">{fmtYmd(d.day, true)}</td>{teamCols.map(c => <td key={c.label} className="px-3 py-2"><N onClick={() => onDrill({ day: d.day, kind: c.kind, label: kindName[c.kind] })}>{c.cell(d.total)}</N></td>)}</tr>
             ))}
           </tbody>
         </table>
@@ -309,28 +327,48 @@ function Daily({ r, dir, fileTag }: { r: Report; dir: Directory; fileTag: string
 
 /* ───────────── By hour ───────────── */
 
-function Hourly({ r, fileTag }: { r: Report; fileTag: string }) {
-  const label = (h: number) => `${h % 12 || 12} ${h < 12 ? 'AM' : 'PM'}`
+function Hourly({ r, fileTag, onDrill }: { r: Report; fileTag: string; onDrill: OnDrill }) {
+  const label = hourLabel
+  const by = new Map(r.byHour.map(h => [h.hr, h.total]))
+  const used = r.byHour.filter(h => h.total.calls > 0).map(h => h.hr)
+  // Working span: from the first to the last hour with calls (at least 9 AM – 9 PM), empty hours shown too.
+  const lo = Math.min(9, ...used), hi = Math.max(20, ...used)
+  const hours = Array.from({ length: hi - lo + 1 }, (_, i) => lo + i)
+  const zero = { calls: 0, conn: 0, conn_dur: 0, out: 0, inc: 0, missed: 0, not_picked: 0 } as Metrics
   const busiest = [...r.byHour].sort((a, b) => b.total.conn - a.total.conn)[0]
   const best = [...r.byHour].filter(h => h.total.calls >= 10).sort((a, b) => b.total.conn / b.total.calls - a.total.conn / a.total.calls)[0]
+  const t = r.total
+  const cells = (b: Metrics, hr?: number) => {
+    const go = (kind: Kind) => () => onDrill({ hour: hr, kind, label: kindName[kind] })
+    return <>
+      <td className="px-3 py-2 tabular-nums"><N onClick={b.calls ? go('') : undefined}>{b.calls}</N></td>
+      <td className="px-3 py-2 tabular-nums"><N onClick={b.conn ? go('conn') : undefined}>{b.conn} <span className="text-xs text-slate-500">{pct(b.conn, b.calls)}%</span></N></td>
+      <td className="px-3 py-2 tabular-nums">{dur(b.conn_dur)}</td>
+      <td className="px-3 py-2 tabular-nums"><N onClick={b.out ? go('out') : undefined}>{b.out}</N></td>
+      <td className="px-3 py-2 tabular-nums"><N onClick={b.inc ? go('in') : undefined}>{b.inc}</N></td>
+      <td className="px-3 py-2 tabular-nums"><N onClick={b.missed ? go('missed') : undefined}>{b.missed}</N></td>
+      <td className="px-3 py-2 tabular-nums"><N onClick={b.not_picked ? go('not_picked') : undefined}>{b.not_picked}</N></td>
+    </>
+  }
   return (
     <div className="space-y-4">
       <div className="flex justify-end"><Csv onClick={() => downloadCsv(`closer-os-by-hour_${fileTag}.csv`, ['Hour', T.calls, T.conversations, `${T.convRate} %`, T.talk, T.dialled, T.received, T.missed, T.noAnswer],
-        r.byHour.map(h => [label(h.hr), h.total.calls, h.total.conn, pct(h.total.conn, h.total.calls), dur(h.total.conn_dur), h.total.out, h.total.inc, h.total.missed, h.total.not_picked]))} /></div>
+        [...hours.map(h => { const b = by.get(h) ?? zero; return [hourSlot(h), b.calls, b.conn, pct(b.conn, b.calls), dur(b.conn_dur), b.out, b.inc, b.missed, b.not_picked] }),
+          ['TOTAL', t.calls, t.conn, pct(t.conn, t.calls), dur(t.conn_dur), t.out, t.inc, t.missed, t.not_picked]])} /></div>
       <Card className="p-5">
         <h3 className="font-semibold">Calls by hour of day</h3>
-        <p className="mb-6 mt-1 text-sm text-slate-500">Most conversations: <b>{label(busiest.hr)}</b>{best ? <> · Best answer rate: <b>{label(best.hr)}</b> ({pct(best.total.conn, best.total.calls)}%)</> : null}</p>
-        <Bars height={200} data={r.byHour.map(h => ({ label: `${label(h.hr)} – ${label((h.hr + 1) % 24)}`, short: h.hr % 3 === 0 ? label(h.hr) : '', value: h.total.calls,
-          tip: <p className="text-slate-600">{h.total.conn} conversations ({pct(h.total.conn, h.total.calls)}%)</p> }))} />
+        <p className="mb-6 mt-1 text-sm text-slate-500">Most conversations: <b>{hourSlot(busiest.hr)}</b>{best ? <> · Best answer rate: <b>{hourSlot(best.hr)}</b> ({pct(best.total.conn, best.total.calls)}%)</> : null} · click a bar or number to see the calls</p>
+        <Bars height={200} onClick={i => onDrill({ hour: hours[i], label: 'All calls' })} data={hours.map(h => { const b = by.get(h) ?? zero; return { label: hourSlot(h), short: h % 3 === 0 ? label(h) : '', value: b.calls,
+          tip: <p className="text-slate-600">{b.conn} conversations ({pct(b.conn, b.calls)}%)</p> } })} />
       </Card>
       <Card className="overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-slate-50"><tr>{['Hour', T.calls, T.conversations, T.talk, T.dialled, T.received, T.missed, T.noAnswer].map(h => <th key={h} className="th">{h}</th>)}</tr></thead>
           <tbody className="divide-y divide-slate-100">
-            {r.byHour.filter(h => h.total.calls > 0).map(h => (
-              <tr key={h.hr}><td className="px-3 py-2 font-medium">{label(h.hr)}</td><td className="px-3 py-2">{h.total.calls}</td><td className="px-3 py-2">{h.total.conn} <span className="text-xs text-slate-500">{pct(h.total.conn, h.total.calls)}%</span></td>
-                <td className="px-3 py-2">{dur(h.total.conn_dur)}</td><td className="px-3 py-2">{h.total.out}</td><td className="px-3 py-2">{h.total.inc}</td><td className="px-3 py-2">{h.total.missed}</td><td className="px-3 py-2">{h.total.not_picked}</td></tr>
-            ))}
+            {hours.map(h => { const b = by.get(h) ?? zero; const top = best?.hr === h || (!best && busiest.hr === h)
+              return <tr key={h} className={top ? 'bg-emerald-50' : b.calls ? '' : 'text-slate-300'}>
+                <td className="whitespace-nowrap px-3 py-2 font-medium">{hourSlot(h)}{top && <span className="ml-2 rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">Best hour</span>}</td>{cells(b, h)}</tr> })}
+            <tr className="bg-slate-50 font-semibold"><td className="px-3 py-2">Total</td>{cells(t)}</tr>
           </tbody>
         </table>
       </Card>

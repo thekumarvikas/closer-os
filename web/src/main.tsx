@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { SessionProvider } from './lib/session'
 import App from './App'
+import { DialogHost } from './lib/dialogs'
 import Legal, { LEGAL_PATHS } from './pages/Legal'
 import './index.css'
 
@@ -12,6 +13,7 @@ createRoot(document.getElementById('root')!).render(
     {LEGAL_PATHS.includes(window.location.pathname.replace(/\/+$/, '')) ? <Legal /> : (
       <BrowserRouter>
         <SessionProvider><App /></SessionProvider>
+        <DialogHost />
       </BrowserRouter>
     )}
   </StrictMode>,

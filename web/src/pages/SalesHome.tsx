@@ -14,6 +14,7 @@ import { PlayButton, RecordingPlayer } from '../components/CallLog'
 import { LeadListModal } from '../components/Round9Reports'
 import LeadDrawer from './LeadDrawer'
 import { SaleModal, AddSale, type Sale } from './Sales'
+import { ask } from '../lib/dialogs'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type J = Record<string, any>
@@ -180,7 +181,7 @@ function Overview({ d, t, dir, drill, fromTs, toTs, onRemoved }: { d: J; t: J; d
         <ul className="mt-2 space-y-1">{removed.slice(0, 20).map(r => (
           <li key={r.id} className="flex flex-wrap items-center gap-2"><span className="min-w-0 flex-1 truncate">{r.name || 'Buyer'} · {r.product || 'Sale'} · {fmtMoney(r.amount, org)} · paid {fmtDate(r.paid_at, org)}</span>
             <Button variant="secondary" className="!py-1" onClick={async () => { await supabase.rpc('update_sale_payment', { p_id: r.id, p: { keep: true } }); onRemoved() }}>Keep</Button>
-            <Button variant="ghost" className="!py-1 text-red-600" onClick={async () => { if (confirm('Delete this payment?')) { await supabase.rpc('delete_sale_payment', { p_id: r.id }); onRemoved() } }}>Delete</Button></li>))}</ul>
+            <Button variant="ghost" className="!py-1 text-red-600" onClick={async () => { if (await ask('Delete this payment?')) { await supabase.rpc('delete_sale_payment', { p_id: r.id }); onRemoved() } }}>Delete</Button></li>))}</ul>
       </Card>}
 
       <div className="grid gap-4 lg:grid-cols-2">

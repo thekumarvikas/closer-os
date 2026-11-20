@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import { Button, ErrorBox, Field } from '../components/ui'
+import { toast } from '../lib/dialogs'
 
 const KEY = 'closeros.recovery'
 
@@ -35,7 +36,7 @@ export default function SetPassword({ email, onDone }: { email?: string; onDone:
     const { error } = await supabase.auth.updateUser({ password: pw })
     setBusy(false)
     if (error) return setError(error.message)
-    alert('Password changed. Use it next time you sign in — on the website and in the app.')
+    toast('Password changed. Use it next time you sign in — on the website and in the app.')
     onDone()
   }
 

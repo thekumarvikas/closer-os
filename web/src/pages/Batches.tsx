@@ -9,6 +9,7 @@ import { useDirectory, type Directory } from '../lib/directory'
 import { fmtDateTime } from '../lib/format'
 import type { Batch } from '../lib/types'
 import { Badge, Button, Card, Empty, ErrorBox, Field, Modal, PageHeader, Spinner } from '../components/ui'
+import { ask } from '../lib/dialogs'
 
 interface Row extends Batch { leads: number; attended: number }
 
@@ -47,7 +48,7 @@ export default function Batches() {
   useEffect(() => { setRows(null); setCards(null); load() }, [org.id, archived]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function del(c: CardRow) {
-    if (!confirm(`Delete "${c.name}"?\n\nThe ${c.registered} leads stay in Leads (with their calls and notes) — they just won't be in this webinar any more.`)) return
+    if (!await ask(`Delete "${c.name}"?\n\nThe ${c.registered} leads stay in Leads (with their calls and notes) — they just won't be in this webinar any more.`)) return
     const { error } = await supabase.rpc('delete_batch', { p_batch: c.id })
     if (error) return setError(errorText(error))
     load()

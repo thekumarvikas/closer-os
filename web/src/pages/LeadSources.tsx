@@ -8,6 +8,7 @@ import type { Batch } from '../lib/types'
 import { Badge, Button, Card, Empty, ErrorBox, Field, Modal, PageHeader, Spinner } from '../components/ui'
 import { useLeadFields } from '../lib/leadFields'
 import { SourceCounts, SheetHealth, SheetGuide, ColumnMatch, AssignByColumn, type SourceStats } from '../components/SourceSheets'
+import { ask } from '../lib/dialogs'
 
 type Kind = 'facebook' | 'google_ads' | 'flexifunnels' | 'pabbly' | 'zapier' | 'webhook' | 'google_sheets' | 'indiamart'
 interface Source {
@@ -342,7 +343,7 @@ function SourceDrawer({ s, dir, batches, onClose, onChanged }: { s: Source; dir:
               <Button variant="secondary" onClick={() => setEdit(true)}>Edit settings</Button>
               <Button variant="ghost" onClick={() => update({ is_active: !s.is_active })}>{s.is_active ? <><Pause className="h-4 w-4" /> Pause</> : <><Play className="h-4 w-4" /> Resume</>}</Button>
               <Button variant="ghost" className="text-red-600" onClick={async () => {
-                if (!confirm(`Delete "${s.name}"? Its link stops working. Leads already received stay.`)) return
+                if (!await ask(`Delete "${s.name}"? Its link stops working. Leads already received stay.`)) return
                 await supabase.from('lead_sources').delete().eq('id', s.id); onChanged(); onClose()
               }}><Trash2 className="h-4 w-4" /> Delete</Button>
             </div>

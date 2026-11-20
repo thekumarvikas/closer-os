@@ -8,6 +8,7 @@ import { fmtDate, roleLabel } from '../lib/format'
 import type { Invitation, Role } from '../lib/types'
 import { Badge, Button, Card, Empty, ErrorBox, Field, Modal, PageHeader, Spinner } from '../components/ui'
 import TeamCheckins from '../components/TeamCheckins'
+import { ask } from '../lib/dialogs'
 
 export default function Team() {
   const { org, isAdmin, role: myRole, session } = useOrg()
@@ -135,7 +136,7 @@ export default function Team() {
                 <div className="mb-3 flex items-center justify-between">
                   <h3 className="font-semibold">{t.name}</h3>
                   {isAdmin && <button className="text-slate-400 hover:text-red-600" aria-label="Delete team"
-                    onClick={() => confirm(`Delete team "${t.name}"?`) && run(supabase.from('teams').delete().eq('id', t.id))}><Trash2 className="h-4 w-4" /></button>}
+                    onClick={() => ask(`Delete team "${t.name}"?`).then(ok => { if (ok) void run(supabase.from('teams').delete().eq('id', t.id)) })}><Trash2 className="h-4 w-4" /></button>}
                 </div>
                 <ul className="space-y-1.5 text-sm">
                   {tm.length === 0 && <li className="text-slate-500">No members yet.</li>}

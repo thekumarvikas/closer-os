@@ -18,6 +18,7 @@ import { SortTh, type SortDir } from '../lib/sort'
 import { dur } from '../components/terms'
 import { useFilters, FilterActions, FilterChips, applyOnEnter } from '../lib/filters'
 import { useLeadFields, fieldLabel } from '../lib/leadFields'
+import { ask, toast } from '../lib/dialogs'
 
 const PAGE = 50
 
@@ -171,7 +172,10 @@ export default function Leads() {
     const ids = await targetIds()
     const { data, error } = await supabase.rpc('bulk_update_leads', { p_org: org.id, p_ids: ids, p })
     if (error) return setError(errorText(error))
-    setError(null); alert(`${data} lead${data === 1 ? '' : 's'} updated`); refresh()
+    setError(null); const n = `${data} lead${data === 1 ? '' : 's'}`
+    toast(p.assigned_to !== undefined ? `${n} assigned to ${p.assigned_to ? dir?.nameOf(p.assigned_to as string) : 'nobody'}`
+      : p.stage_id ? `${n} moved to ${dir?.stageOf(p.stage_id as string)?.name ?? 'the stage'}` : p.add_tag ? `Tag "${p.add_tag}" added to ${n}`
+      : p.remove_tag ? `Tag "${p.remove_tag}" removed from ${n}` : p.delete ? `${n} deleted` : p.do_not_call !== undefined ? `${n} marked ${p.do_not_call ? 'Do not call' : 'callable'}` : `${n} updated`); refresh()
   }
   const allOnPage = !!leads?.length && leads.every(l => selected.has(l.id))
   const nSel = allMatching ? count : selected.size
@@ -293,7 +297,7 @@ export default function Leads() {
             )}
             <Button variant="secondary" className="!py-1" onClick={() => { const t = prompt('Tag to add (e.g. VIP, Hindi, Batch 12)')?.trim(); if (t) bulk({ add_tag: t }) }}>+ Tag</Button>
             <Button variant="secondary" className="!py-1" onClick={() => bulk({ do_not_call: true })}>Do not call</Button>
-            <Button variant="ghost" className="!py-1 text-red-600" onClick={() => confirm(`Delete ${nSel} leads? Their calls stay in reports.`) && bulk({ delete: true })}>Delete</Button>
+            <Button variant="ghost" className="!py-1 text-red-600" onClick={() => ask(`Delete ${nSel} leads? Their calls stay in reports.`).then(ok => { if (ok) void bulk({ delete: true }) })}>Delete</Button>
             <button className="text-slate-500 hover:underline" onClick={() => { setSelected(new Set()); setAllMatching(false) }}>Clear</button>
           </div>
         )}

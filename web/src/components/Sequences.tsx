@@ -4,6 +4,7 @@ import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
 import { Button, Card, ErrorBox, Modal, Spinner, Stat } from './ui'
 import { MessageBox } from './FillIns'
+import { ask } from '../lib/dialogs'
 
 /**
  * WhatsApp sequences: messages sent to a lead over days (Day 0, Day 2, Day 5…) or around an event.
@@ -63,7 +64,7 @@ export function CompanySequences() {
   }, [org.id, version])
   const label = (id: string) => outcomes.find(o => o.id === id)?.label
   async function remove(s: Seq) {
-    if (!confirm(`Delete "${s.name}"? Leads on it stop getting its messages.`)) return
+    if (!await ask(`Delete "${s.name}"? Leads on it stop getting its messages.`)) return
     const { error } = await supabase.rpc('archive_sequence', { p_id: s.id }); setError(error ? errorText(error) : null); setVersion(v => v + 1)
   }
   const company = (rows ?? []).filter(s => s.company), personal = (rows ?? []).filter(s => !s.company)

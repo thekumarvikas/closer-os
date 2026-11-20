@@ -11,6 +11,7 @@ import { Button, Card, Empty, ErrorBox, PageHeader, Spinner } from '../component
 import { PlayButton, RecordingPlayer, signedRecording } from '../components/CallLog'
 import { Journey } from './SalesHome'
 import LeadDrawer from './LeadDrawer'
+import { ask } from '../lib/dialogs'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type J = Record<string, any>
@@ -55,7 +56,7 @@ export default function Training() {
   /** One sale's recordings — or every recording in the list — as a single .zip file. */
   async function downloadZip(list: J[], name: string) {
     const calls = list.flatMap(r => (r.calls as J[]).map(c => [r, c] as const))
-    if (calls.length > 150 && !confirm(`${calls.length} recordings — this can take a few minutes and a lot of data. Continue?`)) return
+    if (calls.length > 150 && !await ask(`${calls.length} recordings — this can take a few minutes and a lot of data. Continue?`)) return
     const files: { name: string; data: Uint8Array }[] = []; const seen = new Set<string>()
     for (let i = 0; i < calls.length; i++) {
       setBusy(`Getting recording ${i + 1} of ${calls.length}…`)

@@ -6,6 +6,7 @@ import type { Directory } from '../lib/directory'
 import { fmtDate, fmtDateTime, fmtMoney, fmtPhone, fmtDuration } from '../lib/format'
 import { Badge, Button, Card, ErrorBox, Field, Modal, Spinner } from '../components/ui'
 import { PlayButton, RecordingPlayer } from '../components/CallLog'
+import { ask } from '../lib/dialogs'
 
 export interface Sale {
   id: string; org_id: string; lead_id: string | null; product: string | null; product_id: string | null; amount: number; sold_at: string
@@ -41,7 +42,7 @@ export function SaleModal({ id, dir, onClose, onChanged, onOpenLead }: { id: str
   if (!f) return <Modal open onClose={onClose} title="Sale"><ErrorBox error={error} /><Spinner /></Modal>
   const s = f.sale as Sale; const l = f.lead as Record<string, any> | null
   async function review(approve: boolean) {
-    if (!approve && !note.trim() && !confirm('Reject without a reason? The rep will see the reason if you write one.')) return
+    if (!approve && !note.trim() && !await ask('Reject without a reason? The rep will see the reason if you write one.')) return
     setBusy(true)
     const { error } = await supabase.rpc('review_sale', { p_sale: id, p_approve: approve, p: { credited_to: credit || null, amount: amount || null, note } })
     setBusy(false); if (error) return setError(errorText(error)); onChanged(); load()
@@ -58,11 +59,11 @@ export function SaleModal({ id, dir, onClose, onChanged, onOpenLead }: { id: str
     setBusy(false); if (error) return setError(errorText(error)); setEdit(null); onChanged(); load()
   }
   async function delSale() {
-    if (!confirm('Delete this sale and its payments? This cannot be undone. (If it came from your Google Sheet, also remove its row there.)')) return
+    if (!await ask('Delete this sale and its payments? This cannot be undone. (If it came from your Google Sheet, also remove its row there.)')) return
     const { error } = await supabase.rpc('delete_sale', { p_sale: id }); if (error) return setError(errorText(error)); onChanged(); onClose()
   }
   async function delPay(pid: string) {
-    if (!confirm('Remove this payment?')) return
+    if (!await ask('Remove this payment?')) return
     const { error } = await supabase.rpc('delete_sale_payment', { p_id: pid }); if (error) return setError(errorText(error)); onChanged(); load()
   }
   return (

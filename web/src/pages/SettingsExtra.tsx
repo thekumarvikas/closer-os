@@ -8,6 +8,7 @@ import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
 import type { ProfessionCategory } from '../lib/types'
 import { Button, Card, ErrorBox, Field, Modal } from '../components/ui'
+import { ask } from '../lib/dialogs'
 
 /** Profession groups: free-text professions are sorted into these by keyword. */
 export function ProfessionCategories() {
@@ -34,7 +35,7 @@ export function ProfessionCategories() {
             <input className="input font-medium" defaultValue={c.name} onBlur={e => e.target.value.trim() && e.target.value !== c.name && run(supabase.from('profession_categories').update({ name: e.target.value.trim() }).eq('id', c.id))} />
             <textarea className="input min-h-[38px] text-xs" rows={2} defaultValue={c.keywords.join(', ')}
               onBlur={e => { const k = e.target.value.split(',').map(x => x.trim().toLowerCase()).filter(Boolean); if (k.join(',') !== c.keywords.join(',')) run(supabase.from('profession_categories').update({ keywords: k }).eq('id', c.id)) }} />
-            <button className="mt-2 text-slate-400 hover:text-red-600" aria-label={`Delete ${c.name}`} onClick={() => confirm(`Delete group "${c.name}"?`) && run(supabase.from('profession_categories').delete().eq('id', c.id))}><Trash2 className="h-4 w-4" /></button>
+            <button className="mt-2 text-slate-400 hover:text-red-600" aria-label={`Delete ${c.name}`} onClick={() => ask(`Delete group "${c.name}"?`).then(ok => { if (ok) void run(supabase.from('profession_categories').delete().eq('id', c.id)) })}><Trash2 className="h-4 w-4" /></button>
           </div>
         ))}
       </div>
@@ -189,7 +190,7 @@ export function WhatsAppTemplates() {
             <div className="mb-2 flex items-center gap-2">
               <input className="input !py-1.5 font-medium" defaultValue={t.name} onBlur={e => e.target.value.trim() && e.target.value !== t.name && run(supabase.from('message_templates').update({ name: e.target.value.trim() }).eq('id', t.id))} />
               <button className="whitespace-nowrap text-xs text-brand-700 hover:underline" onClick={() => run(supabase.from('message_templates').update({ is_active: !t.is_active }).eq('id', t.id))}>{t.is_active ? 'Hide' : 'Show'}</button>
-              <button className="text-slate-400 hover:text-red-600" aria-label="Delete" onClick={() => confirm(`Delete "${t.name}"?`) && run(supabase.from('message_templates').delete().eq('id', t.id))}><Trash2 className="h-4 w-4" /></button>
+              <button className="text-slate-400 hover:text-red-600" aria-label="Delete" onClick={() => ask(`Delete "${t.name}"?`).then(ok => { if (ok) void run(supabase.from('message_templates').delete().eq('id', t.id)) })}><Trash2 className="h-4 w-4" /></button>
             </div>
             <TemplateBody body={t.body} onSave={v => v !== t.body && run(supabase.from('message_templates').update({ body: v }).eq('id', t.id))} />
             <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
@@ -249,7 +250,7 @@ export function CompanyFiles() {
     setBusy(false); setVersion(v => v + 1)
   }
   async function remove(f: CompanyFile) {
-    if (!confirm(`Delete "${f.name}"? Reps won't be able to send it any more.`)) return
+    if (!await ask(`Delete "${f.name}"? Reps won't be able to send it any more.`)) return
     await supabase.storage.from('template-media').remove([f.path])
     const { error } = await supabase.from('company_files').delete().eq('id', f.id)
     setError(error ? errorText(error) : null); setVersion(v => v + 1)

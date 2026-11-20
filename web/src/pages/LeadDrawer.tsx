@@ -14,6 +14,7 @@ import type { Directory } from '../lib/directory'
 import { fmtDateTime, fmtDuration, fmtPhone, fmtMoney } from '../lib/format'
 import type { Call, FollowUp, Lead, ProfessionCategory } from '../lib/types'
 import { Badge, Button, ErrorBox, Spinner } from '../components/ui'
+import { ask } from '../lib/dialogs'
 
 interface Activity { id: string; kind: string; data: Record<string, unknown>; created_at: string; user_id: string | null }
 
@@ -239,7 +240,7 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
               </section>
               {isManager && (
                 <Button variant="ghost" className="text-red-600" onClick={async () => {
-                  if (!confirm('Remove this lead? It will be hidden from everyone.')) return
+                  if (!await ask('Remove this lead? It will be hidden from everyone.')) return
                   await update({ deleted_at: new Date().toISOString() } as Partial<Lead>); onClose()
                 }}>Remove lead</Button>
               )}

@@ -6,6 +6,7 @@ import { useDirectory } from '../lib/directory'
 import { Button, Card, ErrorBox } from '../components/ui'
 import { DEFAULT_INTENTS, intentLevels, type IntentLevel } from '../lib/intents'
 import { DEFAULT_LOST_REASONS, lostReasons } from '../lib/lostReasons'
+import { ask } from '../lib/dialogs'
 
 const NEXT = [['', 'Rep chooses'], ['30m', 'In 30 min'], ['1h', 'In 1 hour'], ['2h', 'In 2 hours'], ['3h', 'In 3 hours'], ['today', 'Today (pick time)'],
   ['tomorrow', 'Tomorrow 11 AM'], ['2d', 'Day after 11 AM'], ['30d', 'In 30 days'], ['pick', 'Must pick a time'], ['none', 'No follow-up']] as const
@@ -143,7 +144,7 @@ export function TagGroups() {
               <input className="input !py-1.5 font-medium" defaultValue={g.name} onBlur={e => e.target.value.trim() && e.target.value !== g.name && update(groups.map((x, i) => i === gi ? { ...x, name: e.target.value.trim() } : x))} />
               <div className="flex gap-1">{COLORS.map(c => <button key={c} onClick={() => update(groups.map((x, i) => i === gi ? { ...x, color: c } : x))}
                 className={`h-5 w-5 rounded-full ${g.color === c ? 'ring-2 ring-offset-1 ring-slate-400' : ''}`} style={{ background: c }} aria-label="Colour" />)}</div>
-              <button className="text-slate-400 hover:text-red-600" onClick={() => confirm(`Delete the group "${g.name}"?`) && update(groups.filter((_, i) => i !== gi))}><Trash2 className="h-4 w-4" /></button>
+              <button className="text-slate-400 hover:text-red-600" onClick={() => ask(`Delete the group "${g.name}"?`).then(ok => { if (ok) void update(groups.filter((_, i) => i !== gi)) })}><Trash2 className="h-4 w-4" /></button>
             </div>
             <KindPicker value={g.show_for ?? []} onChange={v => update(groups.map((x, i) => i === gi ? { ...x, show_for: v } : x))} />
             <div className="mb-2 flex flex-wrap gap-1.5">{g.tags.map(t => (

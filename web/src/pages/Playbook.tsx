@@ -6,6 +6,7 @@ import { useOrg } from '../lib/session'
 import { useDirectory } from '../lib/directory'
 import { fmtDateTime } from '../lib/format'
 import { Badge, Button, Card, Empty, ErrorBox, Field, Modal, PageHeader, Spinner } from '../components/ui'
+import { ask } from '../lib/dialogs'
 
 type Kind = 'script' | 'objection' | 'answer' | 'link' | 'doc'
 interface Item {
@@ -105,7 +106,7 @@ export default function Playbook() {
                         {i.status === 'rejected' && <Badge color="red">Not approved</Badge>}
                         {(isManager || (i.created_by === session?.user.id && i.status !== 'published')) && <>
                           <button className="p-1 text-slate-400 hover:text-slate-700" onClick={() => setEdit(i)} aria-label="Edit"><Pencil className="h-4 w-4" /></button>
-                          <button className="p-1 text-slate-400 hover:text-red-600" onClick={() => confirm('Delete this?') && run(supabase.from('playbook_items').delete().eq('id', i.id))} aria-label="Delete"><Trash2 className="h-4 w-4" /></button>
+                          <button className="p-1 text-slate-400 hover:text-red-600" onClick={() => ask('Delete this?').then(ok => { if (ok) void run(supabase.from('playbook_items').delete().eq('id', i.id)) })} aria-label="Delete"><Trash2 className="h-4 w-4" /></button>
                         </>}
                       </div>
                     </div>
@@ -116,7 +117,7 @@ export default function Playbook() {
                       <div key={a.id} className="mt-2 rounded-md bg-slate-50 p-2 text-sm">
                         <div className="flex items-start justify-between gap-2">
                           <p className="whitespace-pre-wrap text-slate-700">{a.body}</p>
-                          {(isManager || a.created_by === session?.user.id) && <button className="p-1 text-slate-400 hover:text-red-600" onClick={() => confirm('Delete this answer?') && run(supabase.from('playbook_items').delete().eq('id', a.id))} aria-label="Delete"><Trash2 className="h-3.5 w-3.5" /></button>}
+                          {(isManager || a.created_by === session?.user.id) && <button className="p-1 text-slate-400 hover:text-red-600" onClick={() => ask('Delete this answer?').then(ok => { if (ok) void run(supabase.from('playbook_items').delete().eq('id', a.id)) })} aria-label="Delete"><Trash2 className="h-3.5 w-3.5" /></button>}
                         </div>
                         <p className="text-xs text-slate-500">{[dir.nameOf(a.created_by), answerStat(i, a.id)].filter(Boolean).join(' · ')}</p>
                       </div>))}

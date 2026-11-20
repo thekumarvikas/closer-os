@@ -141,9 +141,11 @@ export default function TeamTable({ dir, version, onChanged, onRemove }: {
                     ) : m.call_team && <p className="text-xs text-slate-500">{m.call_team === 'reminder' ? 'Reminder team' : 'Sales team'}</p>}
                   </td>
                   <td className="px-3 py-2.5">
-                    {ws.length ? ws.map(s => <p key={s.id}>{s.label ?? 'SIM'} · {fmtPhone(s.sim_number)}
-                      {isAdmin && <button className="ml-1 text-xs text-slate-400 hover:text-red-600" title="Stop tracking this SIM"
-                        onClick={() => ask('Stop tracking this SIM? It frees one subscription.').then(ok => { if (ok) void run(supabase.rpc('remove_work_sim', { p_id: s.id })) })}>×</button>}</p>)
+                    {ws.length ? ws.map(s => <div key={s.id} className="mb-1">
+                      <p>{s.label ?? 'SIM'} · {fmtPhone(s.sim_number)}</p>
+                      {isAdmin && <button className="mt-0.5 rounded border border-red-200 px-2 py-0.5 text-xs font-medium text-red-600 hover:bg-red-50"
+                        onClick={() => ask(`Stop tracking ${dir.nameOf(m.user_id)}'s ${s.label ?? 'SIM'}? Their calls on it will no longer be tracked, and one subscription becomes free.`, { ok: 'Stop tracking' })
+                          .then(ok => { if (ok) void run(supabase.rpc('remove_work_sim', { p_id: s.id })) })}>Stop tracking</button>}</div>)
                       : <p className="text-slate-400" title="Until the rep picks their work SIM in the app, calls on both SIMs are tracked">Not chosen yet</p>}
                   </td>
                   <td className="px-3 py-2.5">

@@ -2053,3 +2053,8 @@ intelligence → Play Store launch.
 - Recordings: Nikhil (Lava LZG414, com.android.dialer, folder set) had 0 files. App 0.27.4: files with no "last modified"
   use the name's time, audio by mime too, and a daily "no files · folder: … · files in it: N · types" info row in
   app_errors (place "recordings"). Team page shows the plain reason under each phone without uploads.
+- Sheet script v3 (Nov 20): Cancer's sheet stopped adding leads at 2:46 PM though the script checked in every minute —
+  new rows were appearing ABOVE the bookmark (sheet sorted newest first / IMPORTRANGE), and v2 only read rows after it.
+  v3 remembers sent rows by a 10-char fingerprint in document properties (chunks of 700, closerOsSeen0..N) and sends
+  any row not seen, wherever it is. Health shows "older version" warning; the client must paste v3 once. Test passes
+  (row added at the top picked up, 1,042-row minute check ≈ 2 s).

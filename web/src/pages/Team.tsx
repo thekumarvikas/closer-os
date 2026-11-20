@@ -296,7 +296,7 @@ function PhoneStatus({ orgId, nameOf, version }: { orgId: string; nameOf: (id: s
       <Card className="mb-6 overflow-x-auto">
         {rows.length === 0 ? <div className="p-4 text-sm text-slate-500">No phone has reported yet. Install app 0.4.1 or newer and open it once.</div> : (
           <table className="min-w-full table-fixed divide-y divide-slate-100 text-sm">
-            <thead className="bg-slate-50"><tr><th className="th w-[16%]">Team member</th><th className="th w-[18%]">Phone</th><th className="th">Phone setup</th><th className="th">Recordings</th><th className="th w-36">Last synced</th></tr></thead>
+            <thead className="bg-slate-50"><tr><th className="th w-[16%]">Team member</th><th className="th w-[16%]">Phone</th><th className="th w-[18%]">Phone setup</th><th className="th">Recordings</th><th className="th w-36">Last synced</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
               {rows.map(d => {
                 const [text, c] = status(d)
@@ -310,9 +310,9 @@ function PhoneStatus({ orgId, nameOf, version }: { orgId: string; nameOf: (id: s
                       return missing.length === 0 ? <span className="text-emerald-700">All done ✓</span>
                         : <><div className="text-amber-700">{missing.length} not done</div><div className="text-xs text-slate-500">{missing.join(', ')}</div></>
                     })()}</td>
-                    <td className="td"><div className={color[c]}>{text}</div>
+                    <td className="td !whitespace-normal break-words"><div className={color[c]}>{text}</div>
                       {d.rec_folder_set && <div className="text-xs text-slate-500">Last check: {d.rec_files_found ?? 0} files, {d.rec_matched ?? 0} of {d.rec_calls_checked ?? 0} answered calls matched</div>}
-                      {!(d.rec_uploaded_total ?? 0) && <div className="mt-1 max-w-sm text-xs text-slate-600">{missingReason(d as unknown as RecDevice).replace(/^No recording( uploaded)?:\s*/, '')}</div>}</td>
+                      {!(d.rec_uploaded_total ?? 0) && <div className="mt-1 text-xs text-slate-600">{missingReason(d as unknown as RecDevice).replace(/^No recording( uploaded)?:\s*/, '')}</div>}</td>
                     <td className={`td ${staleMin(d) > 60 ? 'font-medium text-red-700' : 'text-slate-500'}`}>{ago(d.updated_at)}
                       <button className="mt-1 block text-xs font-medium text-brand-700 hover:underline disabled:text-slate-400" disabled={!!syncing[d.user_id] || !!syncing.all}
                         onClick={() => syncNow(d.user_id)}>{syncing[d.user_id] || syncing.all ? 'Syncing…' : '⟳ Sync now'}</button></td>

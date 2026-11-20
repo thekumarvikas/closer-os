@@ -2058,3 +2058,10 @@ intelligence → Play Store launch.
   v3 remembers sent rows by a 10-char fingerprint in document properties (chunks of 700, closerOsSeen0..N) and sends
   any row not seen, wherever it is. Health shows "older version" warning; the client must paste v3 once. Test passes
   (row added at the top picked up, 1,042-row minute check ≈ 2 s).
+- Nov 20: log_call no longer refuses a call tagged with a deleted / archived webinar (0105: batch → null, t_call_webinar picks
+  the right one). Nikhil's outbox had 99 "Unknown webinar batch" refusals after the Jan/May merge.
+- 0106–0107 leads_select rewritten: per-row security functions cost ~0.7 ms/row → reps' LeadIndex download timed out
+  (Amee Shah 3.5 s for 0 rows, "statement timeout"). Now my_member_orgs / my_admin_orgs / my_manager_orgs / my_seen_users
+  are computed once per query ((select f())::uuid[] — the cast is needed so ANY sees an array, not a subquery) +
+  lead_reminder_in(id, users). 31 ms. Verified identical visible-lead counts for 25 random members (old vs new rule).
+  Use the same InitPlan pattern if other tables' rules get slow.

@@ -1,3 +1,4 @@
+import TeamCheckins from '../components/TeamCheckins'
 import { SequenceReport } from '../components/Sequences'
 import TeamPerformance from '../components/TeamPerformance'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -19,8 +20,8 @@ import { LeadWork, WhatWorks, Insights } from '../components/Round9Reports'
 import ResponseTime from '../components/ResponseTime'
 import Compare from '../components/Compare'
 
-type Tab = 'perf' | 'compare' | 'overview' | 'outcomes' | 'targets' | 'team' | 'daily' | 'hourly' | 'followups' | 'log' | 'leadwork' | 'sales' | 'response' | 'sequences'
-const tabs: [Tab, string][] = [['overview', 'Overview'], ['perf', 'Team performance'], ['compare', 'Compare periods'], ['outcomes', 'Outcomes'], ['targets', 'Targets'], ['team', 'Team'], ['daily', 'Daily'], ['hourly', 'By hour'], ['followups', 'Follow-ups'], ['response', 'Response time'], ['leadwork', 'Lead work'], ['sales', 'Sales insights'], ['sequences', 'WhatsApp sequences'], ['log', 'Call log']]
+type Tab = 'perf' | 'compare' | 'overview' | 'outcomes' | 'targets' | 'team' | 'daily' | 'hourly' | 'followups' | 'log' | 'checkins' | 'leadwork' | 'sales' | 'response' | 'sequences'
+const tabs: [Tab, string][] = [['overview', 'Overview'], ['perf', 'Team performance'], ['compare', 'Compare periods'], ['outcomes', 'Outcomes'], ['targets', 'Targets'], ['team', 'Team'], ['daily', 'Daily'], ['hourly', 'By hour'], ['followups', 'Follow-ups'], ['checkins', 'Hourly check-ins'], ['response', 'Response time'], ['leadwork', 'Lead work'], ['sales', 'Sales insights'], ['sequences', 'WhatsApp sequences'], ['log', 'Call log']]
 interface Filters { from: string; to: string; users: string[]; dir: Dir; ch: Channel }
 
 type Kind = '' | 'conn' | 'not_picked' | 'missed' | 'rejected' | 'out' | 'in'
@@ -116,6 +117,7 @@ export default function Reports() {
           <section><h2 className="mb-1 text-lg font-semibold">1 · Who buys — and how much revenue each kind of lead brings</h2><Insights from={applied.from} to={applied.to} /></section>
           <section><h2 className="mb-1 text-lg font-semibold">2 · What it takes to close a sale — effort and revenue per team member</h2><WhatWorks dir={dir} users={applied.users} from={applied.from} to={applied.to} /></section>
         </div> :
+        tab === 'checkins' ? <TeamCheckins /> :
         tab === 'sequences' ? <SequenceReport from={applied.from} to={applied.to} /> :
         tab === 'perf' ? (dir ? <TeamPerformance dir={dir} from={range.from} to={range.to} users={applied.users} /> : <Spinner />) :
         tab === 'response' ? <ResponseTime dir={dir} from={applied.from} to={applied.to} /> :

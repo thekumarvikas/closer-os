@@ -1,5 +1,3 @@
-import { missingReason, type RecDevice } from '../components/CallColors'
-import WorkSims from '../components/WorkSims'
 import { useEffect, useState, type FormEvent } from 'react'
 import { UserPlus, Users, Copy, Trash2, Plus } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
@@ -8,11 +6,11 @@ import { useDirectory, type Directory } from '../lib/directory'
 import { fmtDate, roleLabel } from '../lib/format'
 import type { Invitation, Role } from '../lib/types'
 import { Badge, Button, Card, Empty, ErrorBox, Field, Modal, PageHeader, Spinner } from '../components/ui'
-import TeamCheckins from '../components/TeamCheckins'
-import { ask, toast } from '../lib/dialogs'
+import TeamTable from '../components/TeamTable'
+import { ask } from '../lib/dialogs'
 
 export default function Team() {
-  const { org, isAdmin, role: myRole, session } = useOrg()
+  const { org, isAdmin, role: myRole } = useOrg()
   const [version, setVersion] = useState(0)
   const dir = useDirectory(org.id, version)
   const [invites, setInvites] = useState<Invitation[]>([])
@@ -42,65 +40,9 @@ export default function Team() {
       <PageHeader title="Team" subtitle={`${dir.members.filter(m => m.status === 'active').length} active people`}
         actions={isAdmin && <Button onClick={() => setShowInvite(true)}><UserPlus className="h-4 w-4" /> Invite people</Button>} />
       <ErrorBox error={error} />
-      <TeamCheckins />
-      <WorkSims dir={dir} />
-
-      <Card className="mb-6 overflow-x-auto">
-        <table className="min-w-full divide-y divide-slate-100">
-          <thead className="bg-slate-50"><tr><th className="th">Name</th><th className="th">Phone</th><th className="th">Email</th><th className="th">Role</th><th className="th" title="Only matters if you work with a separate reminder team and sales team">Calling team</th><th className="th">Teams</th><th className="th">Joined</th><th className="th">Status</th></tr></thead>
-          <tbody className="divide-y divide-slate-100">
-            {dir.members.map(m => {
-              const me = m.user_id === session?.user.id
-              return (
-                <tr key={m.user_id} className={m.status === 'deactivated' ? 'opacity-60' : ''}>
-                  <td className="td font-medium">{m.profile?.full_name || '—'} {me && <Badge color="brand">You</Badge>}</td>
-                  <td className="td">
-                    {isAdmin || me ? (
-                      <input className="input !w-40 !py-1" placeholder="Add phone" defaultValue={dir.phoneOf(m.user_id)}
-                        onBlur={e => e.target.value !== dir.phoneOf(m.user_id) && run(supabase.rpc('set_member_phone', { p_org: org.id, p_user: m.user_id, p_phone: e.target.value }))} />
-                    ) : dir.phoneOf(m.user_id) || '—'}
-                  </td>
-                  <td className="td text-slate-600">{m.profile?.email}</td>
-                  <td className="td">
-                    {isAdmin && !me && (m.role !== 'owner' || myRole === 'owner') ? (
-                      <select className="input !w-32 !py-1" value={m.role}
-                        onChange={e => run(supabase.from('org_members').update({ role: e.target.value }).eq('org_id', org.id).eq('user_id', m.user_id))}>
-                        {roles.map(r => <option key={r} value={r}>{roleLabel[r]}</option>)}
-                      </select>
-                    ) : roleLabel[m.role]}
-                  </td>
-                  <td className="td">
-                    {isAdmin ? (
-                      <select className="input !w-36 !py-1" value={m.call_team ?? ''}
-                        onChange={e => run(supabase.from('org_members').update({ call_team: e.target.value || null }).eq('org_id', org.id).eq('user_id', m.user_id))}>
-                        <option value="">Both / not set</option><option value="reminder">Reminder team</option><option value="sales">Sales team</option>
-                      </select>
-                    ) : m.call_team === 'reminder' ? 'Reminder team' : m.call_team === 'sales' ? 'Sales team' : '—'}
-                  </td>
-                  <td className="td text-slate-600">{dir.teamMembers.filter(t => t.user_id === m.user_id).map(t =>
-                    dir.teams.find(x => x.id === t.team_id)?.name + (t.is_manager ? ' (mgr)' : '')).join(', ') || '—'}</td>
-                  <td className="td text-slate-500">{fmtDate(m.joined_at, org)}</td>
-                  <td className="td">
-                    {isAdmin && !me ? (
-                      <button className="text-sm text-brand-700 hover:underline"
-                        onClick={() => run(supabase.from('org_members').update({ status: m.status === 'active' ? 'deactivated' : 'active' }).eq('org_id', org.id).eq('user_id', m.user_id))}>
-                        {m.status === 'active' ? 'Deactivate' : 'Reactivate'}
-                      </button>
-                    ) : null}
-                    {isAdmin && !me && (m.role !== 'owner' || myRole === 'owner') ? (
-                      <button className="ml-3 text-sm text-red-600 hover:underline" onClick={() => setRemoving(m.user_id)}>Delete</button>
-                    ) : null}
-                    {!(isAdmin && !me) && <Badge color={m.status === 'active' ? 'green' : 'gray'}>{m.status}</Badge>}
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </Card>
+      <TeamTable dir={dir} version={version} onChanged={reload} onRemove={setRemoving} />
 
       {removing && <RemoveMember userId={removing} dir={dir} onClose={() => setRemoving(null)} onDone={() => { setRemoving(null); reload() }} />}
-      <PhoneStatus orgId={org.id} nameOf={dir.nameOf} version={version} />
 
       {isAdmin && invites.length > 0 && (
         <>
@@ -228,104 +170,6 @@ function InviteModal({ teams, roles, onClose, onDone }: { teams: { id: string; n
   )
 }
 
-type Device = {
-  device_id: string; user_id: string; model: string | null; android: string | null; app_version: string | null
-  default_dialer: string | null; rec_folder_set: boolean; rec_files_found: number | null; rec_calls_checked: number | null
-  rec_matched: number | null; rec_uploaded_total: number | null; rec_last_error: string | null; rec_checked_at: string | null; updated_at: string
-  setup: Record<string, boolean> | null
-}
-
-const setupNames: Record<string, string> = {
-  calls: 'Calls & call history', notify: 'Notifications', contacts: 'Contacts', alarms: 'On-time reminders', whatsapp: 'WhatsApp calls',
-  battery: 'Background running', autostart: 'Autostart', dialer: 'Phone app', autorecord: 'Auto recording', recfolder: 'Recordings folder',
-}
-
-/** Each rep's phone: app version, phone app in use, and whether call recordings are being uploaded. */
-function PhoneStatus({ orgId, nameOf, version }: { orgId: string; nameOf: (id: string) => string; version: number }) {
-  const [rows, setRows] = useState<Device[] | null>(null)
-  const [tick, setTick] = useState(0)
-  const [syncing, setSyncing] = useState<Record<string, number>>({})   // user (or 'all') → when asked
-  useEffect(() => {
-    supabase.from('device_status').select('*').eq('org_id', orgId).order('updated_at', { ascending: false })
-      .then(({ data }) => setRows((data ?? []) as Device[]))
-  }, [orgId, version, tick])
-  /** Wakes the phone(s) through a push message; they upload calls + recordings and report back here. */
-  async function syncNow(user?: string) {
-    const key = user ?? 'all'
-    setSyncing(x => ({ ...x, [key]: Date.now() }))
-    const { data, error } = await supabase.functions.invoke('push', { body: { org: orgId, users: user ? [user] : null, kind: 'sync' } })
-    const r = data as { ok: boolean; error?: string; sent: number; phones: number } | null
-    if (error || !r?.ok) { setSyncing(x => { const n = { ...x }; delete n[key]; return n }); toast(r?.error ?? errorText(error)); return }
-    if (r.sent === 0) { setSyncing(x => { const n = { ...x }; delete n[key]; return n })
-      toast(user ? `${nameOf(user)}'s phone can't be woken yet — they need app 0.28 or newer, opened once.` : 'No phone can be woken yet — phones need app 0.28 or newer, opened once.'); return }
-    toast(`Asked ${user ? nameOf(user) + "'s phone" : r.sent + ' phone' + (r.sent === 1 ? '' : 's')} to sync — "Last synced" updates within a minute.`)
-    for (const ms of [15000, 35000, 60000]) setTimeout(() => setTick(t => t + 1), ms)
-    setTimeout(() => setSyncing(x => { const n = { ...x }; delete n[key]; return n }), 60000)
-  }
-  if (!rows) return null
-  const ago = (t: string | null) => {
-    if (!t) return 'never'
-    const m = Math.round((Date.now() - new Date(t).getTime()) / 60000)
-    return m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`
-  }
-  const status = (d: Device): [string, 'green' | 'amber' | 'red'] => {
-    if (d.default_dialer === 'com.google.android.dialer') return ["Google's Phone app keeps recordings private — can't upload on this phone", 'red']
-    if (!d.rec_folder_set) return ['Recordings folder not chosen (app → Profile → Call recordings)', 'amber']
-    if (d.rec_last_error) return [d.rec_last_error, 'amber']
-    return [`Working · ${d.rec_uploaded_total ?? 0} uploaded`, 'green']
-  }
-  const color = { green: 'text-emerald-700', amber: 'text-amber-700', red: 'text-red-700' }
-  // A phone syncs every 15 minutes and after each call; over an hour without a report = it is being held back.
-  const staleMin = (d: Device) => Math.round((Date.now() - new Date(d.updated_at).getTime()) / 60000)
-  const latest = new Map<string, Device>()
-  for (const d of rows) if (!latest.has(d.user_id)) latest.set(d.user_id, d)
-  const stale = [...latest.values()].filter(d => staleMin(d) > 60)
-  return (
-    <>
-      <div className="mb-1 flex items-center justify-between gap-2">
-        <h2 className="font-semibold">Phones &amp; call recordings</h2>
-        {rows.length > 0 && <Button variant="secondary" className="!py-1.5" loading={!!syncing.all} onClick={() => syncNow()}>⟳ Sync all phones now</Button>}
-      </div>
-      {stale.length > 0 && (
-        <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-          ⚠ Not synced for over an hour: {stale.map(d => `${nameOf(d.user_id)} (${ago(d.updated_at)})`).join(', ')}.
-          <span className="block text-xs text-amber-700">Usually the phone is off, has no internet, or the phone is stopping Closer OS in the background. Ask them to open the app once and finish Settings → Open phone setup (Battery "No restrictions" + Autostart).</span>
-        </div>
-      )}
-      <p className="mb-2 text-sm text-slate-500">Each phone reports here after it syncs (app 0.4.1 or newer). A phone that isn't listed hasn't updated the app yet. Reps fix anything "not done" in the app: Profile → Open phone setup.</p>
-      <Card className="mb-6 overflow-x-auto">
-        {rows.length === 0 ? <div className="p-4 text-sm text-slate-500">No phone has reported yet. Install app 0.4.1 or newer and open it once.</div> : (
-          <table className="min-w-full table-fixed divide-y divide-slate-100 text-sm">
-            <thead className="bg-slate-50"><tr><th className="th w-[16%]">Team member</th><th className="th w-[16%]">Phone</th><th className="th w-[18%]">Phone setup</th><th className="th">Recordings</th><th className="th w-36">Last synced</th></tr></thead>
-            <tbody className="divide-y divide-slate-100">
-              {rows.map(d => {
-                const [text, c] = status(d)
-                return (
-                  <tr key={d.device_id}>
-                    <td className="td font-medium">{nameOf(d.user_id)}</td>
-                    <td className="td"><div>{d.model || '—'}</div><div className="text-xs text-slate-500">Android {d.android} · app {d.app_version}</div></td>
-                    <td className="td">{(() => {
-                      if (!d.setup) return <span className="text-slate-400">—</span>
-                      const missing = Object.entries(d.setup).filter(([, v]) => !v).map(([k]) => setupNames[k] ?? k)
-                      return missing.length === 0 ? <span className="text-emerald-700">All done ✓</span>
-                        : <><div className="text-amber-700">{missing.length} not done</div><div className="text-xs text-slate-500">{missing.join(', ')}</div></>
-                    })()}</td>
-                    <td className="td !whitespace-normal break-words"><div className={color[c]}>{text}</div>
-                      {d.rec_folder_set && <div className="text-xs text-slate-500">Last check: {d.rec_files_found ?? 0} files, {d.rec_matched ?? 0} of {d.rec_calls_checked ?? 0} answered calls matched</div>}
-                      {!(d.rec_uploaded_total ?? 0) && <div className="mt-1 text-xs text-slate-600">{missingReason(d as unknown as RecDevice).replace(/^No recording( uploaded)?:\s*/, '')}</div>}</td>
-                    <td className={`td ${staleMin(d) > 60 ? 'font-medium text-red-700' : 'text-slate-500'}`}>{ago(d.updated_at)}
-                      <button className="mt-1 block text-xs font-medium text-brand-700 hover:underline disabled:text-slate-400" disabled={!!syncing[d.user_id] || !!syncing.all}
-                        onClick={() => syncNow(d.user_id)}>{syncing[d.user_id] || syncing.all ? 'Syncing…' : '⟳ Sync now'}</button></td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        )}
-      </Card>
-    </>
-  )
-}
 
 /** Permanently removes a person from the company; their leads go to someone else. */
 function RemoveMember({ userId, dir, onClose, onDone }: { userId: string; dir: Directory; onClose: () => void; onDone: () => void }) {

@@ -276,3 +276,48 @@ fun WorkSimCard(vm: AppViewModel) {
             }, confirmButton = {}, dismissButton = { TextButton(onClick = { asking = null }) { Text("Cancel") } })
     }
 }
+
+
+/** Company app: "Select your work SIM" — shown until the rep picks one. Only that SIM's calls are tracked. */
+@Composable
+fun WorkSimPrompt(vm: AppViewModel) {
+    val ctx = LocalContext.current
+    val sims = remember { PhoneCalls.sims(ctx) }
+    if (sims.isEmpty()) return
+    val nums = remember { mutableStateMapOf<Int, String>().apply { sims.forEach { put(it.slot, vm.store.simNumber(it.slot) ?: PhoneCalls.simOwnNumber(ctx, it.slot) ?: "") } } }
+    var pick by remember { mutableStateOf(if (sims.size == 1) sims[0].slot else null as Int?) }
+    var busy by remember { mutableStateOf(false) }
+    AlertDialog(onDismissRequest = {},
+        title = { Text("Select your work SIM") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(if (sims.size > 1) "Only calls on your work SIM are tracked in Closer OS. Calls on your other SIM stay private — never shown or sent."
+                     else "Calls on this SIM are tracked in Closer OS.", fontSize = 13.sp, color = Brand.muted)
+                sims.forEach { s ->
+                    val sel = pick == s.slot
+                    Card(Modifier.fillMaxWidth().clickable { pick = s.slot },
+                        colors = CardDefaults.cardColors(containerColor = if (sel) Color(0xFFE6F4F1) else Color(0xFFF8FAFC)),
+                        border = androidx.compose.foundation.BorderStroke(if (sel) 2.dp else 1.dp, if (sel) Brand.primary else Color(0xFFE2E8F0))) {
+                        Column(Modifier.padding(12.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                RadioButton(selected = sel, onClick = { pick = s.slot })
+                                Text(s.label, fontWeight = FontWeight.SemiBold)
+                            }
+                            OutlinedTextField(nums[s.slot] ?: "", { nums[s.slot] = it }, singleLine = true, label = { Text("Number of this SIM") },
+                                modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone))
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            val num = pick?.let { nums[it] }.orEmpty()
+            Button(enabled = !busy && pick != null && num.filter { it.isDigit() }.length >= 7, onClick = {
+                val s = sims.first { it.slot == pick }
+                busy = true
+                vm.store.setSimNumber(s.slot, num)
+                vm.requestWorkSim(s.slot, num, s.label, null) { busy = false }
+            }) { Text(if (busy) "Saving…" else "This is my work SIM") }
+        },
+        dismissButton = { TextButton(onClick = { vm.workSimLater = true }) { Text("Later") } })
+}

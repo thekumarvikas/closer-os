@@ -2078,3 +2078,11 @@ intelligence → Play Store launch.
   FCM HTTP v1 (OAuth via the service-account JWT, RS256 WebCrypto) with priority HIGH, ttl 600 s; dead tokens dropped.
   Key = Supabase Edge Function secret FCM_SERVICE_ACCOUNT (owner pastes it; never in chat / DB / git).
 - Dashboard Team → Phones: "⟳ Sync all phones now" + "⟳ Sync now" per phone (toast, refreshes Last synced at 15/35/60 s).
+- Nov 20 owner feedback on the Team page: ONE table (components/TeamTable.tsx): member (name, email, inline phone), role +
+  calling team, work SIM (× = stop tracking), phone (model, app, setup steps off), recordings (short line, full reason on
+  hover), last synced + Sync now, ⋯ menu (Deactivate / Delete…). Work-SIM requests = amber strip on top only when pending.
+  Hourly check-ins moved to Reports → "Hourly check-ins". Old WorkSims card / PhoneStatus removed. tests/team-test.cjs.
+- App 0.28.1: WorkSimPrompt (ui/MoreScreens.kt, drawn in MainActivity) = "Select your work SIM" card with SIM 1 / SIM 2 +
+  their numbers, shown in the company app until the rep has an active/pending work SIM (vm.workSimsKnown after the server
+  answers; "Later" = until next app open). Before, the choice only appeared in first-time setup (2-SIM phones) or deep in
+  Settings, so existing reps never saw it.

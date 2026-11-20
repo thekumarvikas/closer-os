@@ -226,6 +226,8 @@ fun Root(vm: AppViewModel) {
                 }
             } }
         }
+        if (!vm.isSolo && vm.workSimsKnown && !vm.workSimLater && vm.workSims.none { it.status == "active" || it.status == "pending" })
+            com.closeros.app.ui.WorkSimPrompt(vm)
         vm.dncAsk?.let { l ->
             androidx.compose.material3.AlertDialog(onDismissRequest = { vm.dncAsk = null },
                 title = { Text("${l.name.ifBlank { "This lead" }} is marked Do not call") },

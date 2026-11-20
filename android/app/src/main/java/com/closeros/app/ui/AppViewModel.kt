@@ -177,11 +177,14 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
     var showMySales by mutableStateOf(false)
     // ───── Work SIM (company app: only this SIM's calls are tracked; 1 subscription = 1 SIM) ─────
     var workSims by mutableStateOf<List<com.closeros.app.data.WorkSim>>(emptyList())
+    /** True once the server has told us this person's work SIMs (so the "Select your work SIM" card can show). */
+    var workSimsKnown by mutableStateOf(false)
+    var workSimLater by mutableStateOf(false)   // "Later" on the card: ask again next time the app opens
     fun loadWorkSims() = viewModelScope.launch {
         val m = membership ?: return@launch
         if (isSolo) return@launch
         workSims = com.closeros.app.data.WorkSims.mine(ctx)
-        runCatching { com.closeros.app.data.WorkSims.refresh(ctx, m.org_id) }.onSuccess { workSims = it }
+        runCatching { com.closeros.app.data.WorkSims.refresh(ctx, m.org_id) }.onSuccess { workSims = it; workSimsKnown = true }
     }
     fun requestWorkSim(slot: Int?, number: String, label: String?, kind: String?, done: (Boolean) -> Unit = {}) = viewModelScope.launch {
         val m = membership ?: return@launch

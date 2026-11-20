@@ -70,7 +70,10 @@ object RecordingSync {
      * Lists recent audio files in the chosen folder (and up to 3 sub-folders) with one quick query per
      * folder — much faster than opening each file on phones with thousands of recordings.
      */
+    /** What the last folder scan saw (for support when nothing is found). */
+    private var seen = 0; private var audioAll = 0; private val seenExt = mutableSetOf<String>()
     private fun listFiles(ctx: Context, tree: Uri, sinceMs: Long): List<F> {
+        seen = 0; audioAll = 0; seenExt.clear()
         val root = DocumentFile.fromTreeUri(ctx, tree) ?: throw IllegalStateException("Recordings folder can't be opened — choose it again")
         if (!root.canRead()) throw IllegalStateException("No permission to read the recordings folder — choose it again")
         val out = mutableListOf<F>()
@@ -83,7 +86,14 @@ object RecordingSync {
                     val id = c.getString(0); val name = c.getString(1).orEmpty(); val mime = c.getString(2).orEmpty()
                     val modified = c.getLong(3); val size = c.getLong(4)
                     if (mime == DocumentsContract.Document.MIME_TYPE_DIR) { if (depth < 3) walk(id, depth + 1) }
-                    else if (modified >= sinceMs && audio.matches(name)) out += F(DocumentsContract.buildDocumentUriUsingTree(tree, id), name, modified, nameTime(name), size)
+                    else {
+                        seen++; if (seenExt.size < 8) seenExt += name.substringAfterLast('.', "?").lowercase().take(5)
+                        // Some phones' folders report no "last modified" time: use the time in the file name instead.
+                        val nt = nameTime(name); val mod = if (modified > 0) modified else nt ?: 0L
+                        val isAudio = audio.matches(name) || mime.startsWith("audio/")
+                        if (isAudio) audioAll++
+                        if (isAudio && mod >= sinceMs) out += F(DocumentsContract.buildDocumentUriUsingTree(tree, id), name, mod, nt, size)
+                    }
                 }
             }
         }
@@ -163,6 +173,13 @@ object RecordingSync {
             com.closeros.app.data.AppLog.error(ctx, "recordings", null, kind = "info", message = "no match · files: " +
                 files.sortedByDescending { it.modified }.take(5).joinToString(" | ") { "${it.name.replace(Regex("\\d{6,}")) { m -> "…" + m.value.takeLast(4) }} (mod ${t(it.modified)}, name ${it.nameTime?.let(::t) ?: "-"})" } +
                 " · calls: " + todo.take(4).joinToString(" | ") { "${t(it.startedAtMs)} ${it.durationSec}s …${it.phone.takeLast(4)}" })
+        }
+        // No recent recordings at all: note which folder was chosen and what is in it (once a day, for support).
+        if (files.isEmpty() && System.currentTimeMillis() - diagP.getLong("rec_diag0_ms", 0) > 86_400_000L) runCatching {
+            diagP.edit().putLong("rec_diag0_ms", System.currentTimeMillis()).apply()
+            val folder = runCatching { DocumentsContract.getTreeDocumentId(tree) }.getOrDefault("-")
+            com.closeros.app.data.AppLog.error(ctx, "recordings", null, kind = "info", message = "no files · folder: $folder · files in it: $seen" +
+                " (audio $audioAll, any date) · types: ${seenExt.joinToString(",")} · dialer: ${PhoneSetup.defaultDialer(ctx)}")
         }
         return Result(files.size + uploaded, calls.size, matched, uploaded,
             lastError ?: if (files.isEmpty() && uploaded == 0) "No recording files found in the folder for the last $days days" else null)

@@ -1,3 +1,4 @@
+import { missingReason, type RecDevice } from '../components/CallColors'
 import WorkSims from '../components/WorkSims'
 import { useEffect, useState, type FormEvent } from 'react'
 import { UserPlus, Users, Copy, Trash2, Plus } from 'lucide-react'
@@ -292,7 +293,8 @@ function PhoneStatus({ orgId, nameOf, version }: { orgId: string; nameOf: (id: s
                         : <><div className="text-amber-700">{missing.length} not done</div><div className="text-xs text-slate-500">{missing.join(', ')}</div></>
                     })()}</td>
                     <td className="td"><div className={color[c]}>{text}</div>
-                      {d.rec_folder_set && <div className="text-xs text-slate-500">Last check: {d.rec_files_found ?? 0} files, {d.rec_matched ?? 0} of {d.rec_calls_checked ?? 0} answered calls matched</div>}</td>
+                      {d.rec_folder_set && <div className="text-xs text-slate-500">Last check: {d.rec_files_found ?? 0} files, {d.rec_matched ?? 0} of {d.rec_calls_checked ?? 0} answered calls matched</div>}
+                      {!(d.rec_uploaded_total ?? 0) && <div className="mt-1 max-w-sm text-xs text-slate-600">{missingReason(d as unknown as RecDevice).replace(/^No recording( uploaded)?:\s*/, '')}</div>}</td>
                     <td className={`td ${staleMin(d) > 60 ? 'font-medium text-red-700' : 'text-slate-500'}`}>{ago(d.updated_at)}</td>
                   </tr>
                 )

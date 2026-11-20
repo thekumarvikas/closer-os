@@ -51,7 +51,7 @@ export function missingReason(d: RecDevice | undefined): string {
   if (d.default_dialer && !/android\.(dialer|incallui|contacts)|samsung|miui|xiaomi|coloros|oppo|vivo|bbk|oneplus|motorola|realme|huawei|honor|asus|nothing|telecom/i.test(d.default_dialer))
     return `No recording: the phone uses a third-party phone app (${d.default_dialer}) that doesn't record calls. Switch to the phone maker's Phone app with auto-record on.`
   if (!d.rec_folder_set) return 'No recording: the recordings folder is not chosen in the app (Settings → Call recordings).'
-  if ((d.rec_files_found ?? 0) === 0) return 'No recording: no recording files found on the phone. Auto call recording is probably off in the Phone app.'
+  if ((d.rec_files_found ?? 0) === 0) return "No recording: Closer OS finds no recording files in the folder chosen on this phone. Either auto call recording is off in the Phone app, or a different folder was chosen — in the app open Settings → Call recordings and choose the folder where the Phone app saves recordings (often Recordings → Call)."
   if ((d.rec_matched ?? 0) === 0) return `No recording: ${d.rec_files_found} recording files found, but none matched this call (file names/times don't line up).`
   if (d.rec_last_error) return 'No recording uploaded: ' + d.rec_last_error
   return 'No recording uploaded for this call (the file was not found or not uploaded yet).'

@@ -2025,3 +2025,31 @@ intelligence → Play Store launch.
   (stale-closing), WhatsApp sequence messages anchored to the event (minutes_before → recompute next_due_at for active
   enrollments), app lists/notifications. Registrations kept. Zoom report "Actual Start Time" still overrides for reports.
 - Owner: NO notification to reps when a webinar's time changes (everything just re-plans silently).
+
+## Round 16 built (Nov 20 2026, migrations 0100–0104, app 0.27.4)
+- Owner answers: default webinar time chosen by the admin per source / import (editable per webinar); two webinars on one
+  date — later; 1-minute sync is fine; product name stays Closer OS; Nikhil's Lava DOES record (needs a folder check).
+- Sheets sync v2 (0100): see Lead sources — self-installing 1-minute script, honest counts, column matching, health, guide.
+- Calls ↔ webinars (0101): call_webinar(lead, at) = reminder for the next webinar from sign-up (max 7 days before) until
+  start, else sales for the latest webinar (30 days). Trigger t_call_webinar (batch_auto = linked by rules; app-set
+  batch_id kept), relink_calls, t_bl_relink, t_batch_time (time change → relink calls, seq_advance enrollments, reminder
+  call-backs after the new start → 30 min before; NO rep notification). adopt_calls_of_deleted (calls of a deleted lead move
+  to the live lead with the same number).
+- 0102: batch_for_text(org, raw, source, p_ref = sign-up) — UTC ISO times → company day; day/month swap when the parsed
+  date is far from the sign-up but the swap is close (US-order sheets). Cancer's "10/11 Jan" + "10/11 May 2026" merged into
+  1 Nov / 5 Nov 2026.
+- 0103: batch_cards adds rem_called / rem_talked (30 s+) / rem_calls / rem_by (per caller) → webinar card "📞 Reminder
+  calls x of y called · N left" + by-caller table.
+- Lead import: "＋ New webinar on a date…" (date + start time, time remembered in this browser).
+- 0104: calls.from_history (generated: synced > 1 h after the call = read from the phone's history) + calls.local_hour
+  (company tz, trigger). outcome_report returns those no-outcome calls under the fixed id 00000000-…-0001 = "Before Closer
+  OS / outside the app" (grey, never "not filled"). Web HIST constant in OutcomeReport.tsx + CallLog.tsx.
+- Web: lib/dialogs.tsx ask() / toast() + DialogHost in main.tsx — NEVER use alert()/confirm(); errorText() maps DB/network
+  errors to plain words. Reports: Team / Daily / By hour numbers open the call log (Drill: user, day, hour, kind); by-hour
+  shows "9 AM – 10 AM" slots incl. empty hours, Best hour, Total. Outcomes: fit the card, % of calls with an outcome, unused
+  folded, amber "no outcome yet" notice + grey "phone history" row. Call log: lead profession·city, calls/conversations,
+  source, webinar + reminder/sales, next call, "Before Closer OS"; filters purpose / recording / hour / kind chips; saved
+  views (this browser).
+- Recordings: Nikhil (Lava LZG414, com.android.dialer, folder set) had 0 files. App 0.27.4: files with no "last modified"
+  use the name's time, audio by mime too, and a daily "no files · folder: … · files in it: N · types" info row in
+  app_errors (place "recordings"). Team page shows the plain reason under each phone without uploads.

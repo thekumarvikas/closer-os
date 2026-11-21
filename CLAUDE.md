@@ -2112,3 +2112,8 @@ intelligence → Play Store launch.
 - PENDING idea list (owner asked, nothing chosen yet): sharing reports with the team instead of WhatsApp screenshots —
   "Send to team" with each person's own copy + seen tracking, personal to-do list from suggestions, automatic morning/evening
   summaries, manager's note, WhatsApp-ready image/PDF, weekly 1-to-1 sheet.
+- PENDING (owner, Nov 21, "note, don't build"): automatic daily summaries — MORNING 8:00 AM, EVENING 9:30 PM (company time).
+  Crisp, clear, real insight, minimal look. Each has a "Copy for WhatsApp" button → WhatsApp-formatted text (*bold* headings):
+  time copied, Dialled, Received, Missed, Connected out of dialled, Unique leads, Sales (+ talk time, conversations, best hour,
+  follow-ups on time / missed, missed callers not called back, outcomes, tomorrow's plan…). Owner also liked idea #6
+  (WhatsApp-ready branded image/PDF per person) — elaborated in chat, waiting for answers.

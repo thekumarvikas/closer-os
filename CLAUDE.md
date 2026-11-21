@@ -2134,3 +2134,13 @@ intelligence → Play Store launch.
   warn "This report is from 19 Nov… upload to 19 Nov instead?"; (2) "Undo last upload" on the webinar for a few hours after a
   Zoom upload (remove walk-ins it added, restore previous minutes); (3) short first-time "how this works" hints on the webinar
   page. Owner also has UI suggestions coming (wait for them).
+- PENDING design (owner, Nov 21 — brainstorm, NOT built): webinar show-up by SOURCE. Two groups: (1) Landing page = in the
+  registration sheet/webhook/import (sheet columns: webinar date, timestamp, name, email, phone, assigned to…); (2) Direct
+  Zoom link = in the Zoom file but NOT in the sheet (WhatsApp/Instagram/community links). Owner answers: report type must not
+  matter (Zoom webinar report with Host/Panelist/Attendee sections + Attended Yes/No rows + Registration Time; Zoom meeting
+  participants report; or a hand-cleaned file with only name/email/phone/minutes → then NO pitch/session facts); no per-channel
+  split; anyone in the sheet = registered (whatever link they joined by); EVERYONE in sheet or Zoom file becomes a lead with
+  tags of where they came from; match on email AND phone. Upload order never matters; Zoom file ≠ registration list.
+  Checked on the real 19 Nov Zoom file (phone match): sheet 136 → 35 joined (26%); direct link: 51 registered on Zoom → 28
+  joined (55%); overall 187 → 63 (34%) — Zoom itself said 64 unique viewers. Skip host/panelist rows, note-taker bots and own
+  team members; same phone with a 2nd email = same person (attended under either).

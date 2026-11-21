@@ -10,7 +10,8 @@ import { buildModel, toImage, toPdf, toText, type Summary } from '../lib/summary
 import { Card, Spinner } from './ui'
 import { Ph } from './Copy'
 import LeadDrawer from '../pages/LeadDrawer'
-import type { Line, Section } from '../lib/summary'
+import { hotRows, hotSections, HOT_CATS, HOT_GROUP, HOT_NOTE, type Line, type Section, type HotLead, type HotRow, type Model } from '../lib/summary'
+import { downloadCsv } from '../lib/report'
 
 function save(blob: Blob, name: string) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000)
@@ -25,6 +26,32 @@ export default function DailySummary() {
   const [data, setData] = useState<Summary | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [open, setOpen] = useState<string | null>(null)
+  const [allHot, setAllHot] = useState<{ total: number; list: HotLead[] } | null>(null)
+  useEffect(() => setAllHot(null), [org.id, kind, who])
+  const fetchAllHot = async () => {
+    const { data: d, error: e } = await supabase.rpc('hot_leads_all', { p_org: org.id, p_user: who === 'team' || who === 'me' ? null : who })
+    if (e) { toast(errorText(e)); return null }
+    return d as { total: number; list: HotLead[] }
+  }
+  const loadAllHot = async () => { const d = await fetchAllHot(); if (d) setAllHot(d) }
+  async function downloadHot(kindOf: 'csv' | 'pdf' | 'image') {
+    const full = allHot ?? await fetchAllHot(); if (!full || !data) return
+    if (!allHot) setAllHot(full)
+    const nameOf = (id: string | null) => dir?.nameOf(id) ?? ''
+    const stamp = `hot-leads-${data.plan_day}`
+    if (kindOf === 'csv') {
+      downloadCsv(`${stamp}.csv`, ['#', 'Category', 'Lead', 'Phone', 'Owner', 'Tag', 'Outcome', 'Registered', 'Attended', 'Watched (min)', 'Best (min)', 'Best webinar',
+        'Saw the pitch', 'Chats', 'Polls', 'Talk (min)', 'Talk by team member', 'Calls', 'WhatsApp', 'Last talked', 'Next call'],
+        full.list.map((h, i) => [i + 1, HOT_CATS[h.cat], h.name, h.phone, nameOf(h.owner), h.tag ?? '', h.outcome ?? '', h.reg, h.att, h.watch, h.best ?? '',
+          h.best_at ? new Date(h.best_at).toLocaleDateString('en-IN', { timeZone: data.tz }) : '', h.pitch ? 'yes' : '', h.chats, h.polls, Math.round(h.talk / 60),
+          (h.talk_by ?? []).map(t => `${nameOf(t.user)} ${Math.round(t.sec / 60)}m`).join('; '), h.calls, h.wa,
+          h.last_talk ? new Date(h.last_talk).toLocaleString('en-IN', { timeZone: data.tz }) : '', h.next ? new Date(h.next).toLocaleString('en-IN', { timeZone: data.tz }) : '']))
+      return
+    }
+    const m: Model = { title: 'Hot leads', sub: `${data.team ? `${data.org_name} · Team` : data.who ?? ''} · ${full.total} leads`, tiles: [], plan: { title: '', lines: [] },
+      hot: { total: full.total, note: HOT_NOTE, rows: [] }, results: [], team: [], sections: hotSections(hotRows(full.list, nameOf, data.tz), full.total, data.team) }
+    save(kindOf === 'pdf' ? await toPdf(m) : await toImage(m), `${stamp}.${kindOf === 'pdf' ? 'pdf' : 'png'}`)
+  }
   useEffect(() => {
     setData(null); setError(null)
     supabase.rpc('daily_summary', { p_org: org.id, p_kind: kind, p_user: who === 'team' || who === 'me' ? null : who })
@@ -64,25 +91,10 @@ export default function DailySummary() {
             {/* Left two-thirds: plan + hot leads */}
             <div className="space-y-5 lg:col-span-2">
               <Block s={model.plan} />
-              {model.hot.rows.length > 0 && <div>
-                <p className={head}>Hot leads · call first ({model.hot.total})</p>
-                <p className="mb-2 text-xs italic text-slate-500">{model.hot.note}{model.hot.total > model.hot.rows.length ? ` Showing the first ${model.hot.rows.length}.` : ''}</p>
-                <div className="overflow-x-auto rounded-lg border border-slate-200">
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-50 text-left text-xs text-slate-500"><tr>
-                      <th className="px-3 py-2 font-medium">Lead</th>{data!.team && <th className="px-3 py-2 font-medium">Owner</th>}
-                      <th className="px-3 py-2 font-medium">Why hot</th><th className="px-3 py-2 font-medium">What we've done</th></tr></thead>
-                    <tbody className="divide-y divide-slate-100">{model.hot.rows.map((r, i) => (
-                      <tr key={r.lead_id} className="cursor-pointer align-top hover:bg-brand-50/40" onClick={e => { if (!(e.target as HTMLElement).closest('button')) setOpen(r.lead_id) }}>
-                        <td className="px-3 py-2"><span className="font-medium text-brand-700 hover:underline">{i + 1}. {r.name}</span>
-                          <span className="block text-xs text-slate-500"><Ph v={r.phone} /></span></td>
-                        {data!.team && <td className="whitespace-nowrap px-3 py-2 text-slate-600">{r.owner}</td>}
-                        <td className="px-3 py-2 text-slate-700">{r.why}</td>
-                        <td className="px-3 py-2 text-slate-600">{r.done}{r.when && <span className="block text-xs text-slate-500">{r.when}</span>}</td>
-                      </tr>))}</tbody>
-                  </table>
-                </div>
-              </div>}
+              {model.hot.rows.length > 0 && <HotTable rows={allHot ? hotRows(allHot.list, id => dir?.nameOf(id) ?? '', data!.tz) : model.hot.rows}
+                total={model.hot.total} note={model.hot.note} team={data!.team} onOpen={setOpen}
+                showAll={allHot ? null : model.hot.total > model.hot.rows.length ? loadAllHot : null}
+                onDownload={downloadHot} />}
               {model.team.length > 0 && <div>
                 <p className={head}>Team · {data!.kind === 'morning' ? 'yesterday' : 'today'}</p>
                 <table className="w-full text-sm">
@@ -111,4 +123,42 @@ function Block({ s }: { s: Section }) {
   return <div><p className={head}>{s.title}</p>
     {s.lines.map((l: Line) => <div key={l.label} className="flex justify-between gap-3 py-0.5 text-sm">
       <span className="text-slate-500">{l.label}</span><span className="text-right font-medium text-slate-800">{l.value}</span></div>)}</div>
+}
+
+function HotTable({ rows, total, note, team, onOpen, showAll, onDownload }: { rows: HotRow[]; total: number; note: string; team: boolean
+  onOpen: (id: string) => void; showAll: (() => void) | null; onDownload: (k: 'csv' | 'pdf' | 'image') => void }) {
+  const dl = 'rounded border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-600 hover:bg-slate-50'
+  let lastGroup = '', lastCat = 0
+  return <div>
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <p className={head + ' flex-1'}>Hot leads · call first ({total})</p>
+      <div className="flex gap-1"><span className="self-center text-xs text-slate-500">Download full list:</span>
+        <button className={dl} onClick={() => onDownload('csv')}>CSV</button><button className={dl} onClick={() => onDownload('pdf')}>PDF</button>
+        <button className={dl} onClick={() => onDownload('image')}>Image</button></div>
+    </div>
+    <p className="mb-2 mt-1 text-xs italic text-slate-500">{note}</p>
+    <div className="overflow-x-auto rounded-lg border border-slate-200">
+      <table className="w-full text-sm">
+        <thead className="bg-slate-50 text-left text-xs text-slate-500"><tr>
+          <th className="px-3 py-2 font-medium">Lead</th>{team && <th className="px-3 py-2 font-medium">Owner</th>}
+          <th className="px-3 py-2 font-medium">Why</th><th className="px-3 py-2 font-medium">Webinars & Zoom</th><th className="whitespace-nowrap px-3 py-2 font-medium">What we've done</th></tr></thead>
+        <tbody className="divide-y divide-slate-100">{rows.map((r, i) => {
+          const g = HOT_GROUP(r.cat), showG = g !== lastGroup, showC = r.cat !== lastCat
+          lastGroup = g; lastCat = r.cat
+          return [
+            showG && <tr key={'g' + i} className="bg-slate-100"><td colSpan={team ? 5 : 4} className="px-3 py-1.5 text-xs font-semibold text-slate-700">{g}</td></tr>,
+            showC && <tr key={'c' + i}><td colSpan={team ? 5 : 4} className="px-3 pb-0.5 pt-2 text-xs font-semibold uppercase tracking-wide text-brand-700">{HOT_CATS[r.cat]}</td></tr>,
+            <tr key={r.lead_id} className="cursor-pointer align-top hover:bg-brand-50/40" onClick={e => { if (!(e.target as HTMLElement).closest('button')) onOpen(r.lead_id) }}>
+              <td className="min-w-[160px] px-3 py-2"><span className="font-medium text-brand-700 hover:underline">{i + 1}. {r.name}</span>
+                <span className="block whitespace-nowrap text-xs text-slate-500"><Ph v={r.phone} /></span></td>
+              {team && <td className="whitespace-nowrap px-3 py-2 text-slate-600">{r.owner}</td>}
+              <td className="px-3 py-2 text-slate-700">{r.why}</td>
+              <td className="px-3 py-2 text-slate-600">{r.activity}</td>
+              <td className="min-w-[170px] px-3 py-2 text-slate-600">{r.done}{r.when && <span className="block text-xs text-slate-500">{r.when}</span>}</td>
+            </tr>]
+        })}</tbody>
+      </table>
+    </div>
+    {showAll && <button className="mt-2 text-sm font-medium text-brand-700 hover:underline" onClick={showAll}>Show all {total} hot leads</button>}
+  </div>
 }

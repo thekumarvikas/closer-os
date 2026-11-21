@@ -5,14 +5,50 @@ export type DayStats = { dialled: number; connected: number; received: number; m
   talk: number; leads: number; leads_connected: number; leads_1min: number; calls_1min: number; conn_outcome: number
   interested: number; call_later: number; sales: number; revenue: number
   hours: { hr: number; conn: number; talk: number; pos: number }[]; fu_due: number; fu_on_time: number; fu_late: number; fu_missed: number }
-export type HotLead = { lead_id: string; name: string; phone: string; owner: string | null; why: string[]; calls: number; connected: number
-  talk: number; wa: number; last_talk: string | null; next: string | null }
+export type HotLead = { lead_id: string; name: string; phone: string; owner: string | null; cat: number; tag: string | null; outcome: string | null
+  reg: number; att: number; watch: number; best: number | null; best_at: string | null; pitch: boolean; chats: number; polls: number
+  talk: number; talk_by: { user: string; sec: number }[]; calls: number; wa: number; last_talk: string | null; next: string | null }
 export type Summary = { kind: 'morning' | 'evening'; day: string; plan_day: string; tz: string; team: boolean; org_name: string; who: string | null
   working_day: boolean; stats: DayStats; people: { user_id: string; name: string; email: string | null; stats: DayStats }[] | null
-  plan: { follow_ups: number; overdue: number; hot: { total: number; list: HotLead[] }; no_next: number; webinars: { name: string; at: string; leads: number }[] } }
+  plan: { follow_ups: number; overdue: number; hot: { total: number; by_cat: Record<string, number>; list: HotLead[] }; no_next: number; webinars: { name: string; at: string; leads: number }[] } }
 export type Line = { label: string; value: string }
 export type Section = { title: string; lines: Line[]; note?: string }
-export type HotRow = { lead_id: string; name: string; phone: string; owner: string; why: string; done: string; when: string }
+export type HotRow = { lead_id: string; name: string; phone: string; owner: string; cat: number; why: string; activity: string; done: string; when: string }
+export const HOT_CATS: Record<number, string> = { 1: 'Ready to pay', 2: 'Hot', 3: 'Interested', 4: 'Positive — follow up',
+  5: 'Came back + active in Zoom', 6: 'Came back (attended 2+ webinars)', 7: 'Active in Zoom once', 8: 'Talked, not tagged yet — ask the team member' }
+export const HOT_GROUP = (c: number) => c <= 4 ? '🔥 Hot — tagged or positive outcome' : c <= 7 ? '⭐ Potentially hot — attended, not talked to yet' : '❓ Talked, not tagged yet'
+export const HOT_NOTE = 'Hot = tagged Ready to pay / Hot / Interested or a positive outcome. Potentially hot = attended webinars (2+ times, or chatted / answered polls) but nobody has talked to them yet. Inside each category: most webinar minutes first, then most talk time with the team.'
+const mins = (sec: number) => `${Math.round(sec / 60)} min`
+/** One readable row per hot lead (dashboard, app, text, image, PDF, CSV). */
+export function hotRows(list: HotLead[], nameOf: (id: string | null) => string, tz: string): HotRow[] {
+  const when = (iso: string | null) => iso ? new Date(iso).toLocaleString('en-IN', { timeZone: tz, day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : ''
+  const day = (iso: string | null) => iso ? new Date(iso).toLocaleDateString('en-IN', { timeZone: tz, day: 'numeric', month: 'short' }) : ''
+  return list.map(h => {
+    const owner = nameOf(h.owner)
+    const why = h.cat === 8 ? `Not tagged yet — ask ${owner || 'the team member'}` : h.cat >= 5 ? HOT_CATS[h.cat] : [h.tag, h.outcome].filter(Boolean).join(' · ') || HOT_CATS[h.cat]
+    const activity = [`Registered ${h.reg}× · attended ${h.att}×`,
+      h.watch ? `watched ${h.watch} min${h.att > 1 && h.best ? ` (best ${h.best} min, ${day(h.best_at)})` : ''}` : '',
+      h.pitch ? 'saw the pitch' : '', h.chats ? `${h.chats} chat${h.chats > 1 ? 's' : ''}` : '', h.polls ? 'answered polls' : ''].filter(Boolean).join(' · ')
+    const by = (h.talk_by ?? []).filter(t => t.sec > 0)
+    const talk = h.talk ? `Talked ${mins(h.talk)}${by.length > 1 ? ` (${by.map(t => `${nameOf(t.user).split(' ')[0]} ${mins(t.sec)}`).join(', ')})` : ''}` : 'Not talked yet'
+    const done = [talk, `${h.calls} call${h.calls === 1 ? '' : 's'}`, h.wa ? `${h.wa} WhatsApp` : ''].filter(Boolean).join(' · ')
+    return { lead_id: h.lead_id, name: h.name, phone: h.phone, owner, cat: h.cat, why, activity, done,
+      when: [h.last_talk ? `Last talked ${when(h.last_talk)}` : '', h.next ? `Next call ${when(h.next)}` : ''].filter(Boolean).join(' · ') }
+  })
+}
+/** Flat sections (text / image / PDF) for hot rows, grouped with category headings. */
+export function hotSections(rows: HotRow[], total: number, team: boolean): Section[] {
+  const out: Section[] = []
+  rows.forEach((r, i) => {
+    const title = `${HOT_GROUP(r.cat)} · ${HOT_CATS[r.cat]}`
+    let sec = out[out.length - 1]
+    if (!sec || sec.title !== title) { sec = { title, lines: [] }; out.push(sec) }
+    sec.lines.push({ label: `${i + 1}. ${r.name}${team && r.owner ? ` (${r.owner})` : ''}`, value: `${r.why} — ${r.activity} — ${r.done}` })
+  })
+  if (out.length) out[0].note = HOT_NOTE
+  if (total > rows.length) out.push({ title: `+${total - rows.length} more hot leads`, lines: [{ label: 'Open Closer OS', value: 'to see all and download' }] })
+  return out
+}
 export type TeamRow = { name: string; dialled: number; connected: number; talk: string; sales: number; calls: boolean }
 export type Model = { title: string; sub: string; tiles: Line[]; plan: Section; hot: { total: number; note: string; rows: HotRow[] }
   results: Section[]; team: TeamRow[]; sections: Section[] }
@@ -23,12 +59,10 @@ export const dur = (s: number) => { s = Math.round(s); const h = Math.floor(s / 
   return h ? `${h}h ${m}m` : m ? `${m}m ${s % 60}s` : `${s}s` }
 const pc = (a: number, b: number) => b ? Math.round(a * 100 / b) : 0
 const dayName = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
-export const HOT_NOTE = 'Hot = marked Hot or Ready to pay, interested on a recent call, talked 5+ min, called us back, or very engaged in a webinar in the last 14 days (watched most of it, saw the pitch, chatted, answered polls, registered again).'
 
 export function buildModel(s: Summary, money: (v: number) => string, nameOf: (id: string | null) => string = () => ''): Model {
   const st = s.stats, tz = s.tz
   const res = s.kind === 'morning' ? 'Yesterday' : 'Today'
-  const when = (iso: string | null) => iso ? new Date(iso).toLocaleString('en-IN', { timeZone: tz, day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : ''
   const tiles: Line[] = [
     { label: 'Dialled', value: `${st.dialled}` },
     { label: 'Connected', value: `${pc(st.connected, st.dialled)}%` },
@@ -39,21 +73,21 @@ export function buildModel(s: Summary, money: (v: number) => string, nameOf: (id
   const results: Section[] = []
   results.push({ title: `${res} · calls`, lines: [
     { label: 'Dialled', value: `${st.dialled}` },
-    { label: 'Connected', value: `${st.connected} of ${st.dialled} (${pc(st.connected, st.dialled)}%)` },
+    { label: 'Connected calls', value: `${st.connected} of ${st.dialled} dialled (${pc(st.connected, st.dialled)}%)` },
     { label: 'Received', value: `${st.received}` },
     { label: 'Missed', value: `${st.missed}${st.missed ? (st.missed_open ? ` (${st.missed_open} not called back)` : ' (all called back)') : ''}` },
     { label: 'Talk time', value: dur(st.talk) },
   ] })
   results.push({ title: `${res} · leads`, lines: [
     { label: 'Total leads', value: `${st.leads}` },
-    { label: 'Connected', value: `${st.leads_connected} of ${st.leads} (${pc(st.leads_connected, st.leads)}%)` },
+    { label: 'Leads connected', value: `${st.leads_connected} of ${st.leads} (${pc(st.leads_connected, st.leads)}%)` },
     { label: 'Talked 1 min or more', value: `${st.leads_1min} of ${st.leads} (${pc(st.leads_1min, st.leads)}%)` },
   ] })
   results.push({ title: 'Results', lines: [
     { label: 'Sales', value: st.sales ? `${st.sales} · ${money(st.revenue)}` : '0' },
     { label: 'Interested', value: `${st.interested}` },
     ...(st.call_later ? [{ label: 'Asked to call later', value: `${st.call_later}` }] : []),
-    { label: 'Outcomes filled', value: `${st.conn_outcome} of ${st.conversations} connected calls` },
+    { label: 'Outcomes saved', value: `${st.conn_outcome} of ${st.conversations} calls that connected (dialled + received)` },
   ] })
   const b = bestHour(st.hours)
   if (b) results.push({ title: 'Best hour', lines: [{ label: slot(b.hr), value: `${b.conn} connected · ${dur(b.talk)}` }] })
@@ -76,14 +110,9 @@ export function buildModel(s: Summary, money: (v: number) => string, nameOf: (id
   plan.push({ label: 'Hot leads', value: `${pl.hot.total}` })
   const planDay = s.kind === 'morning' ? 'Today' : 'Tomorrow'
   const planSec: Section = { title: `${planDay} · plan`, lines: plan }
-  const rows: HotRow[] = pl.hot.list.map(h => ({ lead_id: h.lead_id, name: h.name, phone: h.phone, owner: nameOf(h.owner),
-    why: h.why.join(' · ') || 'Engaged',
-    done: h.calls ? `${h.calls} call${h.calls > 1 ? 's' : ''} · ${h.connected} connected · ${dur(h.talk)} talk${h.wa ? ` · ${h.wa} WhatsApp` : ''}` : `Not called yet${h.wa ? ` · ${h.wa} WhatsApp` : ''}`,
-    when: [h.last_talk ? `Last talked ${when(h.last_talk)}` : '', h.next ? `Next call ${when(h.next)}` : ''].filter(Boolean).join(' · ') }))
-  // Flat sections for text / image / PDF. Morning: plan first, results below. Evening: results first.
-  const hotSec: Section[] = rows.length ? [{ title: `Hot leads · call first (${pl.hot.total})`, note: HOT_NOTE,
-    lines: rows.map((r, i) => ({ label: `${i + 1}. ${r.name}${s.team && r.owner ? ` (${r.owner})` : ''}`, value: `${r.why} — ${r.done}` })) }] : []
-  const teamSec: Section[] = team.length ? [{ title: 'Team', lines: team.map(t => ({ label: t.name, value: t.calls ? `${t.dialled} dialled · ${t.connected} connected · ${t.talk} · ${t.sales} sale${t.sales === 1 ? '' : 's'}` : 'no calls' })) }] : []
+  const rows = hotRows(pl.hot.list, nameOf, tz)
+  const hotSec = hotSections(rows, pl.hot.total, s.team)
+  const teamSec: Section[] = team.length ? [{ title: 'Team', lines: team.map(t => ({ label: t.name, value: t.calls ? `${t.dialled} dialled · ${t.connected} leads connected · ${t.talk} · ${t.sales} sale${t.sales === 1 ? '' : 's'}` : 'no calls' })) }] : []
   const sections = s.kind === 'morning' ? [planSec, ...hotSec, ...results, ...teamSec] : [...results, ...teamSec, planSec, ...hotSec]
   const now = new Date().toLocaleTimeString('en-IN', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).toUpperCase()
   return { title: `${s.kind === 'morning' ? 'Morning' : 'Evening'} summary`,
@@ -93,13 +122,6 @@ export function buildModel(s: Summary, money: (v: number) => string, nameOf: (id
 
 /** WhatsApp text: *bold* headings. */
 export function toText(m: Model): string {
-  const cut = (sec: Section) => {
-    if (!sec.title.startsWith('Hot leads')) return sec
-    const per = new Map<string, number>(); const lines: Line[] = []; let more = 0
-    m.hot.rows.forEach((r, i) => { const k = r.owner; const n = (per.get(k) ?? 0) + 1; per.set(k, n); if (n <= 10) lines.push(sec.lines[i]); else more++ })
-    return { ...sec, lines: more ? [...lines, { label: `+${more} more`, value: 'open Closer OS' }] : lines }
-  }
-  m = { ...m, sections: m.sections.map(cut) }
   return [`*Closer OS · ${m.title}*`, m.sub, ...m.sections.flatMap(s => ['', `*${s.title}*`, ...(s.note ? [`_${s.note}_`] : []), ...s.lines.map(l => `${l.label}: ${l.value}`)])].join('\n')
 }
 

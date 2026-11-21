@@ -15,7 +15,14 @@ const log = (...a) => console.log('•', ...a);
     await admin.from('org_members').insert([{ org_id: org, user_id: o, role: 'owner' }, { org_id: org, user_id: a, role: 'rep' }, { org_id: org, user_id: b, role: 'rep' }])
     const names = ['Anita Verma', 'Rohit Jain', 'Meera Iyer', 'Sanjay Rao', 'Pooja Nair', 'Vivek Singh', 'Kavya Menon', 'Arjun Das']
     const { error: le } = await admin.from('leads').insert(names.map((n, i) => ({ org_id: org, name: n, phone: '+9198000000' + String(i).padStart(2, '0'),
-      assigned_to: i % 2 ? a : b, intent: i % 3 === 0 ? 'ready' : 'hot', source: 'Webinar sheet' }))); if (le) throw le
+      assigned_to: i % 2 ? a : b, intent: i < 3 ? (i === 0 ? 'ready' : 'hot') : null, source: 'Webinar sheet' }))); if (le) throw le
+    const { data: lds } = await admin.from('leads').select('id,name').eq('org_id', org)
+    const bs = []
+    for (const d of [20, 10]) { const { data: bt, error: be } = await admin.from('batches').insert({ org_id: org, name: `Webinar ${d} days ago`, webinar_at: new Date(Date.now() - d * 864e5).toISOString() }).select().single(); if (be) throw be; bs.push(bt.id) }
+    const bl = []
+    lds.forEach((l, i) => { bl.push({ batch_id: bs[0], lead_id: l.id, org_id: org, watch_minutes: 20 + i * 9, attended: true, chat_count: i % 2 ? 2 : 0, poll_answered: 0 })
+      if (i % 3 !== 1) bl.push({ batch_id: bs[1], lead_id: l.id, org_id: org, watch_minutes: 10 + i * 7, attended: true, chat_count: 0, poll_answered: 0 }) })
+    const { error: ble } = await admin.from('batch_leads').insert(bl); if (ble) console.log('batch_leads', ble.message)
     const now = Date.now(), calls = []
     for (let i = 0; i < 24; i++) calls.push({ id: require('crypto').randomUUID(), org_id: org, user_id: i % 3 ? a : b, direction: i % 7 === 0 ? 'missed' : 'outgoing', phone: '+9198000000' + String(i % 15).padStart(2, '0'),
       started_at: new Date(now - (i + 1) * 17 * 60e3).toISOString(), duration_sec: i % 2 ? 0 : 30 + i * 11 })

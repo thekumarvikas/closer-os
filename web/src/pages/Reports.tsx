@@ -371,12 +371,6 @@ function Hourly({ r, fileTag, onDrill, orgId, tz, from, to, users, callDir, ch, 
       <div className="flex justify-end"><Csv onClick={() => downloadCsv(`closer-os-by-hour_${fileTag}.csv`, ['Hour', T.calls, T.conversations, `${T.convRate} %`, T.talk, T.dialled, T.received, T.missed, T.noAnswer],
         [...hours.map(h => { const b = by.get(h) ?? zero; return [hourSlot(h), b.calls, b.conn, pct(b.conn, b.calls), dur(b.conn_dur), b.out, b.inc, b.missed, b.not_picked] }),
           ['TOTAL', t.calls, t.conn, pct(t.conn, t.calls), dur(t.conn_dur), t.out, t.inc, t.missed, t.not_picked]])} /></div>
-      <Card className="p-5">
-        <h3 className="font-semibold">Calls by hour of day</h3>
-        <p className="mb-6 mt-1 text-sm text-slate-500">Most conversations: <b>{hourSlot(busiest.hr)}</b>{best ? <> · Best hour: <b>{hourSlot(best.hr)}</b></> : null} · click a bar or number to see the calls</p>
-        <Bars height={200} onClick={i => onDrill({ hour: hours[i], label: 'All calls' })} data={hours.map(h => { const b = by.get(h) ?? zero; return { label: hourSlot(h), short: h % 3 === 0 ? label(h) : '', value: b.calls,
-          tip: <p className="text-slate-600">{b.conn} conversations ({pct(b.conn, b.calls)}%)</p> } })} />
-      </Card>
       <Card className="overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-slate-50"><tr>{['Hour', T.calls, T.conversations, T.talk, T.dialled, T.received, T.missed, T.noAnswer].map(h => <th key={h} className="th">{h}</th>)}</tr></thead>

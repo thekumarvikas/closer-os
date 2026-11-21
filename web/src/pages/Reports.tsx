@@ -9,7 +9,8 @@ import { useOrg } from '../lib/session'
 import Targets from './Targets'
 import LeadStatus from '../components/LeadStatus'
 import { useDirectory, type Directory } from '../lib/directory'
-import { fetchReport, zonedMidnight, zonedYmd, addDays, fmtYmd, pct, downloadCsv, type Bucket, type Metrics, type Report, type Dir, type Channel } from '../lib/report'
+import HourInsights, { bestHour, type HourIns } from '../components/HourInsights'
+import { chList, dirList, fetchReport, zonedMidnight, zonedYmd, addDays, fmtYmd, pct, downloadCsv, type Bucket, type Metrics, type Report, type Dir, type Channel } from '../lib/report'
 import type { Organization } from '../lib/types'
 import { Button, Card, Empty, ErrorBox, PageHeader, Spinner } from '../components/ui'
 import { Bars, Meter, SegmentBar, callColors } from '../components/charts'
@@ -130,7 +131,7 @@ export default function Reports() {
         tab === 'overview' ? <Overview r={report} fileTag={fileTag} /> :
         tab === 'team' ? <Team r={report} dir={dir} fileTag={fileTag} onDrill={open} /> :
         tab === 'daily' ? <Daily r={report} dir={dir} fileTag={fileTag} onDrill={open} /> :
-        <Hourly r={report} fileTag={fileTag} onDrill={open} />}
+        <Hourly r={report} fileTag={fileTag} onDrill={open} orgId={org.id} tz={org.timezone} from={range.from} to={range.to} users={applied.users} callDir={applied.dir} ch={applied.ch} dir={dir} />}
     </>
   )
 }
@@ -329,7 +330,18 @@ function Daily({ r, dir, fileTag, onDrill }: { r: Report; dir: Directory; fileTa
 
 /* ───────────── By hour ───────────── */
 
-function Hourly({ r, fileTag, onDrill }: { r: Report; fileTag: string; onDrill: OnDrill }) {
+function Hourly({ r, fileTag, onDrill, orgId, tz, from, to, users, callDir, ch, dir }: { r: Report; fileTag: string; onDrill: OnDrill
+  orgId: string; tz: string; from: Date; to: Date; users: string[]; callDir: Dir; ch: Channel; dir: Directory | null }) {
+  const [ins, setIns] = useState<HourIns | null>(null)
+  useEffect(() => {
+    setIns(null)
+    supabase.rpc('hour_insights', { p_org: orgId, p_from: from.toISOString(), p_to: to.toISOString(), p_users: users.length ? users : null,
+      p_dirs: dirList(callDir), p_channels: chList(ch) }).then(({ data }) => { if (data) setIns(data as HourIns) })
+  }, [orgId, from, to, users, callDir, ch])
+  const nowParts = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: 'numeric', hour12: false }).format(new Date())
+  const nowHour = parseInt(nowParts, 10) % 24
+  const isToday = to.getTime() > Date.now() && from.getTime() <= Date.now()
+  const nowText = new Date().toLocaleTimeString('en-IN', { timeZone: tz, hour: 'numeric', minute: '2-digit' })
   const label = hourLabel
   const by = new Map(r.byHour.map(h => [h.hr, h.total]))
   const used = r.byHour.filter(h => h.total.calls > 0).map(h => h.hr)
@@ -338,10 +350,9 @@ function Hourly({ r, fileTag, onDrill }: { r: Report; fileTag: string; onDrill: 
   const hours = Array.from({ length: hi - lo + 1 }, (_, i) => lo + i)
   const zero = { calls: 0, conn: 0, conn_dur: 0, out: 0, inc: 0, missed: 0, not_picked: 0 } as Metrics
   const busiest = [...r.byHour].sort((a, b) => b.total.conn - a.total.conn)[0]
-  // Best hour (owner's rule): connected calls + talk time, each counts half, scored against the top hour for each. All hours count.
-  const maxConn = Math.max(1, ...r.byHour.map(h => h.total.conn)), maxTalk = Math.max(1, ...r.byHour.map(h => h.total.conn_dur))
-  const score = (m: Metrics) => (m.conn / maxConn + m.conn_dur / maxTalk) / 2
-  const best = [...r.byHour].filter(h => h.total.conn > 0).sort((a, b) => score(b.total) - score(a.total))[0]
+  // Best hour (owner's rule): conversations + talk time + positive outcomes, each counts equally. All hours count.
+  const posBy = new Map((ins?.hours ?? []).map(h => [h.hr, h.pos]))
+  const best = bestHour(r.byHour.map(h => ({ hr: h.hr, conn: h.total.conn, talk: h.total.conn_dur, pos: posBy.get(h.hr) ?? 0 })))
   const t = r.total
   const cells = (b: Metrics, hr?: number) => {
     const go = (kind: Kind) => () => onDrill({ hour: hr, kind, label: kindName[kind] })
@@ -376,10 +387,8 @@ function Hourly({ r, fileTag, onDrill }: { r: Report; fileTag: string; onDrill: 
             <tr className="bg-slate-50 font-semibold"><td className="px-3 py-2">Total</td>{cells(t)}</tr>
           </tbody>
         </table>
-        {best && <p className="border-t border-slate-100 bg-emerald-50/50 px-4 py-3 text-sm text-slate-600">
-          <b className="text-emerald-700">Best hour = {hourSlot(best.hr)}</b>: {best.total.conn} conversation{best.total.conn === 1 ? '' : 's'} and {dur(best.total.conn_dur)} of talk.
-          {' '}It's the hour with the most conversations and talk time together (both count equally) — when people are most likely to pick up and talk.
-        </p>}
+        <HourInsights byHour={r.byHour} ins={ins} dir={dir} oneUser={users.length === 1 ? users[0] : null} isToday={isToday} nowHour={nowHour}
+          nowText={nowText} endHour={hi} onDrill={d => onDrill({ hour: d.hour, user: d.user, kind: d.kind, label: d.label })} />
       </Card>
     </div>
   )

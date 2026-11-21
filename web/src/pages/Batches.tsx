@@ -50,7 +50,12 @@ export default function Batches() {
   useEffect(() => { setRows(null); setCards(null); load() }, [org.id, archived]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function del(c: CardRow) {
-    if (!await ask(`Delete "${c.name}"?\n\nThe ${c.registered} leads stay in Leads (with their calls and notes) — they just won't be in this webinar any more.`)) return
+    const { data: regs } = await supabase.rpc('batch_sheet_regs', { p_batch: c.id })
+    const n = (regs as number | null) ?? c.registered
+    const msg = c.auto_created
+      ? `Delete "${c.name}"?\n\n${n} people registered for this webinar from your sheet. Deleting removes their registration from this webinar (the leads, calls and notes stay).\n\nIf your sheet brings this date in again, Closer OS will add these ${n} people back automatically.\n\nUploaded a wrong Zoom file? You don't need to delete the webinar — just upload the right file again.`
+      : `Delete "${c.name}"?\n\n${n} people are registered for this webinar. Deleting removes their registration from this webinar (the leads, calls and notes stay).`
+    if (!await ask(msg, { ok: 'Delete webinar', danger: true })) return
     const { error } = await supabase.rpc('delete_batch', { p_batch: c.id })
     if (error) return setError(errorText(error))
     load()

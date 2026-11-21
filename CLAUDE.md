@@ -2126,3 +2126,11 @@ intelligence → Play Store launch.
   (*bold* headings, no "copied"), PNG image (canvas) and one-page PDF (hand-written PDF with the JPEG). tests/summary-test.cjs.
   App: calls/DailySummaryAlarm.kt (exact alarms 8:00 + 21:30, notification with one line; holidays only when follow-ups are lined
   up / any activity), ui/SummaryScreen.kt (Copy text · Image · PDF via share sheet), Home tool "📋 Summary", vm.summaryKind.
+- Nov 21 (migration 0113): Cancer 23 Nov webinar was missing 3 sheet registrants — Amee uploaded the 19 Nov Zoom report into the
+  23 Nov webinar (173 added), then deleted that webinar (registrations gone); the sheet re-created 23 Nov but never re-sends rows.
+  Fixed: batch_parked_regs — delete_batch parks a sheet webinar's registrants; t_batch_unpark adds them back when the same source
+  creates the same day again; delete warning says how many registered from the sheet. Owner rule: keep the sheet as the original.
+- PENDING (owner said "do all three, don't build yet"): (1) Zoom upload date check — report's meeting date ≠ webinar date →
+  warn "This report is from 19 Nov… upload to 19 Nov instead?"; (2) "Undo last upload" on the webinar for a few hours after a
+  Zoom upload (remove walk-ins it added, restore previous minutes); (3) short first-time "how this works" hints on the webinar
+  page. Owner also has UI suggestions coming (wait for them).

@@ -2104,7 +2104,7 @@ intelligence → Play Store launch.
 - Instant notification: push_wake(org, user, 'leads') → pg_net → edge function push (now verify_jwt=false; x-cron-secret
   path uses push_targets_service) → app PushService kind "leads" → TeamAlerts.check. my_new_leads returns again[] →
   "🔁 <name> registered again" / "3rd time · call while interest is high". App tag "🔁 Registered again ×N" (LeadIndex v12).
-- NOT done (owner to decide): 1,425 older Cancer leads (webinars 18 Oct–16 Nov) unassigned though the sheet says Nikhil.
+- 1,425 older Cancer leads (webinars 18 Oct–16 Nov) stay unassigned ON PURPOSE (owner, Nov 21): Nikhil called them before Closer OS existed. Do not assign them.
 - By hour report (Nov 21): chart card REMOVED (table + insights box say it all); best hour = conversations + talk + positive
   outcomes (components/HourInsights.tsx + hour_insights() SQL, app ReportsScreen HourInsightsCard), every hour + every member counts.
 - PENDING (owner, Nov 21, "just note, don't build"): By hour table always shows 8 AM – 12 AM (8:00 AM to 11:59 PM) as

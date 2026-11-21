@@ -13,6 +13,9 @@ const log = (...a) => console.log('•', ...a);
     const o = await mk('sum-owner@closeros-test.dev', 'Priya Owner'); const a = await mk('sum-rep1@closeros-test.dev', 'Nikhil Yadav'); const b = await mk('sum-rep2@closeros-test.dev', 'Amee Shah')
     const { data: og, error: oe } = await admin.from('organizations').insert({ name: 'Summary Co (TEST)', created_by: o }).select().single(); if (oe) throw oe; org = og.id
     await admin.from('org_members').insert([{ org_id: org, user_id: o, role: 'owner' }, { org_id: org, user_id: a, role: 'rep' }, { org_id: org, user_id: b, role: 'rep' }])
+    const names = ['Anita Verma', 'Rohit Jain', 'Meera Iyer', 'Sanjay Rao', 'Pooja Nair', 'Vivek Singh', 'Kavya Menon', 'Arjun Das']
+    const { error: le } = await admin.from('leads').insert(names.map((n, i) => ({ org_id: org, name: n, phone: '+9198000000' + String(i).padStart(2, '0'),
+      assigned_to: i % 2 ? a : b, intent: i % 3 === 0 ? 'ready' : 'hot', source: 'Webinar sheet' }))); if (le) throw le
     const now = Date.now(), calls = []
     for (let i = 0; i < 24; i++) calls.push({ id: require('crypto').randomUUID(), org_id: org, user_id: i % 3 ? a : b, direction: i % 7 === 0 ? 'missed' : 'outgoing', phone: '+9198000000' + String(i % 15).padStart(2, '0'),
       started_at: new Date(now - (i + 1) * 17 * 60e3).toISOString(), duration_sec: i % 2 ? 0 : 30 + i * 11 })

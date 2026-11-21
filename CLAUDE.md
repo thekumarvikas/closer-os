@@ -2172,3 +2172,11 @@ intelligence → Play Store launch.
   by talk time. MORNING shows today's plan FIRST, yesterday below; evening shows today then tomorrow. Website: Download image /
   Download PDF (no share sheet). App: Send image / Send PDF + Download image / Download PDF (MediaStore Downloads; Android < 10
   falls back to share).
+- Hot leads v2 (Nov 22, migration 0117, app 0.28.9): hot_leads(org, users, 50) → {total, list}: every hot lead (ready / Hot intent,
+  positive or call-back last outcome, a 5+ min call this week, missed call from them not called back (2 days), webinar warmth ≥ 70 in
+  14 days, score ≥ 60), never won/lost/invalid/DNC, never a team member (email, profile phone, work SIM, exact name). Each row: all
+  reasons (why[]) + work done (calls, connected, talk, WhatsApp, last talk, next call); order Ready → Hot → Interested → engaged →
+  rest, least recently talked first. day_stats.conn_outcome → "Outcomes filled x of y connected calls". Team members with the same
+  name show their email. Wording "Marked Hot". Web DailySummary = tiles row + left (plan, hot-leads table clickable → LeadDrawer,
+  team table) + right (results). WhatsApp text: 10 hot leads per owner + "+N more". App: hot rows open the lead (summary stays
+  underneath: MainActivity/closeTop check openLeadId first). Image/PDF: hot lines on two lines.

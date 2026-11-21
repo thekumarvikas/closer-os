@@ -1465,7 +1465,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         // Same order as the screens are stacked in MainActivity: whatever is drawn on top closes first.
         when {
             checkIn != null -> checkIn = null
-            summaryKind != null -> summaryKind = null
+            summaryKind != null && openLeadId == null -> summaryKind = null
             editSequence != null -> closeSequenceEditor()
             showImport -> { showImport = false; importData = null; importResult = null }
             showCallLists -> showCallLists = false

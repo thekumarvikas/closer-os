@@ -14,6 +14,7 @@ import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.foundation.horizontalScroll
@@ -46,7 +47,7 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
-data class SumLine(val label: String, val value: String)
+data class SumLine(val label: String, val value: String, val leadId: String? = null, val sub: String? = null)
 data class SumSection(val title: String, val lines: List<SumLine>, val note: String? = null)
 data class SumModel(val title: String, val sub: String, val sections: List<SumSection>)
 
@@ -88,7 +89,8 @@ fun buildSummary(s: JsonObject, currency: String): SumModel {
     done += SumSection("Results", listOfNotNull(
         SumLine("Sales", if (st.i("sales") > 0) "${st.i("sales")} · ${money(st.n("revenue"))}" else "0"),
         SumLine("Interested", "${st.i("interested")}"),
-        if (st.i("call_later") > 0) SumLine("Asked to call later", "${st.i("call_later")}") else null))
+        if (st.i("call_later") > 0) SumLine("Asked to call later", "${st.i("call_later")}") else null,
+        SumLine("Outcomes filled", "${st.i("conn_outcome")} of ${st.i("conversations")} connected calls")))
     bestHour((st["hours"] as? JsonArray)?.map { it.jsonObject } ?: emptyList())?.let {
         done += SumSection("Best hour", listOf(SumLine(slot(it.i("hr")), "${it.i("conn")} connected · ${d(it.i("talk"))}"))) }
     if (st.i("fu_due") > 0) done += SumSection("Follow-ups", listOfNotNull(
@@ -112,27 +114,46 @@ fun buildSummary(s: JsonObject, currency: String): SumModel {
         val at = runCatching { com.closeros.app.data.parseInstant(w.t("at")!!).atZone(tz).format(DateTimeFormatter.ofPattern("h:mm a")) }.getOrDefault("")
         plan += SumLine(w.t("name") ?: "Webinar", "$at · ${w.i("leads")} leads to remind")
     }
-    plan += SumLine("Hot leads", "${pl.i("hot")}")
+    val hotObj = pl["hot"] as? JsonObject
+    val ownerName = (s["people"] as? JsonArray)?.associate { it.jsonObject.t("user_id") to (it.jsonObject.t("name") ?: "") } ?: emptyMap()
+    val team = s["team"]?.jsonPrimitive?.booleanOrNull == true
+    plan += SumLine("Hot leads", "${hotObj?.i("total") ?: 0}")
     val out = mutableListOf(SumSection("${if (morning) "Today" else "Tomorrow"} · plan", plan))
-    (pl["hot_list"] as? JsonArray)?.map { it.jsonObject }?.takeIf { it.isNotEmpty() }?.let { hot ->
-        out += SumSection("Hot leads · call first", hot.mapIndexed { i, h -> SumLine("${i + 1}. ${h.t("name") ?: ""}", h.t("why")?.takeIf { it.isNotBlank() } ?: h.t("phone") ?: "") },
-            note = "Hot = said \"Hot\" or \"Ready to pay\", or very engaged in a webinar in the last 14 days (watched most of it, saw the pitch, chatted, answered polls, or registered again).")
+    (hotObj?.get("list") as? JsonArray)?.map { it.jsonObject }?.takeIf { it.isNotEmpty() }?.let { hot ->
+        fun whenTxt(k: String, h: JsonObject) = h.t(k)?.let { runCatching { com.closeros.app.data.parseInstant(it).atZone(tz).format(DateTimeFormatter.ofPattern("d MMM, h:mm a")) }.getOrNull() }
+        out += SumSection("Hot leads · call first (${hotObj.i("total")})", hot.mapIndexed { i, h ->
+            val why = (h["why"] as? JsonArray)?.mapNotNull { it.jsonPrimitive.contentOrNull }?.joinToString(" · ")?.ifBlank { null } ?: "Engaged"
+            val calls = h.i("calls"); val wa = h.i("wa")
+            val done = (if (calls > 0) "$calls call${if (calls > 1) "s" else ""} · ${h.i("connected")} connected · ${d(h.i("talk"))} talk" else "Not called yet") + (if (wa > 0) " · $wa WhatsApp" else "")
+            val whenLine = listOfNotNull(whenTxt("last_talk", h)?.let { "Last talked $it" }, whenTxt("next", h)?.let { "Next call $it" }).joinToString(" · ")
+            val owner = if (team) ownerName[h.t("owner")]?.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: "" else ""
+            SumLine("${i + 1}. ${h.t("name") ?: ""}$owner", "$why — $done", leadId = h.t("lead_id"), sub = whenLine.ifBlank { null })
+        }, note = "Hot = marked Hot or Ready to pay, interested on a recent call, talked 5+ min, called us back, or very engaged in a webinar in the last 14 days (watched most of it, saw the pitch, chatted, answered polls, registered again).")
     }
     // Morning: today's tasks first, yesterday below. Evening: today's results first, then tomorrow.
     if (morning) out.addAll(done) else out.addAll(0, done)
-    val day = runCatching { LocalDate.parse(s.t("day")).format(DateTimeFormatter.ofPattern("EEE, d MMM")) }.getOrDefault(s.t("day") ?: "")
+    fun dn(k: String) = runCatching { LocalDate.parse(s.t(k)).format(DateTimeFormatter.ofPattern("EEE, d MMM")) }.getOrDefault(s.t(k) ?: "")
+    val day = "Plan for ${dn("plan_day")} · Results of ${dn("day")}"
     val who = if (s["team"]?.jsonPrimitive?.booleanOrNull == true) "${s.t("org_name")} · Team" else s.t("who") ?: ""
     return SumModel("${if (morning) "Morning" else "Evening"} summary", "$who · $day · ${ZonedDateTime.now(tz).format(DateTimeFormatter.ofPattern("h:mm a"))}", out)
 }
 
 fun summaryText(m: SumModel) = (listOf("*Closer OS · ${m.title}*", m.sub) +
-    m.sections.flatMap { s -> listOf("", "*${s.title}*") + listOfNotNull(s.note?.let { "_${it}_" }) + s.lines.map { "${it.label}: ${it.value}" } }).joinToString("\n")
+    m.sections.flatMap { s ->
+        // Hot leads: the first 10 per owner in the WhatsApp text; the rest stay in the app / image / PDF.
+        val per = mutableMapOf<String, Int>(); var more = 0
+        val lines = if (!s.title.startsWith("Hot leads")) s.lines else s.lines.filter { l ->
+            val k = Regex("\\(([^)]*)\\)$").find(l.label)?.groupValues?.get(1) ?: ""; val n = (per[k] ?: 0) + 1; per[k] = n
+            (n <= 10).also { if (!it) more++ } }
+        listOf("", "*${s.title}*") + listOfNotNull(s.note?.let { "_${it}_" }) + lines.map { "${it.label}: ${it.value}" } +
+            (if (more > 0) listOf("+$more more — open Closer OS") else emptyList())
+    }).joinToString("\n")
 
 /** Phone-sized picture of the summary (same look as the dashboard's image). */
 fun summaryBitmap(m: SumModel): Bitmap {
     val w = 1080; val pad = 64f; val row = 56
     fun wrap(t: String): List<String> { val out = mutableListOf<String>(); var line = ""; t.split(' ').forEach { w -> if (("$line $w").length > 62) { out += line; line = w } else line = if (line.isEmpty()) w else "$line $w" }; if (line.isNotEmpty()) out += line; return out }
-    val h = 260 + m.sections.sumOf { 90 + it.lines.size * row + (it.note?.let { n -> wrap(n).size * 40 + 16 } ?: 0) } + 80
+    val h = 260 + m.sections.sumOf { sec -> 90 + sec.lines.sumOf { if (it.value.length > 44) 56 + wrap(it.value).size * 36 + 14 else row } + (sec.note?.let { n -> wrap(n).size * 40 + 16 } ?: 0) } + 80
     val b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888); val c = Canvas(b)
     val p = Paint(Paint.ANTI_ALIAS_FLAG)
     c.drawColor(0xFFFFFFFF.toInt()); p.color = 0xFF0E5E57.toInt(); c.drawRect(0f, 0f, w.toFloat(), 200f, p)
@@ -147,6 +168,11 @@ fun summaryBitmap(m: SumModel): Bitmap {
         p.color = 0xFFE3E7EE.toInt(); c.drawRect(pad, y + 18, w - pad, y + 20, p); y += 70
         s.note?.let { n -> wrap(n).forEach { ln -> txt(ln, pad, y, 26f, 0xFF6B7280.toInt(), false); y += 40 }; y += 16 }
         s.lines.forEach { l ->
+            if (l.value.length > 44) {
+                txt(l.label, pad, y, 30f, 0xFF1D2433.toInt(), true); y += 42
+                wrap(l.value).forEach { ln -> txt(ln, pad + 24, y, 26f, 0xFF4A5263.toInt(), false); y += 36 }
+                y += 14; return@forEach
+            }
             txt(if (l.label.length > 36) l.label.take(35) + "…" else l.label, pad, y, 30f, 0xFF4A5263.toInt(), false)
             txt(l.value, w - pad, y, 30f, 0xFF1D2433.toInt(), true, right = true); y += row
         }
@@ -252,7 +278,11 @@ fun SummaryScreen(vm: AppViewModel, initialKind: String, onBack: () -> Unit) {
                         Text(s.title.uppercase(), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Brand.primary, modifier = Modifier.padding(top = 14.dp, bottom = 4.dp))
                         s.note?.let { Text(it, fontSize = 12.sp, color = Brand.muted, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, modifier = Modifier.padding(bottom = 4.dp)) }
                         s.lines.forEach { l ->
-                            Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                            if (l.leadId != null) Column(Modifier.fillMaxWidth().clickable { vm.openLeadId = l.leadId }.padding(vertical = 6.dp)) {
+                                Text(l.label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Brand.primary)
+                                Text(l.value, fontSize = 13.sp)
+                                l.sub?.let { Text(it, fontSize = 12.sp, color = Brand.muted) }
+                            } else Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
                                 Text(l.label, Modifier.weight(1f), fontSize = 14.sp, color = Brand.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text(l.value, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.End)
                             }

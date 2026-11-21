@@ -172,6 +172,6 @@ class FollowUpReceiver : BroadcastReceiver() {
 /** Alarms are cleared when the phone restarts: sync again to put them back. */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, i: Intent) {
-        if (i.action == Intent.ACTION_BOOT_COMPLETED) { CallSync.syncNow(ctx); CheckIn.schedule(ctx) }
+        if (i.action == Intent.ACTION_BOOT_COMPLETED) { CallSync.syncNow(ctx); CheckIn.schedule(ctx); DailySummaryAlarm.schedule(ctx) }
     }
 }

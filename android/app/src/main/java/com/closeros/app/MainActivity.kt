@@ -85,6 +85,7 @@ class MainActivity : ComponentActivity() {
             vm.callLeadById(it, i.getStringExtra("purpose")); i.removeExtra("call_lead") }
         i?.getStringExtra("open_lead")?.let { vm.openLeadId = it; i.removeExtra("open_lead") }
         // Hourly check-in notification: open the card, or "start calling" straight away.
+        i?.getStringExtra("summary")?.let { vm.summaryKind = it; i.removeExtra("summary") }
         i?.getStringExtra("checkin")?.let { if (it == "go") vm.checkInGo() else vm.openCheckIn(); i.removeExtra("checkin") }
         i?.getStringExtra("open_tab")?.let { if (it == "leads") { vm.tab = Tab.Leads; vm.reloadLeads() }; if (it == "sequences") { vm.showSequences = true; vm.loadSequences(); vm.loadSeqDue() }
             if (it == "wa_due") vm.startSeqQueue(); i.removeExtra("open_tab") }
@@ -171,6 +172,7 @@ fun Root(vm: AppViewModel) {
             vm.pending != null -> if (com.closeros.app.data.CallLists.isListId(vm.pending?.leadId)) com.closeros.app.ui.ListCallScreen(vm) else OutcomeScreen(vm)
             vm.announcements.isNotEmpty() -> AnnouncementScreen(vm, vm.announcements.first())
             vm.checkIn != null -> vm.checkIn?.let { CheckInScreen(vm, it) }
+            vm.summaryKind != null -> com.closeros.app.ui.SummaryScreen(vm, vm.summaryKind!!) { vm.summaryKind = null }
             vm.showRemoveAds -> RemoveAdsScreen(vm)
             vm.waActive -> WaQueueScreen(vm)
             vm.editSequence != null -> vm.editSequence?.let { s -> SequenceEditor(vm, s) }

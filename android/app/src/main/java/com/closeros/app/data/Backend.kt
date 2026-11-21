@@ -641,6 +641,13 @@ object Repo {
             put("p_users", users?.let { u -> buildJsonArray { u.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } } } ?: kotlinx.serialization.json.JsonNull)
         }).data)
 
+    /** Morning / evening summary (daily_summary): user null = me, "team" = whole team (managers), else that person. */
+    suspend fun dailySummary(orgId: String, kind: String, user: String?): JsonObject =
+        json.parseToJsonElement(rpcR("daily_summary", buildJsonObject {
+            put("p_org", orgId); put("p_kind", kind)
+            put("p_user", if (user == null || user == "team") kotlinx.serialization.json.JsonNull else kotlinx.serialization.json.JsonPrimitive(user))
+        }).data).jsonObject
+
     suspend fun targetsFor(orgId: String, from: LocalDate, to: LocalDate, users: List<String>?): ProgressReport =
         json.decodeFromString(rpcR("target_progress", buildJsonObject {
             put("p_org", orgId); put("p_from", from.toString()); put("p_to", to.toString())

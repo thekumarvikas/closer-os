@@ -115,6 +115,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ── Hourly check-in card ──
     var checkIn by mutableStateOf<com.closeros.app.calls.CheckIn.Summary?>(null)
+    var summaryKind by mutableStateOf<String?>(null)   // "morning" | "evening" = summary screen open
     private var checkInSeenSlot = 0L
     /** From the notification: the check-in it showed (or a fresh one). */
     fun openCheckIn() = viewModelScope.launch {
@@ -432,7 +433,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
                 outcomes = Repo.outcomes(m.org_id).also { save("outcomes", it) }
                 runCatching { categories = Repo.categories(m.org_id).also { save("categories", it) } }
                 runCatching { templates = Repo.templates(m.org_id).also { save("templates", it) } }
-                if (!lite) { refreshHome(); reloadLeads(); CallSync.schedule(ctx); CallSync.syncNow(ctx); com.closeros.app.calls.CheckIn.schedule(ctx) }
+                if (!lite) { refreshHome(); reloadLeads(); CallSync.schedule(ctx); CallSync.syncNow(ctx); com.closeros.app.calls.CheckIn.schedule(ctx); com.closeros.app.calls.DailySummaryAlarm.schedule(ctx) }
             }
         }.onFailure {
             if (membership == null) { message = com.closeros.app.data.SafeError.forUser(it, "Couldn't load your company — check your internet"); com.closeros.app.data.AppLog.error(ctx, "load company", it) }
@@ -1464,6 +1465,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         // Same order as the screens are stacked in MainActivity: whatever is drawn on top closes first.
         when {
             checkIn != null -> checkIn = null
+            summaryKind != null -> summaryKind = null
             editSequence != null -> closeSequenceEditor()
             showImport -> { showImport = false; importData = null; importResult = null }
             showCallLists -> showCallLists = false

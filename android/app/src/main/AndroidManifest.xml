@@ -76,6 +76,7 @@
         </service>
         <receiver android:name=".calls.FollowUpReceiver" android:exported="false" />
         <receiver android:name=".calls.CheckInReceiver" android:exported="false" />
+        <receiver android:name=".calls.DailySummaryReceiver" android:exported="false" />
         <receiver android:name=".data.WaScheduledReceiver" android:exported="false" />
         <receiver android:name=".calls.BootReceiver" android:exported="false">
             <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter>

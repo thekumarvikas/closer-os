@@ -2117,3 +2117,12 @@ intelligence → Play Store launch.
   time copied, Dialled, Received, Missed, Connected out of dialled, Unique leads, Sales (+ talk time, conversations, best hour,
   follow-ups on time / missed, missed callers not called back, outcomes, tomorrow's plan…). Owner also liked idea #6
   (WhatsApp-ready branded image/PDF per person) — elaborated in chat, waiting for answers.
+- BUILT (Nov 21, migration 0112, app 0.28.6): daily summaries. daily_summary(org, kind morning|evening, day?, user?) + day_stats():
+  morning = yesterday's results + today's plan (8:00 AM), evening = today's results + tomorrow's plan (9:30 PM), company tz.
+  Calls (dialled, connected of dialled, received, missed + not called back, conversations, talk, unique leads), results (sales +
+  revenue, interested, call later), best hour (same equal-weight rule), follow-ups on time/late/not called, team lines per person
+  (managers), plan (follow-ups due, overdue, hot leads, missed callers, webinars with leads to remind), holiday note.
+  Web: components/DailySummary.tsx on the Dashboard (Morning/Evening, Whole team / a person), lib/summary.ts → WhatsApp text
+  (*bold* headings, no "copied"), PNG image (canvas) and one-page PDF (hand-written PDF with the JPEG). tests/summary-test.cjs.
+  App: calls/DailySummaryAlarm.kt (exact alarms 8:00 + 21:30, notification with one line; holidays only when follow-ups are lined
+  up / any activity), ui/SummaryScreen.kt (Copy text · Image · PDF via share sheet), Home tool "📋 Summary", vm.summaryKind.

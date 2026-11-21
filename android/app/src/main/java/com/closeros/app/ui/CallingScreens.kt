@@ -228,6 +228,7 @@ fun HomeScreen(vm: AppViewModel) {
                 add(Triple("📊", if (vm.isManager && !vm.isSolo) "Reports" else "My reports") { vm.showReports = true })
                 add(Triple("📈", "Lead work") { vm.require(com.closeros.app.data.Feature.REPORTS) { vm.showLeadWork = true } })
                 add(Triple("💡", "Sales insights") { vm.require(com.closeros.app.data.Feature.REPORTS) { vm.showRecipe = true } })
+                add(Triple("📋", "Summary") { vm.summaryKind = if (java.time.LocalTime.now().hour < 15) "morning" else "evening" })
                 if (vm.reviews.isNotEmpty()) add(Triple("🎯", "Feedback") { vm.showFeedback = true })
             }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

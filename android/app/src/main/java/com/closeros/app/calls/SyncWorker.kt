@@ -100,7 +100,8 @@ object CallSync {
         runCatching { TeamAlerts.check(ctx, orgId) }
         runCatching { com.closeros.app.data.SeqAlerts.check(ctx, orgId) }
         runCatching { com.closeros.app.data.WaSchedAlarms.scheduleAll(ctx, com.closeros.app.data.Seqs.myScheduled(orgId)) }   // scheduled WhatsApp alarms
-        runCatching { CheckIn.schedule(ctx) }   // hourly check-ins (settings may have changed)
+        runCatching { CheckIn.schedule(ctx) }
+        runCatching { DailySummaryAlarm.schedule(ctx) }   // hourly check-ins (settings may have changed)
         // 5) Refresh follow-up reminders.
         runCatching { FollowUpAlarms.scheduleAll(ctx, Repo.followUps(orgId)) }
         // 6) Save copies of reports, lead work, playbook, focus and recent recordings for use with no internet.

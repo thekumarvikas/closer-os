@@ -43,7 +43,7 @@ export default function HourInsights({ byHour, ins, dir, oneUser, isToday, nowHo
   const used = rows.filter(r => r.calls > 0)
   const highPick = [...used].sort((a, b) => b.conn / b.calls - a.conn / a.calls || b.calls - a.calls)[0]
   const mostConv = [...used].sort((a, b) => b.conn - a.conn)[0]
-  const lowPick = [...used].filter(r => r.calls >= 2).sort((a, b) => a.conn / a.calls - b.conn / b.calls)[0]
+  const lowPick = [...used].sort((a, b) => a.conn / a.calls - b.conn / b.calls)[0]
   const mostCalls = [...used].sort((a, b) => b.calls - a.calls)[0]
   const you = oneUser ? 'your ' : ''
   const B = ({ children }: { children: ReactNode }) => <b className="text-slate-800">{children}</b>
@@ -79,6 +79,7 @@ export default function HourInsights({ byHour, ins, dir, oneUser, isToday, nowHo
   ;(ins?.users90 ?? []).forEach(u => perUser.set(u.user_id, [...(perUser.get(u.user_id) ?? []), u]))
   const users90 = [...perUser.entries()].map(([u, r]) => ({ u, b: bestHour(r) })).filter((x): x is { u: string; b: HourRow } => !!x.b)
     .sort((a, b) => b.b.conn - a.b.conn)
+  const noConv = [...perUser.keys()].filter(u => !users90.some(x => x.u === u))
 
   // Suggestions
   const goodHrs = [...used].sort((a, b) => b.conn / b.calls - a.conn / a.calls).slice(0, 2).map(r => r.hr).sort((a, b) => a - b)
@@ -130,9 +131,10 @@ export default function HourInsights({ byHour, ins, dir, oneUser, isToday, nowHo
             ? <li><B>{dir?.nameOf(oneUser) ?? 'This team member'}: {slot(users90[0]?.b.hr ?? team90.hr)}</B> · {users90[0]?.b.conn ?? team90.conn} conversations · {dur(users90[0]?.b.talk ?? team90.talk)} of talk</li>
             : <>
               <li><B>Whole team: {slot(team90.hr)}</B> · {team90.conn} conversations · {dur(team90.talk)} of talk</li>
-              {users90.length > 1 && <li>Each team member's best hour:
+              {users90.length > 0 && <li>Each team member's best hour:
                 <ul className="list-[circle] pl-5">{users90.map(x => <li key={x.u}>
-                  <Link onClick={() => onDrill({ user: x.u, hour: x.b.hr, label: `${dir?.nameOf(x.u) ?? ''} · ${slot(x.b.hr)}` })}>{dir?.nameOf(x.u) ?? '—'}: {slot(x.b.hr)}</Link> · {x.b.conn} conversations · {dur(x.b.talk)} of talk</li>)}</ul></li>}
+                  <Link onClick={() => onDrill({ user: x.u, hour: x.b.hr, label: `${dir?.nameOf(x.u) ?? ''} · ${slot(x.b.hr)}` })}>{dir?.nameOf(x.u) ?? '—'}: {slot(x.b.hr)}</Link> · {x.b.conn} conversations · {dur(x.b.talk)} of talk</li>)}
+                  {noConv.map(u => <li key={u}>{dir?.nameOf(u) ?? '—'}: no conversations yet in the last 90 days</li>)}</ul></li>}
             </>}
         </ul></>}
 

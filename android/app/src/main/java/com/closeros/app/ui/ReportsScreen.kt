@@ -394,7 +394,7 @@ private fun HourInsightsCard(hours: Map<Int, JsonObject>, ins: JsonObject?, team
     val tCalls = used.sumOf { it.calls }; val tConn = used.sumOf { it.conn }; val tTalk = used.sumOf { it.talk }; val tNp = used.sumOf { it.notPicked }
     val hi = used.maxWith(compareBy<HR> { it.conn * 1000 / it.calls }.thenBy { it.calls })
     val most = used.maxBy { it.conn }
-    val low = used.filter { it.calls >= 2 }.minByOrNull { it.conn * 1000 / it.calls }
+    val low = used.minByOrNull { it.conn * 1000 / it.calls }
     val busy = used.maxBy { it.calls }
     val outs = arr("outcomes")
     val later = outs.filter { Regex("call_back|call_later|later").containsMatchIn(it.s("code") ?: "") }.maxByOrNull { it.i("n") }
@@ -439,6 +439,8 @@ private fun HourInsightsCard(hours: Map<Int, JsonObject>, ins: JsonObject?, team
             else {
                 B("Whole team: ${slotOf(team90.hr)} · ${team90.conn} conversations · ${fmtDur(team90.talk)} of talk")
                 per.forEach { (u, b) -> B("${team.firstOrNull { it.id == u }?.name ?: "Someone"}: ${slotOf(b.hr)} · ${b.conn} conversations · ${fmtDur(b.talk)} of talk") }
+                arr("users90").mapNotNull { it.s("user_id") }.distinct().filter { u -> per.none { it.first == u } }
+                    .forEach { u -> B("${team.firstOrNull { it.id == u }?.name ?: "Someone"}: no conversations yet in the last 90 days") }
             }
         }
         if ((ins?.i("missed") ?: 0) > 0) {

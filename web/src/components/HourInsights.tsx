@@ -63,9 +63,9 @@ export default function HourInsights({ byHour, ins, dir, oneUser, isToday, nowHo
 
   // Hours not counted yet / not tried
   const workEnd = Math.max(endHour, 20)
-  const ahead = isToday && nowHour < workEnd ? [nowHour + 1, workEnd] : null
+  const ahead = isToday && nowHour <= workEnd ? [nowHour, workEnd] : null
   const usedSet = new Set(used.map(r => r.hr))
-  const empty = rows.filter(r => !usedSet.has(r.hr) && (!ahead || r.hr <= nowHour) && r.hr >= Math.min(...used.map(u => u.hr)) && r.hr <= workEnd).map(r => r.hr)
+  const empty = rows.filter(r => !usedSet.has(r.hr) && (!ahead || r.hr <= nowHour) && r.hr >= Math.min(...used.map(u => u.hr)) && r.hr <= workEnd && !(ahead && r.hr >= nowHour)).map(r => r.hr)
 
   // Daily pattern
   const days = new Map<string, HourRow[]>()
@@ -87,6 +87,8 @@ export default function HourInsights({ byHour, ins, dir, oneUser, isToday, nowHo
   const moveN = mostCalls && mostCalls.hr !== highPick.hr ? Math.min(10, Math.round(mostCalls.calls / 3)) : 0
   const gain = mostCalls ? Math.round(moveN * (pickGood - mostCalls.conn / mostCalls.calls)) : 0
 
+  const Tip = ({ children, why }: { children: ReactNode; why: ReactNode }) =>
+    <li>{children}<br /><span className="text-slate-500"><i>Why:</i> {why}</span></li>
   const H = ({ children }: { children: ReactNode }) => <h4 className="mb-1 mt-4 text-sm font-semibold text-slate-800 first:mt-0">{children}</h4>
   return (
     <div className="border-t border-slate-100 bg-emerald-50/40 px-5 py-4 text-sm leading-relaxed text-slate-600">
@@ -121,13 +123,6 @@ export default function HourInsights({ byHour, ins, dir, oneUser, isToday, nowHo
           {noOut > 0 && noOutTop && <li><B>No outcome saved yet:</B> {noOut} call{noOut === 1 ? '' : 's'}, most at <Link onClick={() => onDrill({ hour: noOutTop.hr, label: 'Calls at ' + slot(noOutTop.hr) })}>{slot(noOutTop.hr)}</Link></li>}
         </ul></>}
 
-      {(ahead || empty.length > 0) && <>
-        <H>🕐 Not counted yet</H>
-        <ul className="list-disc space-y-0.5 pl-5">
-          {ahead && <li>It's <B>{nowText}</B>. <B>{lbl(ahead[0])} – {lbl(ahead[1] + 1)}</B> hasn't happened yet today, so those hours aren't counted.</li>}
-          {empty.length > 0 && <li>No calls were made at <B>{empty.map(slot).join(', ')}</B>. Try {empty.length === 1 ? 'it' : 'them'} to see how {empty.length === 1 ? 'it does' : 'they do'}.</li>}
-        </ul></>}
-
       {team90 && <>
         <H>🏆 Best hour, last 90 days</H>
         <ul className="list-disc space-y-0.5 pl-5">
@@ -148,13 +143,25 @@ export default function HourInsights({ byHour, ins, dir, oneUser, isToday, nowHo
         </ul></>}
 
       <H>📌 Suggestions</H>
-      <ul className="list-disc space-y-0.5 pl-5">
-        <li>Put {you}follow-ups and hot leads at <B>{slot(best.hr)}</B>.</li>
-        {moveN > 0 && gain > 0 && <li><B>{mostCalls.calls} calls were made at {slot(mostCalls.hr)}</B>, with {pc(mostCalls.conn, mostCalls.calls)}% picked up. Moving {moveN} of them to <B>{goodSpan}</B> could give about <B>{gain} more conversation{gain === 1 ? '' : 's'}</B>.</li>}
-        {T.notPicked > 0 && <li><Link onClick={() => onDrill({ kind: 'not_picked', label: 'Not picked up' })}>{T.notPicked} calls weren't picked up</Link>. Try them again at <B>{goodSpan}</B>, when people pick up most.</li>}
-        {later && later.hr !== best.hr && <li><B>{later.n} leads said "{later.label}" at {slot(later.hr)}.</B> Plan those call-backs for <B>{slot(best.hr)}</B>.</li>}
-        {ins && ins.missed_open > 0 && <li>Call back the <B>{ins.missed_open} missed caller{ins.missed_open === 1 ? '' : 's'}</B> who {ins.missed_open === 1 ? "hasn't" : "haven't"} heard from {oneUser ? 'you' : 'the team'}.</li>}
+      <ul className="list-disc space-y-1.5 pl-5">
+        <Tip why={<>it gave the best mix of conversations and talk{isToday ? ' today' : ''} ({best.conn} conversations · {dur(best.talk)}{best.pos ? ` · ${best.pos} positive` : ''}), so the people {oneUser ? 'you' : 'the team'} most need to reach are most likely to talk then.</>}>
+          Put {you}follow-ups and hot leads at <B>{slot(best.hr)}</B>.</Tip>
+        {moveN > 0 && gain > 0 && <Tip why={<>only {pc(mostCalls.conn, mostCalls.calls)}% picked up at {slot(mostCalls.hr)}, against {pc(highPick.conn, highPick.calls)}% at {slot(highPick.hr)}. The same calls reach more people at a better hour.</>}>
+          Move about <B>{moveN} of the {mostCalls.calls} calls</B> made at {slot(mostCalls.hr)} to <B>{goodSpan}</B>. That could give about <B>{gain} more conversation{gain === 1 ? '' : 's'}</B>.</Tip>}
+        {T.notPicked > 0 && <Tip why={<>{goodSpan} had the highest pick-up ({pc(highPick.conn, highPick.calls)}%), so a second try then has the best chance of being answered.</>}>
+          Try the <Link onClick={() => onDrill({ kind: 'not_picked', label: 'Not picked up' })}>{T.notPicked} calls that weren't picked up</Link> again at <B>{goodSpan}</B>.</Tip>}
+        {later && later.hr !== best.hr && <Tip why={<>people who ask for a call later are interested but were busy. {slot(best.hr)} is when conversations go best, so they're more likely to have time to talk.</>}>
+          Plan the <B>{later.n} "{later.label}" call-backs</B> from {slot(later.hr)} for <B>{slot(best.hr)}</B>.</Tip>}
+        {ins && ins.missed_open > 0 && <Tip why={<>they called {oneUser ? 'you' : 'the team'} first, so they want to talk. A quick call back is the easiest conversation of the day, and waiting lets the interest cool.</>}>
+          Call back the <B>{ins.missed_open} missed caller{ins.missed_open === 1 ? '' : 's'}</B> who {ins.missed_open === 1 ? "hasn't" : "haven't"} heard back yet.</Tip>}
       </ul>
+
+      {(ahead || empty.length > 0) && <>
+        <H>🕐 Still to come</H>
+        <ul className="list-disc space-y-0.5 pl-5">
+          {ahead && <li>The day isn't over yet. It's <B>{nowText}</B>, so calls from <B>{lbl(ahead[0])} – {lbl(ahead[1] + 1)}</B> will be added as they happen, and the best hour may still change.</li>}
+          {empty.length > 0 && <li><B>{empty.map(slot).join(', ')}</B> {empty.length === 1 ? 'has' : 'have'} passed without any calls, so there's nothing to compare yet. A few calls in {empty.length === 1 ? 'that hour' : 'those hours'} will show whether {empty.length === 1 ? 'it works' : 'they work'} for you.</li>}
+        </ul></>}
 
       <p className="mt-4 text-xs text-slate-400">How "best hour" is chosen: conversations, talk time and positive outcomes count equally. Every hour is included. A conversation is a call that was picked up and talked.</p>
     </div>

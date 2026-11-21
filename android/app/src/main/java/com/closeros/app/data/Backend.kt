@@ -641,6 +641,12 @@ object Repo {
             put("p_users", users?.let { u -> buildJsonArray { u.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } } } ?: kotlinx.serialization.json.JsonNull)
         }).data)
 
+    /** Every hot lead (no limit) for "Show all" + the CSV download. */
+    suspend fun hotLeadsAll(orgId: String, user: String?): JsonObject =
+        json.parseToJsonElement(db.rpc("hot_leads_all", buildJsonObject {
+            put("p_org", orgId); put("p_user", user?.let { kotlinx.serialization.json.JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull)
+        }).data).jsonObject
+
     /** Morning / evening summary (daily_summary): user null = me, "team" = whole team (managers), else that person. */
     suspend fun dailySummary(orgId: String, kind: String, user: String?): JsonObject =
         json.parseToJsonElement(rpcR("daily_summary", buildJsonObject {

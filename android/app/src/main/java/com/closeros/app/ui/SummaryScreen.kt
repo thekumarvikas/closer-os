@@ -15,6 +15,8 @@ import android.graphics.pdf.PdfDocument
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.foundation.horizontalScroll
@@ -49,7 +51,7 @@ import java.time.format.DateTimeFormatter
 
 data class SumLine(val label: String, val value: String, val leadId: String? = null, val sub: String? = null)
 data class SumSection(val title: String, val lines: List<SumLine>, val note: String? = null)
-data class SumModel(val title: String, val sub: String, val sections: List<SumSection>)
+data class SumModel(val title: String, val sub: String, val sections: List<SumSection>, val hotTotal: Int = 0, val hotShown: Int = 0)
 
 private fun JsonObject.n(k: String) = this[k]?.jsonPrimitive?.doubleOrNull ?: 0.0
 private fun JsonObject.i(k: String) = n(k).toInt()
@@ -67,7 +69,42 @@ private fun bestHour(hours: List<JsonObject>): JsonObject? {
     return live.sortedWith(compareByDescending<JsonObject> { sc(it) }.thenByDescending { it.i("conn") }).first()
 }
 
-fun buildSummary(s: JsonObject, currency: String): SumModel {
+val HOT_CATS = mapOf(1 to "Ready to pay", 2 to "Hot", 3 to "Interested", 4 to "Positive — follow up",
+    5 to "Came back + active in Zoom", 6 to "Came back (attended 2+ webinars)", 7 to "Active in Zoom once", 8 to "Talked, not tagged yet — ask the team member")
+fun hotGroup(c: Int) = if (c <= 4) "🔥 Hot — tagged or positive outcome" else if (c <= 7) "⭐ Potentially hot — attended, not talked to yet" else "❓ Talked, not tagged yet"
+const val HOT_NOTE = "Hot = tagged Ready to pay / Hot / Interested or a positive outcome. Potentially hot = attended webinars (2+ times, or chatted / answered polls) but nobody has talked to them yet. Inside each category: most webinar minutes first, then most talk time with the team."
+
+/** Hot leads grouped by category (same rules as the dashboard). */
+fun hotSections(list: List<JsonObject>, total: Int, tz: ZoneId, team: Boolean, nameOf: (String?) -> String): List<SumSection> {
+    fun whenTxt(v: String?, pat: String) = v?.let { runCatching { com.closeros.app.data.parseInstant(it).atZone(tz).format(DateTimeFormatter.ofPattern(pat)) }.getOrNull() }
+    val out = mutableListOf<SumSection>(); var title = ""; var lines = mutableListOf<SumLine>()
+    list.forEachIndexed { i, h ->
+        val cat = h.i("cat"); val owner = nameOf(h.t("owner"))
+        val why = when { cat == 8 -> "Not tagged yet — ask ${owner.ifBlank { "the team member" }}"; cat >= 5 -> HOT_CATS[cat] ?: ""
+            else -> listOfNotNull(h.t("tag"), h.t("outcome")).joinToString(" · ").ifBlank { HOT_CATS[cat] ?: "" } }
+        val att = h.i("att"); val watch = h.i("watch"); val best = h.i("best")
+        val activity = listOfNotNull("Registered ${h.i("reg")}× · attended $att×",
+            if (watch > 0) "watched $watch min" + (if (att > 1 && best > 0) " (best $best min, ${whenTxt(h.t("best_at"), "d MMM")})" else "") else null,
+            if (h["pitch"]?.jsonPrimitive?.booleanOrNull == true) "saw the pitch" else null,
+            h.i("chats").takeIf { it > 0 }?.let { "$it chat${if (it > 1) "s" else ""}" }, if (h.i("polls") > 0) "answered polls" else null).joinToString(" · ")
+        val by = (h["talk_by"] as? JsonArray)?.map { it.jsonObject }?.filter { it.i("sec") > 0 } ?: emptyList()
+        val talkSec = h.i("talk")
+        val talk = if (talkSec > 0) "Talked ${talkSec / 60} min" + (if (by.size > 1) " (" + by.joinToString(", ") { "${nameOf(it.t("user")).substringBefore(' ')} ${it.i("sec") / 60} min" } + ")" else "") else "Not talked yet"
+        val calls = h.i("calls"); val wa = h.i("wa")
+        val done = listOfNotNull(talk, "$calls call${if (calls == 1) "" else "s"}", if (wa > 0) "$wa WhatsApp" else null).joinToString(" · ")
+        val whenLine = listOfNotNull(whenTxt(h.t("last_talk"), "d MMM, h:mm a")?.let { "Last talked $it" }, whenTxt(h.t("next"), "d MMM, h:mm a")?.let { "Next call $it" }).joinToString(" · ")
+        val t = "${hotGroup(cat)} · ${HOT_CATS[cat]}"
+        if (t != title) { if (lines.isNotEmpty()) out += SumSection(title, lines); title = t; lines = mutableListOf() }
+        lines += SumLine("${i + 1}. ${h.t("name") ?: ""}" + (if (team && owner.isNotBlank()) " ($owner)" else ""), "$why — $activity — $done",
+            leadId = h.t("lead_id"), sub = whenLine.ifBlank { null })
+    }
+    if (lines.isNotEmpty()) out += SumSection(title, lines)
+    if (out.isNotEmpty()) out[0] = out[0].copy(note = HOT_NOTE)
+    if (total > list.size) out += SumSection("+${total - list.size} more hot leads", listOf(SumLine("Open Closer OS", "to see all and download")))
+    return out
+}
+
+fun buildSummary(s: JsonObject, currency: String, hotOverride: JsonObject? = null): SumModel {
     val st = s["stats"]!!.jsonObject
     val tz = runCatching { ZoneId.of(s.t("tz")) }.getOrDefault(ZoneId.of("Asia/Kolkata"))
     val money = { v: Double -> java.text.NumberFormat.getCurrencyInstance(java.util.Locale("en", "IN")).apply {
@@ -78,19 +115,19 @@ fun buildSummary(s: JsonObject, currency: String): SumModel {
     val dialled = st.i("dialled"); val missed = st.i("missed"); val open = st.i("missed_open"); val leads = st.i("leads")
     done += SumSection("$res · calls", listOf(
         SumLine("Dialled", "$dialled"),
-        SumLine("Connected", "${st.i("connected")} of $dialled (${pct(st.i("connected"), dialled)}%)"),
+        SumLine("Connected calls", "${st.i("connected")} of $dialled dialled (${pct(st.i("connected"), dialled)}%)"),
         SumLine("Received", "${st.i("received")}"),
         SumLine("Missed", "$missed" + if (missed > 0) (if (open > 0) " ($open not called back)" else " (all called back)") else ""),
         SumLine("Talk time", d(st.i("talk")))))
     done += SumSection("$res · leads", listOf(
         SumLine("Total leads", "$leads"),
-        SumLine("Connected", "${st.i("leads_connected")} of $leads (${pct(st.i("leads_connected"), leads)}%)"),
+        SumLine("Leads connected", "${st.i("leads_connected")} of $leads (${pct(st.i("leads_connected"), leads)}%)"),
         SumLine("Talked 1 min or more", "${st.i("leads_1min")} of $leads (${pct(st.i("leads_1min"), leads)}%)")))
     done += SumSection("Results", listOfNotNull(
         SumLine("Sales", if (st.i("sales") > 0) "${st.i("sales")} · ${money(st.n("revenue"))}" else "0"),
         SumLine("Interested", "${st.i("interested")}"),
         if (st.i("call_later") > 0) SumLine("Asked to call later", "${st.i("call_later")}") else null,
-        SumLine("Outcomes filled", "${st.i("conn_outcome")} of ${st.i("conversations")} connected calls")))
+        SumLine("Outcomes saved", "${st.i("conn_outcome")} of ${st.i("conversations")} calls that connected (dialled + received)")))
     bestHour((st["hours"] as? JsonArray)?.map { it.jsonObject } ?: emptyList())?.let {
         done += SumSection("Best hour", listOf(SumLine(slot(it.i("hr")), "${it.i("conn")} connected · ${d(it.i("talk"))}"))) }
     if (st.i("fu_due") > 0) done += SumSection("Follow-ups", listOfNotNull(
@@ -101,7 +138,7 @@ fun buildSummary(s: JsonObject, currency: String): SumModel {
         done += SumSection("Team", people.sortedWith(compareByDescending<JsonObject> { it["stats"]!!.jsonObject.i("talk") }.thenByDescending { it["stats"]!!.jsonObject.i("dialled") }).map { p ->
             val ps = p["stats"]!!.jsonObject; val sl = ps.i("sales")
             SumLine(p.t("name") ?: "Someone", if (ps.i("dialled") + ps.i("received") == 0) "no calls" else
-                "${ps.i("dialled")} dialled · ${ps.i("leads_connected")} connected · ${d(ps.i("talk"))} · $sl sale${if (sl == 1) "" else "s"}")
+                "${ps.i("dialled")} dialled · ${ps.i("leads_connected")} leads connected · ${d(ps.i("talk"))} · $sl sale${if (sl == 1) "" else "s"}")
         })
     }
     val pl = s["plan"]!!.jsonObject; val plan = mutableListOf<SumLine>()
@@ -114,28 +151,20 @@ fun buildSummary(s: JsonObject, currency: String): SumModel {
         val at = runCatching { com.closeros.app.data.parseInstant(w.t("at")!!).atZone(tz).format(DateTimeFormatter.ofPattern("h:mm a")) }.getOrDefault("")
         plan += SumLine(w.t("name") ?: "Webinar", "$at · ${w.i("leads")} leads to remind")
     }
-    val hotObj = pl["hot"] as? JsonObject
+    val hotObj = hotOverride ?: (pl["hot"] as? JsonObject)
     val ownerName = (s["people"] as? JsonArray)?.associate { it.jsonObject.t("user_id") to (it.jsonObject.t("name") ?: "") } ?: emptyMap()
     val team = s["team"]?.jsonPrimitive?.booleanOrNull == true
     plan += SumLine("Hot leads", "${hotObj?.i("total") ?: 0}")
     val out = mutableListOf(SumSection("${if (morning) "Today" else "Tomorrow"} · plan", plan))
-    (hotObj?.get("list") as? JsonArray)?.map { it.jsonObject }?.takeIf { it.isNotEmpty() }?.let { hot ->
-        fun whenTxt(k: String, h: JsonObject) = h.t(k)?.let { runCatching { com.closeros.app.data.parseInstant(it).atZone(tz).format(DateTimeFormatter.ofPattern("d MMM, h:mm a")) }.getOrNull() }
-        out += SumSection("Hot leads · call first (${hotObj.i("total")})", hot.mapIndexed { i, h ->
-            val why = (h["why"] as? JsonArray)?.mapNotNull { it.jsonPrimitive.contentOrNull }?.joinToString(" · ")?.ifBlank { null } ?: "Engaged"
-            val calls = h.i("calls"); val wa = h.i("wa")
-            val done = (if (calls > 0) "$calls call${if (calls > 1) "s" else ""} · ${h.i("connected")} connected · ${d(h.i("talk"))} talk" else "Not called yet") + (if (wa > 0) " · $wa WhatsApp" else "")
-            val whenLine = listOfNotNull(whenTxt("last_talk", h)?.let { "Last talked $it" }, whenTxt("next", h)?.let { "Next call $it" }).joinToString(" · ")
-            val owner = if (team) ownerName[h.t("owner")]?.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: "" else ""
-            SumLine("${i + 1}. ${h.t("name") ?: ""}$owner", "$why — $done", leadId = h.t("lead_id"), sub = whenLine.ifBlank { null })
-        }, note = "Hot = marked Hot or Ready to pay, interested on a recent call, talked 5+ min, called us back, or very engaged in a webinar in the last 14 days (watched most of it, saw the pitch, chatted, answered polls, registered again).")
-    }
+    val hotList = (hotObj?.get("list") as? JsonArray)?.map { it.jsonObject } ?: emptyList()
+    out += hotSections(hotList, hotObj?.i("total") ?: 0, tz, team) { ownerName[it] ?: "" }
     // Morning: today's tasks first, yesterday below. Evening: today's results first, then tomorrow.
     if (morning) out.addAll(done) else out.addAll(0, done)
     fun dn(k: String) = runCatching { LocalDate.parse(s.t(k)).format(DateTimeFormatter.ofPattern("EEE, d MMM")) }.getOrDefault(s.t(k) ?: "")
     val day = "Plan for ${dn("plan_day")} · Results of ${dn("day")}"
     val who = if (s["team"]?.jsonPrimitive?.booleanOrNull == true) "${s.t("org_name")} · Team" else s.t("who") ?: ""
-    return SumModel("${if (morning) "Morning" else "Evening"} summary", "$who · $day · ${ZonedDateTime.now(tz).format(DateTimeFormatter.ofPattern("h:mm a"))}", out)
+    return SumModel("${if (morning) "Morning" else "Evening"} summary", "$who · $day · ${ZonedDateTime.now(tz).format(DateTimeFormatter.ofPattern("h:mm a"))}", out,
+        hotTotal = hotObj?.i("total") ?: 0, hotShown = hotList.size)
 }
 
 fun summaryText(m: SumModel) = (listOf("*Closer OS · ${m.title}*", m.sub) +
@@ -186,6 +215,37 @@ private fun shareFile(ctx: Context, f: File, mime: String) {
     val uri = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
     val i = Intent(Intent.ACTION_SEND).setType(mime).putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     runCatching { ctx.startActivity(Intent.createChooser(i, "Share summary").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+}
+
+/** Full hot-leads list as a CSV in Downloads (every detail). */
+fun saveHotCsv(ctx: Context, full: JsonObject, people: Map<String?, String>, tz: ZoneId) {
+    fun q(v: Any?) = "\"" + (v?.toString() ?: "").replace("\"", "\"\"") + "\""
+    fun t(v: String?) = v?.let { runCatching { com.closeros.app.data.parseInstant(it).atZone(tz).format(DateTimeFormatter.ofPattern("d MMM yyyy, h:mm a")) }.getOrNull() } ?: ""
+    val sb = StringBuilder("#,Category,Lead,Phone,Owner,Tag,Outcome,Registered,Attended,Watched (min),Best (min),Best webinar,Saw the pitch,Chats,Polls,Talk (min),Talk by team member,Calls,WhatsApp,Last talked,Next call\n")
+    ((full["list"] as? JsonArray)?.map { it.jsonObject } ?: emptyList()).forEachIndexed { i, h ->
+        val by = (h["talk_by"] as? JsonArray)?.map { it.jsonObject }?.joinToString("; ") { "${people[it.t("user")] ?: ""} ${it.i("sec") / 60}m" } ?: ""
+        sb.append(listOf(i + 1, HOT_CATS[h.i("cat")], h.t("name"), h.t("phone"), people[h.t("owner")] ?: "", h.t("tag"), h.t("outcome"), h.i("reg"), h.i("att"),
+            h.i("watch"), h.i("best"), t(h.t("best_at")), if (h["pitch"]?.jsonPrimitive?.booleanOrNull == true) "yes" else "", h.i("chats"), h.i("polls"),
+            h.i("talk") / 60, by, h.i("calls"), h.i("wa"), t(h.t("last_talk")), t(h.t("next"))).joinToString(",") { q(it) }).append('\n')
+    }
+    saveToDownloads(ctx, "hot-leads-${System.currentTimeMillis() / 1000}.csv", "text/csv") { it.write(sb.toString().toByteArray()) }
+}
+
+fun saveToDownloads(ctx: Context, name: String, mime: String, write: (java.io.OutputStream) -> Unit) {
+    runCatching {
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            val v = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.Downloads.DISPLAY_NAME, name); put(android.provider.MediaStore.Downloads.MIME_TYPE, mime) }
+            val uri = ctx.contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, v)!!
+            ctx.contentResolver.openOutputStream(uri)!!.use(write)
+        } else {
+            val dir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS).apply { mkdirs() }
+            File(dir, name).outputStream().use(write)
+        }
+        Toast.makeText(ctx, "Saved in Downloads: $name", Toast.LENGTH_LONG).show()
+    }.onFailure {
+        val f = File(File(ctx.cacheDir, "shared").apply { mkdirs() }, name); f.outputStream().use(write); shareFile(ctx, f, mime)
+    }
 }
 
 /** Save to the phone's Downloads folder. */
@@ -239,13 +299,18 @@ fun SummaryScreen(vm: AppViewModel, initialKind: String, onBack: () -> Unit) {
     var kind by remember { mutableStateOf(initialKind) }
     val team = vm.isManager && !vm.isSolo
     var who by remember { mutableStateOf(if (team) "team" else "me") }
-    var data by remember { mutableStateOf<SumModel?>(null) }
+    var raw by remember { mutableStateOf<JsonObject?>(null) }
+    var allHot by remember { mutableStateOf<JsonObject?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
     LaunchedEffect(kind, who) {
-        data = null; error = null
-        runCatching { buildSummary(Repo.dailySummary(m.org_id, kind, if (who == "me") null else who), m.organization.currency) }
-            .onSuccess { data = it }.onFailure { error = com.closeros.app.data.SafeError.forUser(it, "Couldn't load the summary") }
+        raw = null; allHot = null; error = null
+        runCatching { Repo.dailySummary(m.org_id, kind, if (who == "me") null else who) }
+            .onSuccess { raw = it }.onFailure { error = com.closeros.app.data.SafeError.forUser(it, "Couldn't load the summary") }
     }
+    val data = remember(raw, allHot) { raw?.let { r -> runCatching { buildSummary(r, m.organization.currency, allHot) }.getOrNull() } }
+    suspend fun fetchAll(): JsonObject? = runCatching { Repo.hotLeadsAll(m.org_id, if (who == "me" || who == "team") null else who) }
+        .onFailure { Toast.makeText(ctx, com.closeros.app.data.SafeError.forUser(it, "Couldn't load the hot leads"), Toast.LENGTH_LONG).show() }.getOrNull()
     Column(Modifier.fillMaxSize().background(Brand.bg)) {
         Row(Modifier.fillMaxWidth().padding(8.dp, 8.dp, 8.dp, 0.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") }
@@ -269,6 +334,16 @@ fun SummaryScreen(vm: AppViewModel, initialKind: String, onBack: () -> Unit) {
         Row(Modifier.padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton({ downloadSummary(ctx, dm, false) }, Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 6.dp)) { Text("⬇ Download image", maxLines = 1) }
             OutlinedButton({ downloadSummary(ctx, dm, true) }, Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 6.dp)) { Text("⬇ Download PDF", maxLines = 1) }
+        }
+        if (dm.hotTotal > 0) Row(Modifier.padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (dm.hotShown < dm.hotTotal) OutlinedButton({ scope.launch { fetchAll()?.let { allHot = it } } }, Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 6.dp)) { Text("Show all ${dm.hotTotal} hot leads", maxLines = 1) }
+            OutlinedButton({ scope.launch {
+                val full = allHot ?: fetchAll() ?: return@launch
+                allHot = full
+                val people = (raw?.get("people") as? JsonArray)?.associate { it.jsonObject.t("user_id") to (it.jsonObject.t("name") ?: "") } ?: emptyMap()
+                saveHotCsv(ctx, full, people, ZoneId.of(raw?.t("tz") ?: "Asia/Kolkata"))
+            } }, Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 6.dp)) { Text("⬇ Full hot list (CSV)", maxLines = 1) }
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
             Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.White)) {

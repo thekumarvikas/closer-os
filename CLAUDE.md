@@ -2180,3 +2180,16 @@ intelligence → Play Store launch.
   name show their email. Wording "Marked Hot". Web DailySummary = tiles row + left (plan, hot-leads table clickable → LeadDrawer,
   team table) + right (results). WhatsApp text: 10 hot leads per owner + "+N more". App: hot rows open the lead (summary stays
   underneath: MainActivity/closeTop check openLeadId first). Image/PDF: hot lines on two lines.
+- Hot leads v3 (Nov 22, migration 0118, app 0.29.0) — owner's final rules: CATEGORY decides the order, MINUTES sort inside.
+  1 Ready to pay · 2 Hot · 3 Interested (tag or interest outcome) · 4 other positive (tags approval/price/later, positive or
+  call-back outcomes) — no activity needed (WhatsApp-only is fine; activity just shown) · 5 Came back + active (attended 2+
+  webinars + chat/polls) · 6 Came back (2+) · 7 Active once (1 webinar + chat/polls) — 5–7 only when NOBODY talked to them and no
+  positive tag · 8 Talked, not tagged yet ("ask <owner>") = attended + talked, no positive tag. Never: registered-only, attended
+  once with no activity, cold / not-a-fit, won/lost/invalid/DNC, team members, missed callers (own plan line). Inside a category:
+  total watch minutes over ALL webinars ever ↓, total talk with the whole team ↓, Zoom activity ↓. Rows: registered N× · attended
+  N× · watched (best + date) · pitch · chats · polls · talk total + per team member · calls · WhatsApp · last talked · next call.
+  hot_leads(org, users, limit null = all) + hot_leads_all(org, user?) (RPC). Summary carries 50; dashboard "Show all N" + "Download
+  full list" CSV / PDF / image; app "Show all" + "Full hot list (CSV)" (saveToDownloads). Labels: "Connected calls x of y dialled",
+  "Leads connected", "Outcomes saved x of y calls that connected (dialled + received)", team "N leads connected".
+- Nov 22 finding: Cancer's Nikhil saved 0 outcomes on 47 connected calls (21 Nov) — "Display over other apps" off on his phone
+  (app_errors after-call traces), app 0.27.3. Owner told how to fix. Possible later: show "pop-up off" on Team page + summary.

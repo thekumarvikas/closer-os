@@ -1,5 +1,7 @@
 package com.closeros.app
 
+import com.closeros.app.data.WorkSims
+
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -121,7 +123,12 @@ fun Root(vm: AppViewModel) {
         if (lead.do_not_call) { vm.dncAsk = lead; return }   // ask first, then remove the mark and call
         // No SIM / airplane mode: say so instead of opening the phone app (and then asking for an outcome of a call that never happened).
         PhoneCalls.cannotCallReason(ctx)?.let { vm.message = it; if (vm.queueActive) { vm.queuePaused = true; vm.countdown = null }; return }
-        val sims = vm.sims()
+        val all = vm.sims()
+        // Company app: calls go out on the rep's work SIM automatically. Ask only with two work SIMs,
+        // or when no work SIM is set / the work SIM isn't in this phone.
+        val workSlots = if (BuildConfig.SOLO) emptySet() else WorkSims.mine(ctx).filter { it.status == "active" }.mapNotNull { it.slot }.toSet()
+        val work = all.filter { it.slot in workSlots }
+        val sims = if (work.isNotEmpty()) work else all
         val preferred = sims.firstOrNull { it.slot == vm.store.preferredSim }
         // In a queue, keep using the SIM chosen for the first call instead of asking every time.
         if (sims.size > 1 && !((vm.queueActive || vm.remoteCall) && preferred != null)) simChoice = lead to sims else vm.startCall(lead, preferred ?: sims.firstOrNull())

@@ -224,7 +224,7 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
             // Who, where from, what's next — then ONE line of numbers (no repeated stats further down).
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(fmtPhone(l.phone), fontSize = 18.sp)
+                    LeadContactsBlock(l) { }
                     listOfNotNull(l.profession, l.company, l.city, l.state).filter { it.isNotBlank() }.joinToString(" · ").takeIf { it.isNotEmpty() }?.let { Text(it, color = Brand.muted) }
                     listOfNotNull(l.source, l.campaign).filter { it.isNotBlank() }.joinToString(" · ").takeIf { it.isNotEmpty() }?.let { Text("Source: $it", color = Brand.muted, fontSize = 14.sp) }
                     Text(l.next_follow_up_at?.let { "📅 Next follow-up: ${fmtWhen(it)}" } ?: "📅 No follow-up planned", color = Brand.primary, fontSize = 14.sp, fontWeight = FontWeight.Medium)

@@ -2151,3 +2151,17 @@ intelligence → Play Store launch.
   Secondary (renamable), one Main; (5) webinar items: show-up by source, Zoom date check, Undo last upload, first-time hints, clickable
   cards + "Open webinar" button, "Share out sales calls" only when needed, By hour 8 AM–midnight + any other hour with calls.
   DROPPED by owner: "couldn't connect on the last N tries" hint; WhatsApp-presence tick (for now).
+
+## Round 17 built (Nov 21 2026, migrations 0114–0115, app 0.28.7)
+- Contacts: leads.phone_label / email_label (Primary), lead_phones.source + label 'Secondary', lead_emails; lead_contacts(lead),
+  set_lead_contact(lead, {kind, op add|label|main|remove}); find_lead also checks lead_emails. Web components/LeadContacts.tsx
+  (drawer) + components/Copy.tsx (Ph / Em: copy icon + long-press) on every phone/email; app ui/Contacts.kt (CopyText,
+  LeadContactsBlock on the lead page, "Registered as" tags). Tapping a number never calls.
+- Name conflicts: lead_name_conflicts / lead_names_ok → Duplicates modal "One number, different names".
+- Work SIM automatic (company app): MainActivity.call + dial pad use only active work SIMs; ask only with two (or none / not in phone).
+- Registered = from the sheet/import ONLY (0115: apply_zoom_report never sets it). batch_source_showup → BatchDetail
+  "Who joined — by where they came from" (Landing page vs Direct Zoom link, clickable). Zoom upload groups rows by email OR phone
+  linked together, skips own team + bots, accepts cleaned files (email or phone + minutes); date check vs the webinar day with
+  links to that day's webinars; zoom_upload_begin snapshot → "Undo last upload" (24 h, zoom_upload_undo). WebinarHints (dismissible).
+  Webinar cards clickable + "Open webinar"; "Share out sales calls" only when batch_cards.share_needed > 0.
+- By hour (web + app): always 8 AM – midnight + any other hour with calls.

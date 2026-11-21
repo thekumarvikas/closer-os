@@ -44,7 +44,11 @@ fun DialerScreen(vm: AppViewModel) {
     var leads by remember { mutableStateOf<List<Lead>>(emptyList()) }
     var history by remember { mutableStateOf<List<LogCall>>(emptyList()) }
     var adding by remember { mutableStateOf(false) }
-    val sims = remember { vm.sims() }
+    val sims = remember {
+        val all = vm.sims()
+        val slots = if (com.closeros.app.BuildConfig.SOLO) emptySet() else com.closeros.app.data.WorkSims.mine(ctx).filter { it.status == "active" }.mapNotNull { it.slot }.toSet()
+        all.filter { it.slot in slots }.ifEmpty { all }
+    }
     val digits = number.filter { it.isDigit() }
     // The phone's call history is read once when the dial pad opens, not on every key press.
     val allHistory by produceState<List<LogCall>?>(null) { value = withContext(Dispatchers.IO) { runCatching { PhoneCalls.history(ctx, 3000) }.getOrDefault(emptyList()) } }

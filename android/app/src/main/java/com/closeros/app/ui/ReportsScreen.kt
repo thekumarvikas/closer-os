@@ -335,9 +335,11 @@ fun ReportsScreen(vm: AppViewModel) {
             if (hours.isNotEmpty()) item {
                 val max = hours.values.maxOf { it.i("calls") }.coerceAtLeast(1)
                 Section("By hour (calls · conversations)") {
-                    (hours.keys.min()..hours.keys.max()).forEach { h ->
+                    // Always 8 AM – midnight, plus any other hour that had a call.
+                    ((8..23).toSet() + hours.keys).sorted().forEach { h ->
                         val r = hours[h]
-                        val hl = "${if (h % 12 == 0) 12 else h % 12} ${if (h < 12) "AM" else "PM"}"
+                        fun ap(x: Int) = "${if (x % 12 == 0) 12 else x % 12} ${if (x % 24 < 12) "AM" else "PM"}"
+                        val hl = "${ap(h)} – ${ap(h + 1)}"
                         BarRow(hl, (r?.i("calls") ?: 0).toFloat() / max, "${r?.i("calls") ?: 0} · ${r?.i("conn") ?: 0}", Brand.primary) { calls("Calls at $hl", "hour:$h") }
                     }
                 }

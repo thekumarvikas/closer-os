@@ -338,7 +338,10 @@ function Hourly({ r, fileTag, onDrill }: { r: Report; fileTag: string; onDrill: 
   const hours = Array.from({ length: hi - lo + 1 }, (_, i) => lo + i)
   const zero = { calls: 0, conn: 0, conn_dur: 0, out: 0, inc: 0, missed: 0, not_picked: 0 } as Metrics
   const busiest = [...r.byHour].sort((a, b) => b.total.conn - a.total.conn)[0]
-  const best = [...r.byHour].filter(h => h.total.calls >= 10).sort((a, b) => b.total.conn / b.total.calls - a.total.conn / a.total.calls)[0]
+  // Best hour (owner's rule): connected calls + talk time, each counts half, scored against the top hour for each. All hours count.
+  const maxConn = Math.max(1, ...r.byHour.map(h => h.total.conn)), maxTalk = Math.max(1, ...r.byHour.map(h => h.total.conn_dur))
+  const score = (m: Metrics) => (m.conn / maxConn + m.conn_dur / maxTalk) / 2
+  const best = [...r.byHour].filter(h => h.total.conn > 0).sort((a, b) => score(b.total) - score(a.total))[0]
   const t = r.total
   const cells = (b: Metrics, hr?: number) => {
     const go = (kind: Kind) => () => onDrill({ hour: hr, kind, label: kindName[kind] })
@@ -359,7 +362,7 @@ function Hourly({ r, fileTag, onDrill }: { r: Report; fileTag: string; onDrill: 
           ['TOTAL', t.calls, t.conn, pct(t.conn, t.calls), dur(t.conn_dur), t.out, t.inc, t.missed, t.not_picked]])} /></div>
       <Card className="p-5">
         <h3 className="font-semibold">Calls by hour of day</h3>
-        <p className="mb-6 mt-1 text-sm text-slate-500">Most conversations: <b>{hourSlot(busiest.hr)}</b>{best ? <> · Best answer rate: <b>{hourSlot(best.hr)}</b> ({pct(best.total.conn, best.total.calls)}%)</> : null} · click a bar or number to see the calls</p>
+        <p className="mb-6 mt-1 text-sm text-slate-500">Most conversations: <b>{hourSlot(busiest.hr)}</b>{best ? <> · Best hour: <b>{hourSlot(best.hr)}</b></> : null} · click a bar or number to see the calls</p>
         <Bars height={200} onClick={i => onDrill({ hour: hours[i], label: 'All calls' })} data={hours.map(h => { const b = by.get(h) ?? zero; return { label: hourSlot(h), short: h % 3 === 0 ? label(h) : '', value: b.calls,
           tip: <p className="text-slate-600">{b.conn} conversations ({pct(b.conn, b.calls)}%)</p> } })} />
       </Card>
@@ -367,12 +370,16 @@ function Hourly({ r, fileTag, onDrill }: { r: Report; fileTag: string; onDrill: 
         <table className="w-full text-sm">
           <thead className="bg-slate-50"><tr>{['Hour', T.calls, T.conversations, T.talk, T.dialled, T.received, T.missed, T.noAnswer].map(h => <th key={h} className="th">{h}</th>)}</tr></thead>
           <tbody className="divide-y divide-slate-100">
-            {hours.map(h => { const b = by.get(h) ?? zero; const top = best?.hr === h || (!best && busiest.hr === h)
+            {hours.map(h => { const b = by.get(h) ?? zero; const top = best?.hr === h
               return <tr key={h} className={top ? 'bg-emerald-50' : b.calls ? '' : 'text-slate-300'}>
                 <td className="whitespace-nowrap px-3 py-2 font-medium">{hourSlot(h)}{top && <span className="ml-2 rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">Best hour</span>}</td>{cells(b, h)}</tr> })}
             <tr className="bg-slate-50 font-semibold"><td className="px-3 py-2">Total</td>{cells(t)}</tr>
           </tbody>
         </table>
+        {best && <p className="border-t border-slate-100 bg-emerald-50/50 px-4 py-3 text-sm text-slate-600">
+          <b className="text-emerald-700">Best hour = {hourSlot(best.hr)}</b>: {best.total.conn} conversation{best.total.conn === 1 ? '' : 's'} and {dur(best.total.conn_dur)} of talk.
+          {' '}It's the hour with the most conversations and talk time together (both count equally) — when people are most likely to pick up and talk.
+        </p>}
       </Card>
     </div>
   )

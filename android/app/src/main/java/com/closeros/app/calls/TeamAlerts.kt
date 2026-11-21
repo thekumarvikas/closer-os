@@ -67,18 +67,33 @@ object TeamAlerts {
         anns?.let { showAnnouncements(ctx, it) }
         val since = store.newLeadsSince
         if (since == null) store.newLeadsSince = Instant.now().toString()
-        else runCatching { Repo.myNewLeads(orgId, since) }.getOrNull()?.takeIf { it.count > 0 }?.let { nl ->
+        else runCatching { Repo.myNewLeads(orgId, since) }.getOrNull()?.takeIf { it.count > 0 || it.again_count > 0 }?.let { nl ->
             channels(ctx)
-            val more = if (nl.count > nl.names.size) " and ${nl.count - nl.names.size} more" else ""
-            val n = NotificationCompat.Builder(ctx, LEADS)
-                .setSmallIcon(com.closeros.app.R.drawable.ic_notif).setColor(0xFF0E5E57.toInt())
-                .setContentTitle(if (nl.count == 1) "New lead assigned to you" else "${nl.count} new leads assigned to you")
-                .setContentText(nl.names.joinToString(", ") + more)
-                .setAutoCancel(true).setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setContentIntent(openApp(ctx, 8800, "leads")).build()
-            runCatching { ctx.getSystemService(NotificationManager::class.java).notify(8800, n) }
+            val nm = ctx.getSystemService(NotificationManager::class.java)
+            if (nl.count > 0) {
+                val more = if (nl.count > nl.names.size) " and ${nl.count - nl.names.size} more" else ""
+                val n = NotificationCompat.Builder(ctx, LEADS)
+                    .setSmallIcon(com.closeros.app.R.drawable.ic_notif).setColor(0xFF0E5E57.toInt())
+                    .setContentTitle(if (nl.count == 1) "New lead assigned to you" else "${nl.count} new leads assigned to you")
+                    .setContentText(nl.names.joinToString(", ") + more)
+                    .setAutoCancel(true).setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setContentIntent(openApp(ctx, 8800, "leads")).build()
+                runCatching { nm.notify(8800, n) }
+            }
+            // "🔁 Sujal Patel registered again · 3rd time" — one per person, they're the hottest leads.
+            nl.again.forEach { a ->
+                val n = NotificationCompat.Builder(ctx, LEADS)
+                    .setSmallIcon(com.closeros.app.R.drawable.ic_notif).setColor(0xFF0E5E57.toInt())
+                    .setContentTitle("🔁 ${a.name} registered again")
+                    .setContentText("${ordinal(a.times)} time · call while interest is high")
+                    .setAutoCancel(true).setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setContentIntent(openApp(ctx, 8801 + (a.id.hashCode() and 0xffff), "leads")).build()
+                runCatching { nm.notify(8801 + (a.id.hashCode() and 0xffff), n) }
+            }
             store.newLeadsSince = nl.latest ?: Instant.now().toString()
         }
         return anns ?: emptyList()
     }
+
+    private fun ordinal(n: Int) = n.toString() + when { n % 100 in 11..13 -> "th"; n % 10 == 1 -> "st"; n % 10 == 2 -> "nd"; n % 10 == 3 -> "rd"; else -> "th" }
 }

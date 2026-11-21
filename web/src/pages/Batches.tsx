@@ -9,13 +9,14 @@ import { useDirectory, type Directory } from '../lib/directory'
 import { fmtDateTime } from '../lib/format'
 import type { Batch } from '../lib/types'
 import { Badge, Button, Card, Empty, ErrorBox, Field, Modal, PageHeader, Spinner } from '../components/ui'
-import { ask } from '../lib/dialogs'
+import { ask, toast } from '../lib/dialogs'
+import LeadDrawer from './LeadDrawer'
 
 interface Row extends Batch { leads: number; attended: number }
 
 interface CardRow { id: string; name: string; kind: string; webinar_at: string; auto_created: boolean; zoom_uploaded: boolean
   registered: number; assigned: number; unassigned: number; called: number; attended: number; hot: number; repeats: number
-  rem_called: number; rem_talked: number; rem_calls: number; rem_by: { user_id: string; leads: number; calls: number; talked: number }[] }
+  rem_called: number; rem_talked: number; rem_calls: number; rem_by: { user_id: string; leads: number; calls: number; talked: number }[]; again: number; outside_rule: number }
 
 export default function Batches() {
   const { org, isManager } = useOrg()
@@ -24,6 +25,7 @@ export default function Batches() {
   const [showNew, setShowNew] = useState(false)
   const [archived, setArchived] = useState(false)
   const [view, setView] = useState<'list' | 'compare'>('list')
+  const [outsideFor, setOutsideFor] = useState<CardRow | null>(null)
   const [assignFor, setAssignFor] = useState<CardRow | null>(null)
   const [error, setError] = useState<string | null>(null)
   const dir = useDirectory(org.id)
@@ -93,8 +95,11 @@ export default function Batches() {
                     <div key={l} className="rounded-lg bg-slate-50 px-1 py-1.5"><p className="text-base font-semibold tabular-nums text-slate-900">{v}</p><p className="text-[11px] text-slate-500">{l}</p></div>))}
                 </div>
                 {(!past || c.rem_calls > 0) && c.registered > 0 && <ReminderStatus c={c} dir={dir} past={past} />}
+                {c.again > 0 && <p className="mt-2 text-xs text-orange-800"><b>🔁 {n(c.again)}</b> registered again — came back on their own, called first</p>}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   {c.unassigned > 0 && <Button className="!py-1.5" onClick={() => setAssignFor(c)}><UserPlus className="h-4 w-4" /> Unassigned {c.unassigned} → Assign</Button>}
+                  {c.outside_rule > 0 && <Button variant="secondary" className="!py-1.5" onClick={() => setOutsideFor(c)}
+                    title="These registered again and stayed with the person who had them, who isn't in this sheet's current rule">🔁 {c.outside_rule} kept with previous owner → Review</Button>}
                   {past && <Link to={`/webinars/${c.id}?after=1`}><Button variant={c.unassigned > 0 ? 'secondary' : 'primary'} className="!py-1.5">
                     <Video className="h-4 w-4" /> {c.zoom_uploaded ? 'Share out sales calls' : 'Upload Zoom reports → sales calls'}</Button></Link>}
                   <Link to={`/webinars/${c.id}`} className="text-sm text-brand-700 hover:underline">Open</Link>
@@ -136,6 +141,7 @@ export default function Batches() {
       </Card>}
       {showNew && <BatchForm onClose={() => setShowNew(false)} onSaved={load} />}
       {assignFor && dir && <AssignUnassigned batch={assignFor} dir={dir} onClose={() => setAssignFor(null)} onDone={load} />}
+      {outsideFor && dir && <OutsideRule batch={outsideFor} dir={dir} onClose={() => setOutsideFor(null)} onDone={load} />}
     </>
   )
 }
@@ -160,6 +166,63 @@ function ReminderStatus({ c, dir, past }: { c: CardRow; dir: Directory | null; p
         {c.rem_by.map(r => <tr key={r.user_id}><td className="truncate">{dir?.nameOf(r.user_id) ?? '—'}</td><td className="text-right">{r.leads}</td><td className="text-right">{r.talked}</td><td className="text-right">{r.calls}</td></tr>)}
       </tbody></table>}
     </div>
+  )
+}
+
+/** Registered again, kept with the previous owner who isn't in the current rule: open, bulk re-assign or keep. */
+function OutsideRule({ batch, dir, onClose, onDone }: { batch: CardRow; dir: Directory; onClose: () => void; onDone: () => void }) {
+  const { org } = useOrg()
+  type R = { lead_id: string; name: string; phone: string; owner: string; rule_pick: string | null; times: number; joined_at: string | null }
+  const [rows, setRows] = useState<R[] | null>(null)
+  const [sel, setSel] = useState<string[]>([])
+  const [to, setTo] = useState('')
+  const [open, setOpen] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const load = () => supabase.rpc('batch_outside_rule', { p_batch: batch.id }).then(({ data, error }) => {
+    if (error) setError(errorText(error)); else { setRows((data ?? []) as R[]); setSel([]) } })
+  useEffect(() => { void load() }, [batch.id])
+  async function assign(ids: string[], user: string) {
+    setBusy(true); setError(null)
+    const { error } = await supabase.rpc('bulk_update_leads', { p_org: org.id, p_ids: ids, p: { assigned_to: user } })
+    setBusy(false)
+    if (error) return setError(errorText(error))
+    toast(`${ids.length} lead${ids.length === 1 ? '' : 's'} given to ${dir.nameOf(user)}`)
+    onDone(); void load()
+  }
+  async function bySheet() {
+    const groups = new Map<string, string[]>()
+    rows?.filter(r => sel.includes(r.lead_id) && r.rule_pick).forEach(r => groups.set(r.rule_pick!, [...(groups.get(r.rule_pick!) ?? []), r.lead_id]))
+    for (const [u, ids] of groups) await assign(ids, u)
+  }
+  const active = dir.members.filter(m => m.status === 'active')
+  return (
+    <Modal open onClose={onClose} title={`Kept with previous owner · ${batch.name}`} footer={<Button variant="secondary" onClick={onClose}>Close</Button>}>
+      <div className="space-y-3 text-sm">
+        <p className="text-slate-600">These people registered again. They stayed with the team member who had them before, who isn't in this sheet's current rule. Keep them, or tick and give them to someone else.</p>
+        <ErrorBox error={error} />
+        {!rows ? <Spinner /> : rows.length === 0 ? <p className="text-slate-500">Nothing left to review.</p> : <>
+          <div className="max-h-80 overflow-auto rounded-lg border border-slate-200">
+            <table className="w-full text-left"><thead className="sticky top-0 bg-slate-50 text-xs text-slate-500"><tr>
+              <th className="p-2"><input type="checkbox" aria-label="Select all" checked={sel.length === rows.length} onChange={() => setSel(sel.length === rows.length ? [] : rows.map(r => r.lead_id))} /></th>
+              <th className="p-2">Lead</th><th className="p-2">With</th><th className="p-2">Sheet says</th><th className="p-2 text-right">Registered</th></tr></thead>
+              <tbody>{rows.map(r => <tr key={r.lead_id} className="border-t border-slate-100">
+                <td className="p-2"><input type="checkbox" aria-label={`Select ${r.name}`} checked={sel.includes(r.lead_id)} onChange={() => setSel(sel.includes(r.lead_id) ? sel.filter(x => x !== r.lead_id) : [...sel, r.lead_id])} /></td>
+                <td className="p-2"><button className="text-left font-medium text-brand-700 hover:underline" onClick={() => setOpen(r.lead_id)}>{r.name || r.phone}</button><p className="text-xs text-slate-500">{r.phone}</p></td>
+                <td className="p-2">{dir.nameOf(r.owner)}</td>
+                <td className="p-2">{r.rule_pick ? dir.nameOf(r.rule_pick) : '—'}</td>
+                <td className="p-2 text-right tabular-nums">{r.times}×</td></tr>)}</tbody></table>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-slate-600">{sel.length} selected</span>
+            <Button className="!py-1.5" disabled={!sel.length || busy} onClick={bySheet}>Give to who the sheet says</Button>
+            <select className="input !w-auto !py-1.5" aria-label="Give to" value={to} onChange={e => setTo(e.target.value)}>
+              <option value="">Give to…</option>{active.map(m => <option key={m.user_id} value={m.user_id}>{dir.nameOf(m.user_id)}</option>)}</select>
+            <Button variant="secondary" className="!py-1.5" disabled={!sel.length || !to || busy} onClick={() => assign(sel, to)}>Assign</Button>
+          </div></>}
+      </div>
+      {open && <LeadDrawer leadId={open} dir={dir} onClose={() => setOpen(null)} onChanged={() => { onDone(); void load() }} />}
+    </Modal>
   )
 }
 

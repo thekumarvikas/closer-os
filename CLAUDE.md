@@ -2088,3 +2088,20 @@ intelligence → Play Store launch.
   Settings, so existing reps never saw it.
 - App 0.28.2: Repo.membership() picks the company membership in company builds and the personal one in the solo build
   (a login in both used whichever came first — owner's K20 reported to its personal account). Sign out + in after updating.
+
+## Registered again (migrations 0109–0110, app 0.28.3, Nov 21 2026)
+- Cancer: 3 leads in the 23 Nov webinar were unassigned — they came in at the first sheet sync (19 Nov 5 AM, before the
+  "Assigned" column rule); a manual bulk assign at 5:35 AM missed them; when they registered again they took the repeat
+  path, which never assigned. Webinar card "Called 1" counted Sujal's 19 Nov reminder call (any call ever) — now only
+  calls with calls.batch_id = that webinar.
+- Owner rule: a person registering for ANOTHER webinar → if the lead has an owner, it STAYS with that owner; unowned →
+  the source's current rule (source_rule_pick: sheet team-member column > ticked people in turn > one person; else
+  pick_assignee for 'rules'). batch_leads.assign_how rule|previous_owner, rule_pick, outside_rule (kept with an owner
+  who isn't who the rule names) → webinar card "🔁 N kept with previous owner → Review" (batch_outside_rule; tick,
+  "Give to who the sheet says" / Give to… via bulk_update_leads; lead opens LeadDrawer). Same registration re-sent = no change.
+- leads.reg_count (webinars registered, trigger t_bl_reg_count) + reregistered_at. Priority on the NEWEST webinar row only:
+  2× → warmth ≥ 40 (Warm), 3×+ → ≥ 70 (Hot), warm_reason "🔁 registered N×" (reg_floor_lead; batch_recompute calls it).
+- Instant notification: push_wake(org, user, 'leads') → pg_net → edge function push (now verify_jwt=false; x-cron-secret
+  path uses push_targets_service) → app PushService kind "leads" → TeamAlerts.check. my_new_leads returns again[] →
+  "🔁 <name> registered again" / "3rd time · call while interest is high". App tag "🔁 Registered again ×N" (LeadIndex v12).
+- NOT done (owner to decide): 1,425 older Cancer leads (webinars 18 Oct–16 Nov) unassigned though the sheet says Nikhil.

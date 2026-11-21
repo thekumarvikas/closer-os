@@ -43,12 +43,22 @@ Deno.serve(async (req) => {
   let sa: { client_email: string; private_key: string; project_id: string }
   try { sa = JSON.parse(raw) } catch { return reply({ ok: false, error: 'The Firebase key saved in Supabase is not complete — paste the whole file again.' }) }
   const { org, users, kind } = await req.json().catch(() => ({}))
-  if (!org || !auth) return reply({ ok: false, error: 'Not allowed' }, 403)
-  const user = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: auth } }, auth: { persistSession: false } })
-  const { data: targets, error } = await user.rpc('push_targets', { p_org: org, p_users: users?.length ? users : null })
-  if (error) return reply({ ok: false, error: 'Only managers can do this' }, 403)
-  const list = (targets ?? []) as { user_id: string; device_id: string; token: string }[]
   const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } })
+  let list: { user_id: string; device_id: string; token: string }[]
+  const cron = req.headers.get('x-cron-secret')
+  if (cron) {
+    // From the database itself (a lead was assigned / registered again): wake those people's phones.
+    const { data: ok } = await admin.rpc('check_cron_secret', { p: cron })
+    if (!ok || !users?.length) return reply({ ok: false, error: 'Not allowed' }, 403)
+    const { data } = await admin.rpc('push_targets_service', { p_users: users })
+    list = (data ?? []) as typeof list
+  } else {
+    if (!org || !auth) return reply({ ok: false, error: 'Not allowed' }, 403)
+    const user = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: auth } }, auth: { persistSession: false } })
+    const { data: targets, error } = await user.rpc('push_targets', { p_org: org, p_users: users?.length ? users : null })
+    if (error) return reply({ ok: false, error: 'Only managers can do this' }, 403)
+    list = (targets ?? []) as typeof list
+  }
   let sent = 0; const failed: string[] = []
   const token = await accessToken(sa)
   await Promise.all(list.map(async t => {

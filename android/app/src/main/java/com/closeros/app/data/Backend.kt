@@ -165,7 +165,7 @@ data class LeadFact(val key: String, val label: String, val options: List<String
     /** The latest note written about this lead (call or note), for the before-call brief and reminders. */
     val last_note: String? = null, val last_note_at: String? = null,
     /** How many times this person came in (another form, sheet, campaign, webinar) — 2+ = "Repeated". */
-    val arrivals: Int = 1, val last_arrived_at: String? = null,
+    val arrivals: Int = 1, val last_arrived_at: String? = null, val reg_count: Int = 0,
     /** Objections this lead raised (newest first, ids of playbook objections). */
     val objections: List<String> = emptyList(),
     /** From today's focus list: what kind of call this is (reminder / sales) and for which webinar. */
@@ -255,7 +255,9 @@ data class LeadFact(val key: String, val label: String, val options: List<String
     val id: String, val title: String, val body: String, val urgent: Boolean = false, val created_at: String,
     val reminded_at: String? = null, val from: String? = null,
 )
-@Serializable data class NewLeads(val count: Int = 0, val names: List<String> = emptyList(), val latest: String? = null)
+@Serializable data class AgainLead(val id: String = "", val name: String = "", val times: Int = 2)
+@Serializable data class NewLeads(val count: Int = 0, val names: List<String> = emptyList(), val latest: String? = null,
+    val again_count: Int = 0, val again: List<AgainLead> = emptyList())
 
 @Serializable data class CallReview(
     val id: String, val call_id: String, val rep_id: String, val reviewer: String? = null, val scores: Map<String, Int> = emptyMap(),

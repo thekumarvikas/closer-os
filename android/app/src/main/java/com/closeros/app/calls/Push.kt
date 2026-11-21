@@ -3,6 +3,8 @@ package com.closeros.app.calls
 import android.content.Context
 import com.closeros.app.BuildConfig
 import com.closeros.app.data.AppLog
+import com.closeros.app.data.Repo
+import kotlinx.coroutines.runBlocking
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.messaging.FirebaseMessaging
@@ -61,6 +63,13 @@ class PushService : FirebaseMessagingService() {
         when (message.data["kind"]) {
             "sync", null -> {
                 AppLog.error(applicationContext, "push", null, kind = "info", message = "sync requested from the dashboard")
+                CallSync.syncNow(applicationContext)
+            }
+            // A lead was just assigned to me / one of my leads registered again → notify at once.
+            "leads" -> runBlocking {
+                runCatching { com.closeros.app.data.Backend.ensureFreshSession() }
+                val org = runCatching { Repo.membership()?.org_id }.getOrNull()
+                if (org != null) runCatching { TeamAlerts.check(applicationContext, org) }
                 CallSync.syncNow(applicationContext)
             }
         }

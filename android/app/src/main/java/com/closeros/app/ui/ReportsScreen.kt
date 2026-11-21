@@ -84,6 +84,12 @@ fun ReportsScreen(vm: AppViewModel) {
             Rep(cr, or, fu, tg)
         }.onSuccess { data = it }.onFailure { error = com.closeros.app.data.SafeError.forUser(it, "Couldn't load the report") }
     }
+    var hourIns by remember { mutableStateOf<JsonObject?>(null) }
+    LaunchedEffect(from, to, who) {
+        hourIns = null
+        val users = when (who) { "all" -> null; "me" -> listOfNotNull(com.closeros.app.data.Backend.uid); else -> listOf(who) }
+        hourIns = runCatching { Repo.report("hour_insights", m.org_id, from.atStartOfDay(zone).toInstant(), to.plusDays(1).atStartOfDay(zone).toInstant(), users).jsonObject }.getOrNull()
+    }
     LaunchedEffect(from, to) {
         perf = null
         perf = runCatching { Repo.teamPerformance(m.org_id, from.atStartOfDay(zone).toInstant(), to.plusDays(1).atStartOfDay(zone).toInstant()) }.getOrNull()
@@ -336,6 +342,10 @@ fun ReportsScreen(vm: AppViewModel) {
                     }
                 }
             }
+            if (hours.isNotEmpty()) item {
+                HourInsightsCard(hours, hourIns, team, if (who == "all") null else who, who == "me" || vm.isSolo,
+                    today in from..to, zone) { h -> calls("Calls at ${slotOf(h)}", "hour:$h") }
+            }
             if (calls == 0) item { Text("No calls in this period.", color = Brand.muted) }
         }
     }
@@ -357,5 +367,103 @@ private fun BarRow(label: String, frac: Float, value: String, color: Color, onCl
         Box(Modifier.fillMaxWidth().height(6.dp).background(Color(0xFFE2E8F0), RoundedCornerShape(3.dp))) {
             Box(Modifier.fillMaxWidth(frac.coerceIn(0f, 1f)).height(6.dp).background(color, RoundedCornerShape(3.dp)))
         }
+    }
+}
+
+
+// ---- By hour insights (same rules as the dashboard's box: web components/HourInsights.tsx) ----
+private fun hl(h: Int) = "${if (h % 12 == 0) 12 else h % 12} ${if (h < 12) "AM" else "PM"}"
+private fun slotOf(h: Int) = "${hl(h)} – ${hl((h + 1) % 24)}"
+private fun pc(a: Int, b: Int) = if (b > 0) a * 100 / b else 0
+private data class HR(val hr: Int, val calls: Int, val conn: Int, val talk: Int, val pos: Int, val notPicked: Int = 0)
+private fun bestOf(rows: List<HR>): HR? {
+    val live = rows.filter { it.conn > 0 || it.pos > 0 }; if (live.isEmpty()) return null
+    val mc = live.maxOf { it.conn }.coerceAtLeast(1).toFloat(); val mt = live.maxOf { it.talk }.coerceAtLeast(1).toFloat(); val mp = live.maxOf { it.pos }
+    fun sc(r: HR) = (r.conn / mc + r.talk / mt + (if (mp > 0) r.pos / mp.toFloat() else 0f)) / (if (mp > 0) 3 else 2)
+    return live.sortedWith(compareByDescending<HR> { sc(it) }.thenByDescending { it.conn }).first()
+}
+
+@Composable
+private fun HourInsightsCard(hours: Map<Int, JsonObject>, ins: JsonObject?, team: List<IdName>, oneUser: String?, me: Boolean,
+                             isToday: Boolean, zone: ZoneId, open: (Int) -> Unit) {
+    val arr = { k: String -> (ins?.get(k) as? kotlinx.serialization.json.JsonArray)?.map { it.jsonObject } ?: emptyList() }
+    val posBy = arr("hours").associate { it.i("hr") to it }
+    val rows = hours.map { (h, r) -> HR(h, r.i("calls"), r.i("conn"), r.i("conn_dur"), posBy[h]?.i("pos") ?: 0, r.i("not_picked")) }
+    val best = bestOf(rows) ?: return
+    val used = rows.filter { it.calls > 0 }
+    val tCalls = used.sumOf { it.calls }; val tConn = used.sumOf { it.conn }; val tTalk = used.sumOf { it.talk }; val tNp = used.sumOf { it.notPicked }
+    val hi = used.maxWith(compareBy<HR> { it.conn * 1000 / it.calls }.thenBy { it.calls })
+    val most = used.maxBy { it.conn }
+    val low = used.filter { it.calls >= 2 }.minByOrNull { it.conn * 1000 / it.calls }
+    val busy = used.maxBy { it.calls }
+    val outs = arr("outcomes")
+    val later = outs.filter { Regex("call_back|call_later|later").containsMatchIn(it.s("code") ?: "") }.maxByOrNull { it.i("n") }
+    val posTop = arr("hours").filter { it.i("pos") > 0 }.maxByOrNull { it.i("pos") }
+    val noOut = arr("hours").sumOf { it.i("no_outcome") }
+    val noOutTop = arr("hours").maxByOrNull { it.i("no_outcome") }
+    val team90 = bestOf(arr("team90").map { HR(it.i("hr"), 0, it.i("conn"), it.i("talk"), it.i("pos")) })
+    val per = arr("users90").groupBy { it.s("user_id") ?: "" }.mapNotNull { (u, l) -> bestOf(l.map { HR(it.i("hr"), 0, it.i("conn"), it.i("talk"), it.i("pos")) })?.let { u to it } }
+        .sortedByDescending { it.second.conn }
+    val missedOpen = ins?.i("missed_open") ?: 0
+    val you = if (me) "your " else ""
+    val now = java.time.ZonedDateTime.now(zone)
+    val nowHour = now.hour
+    val usedSet = used.map { it.hr }.toSet()
+    val empty = (used.minOf { it.hr }..maxOf(20, used.maxOf { it.hr })).filter { it !in usedSet && !(isToday && it >= nowHour) }
+
+    @Composable fun H(t: String) = Text(t, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp, bottom = 2.dp))
+    @Composable fun B(t: String, why: String? = null, onClick: (() -> Unit)? = null) = Column(Modifier.padding(start = 4.dp, bottom = 3.dp).then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)) {
+        Text("• $t", fontSize = 13.sp, color = if (onClick != null) Brand.primary else Color.Unspecified)
+        if (why != null) Text("   Why: $why", fontSize = 12.sp, color = Brand.muted)
+    }
+    Section("Best hour & what it means") {
+        H("⭐ Best hour${if (isToday) " today" else ""}: ${slotOf(best.hr)}")
+        B("${best.conn} conversations · ${fmtDur(best.talk)} of talk" + if (best.pos > 0) " · ${best.pos} positive outcomes" else "")
+        B("${pc(best.conn, best.calls)}% of calls picked up (average: ${pc(tConn, tCalls)}%)")
+        B("${fmtDur(if (best.conn > 0) best.talk / best.conn else 0)} average talk per conversation (average: ${fmtDur(if (tConn > 0) tTalk / tConn else 0)})")
+        H("💡 Also worth knowing")
+        B("Highest pick-up: ${slotOf(hi.hr)} (${pc(hi.conn, hi.calls)}% · ${hi.conn} of ${hi.calls} calls)")
+        B("Most conversations: ${slotOf(most.hr)} (${most.conn})")
+        if (low != null && low.hr != hi.hr) B("Lowest pick-up: ${slotOf(low.hr)} (${pc(low.conn, low.calls)}% · ${low.conn} of ${low.calls} calls)")
+        if (busy.hr != best.hr) B("Most calls made: ${slotOf(busy.hr)} (${busy.calls} calls), while the best hour was ${slotOf(best.hr)}")
+        if (posTop != null || later != null || noOut > 0) {
+            H("🎯 Outcomes by hour")
+            posTop?.let { B("Positive outcomes (Interested, Ready to pay): most at ${slotOf(it.i("hr"))} (${it.i("pos")})") }
+            later?.let { B("\"${it.s("label")}\": mostly at ${slotOf(it.i("hr"))} (${it.i("n")} times)") }
+            outs.filter { it.s("category") == "lost" }.maxByOrNull { it.i("n") }?.let { B("\"${it.s("label")}\": mostly at ${slotOf(it.i("hr"))} (${it.i("n")} times)") }
+            if (noOut > 0 && noOutTop != null) B("No outcome saved yet: $noOut calls, most at ${slotOf(noOutTop.i("hr"))}") { open(noOutTop.i("hr")) }
+        }
+        if (team90 != null) {
+            H("🏆 Best hour, last 90 days")
+            if (oneUser != null || me) per.firstOrNull()?.let { B("${if (me) "You" else team.firstOrNull { t -> t.id == it.first }?.name ?: "This person"}: ${slotOf(it.second.hr)} · ${it.second.conn} conversations · ${fmtDur(it.second.talk)} of talk") }
+            else {
+                B("Whole team: ${slotOf(team90.hr)} · ${team90.conn} conversations · ${fmtDur(team90.talk)} of talk")
+                per.forEach { (u, b) -> B("${team.firstOrNull { it.id == u }?.name ?: "Someone"}: ${slotOf(b.hr)} · ${b.conn} conversations · ${fmtDur(b.talk)} of talk") }
+            }
+        }
+        if ((ins?.i("missed") ?: 0) > 0) {
+            H("📞 Calls to return")
+            B("${ins!!.i("missed")} missed incoming calls" + if (missedOpen > 0) ", $missedOpen not called back yet" else ", all called back ✓")
+        }
+        H("📌 Suggestions")
+        B("Put ${you}follow-ups and hot leads at ${slotOf(best.hr)}.",
+            "it gave the best mix of conversations and talk (${best.conn} conversations · ${fmtDur(best.talk)}), so the people you most need to reach are most likely to talk then.")
+        if (busy.hr != hi.hr && busy.calls >= 3) {
+            val move = minOf(10, busy.calls / 3); val gain = (move * (hi.conn.toFloat() / hi.calls - busy.conn.toFloat() / busy.calls)).toInt()
+            if (gain > 0) B("Move about $move of the ${busy.calls} calls made at ${slotOf(busy.hr)} to ${slotOf(hi.hr)}. That could give about $gain more conversations.",
+                "only ${pc(busy.conn, busy.calls)}% picked up at ${slotOf(busy.hr)}, against ${pc(hi.conn, hi.calls)}% at ${slotOf(hi.hr)}. The same calls reach more people at a better hour.")
+        }
+        if (tNp > 0) B("Try the $tNp calls that weren't picked up again at ${slotOf(hi.hr)}.",
+            "${slotOf(hi.hr)} had the highest pick-up (${pc(hi.conn, hi.calls)}%), so a second try then has the best chance of being answered.")
+        if (later != null && later.i("hr") != best.hr) B("Plan the ${later.i("n")} \"${later.s("label")}\" call-backs for ${slotOf(best.hr)}.",
+            "people who ask for a call later are interested but were busy. ${slotOf(best.hr)} is when conversations go best.")
+        if (missedOpen > 0) B("Call back the $missedOpen missed callers who haven't heard back yet.",
+            "they called first, so they want to talk. A quick call back is the easiest conversation of the day, and waiting lets the interest cool.")
+        if ((isToday && nowHour <= 20) || empty.isNotEmpty()) {
+            H("🕐 Still to come")
+            if (isToday && nowHour <= 20) B("The day isn't over yet. It's ${now.format(DateTimeFormatter.ofPattern("h:mm a"))}, so calls from ${hl(nowHour)} – ${hl(21)} will be added as they happen, and the best hour may still change.")
+            if (empty.isNotEmpty()) B("${empty.joinToString(", ") { slotOf(it) }} passed without any calls, so there's nothing to compare yet. A few calls then will show whether it works.")
+        }
+        Text("How \"best hour\" is chosen: conversations, talk time and positive outcomes count equally. Every hour is included.", fontSize = 11.sp, color = Brand.muted, modifier = Modifier.padding(top = 8.dp))
     }
 }

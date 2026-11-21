@@ -1,10 +1,11 @@
+import { Ph } from '../components/Copy'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Download, Plus, Upload, X, Pencil, Lock, Unlock } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
 import { useDirectory, type Directory } from '../lib/directory'
-import { fmtDate, fmtDateTime, fmtMoney, fmtPhone, fmtDuration } from '../lib/format'
+import { fmtDate, fmtDateTime, fmtMoney, fmtDuration } from '../lib/format'
 import { usePersisted } from '../lib/persist'
 import { useFilters, FilterActions } from '../lib/filters'
 import { useSort } from '../lib/sort'
@@ -304,7 +305,7 @@ function BuyersTable({ buyers, dir, pay, setPay, onOpen, onEdit, tag }: { buyers
               <tr key={b.id} className="cursor-pointer align-top hover:bg-slate-50" onClick={() => onOpen(b)}>
                 <td className="td whitespace-nowrap text-slate-600">{fmtDate(b.sold_at, org)}</td>
                 <td className="td"><div className="truncate font-medium">{b.name || 'No name'}{!b.lead_id && <span className="ml-1 text-xs font-normal text-amber-700" title="Not matched to a lead yet">not matched</span>}</div>
-                  <div className="truncate text-xs text-slate-500">{fmtPhone(b.phone)}{b.wname ? ` · ${b.wname}` : ''}</div></td>
+                  <div className="truncate text-xs text-slate-500"><Ph v={b.phone} />{b.wname ? ` · ${b.wname}` : ''}</div></td>
                 <td className="td"><div className="truncate">{b.product || '—'}</div>{b.enrol_batch && <div className="truncate text-xs text-slate-500">{b.enrol_batch}</div>}</td>
                 <td className="td tabular-nums">{fmtMoney(b.revenue, org)}</td>
                 <td className="td"><Badge color={PAY[b.pay_status][1]}>{PAY[b.pay_status][0]}</Badge>{b.pending > 0 && <div className="text-xs text-red-600">due {fmtMoney(b.pending, org)}</div>}

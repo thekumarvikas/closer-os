@@ -1,3 +1,4 @@
+import { Ph } from '../components/Copy'
 import { useEffect, useState } from 'react'
 import { usePersisted } from '../lib/persist'
 import { useFilters, FilterActions } from '../lib/filters'
@@ -5,7 +6,7 @@ import { CalendarClock, Download } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
 import { useDirectory } from '../lib/directory'
-import { fmtDateTime, fmtPhone, startOfToday } from '../lib/format'
+import { fmtDateTime, startOfToday } from '../lib/format'
 import type { FollowUp } from '../lib/types'
 import { Badge, Button, Card, Empty, ErrorBox, PageHeader, Spinner } from '../components/ui'
 import { downloadCsv } from '../lib/report'
@@ -100,7 +101,7 @@ export default function FollowUps() {
               {rows.map(f => (
                 <tr key={f.id}>
                   <td className={`td ${tab === 'overdue' ? 'font-medium text-red-600' : ''}`}>{fmtDateTime(f.due_at, org)}</td>
-                  <td className="td"><p className="font-medium">{f.lead?.name || '—'}</p><p className="text-xs text-slate-500">{f.lead ? fmtPhone(f.lead.phone) : ''}</p></td>
+                  <td className="td"><p className="font-medium">{f.lead?.name || '—'}</p><p className="text-xs text-slate-500">{f.lead ? <Ph v={f.lead.phone} /> : ''}</p></td>
                   <td className="td max-w-xs truncate text-slate-600">{f.reason || f.notes || '—'}</td>
                   <td className="td">{dir.nameOf(f.assigned_to)}</td>
                   <td className="td">{(() => { const t = timing(f); return t.kind === 'upcoming' ? <span className="text-slate-400">—</span>

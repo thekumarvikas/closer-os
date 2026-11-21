@@ -1,3 +1,4 @@
+import { Ph } from './Copy'
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import { Download, ChevronLeft, ChevronRight, Search, MicOff, PhoneCall, Play } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
@@ -181,7 +182,7 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
                 <tr className="align-top hover:bg-slate-50">
                   <td className="px-3 py-2 text-slate-600">{fmtDateTime(c.started_at, org)}</td>
                   <td className="truncate px-3 py-2">{c.lead ? <span className="font-medium">{c.lead.name || 'No name'}</span> : c.contact_name ? <span className="font-medium">{c.contact_name}</span> : null}
-                    <span className={`block truncate ${c.lead || c.contact_name ? 'text-xs text-slate-500' : ''}`}>{fmtPhone(c.phone)}{c.lead && (c.lead.profession || c.lead.city) ? ` · ${[c.lead.profession, c.lead.city].filter(Boolean).join(' · ')}` : ''}</span>
+                    <span className={`block truncate ${c.lead || c.contact_name ? 'text-xs text-slate-500' : ''}`}><Ph v={c.phone} />{c.lead && (c.lead.profession || c.lead.city) ? ` · ${[c.lead.profession, c.lead.city].filter(Boolean).join(' · ')}` : ''}</span>
                     {c.lead && <span className="block truncate text-xs text-slate-400">{c.lead.call_count ?? 0} calls · {c.lead.conversation_count ?? 0} conversations{c.lead.source ? ` · ${c.lead.source}` : ''}</span>}
                     {c.batch && <span className="block truncate text-xs text-brand-700">{c.purpose === 'reminder' ? 'Reminder' : 'Sales'} · {c.batch.name}</span>}</td>
                   <td className="px-3 py-2"><CallType direction={c.direction} duration={c.duration_sec} channel={c.channel} />

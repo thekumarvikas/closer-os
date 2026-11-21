@@ -1,8 +1,9 @@
+import { Ph } from './Copy'
 import { useEffect, useState } from 'react'
 import { Download } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
-import { fmtDateTime, fmtPhone } from '../lib/format'
+import { fmtDateTime } from '../lib/format'
 import { downloadCsv, pct } from '../lib/report'
 import type { Directory } from '../lib/directory'
 import { Button, Card, Empty, ErrorBox, Spinner } from './ui'
@@ -145,7 +146,7 @@ function LeadRows({ rows, dir, minKey, target, onOpen, label }: { rows: Row[]; d
       <thead><tr><th className="th w-[34%]">Lead</th><th className="th">Rep</th><th className="th">Came in</th><th className="th">{label}</th></tr></thead>
       <tbody className="divide-y divide-slate-100">{rows.map(r => (
         <tr key={r.id} className="cursor-pointer hover:bg-slate-50" onClick={() => onOpen(r.id)}>
-          <td className="td"><p className="font-medium">{r.name || 'No name'}</p><p className="text-xs text-slate-500">{fmtPhone(r.phone)}</p></td>
+          <td className="td"><p className="font-medium">{r.name || 'No name'}</p><p className="text-xs text-slate-500"><Ph v={r.phone} /></p></td>
           <td className="td">{r.assigned_to ? dir.nameOf(r.assigned_to) : <span className="text-amber-700">Unassigned</span>}</td>
           <td className="td text-slate-600">{fmtDateTime(r.created_at, org)}</td>
           <td className={`td tabular-nums font-semibold ${(r[minKey] ?? 0) > target ? 'text-red-700' : 'text-emerald-700'}`}>{fmtMin(r[minKey])}</td>

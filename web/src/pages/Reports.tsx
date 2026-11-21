@@ -344,9 +344,8 @@ function Hourly({ r, fileTag, onDrill, orgId, tz, from, to, users, callDir, ch, 
   const nowText = new Date().toLocaleTimeString('en-IN', { timeZone: tz, hour: 'numeric', minute: '2-digit' })
   const by = new Map(r.byHour.map(h => [h.hr, h.total]))
   const used = r.byHour.filter(h => h.total.calls > 0).map(h => h.hr)
-  // Working span: from the first to the last hour with calls (at least 9 AM – 9 PM), empty hours shown too.
-  const lo = Math.min(9, ...used), hi = Math.max(20, ...used)
-  const hours = Array.from({ length: hi - lo + 1 }, (_, i) => lo + i)
+  // Always 8 AM – midnight (empty hours too), plus any other hour that had a call — no call is ever left out.
+  const hours = [...new Set([...Array.from({ length: 16 }, (_, i) => 8 + i), ...used])].sort((a, b) => a - b)
   const zero = { calls: 0, conn: 0, conn_dur: 0, out: 0, inc: 0, missed: 0, not_picked: 0 } as Metrics
   // Best hour (owner's rule): conversations + talk time + positive outcomes, each counts equally. All hours count.
   const posBy = new Map((ins?.hours ?? []).map(h => [h.hr, h.pos]))
@@ -380,7 +379,7 @@ function Hourly({ r, fileTag, onDrill, orgId, tz, from, to, users, callDir, ch, 
           </tbody>
         </table>
         <HourInsights byHour={r.byHour} ins={ins} dir={dir} oneUser={users.length === 1 ? users[0] : null} isToday={isToday} nowHour={nowHour}
-          nowText={nowText} endHour={hi} onDrill={d => onDrill({ hour: d.hour, user: d.user, kind: d.kind, label: d.label })} />
+          nowText={nowText} endHour={Math.max(20, ...used)} onDrill={d => onDrill({ hour: d.hour, user: d.user, kind: d.kind, label: d.label })} />
       </Card>
     </div>
   )

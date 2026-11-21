@@ -1,3 +1,5 @@
+import LeadContacts, { NameTags, useLeadContacts } from '../components/LeadContacts'
+import { Ph } from '../components/Copy'
 import LeadWebinars from '../components/LeadWebinars'
 import LeadShares from '../components/LeadShares'
 import { LeadSales } from './Sales'
@@ -7,11 +9,11 @@ import { PlayButton, RecordingPlayer } from '../components/CallLog'
 import { CallColorKey, CallType } from '../components/CallColors'
 import { useEffect, useState } from 'react'
 import { useLeadFields, fieldLabel } from '../lib/leadFields'
-import { X, Phone, Mail, MapPin, Building2, GraduationCap } from 'lucide-react'
+import { X, Phone, MapPin, Building2, GraduationCap } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
 import type { Directory } from '../lib/directory'
-import { fmtDateTime, fmtDuration, fmtPhone, fmtMoney } from '../lib/format'
+import { fmtDateTime, fmtDuration, fmtMoney } from '../lib/format'
 import type { Call, FollowUp, Lead, ProfessionCategory } from '../lib/types'
 import { Badge, Button, ErrorBox, Spinner } from '../components/ui'
 import { ask } from '../lib/dialogs'
@@ -25,6 +27,7 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
   const { org, isManager } = useOrg()
   const fields = useLeadFields(org.id)
   const [lead, setLead] = useState<Lead | null>(null)
+  const contacts = useLeadContacts(leadId)
   const [calls, setCalls] = useState<Call[]>([])
   const [playing, setPlaying] = useState<string | null>(null)
   const [notes, setNotes] = useState<NoteEntry[]>([])
@@ -89,7 +92,8 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
             <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-200 bg-white px-5 py-4">
               <div>
                 <h2 className="text-lg font-semibold">{lead.name || 'No name'}</h2>
-                <p className="flex items-center gap-1.5 text-sm text-slate-600"><Phone className="h-3.5 w-3.5" /> {fmtPhone(lead.phone)}</p>
+                <NameTags c={contacts.c} />
+                <p className="flex items-center gap-1.5 text-sm text-slate-600"><Phone className="h-3.5 w-3.5" /> <Ph v={lead.phone} /></p>
               </div>
               <button onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100" aria-label="Close"><X className="h-5 w-5" /></button>
             </div>
@@ -132,7 +136,7 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
                 <div><span className="label">Source / campaign</span><p className="py-2">{lead.source || '—'}{lead.campaign ? ` · ${lead.campaign}` : ''}</p></div>
               </div>
               <div className="space-y-1.5 text-sm text-slate-700">
-                {lead.email && <p className="flex items-center gap-2"><Mail className="h-4 w-4 text-slate-400" /> {lead.email}</p>}
+                <LeadContacts leadId={lead.id} c={contacts.c} onChanged={() => { contacts.reload(); load() }} />
                 {emailTypo(lead.email) && <p className="ml-6 text-xs text-amber-700">⚠ Email may be misspelt — did you mean <b>{emailTypo(lead.email)}</b>? (It still matches buyers with the right spelling.)</p>}
                 {(lead.city || lead.state) && <p className="flex items-center gap-2"><MapPin className="h-4 w-4 text-slate-400" /> {[lead.city, lead.state, lead.country].filter(Boolean).join(', ')}</p>}
                 {(lead.company || lead.profession) && <p className="flex items-center gap-2"><Building2 className="h-4 w-4 text-slate-400" /> {[lead.profession, lead.company].filter(Boolean).join(' at ')}</p>}

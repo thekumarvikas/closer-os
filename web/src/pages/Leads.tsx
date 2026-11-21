@@ -1,3 +1,4 @@
+import { Ph } from '../components/Copy'
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { intentLevels, intentOf } from '../lib/intents'
 import { IntentBadge } from '../components/Intent'
@@ -351,7 +352,7 @@ export default function Leads() {
                         }} /></td>}
                       <td className="td"><div className="font-medium text-slate-900">{l.name || <span className="text-slate-400">No name</span>}
                         {l.do_not_call && <Badge color="red">DNC</Badge>}{(l.arrivals ?? 1) > 1 && <span title="Came in more than once"> <Badge color="gray">🔁 Repeated ×{l.arrivals}</Badge></span>} <IntentBadge level={intentOf(org, (l as any).intent)} /></div>
-                        <div className="text-xs tabular-nums text-slate-500">{[fmtPhone(l.phone), l.city].filter(Boolean).join(' · ')}</div></td>
+                        <div className="text-xs tabular-nums text-slate-500"><Ph v={l.phone} />{l.city ? ` · ${l.city}` : ''}</div></td>
                       <td className="td">{l.assigned_to ? dir.nameOf(l.assigned_to) : <span className="text-amber-700">Unassigned</span>}</td>
                       <td className="td whitespace-nowrap text-slate-600">{(l.call_count ?? 0) === 0 ? <span className="text-slate-400">Not called</span> : <>
                         <div>{l.call_count} call{l.call_count === 1 ? '' : 's'}</div>

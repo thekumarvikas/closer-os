@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { SampleLink } from '../lib/samples'
+import { ask, toast } from '../lib/dialogs'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import Papa from 'papaparse'
 import readXlsxFile from 'read-excel-file'
@@ -7,7 +8,7 @@ import { ArrowLeft, Upload, UserPlus, Pencil, Download, CheckCircle2, Video } fr
 import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
 import { useDirectory, type Directory } from '../lib/directory'
-import { fmtDateTime, fmtMoney } from '../lib/format'
+import { fmtDate, fmtDateTime, fmtMoney } from '../lib/format'
 import { downloadCsv, pct } from '../lib/report'
 import { cellText, isDayFirst, parseWall, wallToUtc, parseChat, parsePolls } from '../lib/zoom'
 import type { Batch, ProfessionCategory } from '../lib/types'
@@ -123,6 +124,10 @@ export default function BatchDetail() {
           </div>
         )}
       </div>
+
+      <WebinarHints />
+      {isManager && <UndoZoom key={'u' + version} batch={batch} onDone={refresh} />}
+      {isManager && <SourceShowUp key={'src' + version} batch={batch} dir={dir} />}
 
       <div className="mb-4 flex rounded-lg bg-slate-100 p-1 text-sm sm:inline-flex">
         {([['reminder', 'Reminder calls (before)'], ['showup', 'Show-up impact'], ['sales', 'Sales calls (after)']] as const).map(([k, l]) => (
@@ -373,9 +378,9 @@ function ZoomUpload({ batch, dir, file, onClose, onDone }: { batch: Batch; dir: 
       // an email column and a duration column.
       // Webinar reports have Host / Panelist / Attendee sections: start after "Attendee Details" if present.
       const section = rows.findIndex(r => /attendee details/i.test(String(r[0] ?? '')))
-      const isHeader = (r: string[]) => r.some(c => zoomGuess.email.test(c)) && r.some(c => zoomGuess.minutes.test(c))
+      const isHeader = (r: string[]) => r.some(c => zoomGuess.email.test(c) || zoomGuess.phone.test(c)) && r.some(c => zoomGuess.minutes.test(c))
       const start = section >= 0 ? rows.findIndex((r, i) => i > section && isHeader(r)) : rows.findIndex(isHeader)
-      if (start < 0) throw new Error('Could not find the attendee table (needs an Email and a Duration / Time in Session column).')
+      if (start < 0) throw new Error('Could not find the attendee table (needs an Email or Phone column and a Duration / Time in Session / Minutes column).')
       const head = rows[start].map(c => c.trim())
       const body: string[][] = []
       for (const r of rows.slice(start + 1)) {
@@ -408,23 +413,44 @@ function ZoomUpload({ batch, dir, file, onClose, onDone }: { batch: Batch; dir: 
   // One entry per person; Zoom lists a row per join, so minutes are added up.
   const attendees = useMemo(() => {
     if (!table) return []
-    const map = new Map<string, { name: string; email: string; phone: string; minutes: number; registered?: boolean; sessions?: { join: string; leave: string }[] }>()
+    type A = { name: string; email: string; phone: string; minutes: number; registered?: boolean; sessions?: { join: string; leave: string }[]; emails: Set<string>; phones: Set<string> }
     const dmy = isDayFirst(table.slice(1).flatMap(r => [cols.join >= 0 ? String(r[cols.join] ?? '') : '', cols.leave >= 0 ? String(r[cols.leave] ?? '') : '']))
+    // Our own team (hosts, reps who join to watch) is never counted as an attendee.
+    const teamEmails = new Set(dir.members.map(m => (m.profile?.email ?? '').toLowerCase()).filter(Boolean))
+    const teamPhones = new Set(dir.members.map(m => dir.phoneOf(m.user_id).replace(/\D/g, '').slice(-10)).filter(x => x.length === 10))
+    // One person = rows linked by the same email OR the same phone (Zoom's later join rows often carry only the email).
+    const people: A[] = []
+    const byEmail = new Map<string, A>(), byPhone = new Map<string, A>(), byName = new Map<string, A>()
+    const merge = (a: A, b: A) => {
+      if (a === b) return a
+      a.minutes += b.minutes; if (b.registered) a.registered = true
+      if (b.sessions) a.sessions = [...(a.sessions ?? []), ...b.sessions]
+      if (!a.phone) a.phone = b.phone; if (!a.email) a.email = b.email; if (!a.name) a.name = b.name
+      b.emails.forEach(e => { a.emails.add(e); byEmail.set(e, a) }); b.phones.forEach(p => { a.phones.add(p); byPhone.set(p, a) })
+      people.splice(people.indexOf(b), 1)
+      return a
+    }
     for (const r of table.slice(1)) {
       const g = (k: ZoomCol) => cols[k] >= 0 ? String(r[cols[k]] ?? '').trim() : ''
-      const email = g('email').toLowerCase(), phone = g('phone').replace(/[^\d+]/g, ''), name = g('name').replace(/\s*\(.*\)\s*$/, '')
-      const key = email || phone || name.toLowerCase()
-      if (!key || ZOOM_BOT.test(name) || ZOOM_BOT.test(g('name'))) continue
-      // Zoom's own registration list: a registration time means this person registered for the webinar.
+      const email = g('email').toLowerCase().replace(/\s+/g, ''), phone = g('phone').replace(/[^\d+]/g, ''), name = g('name').replace(/\s*\(.*\)\s*$/, '')
+      const p10 = phone.replace(/\D/g, '').slice(-10)
+      if (!email && !p10 && !name) continue
+      if (ZOOM_BOT.test(name) || ZOOM_BOT.test(g('name'))) continue
+      if ((email && teamEmails.has(email)) || (p10.length === 10 && teamPhones.has(p10))) continue
       const reg = cols.regtime >= 0 && /\d/.test(g('regtime'))
+      // "Attended: No" rows have no duration → 0 minutes (registered on Zoom, didn't join).
       const minutes = Number(g('minutes').replace(/[^\d.]/g, '')) || 0
-      // Join / leave times → one session, in UTC.
       const jw = cols.join >= 0 ? parseWall(g('join'), dmy) : null, lw = cols.leave >= 0 ? parseWall(g('leave'), dmy) : null
       const sess = jw && lw ? { join: wallToUtc(jw, org.timezone), leave: wallToUtc(lw, org.timezone) } : null
-      const cur = map.get(key)
-      if (cur) { cur.minutes += minutes; if (sess) cur.sessions = [...(cur.sessions ?? []), sess]; if (reg) cur.registered = true; if (!cur.phone && phone) cur.phone = phone }
-      else map.set(key, { name, email, phone, minutes, ...(reg ? { registered: true } : {}), ...(sess ? { sessions: [sess] } : {}) })
+      const row: A = { name, email, phone, minutes, ...(reg ? { registered: true } : {}), ...(sess ? { sessions: [sess] } : {}), emails: new Set(email ? [email] : []), phones: new Set(p10.length >= 8 ? [p10] : []) }
+      let cur: A | undefined = (email && byEmail.get(email)) || (p10 && byPhone.get(p10)) || (!email && !p10 ? byName.get(name.toLowerCase()) : undefined)
+      const other = p10 ? byPhone.get(p10) : undefined
+      if (cur) { cur = merge(cur, row); if (other && other !== cur) cur = merge(cur, other) }
+      else { cur = row; people.push(row) }
+      cur.emails.forEach(e => byEmail.set(e, cur!)); cur.phones.forEach(p => byPhone.set(p, cur!))
+      if (!email && !p10) byName.set(name.toLowerCase(), cur)
     }
+    const map = new Map(people.map((p, i) => [String(i), p]))
     // Someone on two devices at once has overlapping sessions: count the time once, not twice.
     for (const a of map.values()) {
       if (!a.sessions || a.sessions.length < 2) continue
@@ -435,12 +461,28 @@ function ZoomUpload({ batch, dir, file, onClose, onDone }: { batch: Batch; dir: 
       const merged = Math.round(total / 60000)
       if (merged + a.sessions.length < a.minutes) a.minutes = merged
     }
-    return [...map.values()]
-  }, [table, cols, org.timezone])
+    return [...map.values()].map(({ emails: _e, phones: _p, ...a }) => a)
+  }, [table, cols, org.timezone, dir])
   const hasTimes = attendees.some(a => a.sessions?.length)
+
+  // Date check: a report from another day usually means the wrong webinar was opened.
+  const dayOf = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: org.timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d)
+  const reportDay = started ? started.slice(0, 10) : ''
+  const batchDay = dayOf(new Date(batch.webinar_at))
+  const [sameDay, setSameDay] = useState<{ id: string; name: string }[]>([])
+  const [dateOk, setDateOk] = useState(false)
+  useEffect(() => {
+    if (!reportDay || reportDay === batchDay) return
+    const from = new Date(Date.parse(reportDay + 'T00:00:00Z') - 86400000).toISOString(), to = new Date(Date.parse(reportDay + 'T00:00:00Z') + 2 * 86400000).toISOString()
+    supabase.from('batches').select('id,name,webinar_at').eq('org_id', org.id).eq('is_archived', false).gte('webinar_at', from).lt('webinar_at', to)
+      .then(({ data }) => setSameDay(((data ?? []) as { id: string; name: string; webinar_at: string }[]).filter(b => dayOf(new Date(b.webinar_at)) === reportDay && b.id !== batch.id)))
+  }, [reportDay, batchDay]) // eslint-disable-line react-hooks/exhaustive-deps
+  const wrongDay = !!reportDay && reportDay !== batchDay && !dateOk
 
   async function apply() {
     setBusy(true); setError(null)
+    // Snapshot first, so "Undo last upload" can put everything back.
+    await supabase.rpc('zoom_upload_begin', { p_batch: batch.id })
     const sw = started ? parseWall(started.replace('T', ' '), false) : null
     const { data, error } = await supabase.rpc('apply_zoom_report', { p_batch: batch.id, p_rows: attendees, p_started_at: sw ? wallToUtc(sw, org.timezone) : null })
     setBusy(false)
@@ -468,7 +510,7 @@ function ZoomUpload({ batch, dir, file, onClose, onDone }: { batch: Batch; dir: 
   return (
     <Modal open onClose={onClose} title="Upload Zoom attendance report" wide footer={result ? <Button onClick={onClose}>Done</Button> : <>
       <Button variant="secondary" onClick={onClose}>Cancel</Button>
-      <Button onClick={apply} loading={busy} disabled={!attendees.length || cols.minutes < 0 || (cols.email < 0 && cols.phone < 0)}>Save watch time for {attendees.length || ''} people</Button>
+      <Button onClick={apply} loading={busy} disabled={wrongDay || !attendees.length || cols.minutes < 0 || (cols.email < 0 && cols.phone < 0)}>Save watch time for {attendees.length || ''} people</Button>
     </>}>
       {result ? (
         <div className="space-y-4 text-sm">
@@ -527,6 +569,15 @@ function ZoomUpload({ batch, dir, file, onClose, onDone }: { batch: Batch; dir: 
       ) : (
         <div className="space-y-4 text-sm">
           <p>Found <b>{table.length - 1}</b> rows → <b>{attendees.length}</b> different people. Check the columns:</p>
+          {wrongDay && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-900">
+              <p className="font-semibold">⚠ This report is from {fmtDate(reportDay + 'T12:00:00Z', org)}, but this webinar is on {fmtDate(batch.webinar_at, org)}.</p>
+              <p className="mt-1">Uploading it here would mark the wrong people as joined.{sameDay.length > 0 && ' Upload it to the right webinar instead:'}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {sameDay.map(b => <Link key={b.id} to={`/webinars/${b.id}`} onClick={onClose}><Button variant="secondary" className="!py-1">{b.name}</Button></Link>)}
+                <Button variant="ghost" className="!py-1" onClick={() => setDateOk(true)}>It's the right webinar — continue</Button>
+              </div>
+            </div>)}
           <div className="grid gap-3 sm:grid-cols-3">
             {(['name', 'email', 'phone', 'minutes', 'join', 'leave', 'regtime'] as ZoomCol[]).map(k => (
               <Field key={k} label={{ name: 'Name', email: 'Email', phone: 'Phone', minutes: 'Minutes watched', join: 'Join time', leave: 'Leave time', regtime: 'Registration time' }[k]}>
@@ -912,4 +963,83 @@ function AssignSalesCalls({ batch, dir, onClose, onDone }: { batch: Batch; dir: 
       )}
     </Modal>
   )
+}
+
+/* ───────────── Show-up by where people came from ───────────── */
+function SourceShowUp({ batch, dir }: { batch: Batch; dir: Directory }) {
+  const [d, setD] = useState<{ reg: number; reg_joined: number; direct: number; direct_joined: number; uploaded: boolean } | null>(null)
+  const [drill, setDrill] = useState<{ title: string; scope: Scope; metric: string } | null>(null)
+  useEffect(() => { supabase.rpc('batch_source_showup', { p_batch: batch.id }).then(({ data }) => setD(data)) }, [batch.id])
+  if (!d || !d.uploaded || d.reg + d.direct === 0) return null
+  const all = d.reg + d.direct, joined = d.reg_joined + d.direct_joined
+  const box = (label: string, hint: string, n: number, j: number, scope: Scope) => (
+    <div className="rounded-lg border border-slate-200 p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-1 text-sm"><button className="font-semibold text-brand-700 hover:underline" onClick={() => setDrill({ title: `${label} · joined`, scope, metric: 'attended' })}>{j.toLocaleString('en-IN')} joined</button>
+        {' '}of <button className="hover:underline" onClick={() => setDrill({ title: label, scope, metric: 'assigned' })}>{n.toLocaleString('en-IN')}</button>
+        <span className="ml-2 text-lg font-semibold text-slate-900">{pct(j, n)}</span></p>
+      <p className="mt-0.5 text-xs text-slate-500">{hint}</p>
+    </div>)
+  return (
+    <Card className="mb-4 p-4">
+      <p className="mb-2 font-semibold">Who joined — by where they came from</p>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {box('Landing page', 'Registered through your sheet, form or import', d.reg, d.reg_joined, 'registered')}
+        {box('Direct Zoom link', 'Only in the Zoom file (WhatsApp, Instagram, community links)', d.direct, d.direct_joined, 'walkin')}
+        {box('Everyone', 'Both together', all, joined, 'all')}
+      </div>
+      {drill && <LeadDrill title={drill.title} dir={dir} ownerLabel="Assigned to" fileName={`${batch.name} ${drill.title}`} onClose={() => setDrill(null)}
+        load={async () => {
+          const { data, error } = await supabase.rpc('batch_leads_list', { p_batch: batch.id, p_purpose: 'sales', p_scope: drill.scope, p_metric: drill.metric, p_rep: null, p_arg: null })
+          if (error) throw error
+          return ((data ?? []) as { lead_id: string; rep: string | null; name: string; phone: string; registered: boolean; watch_minutes: number | null; attempts: number; max_dur: number; last_outcome_id: string | null }[])
+            .map(r => ({ lead_id: r.lead_id, name: r.name, phone: r.phone, owner: r.rep, registered: r.registered, watch_minutes: r.watch_minutes,
+              calls: r.attempts, longest: r.max_dur, outcome_id: r.last_outcome_id } as DrillRow))
+        }} />}
+    </Card>
+  )
+}
+
+/* ───────────── Undo the last Zoom upload (24 hours) ───────────── */
+function UndoZoom({ batch, onDone }: { batch: Batch; onDone: () => void }) {
+  const { org } = useOrg()
+  const [last, setLast] = useState<{ id: string; taken_at: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { supabase.rpc('zoom_upload_last', { p_batch: batch.id }).then(({ data }) => setLast(data)) }, [batch.id])
+  if (!last) return null
+  async function undo() {
+    if (!await ask('Undo the last Zoom upload? Watch time goes back to how it was before the upload, and people the upload added as new leads (and nobody called yet) are removed.', { ok: 'Undo upload', danger: true })) return
+    setBusy(true)
+    const { data, error } = await supabase.rpc('zoom_upload_undo', { p_snapshot: last!.id })
+    setBusy(false)
+    if (error) return toast(errorText(error))
+    toast(`Upload undone — ${data.restored} registrations restored${data.leads_removed ? `, ${data.leads_removed} new leads removed` : ''}.`)
+    setLast(null); onDone()
+  }
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+      <span className="text-slate-600">Zoom report uploaded {fmtDateTime(last.taken_at, org)}. Wrong file or wrong webinar?</span>
+      <Button variant="secondary" className="!py-1" loading={busy} onClick={undo}>Undo last upload</Button>
+    </div>)
+}
+
+/* ───────────── First-time hints ───────────── */
+function WebinarHints() {
+  const [hide, setHide] = useState(() => { try { return localStorage.getItem('closeros.webinarHints') === '1' } catch { return false } })
+  if (hide) return null
+  return (
+    <div className="mb-4 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-semibold">How a webinar works in Closer OS</p>
+          <ol className="mt-1 list-decimal space-y-0.5 pl-5">
+            <li><b>Before:</b> registrations arrive from your sheet / form / import → reminder callers call them.</li>
+            <li><b>After:</b> upload the Zoom report (chat and polls optional) — any order, any Zoom report type. People who joined by a direct link become leads too.</li>
+            <li><b>Then:</b> share out sales calls — the hottest leads first.</li>
+          </ol>
+          <p className="mt-1 text-xs">Uploaded the wrong file? Use “Undo last upload” (for 24 hours).</p>
+        </div>
+        <button className="shrink-0 text-xs font-medium hover:underline" onClick={() => { setHide(true); try { localStorage.setItem('closeros.webinarHints', '1') } catch { /* ignore */ } }}>Got it</button>
+      </div>
+    </div>)
 }

@@ -1,7 +1,8 @@
+import { Ph } from './Copy'
 import { useEffect, useState } from 'react'
 import { Download } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
-import { fmtPhone } from '../lib/format'
+
 import { downloadCsv, hms, pct } from '../lib/report'
 import type { Directory } from '../lib/directory'
 import type { Batch } from '../lib/types'
@@ -118,7 +119,7 @@ function BandLeads({ batch, dir, pick, onClose, scope }: { batch: Batch; dir: Di
           <tbody className="divide-y divide-slate-100">
             {rows.map(r => (
               <tr key={r.lead.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setOpen(r.lead.id)}>
-                <td className="td"><p className="font-medium">{r.lead.name || 'No name'}</p><p className="text-xs text-slate-500">{fmtPhone(r.lead.phone)}{r.lead.city ? ` · ${r.lead.city}` : ''}</p></td>
+                <td className="td"><p className="font-medium">{r.lead.name || 'No name'}</p><p className="text-xs text-slate-500"><Ph v={r.lead.phone} />{r.lead.city ? ` · ${r.lead.city}` : ''}</p></td>
                 <td className="td">{r.lead.assigned_to ? dir.nameOf(r.lead.assigned_to) : <span className="text-amber-700">Unassigned</span>}</td>
                 <td className="td tabular-nums">{r.watch_minutes ?? '—'} min{r.saw_pitch ? ' 🎯' : ''}</td>
                 <td className="td"><span className={`tabular-nums font-medium ${r.warmth >= 70 ? 'text-orange-700' : r.warmth >= 40 ? 'text-amber-700' : 'text-slate-500'}`}>{r.warmth || '—'}</span>

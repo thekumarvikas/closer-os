@@ -1,3 +1,4 @@
+import { Ph, Em } from '../components/Copy'
 import { tagGroupsFor, linesFor } from '../lib/notes'
 import { lostReasons } from '../lib/lostReasons'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -174,7 +175,7 @@ function LeadPanel({ lead, dir, onCall, onFull, busy }: { lead: Lead; dir: Direc
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold">{lead.name || 'No name'}</h2>
-          <div className="text-slate-600">{fmtPhone(lead.phone)}</div>
+          <div className="text-slate-600"><Ph v={lead.phone} />{lead.email && <> · <Em v={lead.email} /></>}</div>
           <div className="text-sm text-slate-500">{[lead.profession, lead.company, lead.city].filter(Boolean).join(' · ')}</div>
           <div className="mt-1 flex flex-wrap gap-1">
             {lead.last_outcome_id && <Badge color="brand">{dir.outcomeOf(lead.last_outcome_id)?.label}</Badge>}

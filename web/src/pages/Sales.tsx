@@ -1,3 +1,4 @@
+import { Ph } from '../components/Copy'
 import { useEffect, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
@@ -100,7 +101,7 @@ export function SaleModal({ id, dir, onClose, onChanged, onOpenLead }: { id: str
         <section className="rounded-lg bg-slate-50 p-3 text-sm">
           <h3 className="mb-1 font-semibold">Lead</h3>
           {l ? <>
-            <button className="font-medium text-brand-700 hover:underline" onClick={() => onOpenLead(l.id)}>{l.name || 'No name'}</button> · {fmtPhone(l.phone)}
+            <button className="font-medium text-brand-700 hover:underline" onClick={() => onOpenLead(l.id)}>{l.name || 'No name'}</button> · <Ph v={l.phone} />
             <p className="text-slate-600">{[l.source, `added ${fmtDate(l.created_at, org)}`, l.assigned_to ? `assigned to ${dir.nameOf(l.assigned_to)}` : 'unassigned', l.arrivals > 1 && `came in ${l.arrivals}×`].filter(Boolean).join(' · ')}</p>
             <p className="mt-1">{l.calls} calls · {l.conversations} conversations · {fmtDuration(l.talk_sec ?? 0)} talk · {f.wa} WhatsApp · {f.recordings} recordings</p>
           </> : <p className="text-slate-500">{s.buyer ? `${s.buyer.name ?? ''} ${s.buyer.phone ?? ''} — not matched to a lead` : 'No lead linked'}</p>}

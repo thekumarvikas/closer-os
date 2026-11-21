@@ -1,9 +1,10 @@
+import { Ph } from './Copy'
 import { useEffect, useState } from 'react'
 import { Download, X } from 'lucide-react'
 import { errorText } from '../lib/supabase'
 import type { Directory } from '../lib/directory'
 import { useOrg } from '../lib/session'
-import { fmtDate, fmtPhone } from '../lib/format'
+import { fmtDate } from '../lib/format'
 import { downloadCsv, hms } from '../lib/report'
 import { Button, Empty, ErrorBox, Spinner } from './ui'
 import LeadDrawer from '../pages/LeadDrawer'
@@ -68,7 +69,7 @@ export function LeadDrill({ title, sub, load, dir, onClose, ownerLabel = 'Team m
                   <tr key={r.lead_id} className="cursor-pointer hover:bg-slate-50" onClick={() => setOpen(r.lead_id)}>
                     <td className="td">
                       <p className="font-medium">{r.name || 'No name'}</p>
-                      <p className="text-xs text-slate-500">{fmtPhone(r.phone)}</p>
+                      <p className="text-xs text-slate-500"><Ph v={r.phone} /></p>
                       {showReg && r.registered === false && <p className="text-[11px] font-medium text-blue-700">Joined without registering</p>}
                       {showPrev && prevText(r) && <p className="text-[11px] text-slate-500">Earlier webinar: {prevText(r)}</p>}
                     </td>

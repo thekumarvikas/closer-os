@@ -1,8 +1,9 @@
+import { Ph, Em } from './Copy'
 import { useEffect, useState } from 'react'
 import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
 import type { Directory } from '../lib/directory'
-import { fmtDate, fmtPhone } from '../lib/format'
+import { fmtDate } from '../lib/format'
 import { Button, ErrorBox, Modal, Spinner } from './ui'
 
 interface DupLead { id: string; name: string; phone: string; email: string | null; source: string | null; created_at: string; assigned_to: string | null; calls: number | null; last_call_at: string | null }
@@ -15,7 +16,9 @@ export default function DuplicatesModal({ dir, onClose, onMerged }: { dir: Direc
   const [keep, setKeep] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [names, setNames] = useState<{ lead_id: string; name: string; phone: string; other_names: string[] }[]>([])
   async function load() {
+    supabase.rpc('lead_name_conflicts', { p_org: org.id }).then(({ data }) => setNames((data ?? []) as typeof names))
     const { data, error } = await supabase.rpc('lead_duplicates', { p_org: org.id })
     if (error) return setError(errorText(error))
     const g = (data ?? []) as Group[]
@@ -46,7 +49,7 @@ export default function DuplicatesModal({ dir, onClose, onMerged }: { dir: Direc
                 <label key={l.id} className="flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50">
                   <input type="radio" className="mt-1" checked={keep[g.key] === l.id} onChange={() => setKeep({ ...keep, [g.key]: l.id })} />
                   <span className="min-w-0 flex-1">
-                    <b>{l.name || 'No name'}</b> · {fmtPhone(l.phone)}{l.email ? ` · ${l.email}` : ''}
+                    <b>{l.name || 'No name'}</b> · <Ph v={l.phone} />{l.email ? <> · <Em v={l.email} /></> : null}
                     <span className="block text-xs text-slate-500">{[l.source, `added ${fmtDate(l.created_at, org)}`, l.assigned_to ? dir.nameOf(l.assigned_to) : 'unassigned',
                       `${l.calls ?? 0} calls`].filter(Boolean).join(' · ')}</span>
                   </span>
@@ -58,6 +61,17 @@ export default function DuplicatesModal({ dir, onClose, onMerged }: { dir: Direc
           ))}
         </div>
       )}
+      {names.length > 0 && (
+        <div className="mt-5">
+          <p className="mb-1 text-sm font-semibold">One number, different names — please check ({names.length})</p>
+          <p className="mb-2 text-xs text-slate-500">The same number or email came in under names that don't match (often a family or office number). They are kept as one lead;
+            if they are really different people, open the lead and change its number. Otherwise mark it fine.</p>
+          <div className="max-h-56 space-y-1 overflow-y-auto">{names.map(n => (
+            <div key={n.lead_id} className="flex items-center gap-2 rounded border border-slate-100 px-2 py-1.5 text-sm">
+              <span className="min-w-0 flex-1"><b>{n.name}</b> · <Ph v={n.phone} /><span className="block text-xs text-slate-500">Also came in as: {n.other_names.join(', ')}</span></span>
+              <button className="text-xs text-brand-700 hover:underline" onClick={async () => { await supabase.rpc('lead_names_ok', { p_lead: n.lead_id }); setNames(names.filter(x => x.lead_id !== n.lead_id)) }}>Same person ✓</button>
+            </div>))}</div>
+        </div>)}
     </Modal>
   )
 }

@@ -23,8 +23,8 @@ export function Button({ variant = 'primary', loading, className = '', children,
   )
 }
 
-export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <div className={`rounded-xl border border-slate-200 bg-white shadow-sm ${className}`}>{children}</div>
+export function Card({ children, className = '', onClick }: { children: ReactNode; className?: string; onClick?: (e: React.MouseEvent) => void }) {
+  return <div onClick={onClick} className={`rounded-xl border border-slate-200 bg-white shadow-sm ${className}`}>{children}</div>
 }
 
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {

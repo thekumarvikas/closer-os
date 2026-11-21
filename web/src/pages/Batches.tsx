@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Plus, Video, Download, UserPlus, Trash2 } from 'lucide-react'
 import { downloadCsv, pct } from '../lib/report'
 import { fmtMoney } from '../lib/format'
@@ -16,9 +16,10 @@ interface Row extends Batch { leads: number; attended: number }
 
 interface CardRow { id: string; name: string; kind: string; webinar_at: string; auto_created: boolean; zoom_uploaded: boolean
   registered: number; assigned: number; unassigned: number; called: number; attended: number; hot: number; repeats: number
-  rem_called: number; rem_talked: number; rem_calls: number; rem_by: { user_id: string; leads: number; calls: number; talked: number }[]; again: number; outside_rule: number }
+  rem_called: number; rem_talked: number; rem_calls: number; rem_by: { user_id: string; leads: number; calls: number; talked: number }[]; again: number; outside_rule: number; share_needed: number }
 
 export default function Batches() {
+  const nav = useNavigate()
   const { org, isManager } = useOrg()
   const [rows, setRows] = useState<Row[] | null>(null)
   const [cards, setCards] = useState<CardRow[] | null>(null)
@@ -83,7 +84,8 @@ export default function Batches() {
             const past = new Date(c.webinar_at) < new Date()
             const n = (v: number, show = true) => show ? v.toLocaleString('en-IN') : '—'
             return (
-              <Card key={c.id} className="flex flex-col p-4">
+              <Card key={c.id} className="flex cursor-pointer flex-col p-4 transition hover:border-brand-300 hover:shadow-md"
+                onClick={(e: React.MouseEvent) => { if (!(e.target as HTMLElement).closest('button,a,input,select,label,table')) nav(`/webinars/${c.id}`) }}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <Link to={`/webinars/${c.id}`} className="block truncate font-semibold text-slate-900 hover:text-brand-700">{c.name}</Link>
@@ -101,13 +103,15 @@ export default function Batches() {
                 </div>
                 {(!past || c.rem_calls > 0) && c.registered > 0 && <ReminderStatus c={c} dir={dir} past={past} />}
                 {c.again > 0 && <p className="mt-2 text-xs text-orange-800"><b>🔁 {n(c.again)}</b> registered again — came back on their own, called first</p>}
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  {c.unassigned > 0 && <Button className="!py-1.5" onClick={() => setAssignFor(c)}><UserPlus className="h-4 w-4" /> Unassigned {c.unassigned} → Assign</Button>}
+                <div className="mt-auto flex flex-wrap items-center gap-2 pt-3">
+                  <Link to={`/webinars/${c.id}`}><Button className="!py-1.5">Open webinar</Button></Link>
+                  {c.unassigned > 0 && <Button variant="secondary" className="!py-1.5" onClick={() => setAssignFor(c)}><UserPlus className="h-4 w-4" /> Unassigned {c.unassigned} → Assign</Button>}
                   {c.outside_rule > 0 && <Button variant="secondary" className="!py-1.5" onClick={() => setOutsideFor(c)}
                     title="These registered again and stayed with the person who had them, who isn't in this sheet's current rule">🔁 {c.outside_rule} kept with previous owner → Review</Button>}
-                  {past && <Link to={`/webinars/${c.id}?after=1`}><Button variant={c.unassigned > 0 ? 'secondary' : 'primary'} className="!py-1.5">
-                    <Video className="h-4 w-4" /> {c.zoom_uploaded ? 'Share out sales calls' : 'Upload Zoom reports → sales calls'}</Button></Link>}
-                  <Link to={`/webinars/${c.id}`} className="text-sm text-brand-700 hover:underline">Open</Link>
+                  {past && !c.zoom_uploaded && <Link to={`/webinars/${c.id}?after=1`}><Button variant="secondary" className="!py-1.5">
+                    <Video className="h-4 w-4" /> Upload Zoom report</Button></Link>}
+                  {c.zoom_uploaded && c.share_needed > 0 && <Link to={`/webinars/${c.id}?after=1`} title="Attendees who don't have a sales caller yet"><Button variant="secondary" className="!py-1.5">
+                    <UserPlus className="h-4 w-4" /> Share out sales calls · {c.share_needed}</Button></Link>}
                   <button onClick={() => del(c)} className="ml-auto text-xs text-slate-400 hover:text-red-600" title="Delete this webinar (leads stay)"><Trash2 className="h-4 w-4" /></button>
                 </div>
               </Card>

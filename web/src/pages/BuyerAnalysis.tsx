@@ -1,3 +1,4 @@
+import { Ph } from '../components/Copy'
 import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
 import { SampleLink } from '../lib/samples'
@@ -510,7 +511,7 @@ function GapsTab({ dir, onOpenLead }: { dir: Directory; onOpenLead: (id: string)
   const outcomes = useMemo(() => Object.fromEntries(dir.outcomes.map(o => [o.id, o.label])), [dir])
   const LeadRows = ({ list, extra }: { list: any[]; extra: (x: any) => string }) => list.length === 0 ? <p className="text-sm text-slate-500">None. 👍</p> :
     <ul className="max-h-80 divide-y divide-slate-100 overflow-y-auto text-sm">{list.map((x, i) => <li key={x.id + i} className="flex cursor-pointer justify-between gap-2 py-1.5 hover:bg-slate-50" onClick={() => onOpenLead(x.id)}>
-      <span><b>{x.name || 'No name'}</b> · {fmtPhone(x.phone)} <span className="text-slate-500">· {extra(x)}</span></span><span className="whitespace-nowrap text-slate-500">{dir.nameOf(x.assigned_to)}</span></li>)}</ul>
+      <span><b>{x.name || 'No name'}</b> · <Ph v={x.phone} /> <span className="text-slate-500">· {extra(x)}</span></span><span className="whitespace-nowrap text-slate-500">{dir.nameOf(x.assigned_to)}</span></li>)}</ul>
   return (
     <div className="space-y-4">
       <ErrorBox error={error} />

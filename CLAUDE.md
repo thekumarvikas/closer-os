@@ -2144,3 +2144,10 @@ intelligence → Play Store launch.
   Checked on the real 19 Nov Zoom file (phone match): sheet 136 → 35 joined (26%); direct link: 51 registered on Zoom → 28
   joined (55%); overall 187 → 63 (34%) — Zoom itself said 64 unique viewers. Skip host/panelist rows, note-taker bots and own
   team members; same phone with a 2nd email = same person (attended under either).
+- BUILD LIST agreed (Nov 21, waiting for "go"): (1) copy icon + long-press copy on every phone/email (app + web); tapping a number
+  never calls — only the Call button; (2) calls from Closer OS use the rep's work SIM automatically, ask only when the rep has TWO
+  work SIMs (or none set / not in the phone); (3) one lead per person: keep extra numbers AND extra emails, "Registered as: <name> ·
+  date" tags under the main name, "Possible duplicates" when names clearly differ; (4) several numbers per lead labelled Primary /
+  Secondary (renamable), one Main; (5) webinar items: show-up by source, Zoom date check, Undo last upload, first-time hints, clickable
+  cards + "Open webinar" button, "Share out sales calls" only when needed, By hour 8 AM–midnight + any other hour with calls.
+  DROPPED by owner: "couldn't connect on the last N tries" hint; WhatsApp-presence tick (for now).

@@ -1,3 +1,4 @@
+import DailySummary from '../components/DailySummary'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { CheckCircle2, Circle } from 'lucide-react'
@@ -72,6 +73,7 @@ export default function Overview() {
     <>
       <PageHeader title={`Good ${h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening'}${profile?.full_name ? `, ${profile.full_name.split(' ')[0]}` : ''}`} subtitle={org.name} />
       <ErrorBox error={error} />
+      <div className="mb-6"><DailySummary /></div>
       {isAdmin && steps.some(s => !s.done) && (
         <Card className="mb-6 p-5">
           <h2 className="font-semibold">Get started</h2>

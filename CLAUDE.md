@@ -2105,3 +2105,10 @@ intelligence → Play Store launch.
   path uses push_targets_service) → app PushService kind "leads" → TeamAlerts.check. my_new_leads returns again[] →
   "🔁 <name> registered again" / "3rd time · call while interest is high". App tag "🔁 Registered again ×N" (LeadIndex v12).
 - NOT done (owner to decide): 1,425 older Cancer leads (webinars 18 Oct–16 Nov) unassigned though the sheet says Nikhil.
+- By hour report (Nov 21): chart card REMOVED (table + insights box say it all); best hour = conversations + talk + positive
+  outcomes (components/HourInsights.tsx + hour_insights() SQL, app ReportsScreen HourInsightsCard), every hour + every member counts.
+- PENDING (owner, Nov 21, "just note, don't build"): By hour table always shows 8 AM – 12 AM (8:00 AM to 11:59 PM) as
+  fixed rows, PLUS any other hour that had a call (e.g. a 1 AM – 2 AM missed call) listed in its place — no call is ever left out.
+- PENDING idea list (owner asked, nothing chosen yet): sharing reports with the team instead of WhatsApp screenshots —
+  "Send to team" with each person's own copy + seen tracking, personal to-do list from suggestions, automatic morning/evening
+  summaries, manager's note, WhatsApp-ready image/PDF, weekly 1-to-1 sheet.

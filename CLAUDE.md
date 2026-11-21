@@ -2165,3 +2165,10 @@ intelligence → Play Store launch.
   links to that day's webinars; zoom_upload_begin snapshot → "Undo last upload" (24 h, zoom_upload_undo). WebinarHints (dismissible).
   Webinar cards clickable + "Open webinar"; "Share out sales calls" only when batch_cards.share_needed > 0.
 - By hour (web + app): always 8 AM – midnight + any other hour with calls.
+- Summary v2 (Nov 21, migration 0116, app 0.28.8): day_stats adds leads_connected / leads_1min / calls_1min (leads = distinct lead or
+  number); "Conversations" removed from the summary (connected calls + "Leads: total · connected · talked 1 min or more");
+  plan adds hot_list (top 5: name + why — intent, watch minutes, pitch, chats, polls, registered N times, last outcome) with a
+  "Hot = …" note, and no_next (interested, no next call). Team lines: name · dialled · connected leads · talk · sales, sorted
+  by talk time. MORNING shows today's plan FIRST, yesterday below; evening shows today then tomorrow. Website: Download image /
+  Download PDF (no share sheet). App: Send image / Send PDF + Download image / Download PDF (MediaStore Downloads; Android < 10
+  falls back to share).

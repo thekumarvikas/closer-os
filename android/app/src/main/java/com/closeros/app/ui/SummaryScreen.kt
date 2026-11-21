@@ -47,7 +47,7 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
 data class SumLine(val label: String, val value: String)
-data class SumSection(val title: String, val lines: List<SumLine>)
+data class SumSection(val title: String, val lines: List<SumLine>, val note: String? = null)
 data class SumModel(val title: String, val sub: String, val sections: List<SumSection>)
 
 private fun JsonObject.n(k: String) = this[k]?.jsonPrimitive?.doubleOrNull ?: 0.0
@@ -72,56 +72,67 @@ fun buildSummary(s: JsonObject, currency: String): SumModel {
     val money = { v: Double -> java.text.NumberFormat.getCurrencyInstance(java.util.Locale("en", "IN")).apply {
         runCatching { this.currency = java.util.Currency.getInstance(currency) }; maximumFractionDigits = 0 }.format(v) }
     val morning = s.t("kind") == "morning"
-    val out = mutableListOf<SumSection>()
-    val dialled = st.i("dialled"); val missed = st.i("missed"); val open = st.i("missed_open")
-    out += SumSection("${if (morning) "Yesterday" else "Today"} · calls", listOf(
+    val done = mutableListOf<SumSection>()
+    val res = if (morning) "Yesterday" else "Today"
+    val dialled = st.i("dialled"); val missed = st.i("missed"); val open = st.i("missed_open"); val leads = st.i("leads")
+    done += SumSection("$res · calls", listOf(
         SumLine("Dialled", "$dialled"),
         SumLine("Connected", "${st.i("connected")} of $dialled (${pct(st.i("connected"), dialled)}%)"),
         SumLine("Received", "${st.i("received")}"),
         SumLine("Missed", "$missed" + if (missed > 0) (if (open > 0) " ($open not called back)" else " (all called back)") else ""),
-        SumLine("Conversations", "${st.i("conversations")}"),
-        SumLine("Talk time", d(st.i("talk"))),
-        SumLine("Unique leads", "${st.i("leads")}")))
-    out += SumSection("Results", listOfNotNull(
+        SumLine("Talk time", d(st.i("talk")))))
+    done += SumSection("$res · leads", listOf(
+        SumLine("Total leads", "$leads"),
+        SumLine("Connected", "${st.i("leads_connected")} of $leads (${pct(st.i("leads_connected"), leads)}%)"),
+        SumLine("Talked 1 min or more", "${st.i("leads_1min")} of $leads (${pct(st.i("leads_1min"), leads)}%)")))
+    done += SumSection("Results", listOfNotNull(
         SumLine("Sales", if (st.i("sales") > 0) "${st.i("sales")} · ${money(st.n("revenue"))}" else "0"),
         SumLine("Interested", "${st.i("interested")}"),
         if (st.i("call_later") > 0) SumLine("Asked to call later", "${st.i("call_later")}") else null))
     bestHour((st["hours"] as? JsonArray)?.map { it.jsonObject } ?: emptyList())?.let {
-        out += SumSection("Best hour", listOf(SumLine(slot(it.i("hr")), "${it.i("conn")} conversations · ${d(it.i("talk"))}"))) }
-    if (st.i("fu_due") > 0) out += SumSection("Follow-ups", listOfNotNull(
+        done += SumSection("Best hour", listOf(SumLine(slot(it.i("hr")), "${it.i("conn")} connected · ${d(it.i("talk"))}"))) }
+    if (st.i("fu_due") > 0) done += SumSection("Follow-ups", listOfNotNull(
         SumLine("On time", "${st.i("fu_on_time")} of ${st.i("fu_due")}"),
         if (st.i("fu_late") > 0) SumLine("Late", "${st.i("fu_late")}") else null,
         if (st.i("fu_missed") > 0) SumLine("Not called", "${st.i("fu_missed")}") else null))
     (s["people"] as? JsonArray)?.map { it.jsonObject }?.takeIf { it.isNotEmpty() }?.let { people ->
-        out += SumSection("Team", people.sortedWith(compareByDescending<JsonObject> { it["stats"]!!.jsonObject.i("conversations") }.thenByDescending { it["stats"]!!.jsonObject.i("dialled") }).map { p ->
-            val ps = p["stats"]!!.jsonObject
+        done += SumSection("Team", people.sortedWith(compareByDescending<JsonObject> { it["stats"]!!.jsonObject.i("talk") }.thenByDescending { it["stats"]!!.jsonObject.i("dialled") }).map { p ->
+            val ps = p["stats"]!!.jsonObject; val sl = ps.i("sales")
             SumLine(p.t("name") ?: "Someone", if (ps.i("dialled") + ps.i("received") == 0) "no calls" else
-                "${ps.i("dialled")} dialled · ${ps.i("connected")} connected · ${d(ps.i("talk"))}" + if (ps.i("sales") > 0) " · ${ps.i("sales")} sale${if (ps.i("sales") > 1) "s" else ""} ${money(ps.n("revenue"))}" else "")
+                "${ps.i("dialled")} dialled · ${ps.i("leads_connected")} connected · ${d(ps.i("talk"))} · $sl sale${if (sl == 1) "" else "s"}")
         })
     }
     val pl = s["plan"]!!.jsonObject; val plan = mutableListOf<SumLine>()
     if (s["working_day"]?.jsonPrimitive?.booleanOrNull == false) plan += SumLine("Holiday", if (pl.i("follow_ups") > 0) "follow-ups are lined up if you want to call" else "no calls planned")
     plan += SumLine("Follow-ups due", "${pl.i("follow_ups")}")
-    if (pl.i("overdue") > 0) plan += SumLine("Overdue", "${pl.i("overdue")}")
-    plan += SumLine("Hot leads", "${pl.i("hot")}")
+    if (pl.i("overdue") > 0) plan += SumLine("Overdue from earlier", "${pl.i("overdue")}")
     if (open > 0) plan += SumLine("Missed callers to call back", "$open")
+    if (pl.i("no_next") > 0) plan += SumLine("Interested, no next call planned", "${pl.i("no_next")}")
     (pl["webinars"] as? JsonArray)?.map { it.jsonObject }?.forEach { w ->
         val at = runCatching { com.closeros.app.data.parseInstant(w.t("at")!!).atZone(tz).format(DateTimeFormatter.ofPattern("h:mm a")) }.getOrDefault("")
         plan += SumLine(w.t("name") ?: "Webinar", "$at · ${w.i("leads")} leads to remind")
     }
-    out += SumSection(if (morning) "Today" else "Tomorrow", plan)
+    plan += SumLine("Hot leads", "${pl.i("hot")}")
+    val out = mutableListOf(SumSection("${if (morning) "Today" else "Tomorrow"} · plan", plan))
+    (pl["hot_list"] as? JsonArray)?.map { it.jsonObject }?.takeIf { it.isNotEmpty() }?.let { hot ->
+        out += SumSection("Hot leads · call first", hot.mapIndexed { i, h -> SumLine("${i + 1}. ${h.t("name") ?: ""}", h.t("why")?.takeIf { it.isNotBlank() } ?: h.t("phone") ?: "") },
+            note = "Hot = said \"Hot\" or \"Ready to pay\", or very engaged in a webinar in the last 14 days (watched most of it, saw the pitch, chatted, answered polls, or registered again).")
+    }
+    // Morning: today's tasks first, yesterday below. Evening: today's results first, then tomorrow.
+    if (morning) out.addAll(done) else out.addAll(0, done)
     val day = runCatching { LocalDate.parse(s.t("day")).format(DateTimeFormatter.ofPattern("EEE, d MMM")) }.getOrDefault(s.t("day") ?: "")
     val who = if (s["team"]?.jsonPrimitive?.booleanOrNull == true) "${s.t("org_name")} · Team" else s.t("who") ?: ""
     return SumModel("${if (morning) "Morning" else "Evening"} summary", "$who · $day · ${ZonedDateTime.now(tz).format(DateTimeFormatter.ofPattern("h:mm a"))}", out)
 }
 
 fun summaryText(m: SumModel) = (listOf("*Closer OS · ${m.title}*", m.sub) +
-    m.sections.flatMap { s -> listOf("", "*${s.title}*") + s.lines.map { "${it.label}: ${it.value}" } }).joinToString("\n")
+    m.sections.flatMap { s -> listOf("", "*${s.title}*") + listOfNotNull(s.note?.let { "_${it}_" }) + s.lines.map { "${it.label}: ${it.value}" } }).joinToString("\n")
 
 /** Phone-sized picture of the summary (same look as the dashboard's image). */
 fun summaryBitmap(m: SumModel): Bitmap {
     val w = 1080; val pad = 64f; val row = 56
-    val h = 260 + m.sections.sumOf { 90 + it.lines.size * row } + 80
+    fun wrap(t: String): List<String> { val out = mutableListOf<String>(); var line = ""; t.split(' ').forEach { w -> if (("$line $w").length > 62) { out += line; line = w } else line = if (line.isEmpty()) w else "$line $w" }; if (line.isNotEmpty()) out += line; return out }
+    val h = 260 + m.sections.sumOf { 90 + it.lines.size * row + (it.note?.let { n -> wrap(n).size * 40 + 16 } ?: 0) } + 80
     val b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888); val c = Canvas(b)
     val p = Paint(Paint.ANTI_ALIAS_FLAG)
     c.drawColor(0xFFFFFFFF.toInt()); p.color = 0xFF0E5E57.toInt(); c.drawRect(0f, 0f, w.toFloat(), 200f, p)
@@ -134,8 +145,9 @@ fun summaryBitmap(m: SumModel): Bitmap {
     m.sections.forEach { s ->
         txt(s.title.uppercase(), pad, y, 32f, 0xFF0E5E57.toInt(), true)
         p.color = 0xFFE3E7EE.toInt(); c.drawRect(pad, y + 18, w - pad, y + 20, p); y += 70
+        s.note?.let { n -> wrap(n).forEach { ln -> txt(ln, pad, y, 26f, 0xFF6B7280.toInt(), false); y += 40 }; y += 16 }
         s.lines.forEach { l ->
-            txt(if (l.label.length > 30) l.label.take(29) + "…" else l.label, pad, y, 30f, 0xFF4A5263.toInt(), false)
+            txt(if (l.label.length > 36) l.label.take(35) + "…" else l.label, pad, y, 30f, 0xFF4A5263.toInt(), false)
             txt(l.value, w - pad, y, 30f, 0xFF1D2433.toInt(), true, right = true); y += row
         }
         y += 20
@@ -148,6 +160,33 @@ private fun shareFile(ctx: Context, f: File, mime: String) {
     val uri = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
     val i = Intent(Intent.ACTION_SEND).setType(mime).putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     runCatching { ctx.startActivity(Intent.createChooser(i, "Share summary").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+}
+
+/** Save to the phone's Downloads folder. */
+fun downloadSummary(ctx: Context, m: SumModel, pdf: Boolean) {
+    val name = "${m.title.replace(' ', '-').lowercase()}-${System.currentTimeMillis() / 1000}.${if (pdf) "pdf" else "png"}"
+    val mime = if (pdf) "application/pdf" else "image/png"
+    runCatching {
+        val write: (java.io.OutputStream) -> Unit = { os ->
+            if (pdf) {
+                val bmp = summaryBitmap(m); val doc = PdfDocument(); val pw = 595; val ph = 595 * bmp.height / bmp.width
+                val page = doc.startPage(PdfDocument.PageInfo.Builder(pw, ph, 1).create())
+                page.canvas.drawBitmap(bmp, null, android.graphics.Rect(0, 0, pw, ph), Paint(Paint.FILTER_BITMAP_FLAG)); doc.finishPage(page)
+                doc.writeTo(os); doc.close()
+            } else summaryBitmap(m).compress(Bitmap.CompressFormat.PNG, 100, os)
+        }
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            val v = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.Downloads.DISPLAY_NAME, name); put(android.provider.MediaStore.Downloads.MIME_TYPE, mime)
+            }
+            val uri = ctx.contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, v)!!
+            ctx.contentResolver.openOutputStream(uri)!!.use(write)
+        } else {
+            val dir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS).apply { mkdirs() }
+            File(dir, name).outputStream().use(write)
+        }
+        Toast.makeText(ctx, "Saved in Downloads: $name", Toast.LENGTH_LONG).show()
+    }.onFailure { if (pdf) shareSummaryPdf(ctx, m) else shareSummaryImage(ctx, m) }
 }
 
 fun shareSummaryImage(ctx: Context, m: SumModel) {
@@ -198,8 +237,12 @@ fun SummaryScreen(vm: AppViewModel, initialKind: String, onBack: () -> Unit) {
                 ctx.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Summary", summaryText(dm)))
                 Toast.makeText(ctx, "Copied — paste it in WhatsApp", Toast.LENGTH_SHORT).show()
             }, Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 6.dp)) { Text("Copy text", maxLines = 1) }
-            OutlinedButton({ shareSummaryImage(ctx, dm) }, Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 6.dp)) { Text("Image", maxLines = 1) }
-            OutlinedButton({ shareSummaryPdf(ctx, dm) }, Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 6.dp)) { Text("PDF", maxLines = 1) }
+            OutlinedButton({ shareSummaryImage(ctx, dm) }, Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 6.dp)) { Text("Send image", maxLines = 1) }
+            OutlinedButton({ shareSummaryPdf(ctx, dm) }, Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 6.dp)) { Text("Send PDF", maxLines = 1) }
+        }
+        Row(Modifier.padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton({ downloadSummary(ctx, dm, false) }, Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 6.dp)) { Text("⬇ Download image", maxLines = 1) }
+            OutlinedButton({ downloadSummary(ctx, dm, true) }, Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 6.dp)) { Text("⬇ Download PDF", maxLines = 1) }
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
             Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.White)) {
@@ -207,6 +250,7 @@ fun SummaryScreen(vm: AppViewModel, initialKind: String, onBack: () -> Unit) {
                     Text(dm.sub, fontSize = 12.sp, color = Brand.muted)
                     dm.sections.forEach { s ->
                         Text(s.title.uppercase(), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Brand.primary, modifier = Modifier.padding(top = 14.dp, bottom = 4.dp))
+                        s.note?.let { Text(it, fontSize = 12.sp, color = Brand.muted, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, modifier = Modifier.padding(bottom = 4.dp)) }
                         s.lines.forEach { l ->
                             Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
                                 Text(l.label, Modifier.weight(1f), fontSize = 14.sp, color = Brand.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)

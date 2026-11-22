@@ -558,6 +558,7 @@ fun SummaryScreen(vm: AppViewModel, initialKind: String, onBack: () -> Unit) {
                         s.lines.forEach { l ->
                             if (l.leadId != null) Column(Modifier.fillMaxWidth().clickable { vm.openLeadId = l.leadId }.padding(vertical = 6.dp)) {
                                 Text(l.label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Brand.primary)
+                                l.phone?.takeIf { it.isNotBlank() }?.let { CopyText(it.filter { c -> c.isDigit() || c == '+' }, it, fontSize = 14.sp, what = "Number copied") }
                                 Text(l.value, fontSize = 13.sp)
                                 l.sub?.let { Text(it, fontSize = 12.sp, color = Brand.muted) }
                             } else Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {

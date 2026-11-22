@@ -8,7 +8,7 @@ import { usePersisted } from '../lib/persist'
 import { fmtMoney } from '../lib/format'
 import { Button, Card, ErrorBox, Modal, Spinner } from '../components/ui'
 import { dur } from '../components/terms'
-import { HOT_CATS, fmtPh, type HotLead } from '../lib/summary'
+import { HOT_CATS, type HotLead } from '../lib/summary'
 import LeadDrawer from './LeadDrawer'
 import { Ph } from '../components/Copy'
 
@@ -231,11 +231,11 @@ function Body({ d, period, mgr, nameOf, first, money, onLead, onShowAll, onDrill
             <Head title={`${mgr ? 'Hot leads' : 'My hot leads'} · ${d.hot.total}`} link={d.hot.total > 5 ? { to: '#', text: 'Show all →', onClick: onShowAll } : undefined} />
             {d.hot.list.length === 0 ? <p className="py-4 text-center text-sm text-slate-400">No hot leads right now.</p> :
               <div className="divide-y divide-slate-100">{d.hot.list.map(l =>
-                <button key={l.lead_id} onClick={() => onLead(l.lead_id)} className="block w-full py-2 text-left text-sm hover:bg-slate-50">
+                <div key={l.lead_id} role="button" onClick={e => { if (!(e.target as HTMLElement).closest('button')) onLead(l.lead_id) }} className="block w-full cursor-pointer py-2 text-left text-sm hover:bg-slate-50">
                   <span className="block"><b>{l.name}</b>{mgr && l.owner ? <span className="text-slate-500"> · {first(l.owner)}</span> : null}
                     {l.tag && <span className="ml-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-800">{l.tag}</span>}</span>
-                  <span className="block text-xs text-slate-500">{fmtPh(l.phone)} · {l.watch ? `${l.watch} min · ` : ''}{l.pitch ? '✓ pitch · ' : ''}{l.talk ? `${dur(l.talk)} talk` : 'not talked yet'}</span>
-                </button>)}</div>}
+                  <span className="block text-xs text-slate-500"><span className="inline-block"><Ph v={l.phone} /></span> · {l.watch ? `${l.watch} min · ` : ''}{l.pitch ? '✓ pitch · ' : ''}{l.talk ? `${dur(l.talk)} talk` : 'not talked yet'}</span>
+                </div>)}</div>}
             {d.hot.total > 0 && <p className="mt-2 text-xs text-slate-500">{Object.entries(d.hot.by_cat).sort(([a], [b]) => +a - +b).map(([c, n]) => `${HOT_CATS[+c]} ${n}`).join(' · ')}</p>}
           </Card>
         </div>

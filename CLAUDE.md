@@ -2240,3 +2240,8 @@ intelligence → Play Store launch.
   data.auto/why. pg_cron 'auto-merge-people' every 10 min for leads of the last 30 min; first run merged 5 pairs. Same full name with
   different number AND email = NOT merged automatically (common names: e.g. two different "Sanjay Kumar"s) → Leads → Possible duplicates
   "Same name … merge only if it is the same person" (lead_duplicates how 'name').
+- REVISED (migration 0123, owner Nov 22): merge ONLY on the EXACT same phone number (last 10 digits) or EXACT same email (lower-case,
+  spaces removed) — never by name, typo, Gmail dots or "+tag". email_key = clean_email only (no domain typo fix any more).
+  same_person_pairs also checks secondary numbers/emails (lead_phones / lead_emails). The 5 name/typo merges of 0122 were undone
+  (leads restored, own calls/origins moved back, webinar rows re-added, activity 'unmerged'); Possible duplicates lists only
+  exact number/email groups. Cron 'auto-merge-people' (10 min) keeps running with the exact rule.

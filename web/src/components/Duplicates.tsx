@@ -44,7 +44,7 @@ export default function DuplicatesModal({ dir, onClose, onMerged }: { dir: Direc
         <div className="max-h-[60vh] space-y-3 overflow-y-auto">
           {groups.map(g => (
             <div key={g.key} className="rounded-lg border border-slate-200 p-3">
-              <div className="mb-2 text-xs font-medium text-slate-500">Same {g.how === 'phone' ? `number (…${g.key.slice(-4)})` : `email (${g.key})`}</div>
+              <div className="mb-2 text-xs font-medium text-slate-500 first-letter:uppercase">{g.how === 'phone' ? `Same number (…${g.key.slice(-4)})` : g.how === 'email' ? `Same email (${g.key})` : `Same name (${g.key}) — different number and email. Merge only if it is the same person.`}</div>
               {g.leads.map(l => (
                 <label key={l.id} className="flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50">
                   <input type="radio" className="mt-1" checked={keep[g.key] === l.id} onChange={() => setKeep({ ...keep, [g.key]: l.id })} />

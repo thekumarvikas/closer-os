@@ -2230,3 +2230,13 @@ intelligence → Play Store launch.
   width when a line wouldn't fit half (never cut). App: calls/PopupGuard.kt = ongoing red notification while "Display over other
   apps" is off (checked on sync, app open, call end; skipped when the rep chose pop-up Off); 8 AM / 9:30 PM summary notification now
   carries the person's own summary picture (BigPictureStyle). Dashboard calls list shows the phone number (copyable).
+
+## One person = one lead (migration 0122, Nov 22 2026)
+- Owner rule for the whole system: count PEOPLE, not numbers. email_key v2 ignores "+tag" and Gmail dots (leads.email_key column
+  re-created; lead_emails keys refreshed). name_key(name) (lower, single spaces, Dr/Mr/Mrs… dropped). same_person_pairs(org, since):
+  same email_key, or same FULL name (2+ words) with email local parts ≤ 2 edits apart (same domain, ≥ 5 chars) or 10-digit numbers ≤ 1
+  digit apart (fuzzystrmatch levenshtein, schema extensions). auto_merge_people(org?, since?) merges each pair (keep = most calls, then
+  oldest; merge_leads now allowed under set_config closeros.system = '1', and keeps the other email in lead_emails), activity 'merged'
+  data.auto/why. pg_cron 'auto-merge-people' every 10 min for leads of the last 30 min; first run merged 5 pairs. Same full name with
+  different number AND email = NOT merged automatically (common names: e.g. two different "Sanjay Kumar"s) → Leads → Possible duplicates
+  "Same name … merge only if it is the same person" (lead_duplicates how 'name').

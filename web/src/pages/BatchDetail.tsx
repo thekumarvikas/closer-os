@@ -977,7 +977,7 @@ function SourceShowUp({ batch, dir }: { batch: Batch; dir: Directory }) {
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-1 text-sm"><button className="font-semibold text-brand-700 hover:underline" onClick={() => setDrill({ title: `${label} · joined`, scope, metric: 'attended' })}>{j.toLocaleString('en-IN')} joined</button>
         {' '}of <button className="hover:underline" onClick={() => setDrill({ title: label, scope, metric: 'assigned' })}>{n.toLocaleString('en-IN')}</button>
-        <span className="ml-2 text-lg font-semibold text-slate-900">{pct(j, n)}</span></p>
+        <span className="ml-2 text-lg font-semibold text-slate-900">{pct(j, n)}%</span></p>
       <p className="mt-0.5 text-xs text-slate-500">{hint}</p>
     </div>)
   return (

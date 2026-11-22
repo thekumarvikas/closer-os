@@ -2201,3 +2201,11 @@ intelligence → Play Store launch.
   grouped by team member, name · phone once + one short line (watch min · ✓ pitch · chats · polls · attended/registered only when
   > 1 · talked · calls · WA). Web = Download image / Download PDF only; app = Send image / Send PDF only for managers / owners /
   individuals (reps: download only).
+- Summary layout v4 (Nov 22, app 0.29.2): web lib/summary.ts kit() / app Kit = shared drawing kit (head with top margin, tables with
+  optional header + zebra rows, fit-to-width). IMAGE: 8 number tiles (Dialled, Connected %, Received, Missed, Leads connected,
+  Talked 1 min+, Talk time, Sales) + bullet extras (best hour, outcomes saved, follow-ups on time, missed not called back, interested,
+  revenue) · plan · hot category × member table · "Call first" top 5 (lead · phone · why) for team AND personal · team table.
+  PDF: 2-line header (company bold, then plan/results/time), every section a key/value zebra table, team table incl. no-call members
+  (—), hot leads = coloured category band once → team member heading once → table Lead (+tag only if ≠ category) · Phone (tap to
+  call) · Webinar (min · pitch · chats · polls · N webinars · registered N×) · Calls (talk · calls · WA). HotRow/SumLine carry web /
+  work / tag. "Download full list" PDF uses the same hot tables.

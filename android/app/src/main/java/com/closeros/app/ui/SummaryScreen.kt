@@ -50,11 +50,11 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
 data class SumLine(val label: String, val value: String, val leadId: String? = null, val sub: String? = null, val phone: String? = null,
-    val short: String? = null, val owner: String? = null, val cat: Int = 0, val name: String? = null)
+    val short: String? = null, val owner: String? = null, val cat: Int = 0, val name: String? = null, val web: String = "", val work: String = "", val tag: String = "")
 data class SumSection(val title: String, val lines: List<SumLine>, val note: String? = null)
 data class SumCard(val header: String, val sub: String, val planTitle: String, val plan: List<String>, val hotTotal: Int, val cols: List<String>,
     val grid: List<Triple<String, List<Int>, Int>>, val top: List<SumLine>, val resultsTitle: String, val yesterday: List<String>,
-    val team: List<List<String>>, val noCalls: List<String>)
+    val team: List<List<String>>, val noCalls: List<String>, val stats: List<Pair<String, String>> = emptyList(), val extra: List<String> = emptyList())
 data class SumModel(val title: String, val sub: String, val sections: List<SumSection>, val hotTotal: Int = 0, val hotShown: Int = 0,
     val card: SumCard? = null, val hot: List<SumLine> = emptyList(), val teamView: Boolean = false)
 fun fmtPh(p: String?) = p?.let { Regex("^\\+91(\\d{5})(\\d{5})$").find(it)?.let { m -> "+91 ${m.groupValues[1]} ${m.groupValues[2]}" } ?: it } ?: ""
@@ -106,8 +106,15 @@ fun hotSections(list: List<JsonObject>, total: Int, tz: ZoneId, team: Boolean, n
             if (att > 1) "attended $att×" else null, if (h.i("reg") > 1) "registered ${h.i("reg")}×" else null,
             if (talkSec > 0) "talked " + (if (talkSec < 60) "${talkSec}s" else "${talkSec / 60}m") else "not talked",
             "$calls call${if (calls == 1) "" else "s"}", if (wa > 0) "$wa WA" else null).joinToString(" · ")
+        val web = listOfNotNull(if (watch > 0) "$watch min" else "joined", if (h["pitch"]?.jsonPrimitive?.booleanOrNull == true) "✓ pitch" else null,
+            h.i("chats").takeIf { it > 0 }?.let { "$it chat${if (it > 1) "s" else ""}" }, if (h.i("polls") > 0) "polls" else null,
+            if (att > 1) "$att webinars" else null, if (h.i("reg") > 1) "registered ${h.i("reg")}×" else null).joinToString(" · ")
+        val work = listOfNotNull(if (talkSec > 0) (if (talkSec < 60) "${talkSec}s talk" else "${talkSec / 60}m talk") else "no talk",
+            "$calls call${if (calls == 1) "" else "s"}", if (wa > 0) "$wa WA" else null).joinToString(" · ")
+        val tag = if (cat <= 4) listOfNotNull(h.t("tag"), h.t("outcome")).joinToString(" · ") else ""
         lines += SumLine("${i + 1}. ${h.t("name") ?: ""}" + (if (team && owner.isNotBlank()) " ($owner)" else ""), "$why — $activity — $done",
-            leadId = h.t("lead_id"), sub = whenLine.ifBlank { null }, phone = fmtPh(h.t("phone")), short = short, owner = owner, cat = cat, name = h.t("name"))
+            leadId = h.t("lead_id"), sub = whenLine.ifBlank { null }, phone = fmtPh(h.t("phone")), short = short, owner = owner, cat = cat, name = h.t("name"),
+            web = web, work = work, tag = tag)
     }
     if (lines.isNotEmpty()) out += SumSection(title, lines)
     if (out.isNotEmpty()) out[0] = out[0].copy(note = HOT_NOTE)
@@ -138,7 +145,7 @@ fun buildSummary(s: JsonObject, currency: String, hotOverride: JsonObject? = nul
         SumLine("Sales", if (st.i("sales") > 0) "${st.i("sales")} · ${money(st.n("revenue"))}" else "0"),
         SumLine("Interested", "${st.i("interested")}"),
         if (st.i("call_later") > 0) SumLine("Asked to call later", "${st.i("call_later")}") else null,
-        SumLine("Outcomes saved", "${st.i("conn_outcome")} of ${st.i("conversations")} calls that connected (dialled + received)")))
+        SumLine("Outcomes saved (connected calls)", "${st.i("conn_outcome")} of ${st.i("conversations")}")))
     bestHour((st["hours"] as? JsonArray)?.map { it.jsonObject } ?: emptyList())?.let {
         done += SumSection("Best hour", listOf(SumLine(slot(it.i("hr")), "${it.i("conn")} connected · ${d(it.i("talk"))}"))) }
     if (st.i("fu_due") > 0) done += SumSection("Follow-ups", listOfNotNull(
@@ -190,11 +197,17 @@ fun buildSummary(s: JsonObject, currency: String, hotOverride: JsonObject? = nul
             if (open > 0) "Missed callers $open" else null, if (pl.i("no_next") > 0) "Interested, no next call ${pl.i("no_next")}" else null).joinToString(" · ")) +
             ((pl["webinars"] as? JsonArray)?.map { it.jsonObject }?.map { w -> "${w.t("name")} ${runCatching { com.closeros.app.data.parseInstant(w.t("at")!!).atZone(tz).format(DateTimeFormatter.ofPattern("h:mm a")) }.getOrDefault("")} · ${w.i("leads")} to remind" } ?: emptyList()),
         hotObj?.i("total") ?: 0, owners.map { (ownerName[it] ?: "").substringBefore(' ').ifBlank { "Unassigned" } }, grid,
-        if (team) emptyList() else hotLines.take(5), res,
+        hotLines.take(5), res,
         listOf("Dialled $dialled · Connected ${pct(st.i("connected"), dialled)}% · Leads connected ${st.i("leads_connected")}",
             "Talk ${d(st.i("talk"))} · Outcomes saved ${st.i("conn_outcome")} of ${st.i("conversations")} · Sales ${st.i("sales")}"),
         withCalls.map { val ps = it["stats"]!!.jsonObject; listOf(it.t("name") ?: "", "${ps.i("dialled")}", "${ps.i("leads_connected")}", d(ps.i("talk")), "${ps.i("sales")}") },
-        people.filter { it !in withCalls }.map { it.t("name") ?: "" })
+        people.filter { it !in withCalls }.map { it.t("name") ?: "" },
+        listOf("Dialled" to "$dialled", "Connected" to "${pct(st.i("connected"), dialled)}%", "Received" to "${st.i("received")}", "Missed" to "$missed",
+            "Leads connected" to "${st.i("leads_connected")}", "Talked 1 min+" to "${st.i("leads_1min")}", "Talk time" to d(st.i("talk")), "Sales" to "${st.i("sales")}"),
+        listOfNotNull(bestHour((st["hours"] as? JsonArray)?.map { it.jsonObject } ?: emptyList())?.let { "Best hour ${slot(it.i("hr"))} · ${it.i("conn")} connected" },
+            "Outcomes saved ${st.i("conn_outcome")} of ${st.i("conversations")}",
+            if (st.i("fu_due") > 0) "Follow-ups on time ${st.i("fu_on_time")} of ${st.i("fu_due")}" else null,
+            if (open > 0) "$open missed callers not called back" else null, if (st.i("interested") > 0) "Interested ${st.i("interested")}" else null))
     return SumModel("${if (morning) "Morning" else "Evening"} summary", "$who · $day · ${ZonedDateTime.now(tz).format(DateTimeFormatter.ofPattern("h:mm a"))}", out,
         hotTotal = hotObj?.i("total") ?: 0, hotShown = hotList.size, card = card, hot = hotLines, teamView = team)
 }
@@ -219,102 +232,128 @@ fun summaryText(m: SumModel): String {
     return out.joinToString("\n")
 }
 
-/** ONE phone-shaped picture (4:5, drawn at 2× so WhatsApp keeps it sharp): numbers only. */
+private object Col { const val brand = 0xFF0E5E57; const val soft = 0xFFE8F3F1; const val ink = 0xFF1D2433; const val muted = 0xFF5B6576
+    const val faint = 0xFF98A2B3; const val line = 0xFFE3E7EE; const val zebra = 0xFFF7F8FA; const val link = 0xFF0B63C5 }
+
+/** Drawing kit shared by the image and the PDF (canvas null = measure only). */
+private class Kit(val c: Canvas?, val w: Float, val pad: Float) {
+    val p = Paint(Paint.ANTI_ALIAS_FLAG)
+    private fun font(size: Float, bold: Boolean) { p.textSize = size; p.typeface = Typeface.create(Typeface.SANS_SERIF, if (bold) Typeface.BOLD else Typeface.NORMAL) }
+    fun t(s: String, x: Float, y: Float, size: Float, color: Long, bold: Boolean = false, right: Boolean = false): Float {
+        font(size, bold); p.color = color.toInt(); p.textAlign = if (right) Paint.Align.RIGHT else Paint.Align.LEFT
+        c?.drawText(s, x, y, p); p.textAlign = Paint.Align.LEFT; return p.measureText(s) }
+    fun fit(s: String, size: Float, bold: Boolean, max: Float): String { font(size, bold); if (p.measureText(s) <= max) return s
+        var v = s; while (v.length > 2 && p.measureText("$v…") > max) v = v.dropLast(1); return "$v…" }
+    fun rect(x: Float, y: Float, rw: Float, rh: Float, color: Long, r: Float = 0f) { c ?: return; p.color = color.toInt()
+        if (r > 0) c.drawRoundRect(x, y, x + rw, y + rh, r, r, p) else c.drawRect(x, y, x + rw, y + rh, p) }
+    fun head(s: String, y0: Float): Float { val y = y0 + 22; t(s.uppercase(), pad, y, 24f, Col.brand, true); rect(pad, y + 12, w - pad * 2, 2f, Col.line); return y + 40 }
+    /** cols = (title, share, right-aligned). Header row only when a title is set. */
+    fun table(y0: Float, cols: List<Triple<String, Float, Boolean>>, rows: List<List<String>>, size: Float = 26f, rowH: Float = 50f): Float {
+        var y = y0; val inner = w - pad * 2; val tot = cols.sumOf { it.second.toDouble() }.toFloat()
+        val xs = mutableListOf<Float>(); var x = pad; cols.forEach { xs += x; x += inner * it.second / tot }
+        fun cell(i: Int, s: String, yy: Float, sz: Float, col: Long, bold: Boolean) { val cw = inner * cols[i].second / tot
+            t(fit(s, sz, bold, cw - 24), if (cols[i].third) xs[i] + cw - 14 else xs[i] + 14, yy, sz, col, bold, cols[i].third) }
+        if (cols.any { it.first.isNotEmpty() }) { rect(pad, y, inner, rowH - 6, Col.soft, 8f); cols.forEachIndexed { i, cc -> cell(i, cc.first, y + rowH / 2 + 2, 20f, Col.brand, true) }; y += rowH }
+        rows.forEachIndexed { ri, r -> if (ri % 2 == 1) rect(pad, y - 4, inner, rowH, Col.zebra)
+            cols.indices.forEach { i -> cell(i, r.getOrElse(i) { "" }, y + rowH / 2 + 4, size, Col.ink, i > 0) }; y += rowH }
+        return y + 16 }
+}
+
+/** ONE phone-shaped picture (4:5, drawn at 2× so WhatsApp keeps it sharp). */
 fun summaryBitmap(m: SumModel): Bitmap {
     val k = m.card ?: return listBitmap(m).first
     val w = 1080f; val pad = 56f; val sc = 2f
-    val colW = 120f; val labW = w - pad * 2 - (k.cols.size + 1) * colW
-    var need = 230f + 60 + k.plan.size * 44 + 40
-    if (k.hotTotal > 0) need += 70 + (if (k.cols.isNotEmpty()) 50 else 0) + k.grid.size * 52 + (if (k.top.isNotEmpty()) 30 + k.top.size * 76 else 0) + 30
-    need += 60 + k.yesterday.size * 46 + 30
-    if (k.team.isNotEmpty()) need += 60 + 46 + k.team.size * 48 + (if (k.noCalls.isNotEmpty()) 50 else 0)
-    need += 70
-    val h = maxOf(w * 1.25f, need)
-    val b = Bitmap.createBitmap((w * sc).toInt(), (h * sc).toInt(), Bitmap.Config.ARGB_8888); val c = Canvas(b); c.scale(sc, sc)
-    val p = Paint(Paint.ANTI_ALIAS_FLAG)
-    fun t(s: String, x: Float, y: Float, size: Float, color: Long, bold: Boolean = false, right: Boolean = false) {
-        p.textSize = size; p.color = color.toInt(); p.typeface = Typeface.create(Typeface.SANS_SERIF, if (bold) Typeface.BOLD else Typeface.NORMAL)
-        p.textAlign = if (right) Paint.Align.RIGHT else Paint.Align.LEFT; c.drawText(s, x, y, p)
-    }
-    fun head(s: String, y: Float) { t(s.uppercase(), pad, y, 26f, 0xFF0E5E57, true); p.color = 0xFFE3E7EE.toInt(); c.drawRect(pad, y + 14, w - pad, y + 16, p) }
-    c.drawColor(0xFFFFFFFF.toInt()); p.color = 0xFF0E5E57.toInt(); c.drawRect(0f, 0f, w, 190f, p)
-    t("Closer OS", pad, 62f, 28f, 0xFFCFE7E3, true); t(k.header, pad, 122f, 52f, 0xFFFFFFFF, true); t(k.sub, pad, 165f, 28f, 0xFFCFE7E3)
-    var y = 250f
-    head(k.planTitle, y); y += 58
-    k.plan.forEach { t(it, pad, y, 30f, 0xFF1D2433); y += 44 }
-    y += 30
-    if (k.hotTotal > 0) {
-        head("Hot leads · ${k.hotTotal}", y); y += 56
-        fun colX(i: Int) = pad + labW + colW * i + colW
-        if (k.cols.isNotEmpty()) { k.cols.forEachIndexed { i, n -> t(if (n.length > 8) n.take(7) + "…" else n, colX(i), y, 24f, 0xFF6B7280, true, true) }; t("Total", colX(k.cols.size), y, 24f, 0xFF6B7280, true, true); y += 48 }
-        k.grid.forEach { (label, vals, total) ->
-            t(label, pad, y, 30f, 0xFF1D2433)
-            vals.forEachIndexed { i, v -> t("$v", colX(i), y, 30f, if (v > 0) 0xFF1D2433 else 0xFFC3C9D4, true, true) }
-            t("$total", if (k.cols.isNotEmpty()) colX(k.cols.size) else w - pad, y, 32f, 0xFF0E5E57, true, true); y += 52
+    fun draw(c: Canvas?, h: Float): Float {
+        val g = Kit(c, w, pad)
+        g.rect(0f, 0f, w, h, 0xFFFFFFFF); g.rect(0f, 0f, w, 176f, Col.brand)
+        g.t("Closer OS", pad, 54f, 24f, 0xFFCFE7E3, true); g.t(k.header, pad, 112f, 48f, 0xFFFFFFFF, true); g.t(g.fit(k.sub, 26f, false, w - pad * 2), pad, 152f, 26f, 0xFFCFE7E3)
+        var y = g.head(k.resultsTitle, 204f)
+        val tw = (w - pad * 2 - 3 * 14) / 4
+        k.stats.forEachIndexed { i, (l, v) -> val x = pad + (i % 4) * (tw + 14); val yy = y + (i / 4) * 104
+            g.rect(x, yy, tw, 92f, Col.zebra, 12f); g.t(l, x + 16, yy + 32, 20f, Col.muted, true); g.t(v, x + 16, yy + 76, 34f, Col.ink, true) }
+        y += 2 * 104 + 30
+        k.extra.forEach { g.t("• $it", pad, y, 24f, Col.muted); y += 36 }
+        y = g.head(k.planTitle, y + 18)
+        k.plan.forEach { g.t(g.fit(it, 26f, false, w - pad * 2), pad, y, 26f, Col.ink); y += 38 }
+        if (k.hotTotal > 0) {
+            y = g.head("Hot leads · ${k.hotTotal}", y + 18)
+            y = g.table(y, listOf(Triple("Category", 4f, false)) + k.cols.map { Triple(it, 1.3f, true) } + Triple("Total", 1.3f, true),
+                k.grid.map { (l, v, tot) -> listOf(l) + v.map { "$it" } + "$tot" })
+            if (k.top.isNotEmpty()) { g.t("Call first", pad, y + 10, 22f, Col.muted, true); y += 44
+                y = g.table(y, listOf(Triple("Lead", 3.2f, false), Triple("Phone", 2.2f, false), Triple("Why", 3f, false)),
+                    k.top.map { listOf((it.name ?: "") + (if (m.teamView && !it.owner.isNullOrBlank()) " · ${it.owner!!.substringBefore(' ')}" else ""), it.phone ?: "", it.tag.ifBlank { it.web }) }, 22f, 44f) }
         }
-        if (k.top.isNotEmpty()) {
-            y += 14; t("Call first", pad, y, 24f, 0xFF6B7280, true); y += 40
-            k.top.forEachIndexed { i, r -> t("${i + 1}. ${r.name ?: ""}", pad, y, 30f, 0xFF1D2433, true); t(r.phone ?: "", w - pad, y, 26f, 0xFF0E5E57, false, true); y += 34
-                val sh = r.short ?: ""; t(if (sh.length > 60) sh.take(59) + "…" else sh, pad + 30, y, 24f, 0xFF4A5263); y += 42 }
+        if (k.team.isNotEmpty()) {
+            y = g.head("Team", y)
+            y = g.table(y, listOf(Triple("Team member", 4f, false), Triple("Dialled", 1.4f, true), Triple("Leads conn.", 1.8f, true), Triple("Talk", 1.6f, true), Triple("Sales", 1.2f, true)), k.team, 24f, 46f)
+            if (k.noCalls.isNotEmpty()) { g.t(g.fit("No calls: ${k.noCalls.joinToString(", ")}", 22f, false, w - pad * 2), pad, y, 22f, Col.faint); y += 34 }
         }
-        y += 26
+        g.t("Made with Closer OS", pad, h - 28, 20f, Col.faint)
+        return y + 50
     }
-    head(k.resultsTitle, y); y += 58
-    k.yesterday.forEach { t(it, pad, y, 28f, 0xFF1D2433); y += 46 }
-    y += 26
-    if (k.team.isNotEmpty()) {
-        head("Team", y); y += 54
-        val cx = listOf(w - pad - 390, w - pad - 250, w - pad - 110, w - pad)
-        listOf("Dialled", "Leads conn.", "Talk", "Sales").forEachIndexed { i, s -> t(s, cx[i], y, 22f, 0xFF6B7280, true, true) }; y += 44
-        k.team.forEach { r -> t(if (r[0].length > 22) r[0].take(21) + "…" else r[0], pad, y, 28f, 0xFF1D2433)
-            (1..4).forEach { i -> t(r[i], cx[i - 1], y, 28f, 0xFF1D2433, true, true) }; y += 48 }
-        if (k.noCalls.isNotEmpty()) { y += 6; t("No calls: ${k.noCalls.joinToString(", ")}".take(80), pad, y, 24f, 0xFF6B7280); y += 44 }
-    }
-    t("Made with Closer OS", pad, h - 34, 22f, 0xFF98A2B3)
+    val h = maxOf(w * 1.25f, draw(null, 0f))
+    val b = Bitmap.createBitmap((w * sc).toInt(), (h * sc).toInt(), Bitmap.Config.ARGB_8888); val c = Canvas(b); c.scale(sc, sc); draw(c, h)
     return b
 }
 
 data class TelLink(val x: Float, val y: Float, val w: Float, val h: Float, val phone: String)
 
-/** Long picture of every section (inside the PDF) + where each phone number was drawn (tap-to-call). */
+/** The PDF page: clean header, tables, hot leads grouped by category → team member, tap-to-call phones. */
 fun listBitmap(m: SumModel): Pair<Bitmap, List<TelLink>> {
+    val w = 1080f; val pad = 56f; val sc = 1.5f
     val links = mutableListOf<TelLink>()
-    val w = 1080; val pad = 64f; val row = 56
-    fun wrap(t: String): List<String> { val out = mutableListOf<String>(); var line = ""; t.split(' ').forEach { w -> if (("$line $w").length > 62) { out += line; line = w } else line = if (line.isEmpty()) w else "$line $w" }; if (line.isNotEmpty()) out += line; return out }
-    val h = 260 + m.sections.sumOf { sec -> 90 + sec.lines.sumOf { if (it.value.length > 44) 56 + wrap(it.value).size * 36 + 14 else row } + (sec.note?.let { n -> wrap(n).size * 40 + 16 } ?: 0) } + 80
-    val b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888); val c = Canvas(b)
-    val p = Paint(Paint.ANTI_ALIAS_FLAG)
-    c.drawColor(0xFFFFFFFF.toInt()); p.color = 0xFF0E5E57.toInt(); c.drawRect(0f, 0f, w.toFloat(), 200f, p)
-    fun txt(s: String, x: Float, y: Float, size: Float, color: Int, bold: Boolean, right: Boolean = false) {
-        p.textSize = size; p.color = color; p.typeface = Typeface.create(Typeface.SANS_SERIF, if (bold) Typeface.BOLD else Typeface.NORMAL)
-        p.textAlign = if (right) Paint.Align.RIGHT else Paint.Align.LEFT; c.drawText(s, x, y, p)
-    }
-    txt("Closer OS", pad, 70f, 30f, 0xFFFFFFFF.toInt(), true); txt(m.title, pad, 135f, 54f, 0xFFFFFFFF.toInt(), true); txt(m.sub, pad, 180f, 28f, 0xFFCFE7E3.toInt(), false)
-    var y = 270f
-    m.sections.forEach { s ->
-        txt(s.title.uppercase(), pad, y, 32f, 0xFF0E5E57.toInt(), true)
-        p.color = 0xFFE3E7EE.toInt(); c.drawRect(pad, y + 18, w - pad, y + 20, p); y += 70
-        s.note?.let { n -> wrap(n).forEach { ln -> txt(ln, pad, y, 26f, 0xFF6B7280.toInt(), false); y += 40 }; y += 16 }
-        s.lines.forEach { l ->
-            if (l.value.length > 44) {
-                txt(l.label, pad, y, 30f, 0xFF1D2433.toInt(), true)
-                l.phone?.takeIf { it.isNotBlank() }?.let { ph ->
-                    p.textSize = 30f; p.typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-                    val x = pad + p.measureText(l.label + "   ")
-                    txt("📞 $ph", x, y, 28f, 0xFF0B63C5.toInt(), true)
-                    p.textSize = 28f; links += TelLink(x - 6, y - 30, p.measureText("📞 $ph") + 12, 40f, ph.filter { it.isDigit() || it == '+' })
-                }
-                y += 42
-                wrap(l.value).forEach { ln -> txt(ln, pad + 24, y, 26f, 0xFF4A5263.toInt(), false); y += 36 }
-                y += 14; return@forEach
-            }
-            txt(if (l.label.length > 36) l.label.take(35) + "…" else l.label, pad, y, 30f, 0xFF4A5263.toInt(), false)
-            txt(l.value, w - pad, y, 30f, 0xFF1D2433.toInt(), true, right = true); y += row
+    fun draw(c: Canvas?, h: Float): Float {
+        val g = Kit(c, w, pad); links.clear()
+        g.rect(0f, 0f, w, h, 0xFFFFFFFF); g.rect(0f, 0f, w, 190f, Col.brand)
+        val parts = m.sub.split(" · ")
+        g.t("Closer OS", pad, 54f, 24f, 0xFFCFE7E3, true); g.t(m.title, pad, 110f, 48f, 0xFFFFFFFF, true)
+        g.t(g.fit(parts.first(), 26f, true, w - pad * 2), pad, 146f, 26f, 0xFFFFFFFF, true); g.t(g.fit(parts.drop(1).joinToString(" · "), 22f, false, w - pad * 2), pad, 176f, 22f, 0xFFCFE7E3)
+        var y = 218f
+        for (sec in m.sections) {
+            if (listOf("🔥", "⭐", "❓", "+").any { sec.title.startsWith(it) }) continue
+            y = g.head(sec.title, y)
+            if (sec.title == "Team") {
+                val k = m.card
+                val rows = (k?.team ?: emptyList()) + (k?.noCalls ?: emptyList()).map { listOf(it, "—", "—", "—", "—") }
+                y = g.table(y, listOf(Triple("Team member", 4f, false), Triple("Dialled", 1.4f, true), Triple("Leads conn.", 1.8f, true), Triple("Talk", 1.6f, true), Triple("Sales", 1.2f, true)), rows, 24f, 46f)
+            } else y = g.table(y, listOf(Triple("", 2f, false), Triple("", 3f, true)), sec.lines.map { listOf(it.label, it.value) }, 24f, 46f)
         }
-        y += 20
+        if (m.hot.isNotEmpty()) {
+            y = g.head("Hot leads · ${m.hotTotal}", y)
+            HOT_NOTE.split(' ').fold(mutableListOf("")) { acc, wd -> if ((acc.last() + " " + wd).length > 80) acc += wd else acc[acc.size - 1] = (acc.last() + " " + wd).trim(); acc }
+                .forEach { g.t(it, pad, y, 20f, Col.faint); y += 28 }
+            y += 12
+            for (cat in m.hot.map { it.cat }.distinct()) {
+                val inCat = m.hot.filter { it.cat == cat }
+                g.rect(pad, y - 4, w - pad * 2, 50f, if (cat <= 4) 0xFFFFF4E5 else if (cat <= 7) 0xFFFFF9DB else 0xFFEEF2FF, 10f)
+                g.t("${if (cat <= 4) "🔥" else if (cat <= 7) "⭐" else "❓"}  ${HOT_CATS[cat]} · ${inCat.size}", pad + 16, y + 30, 24f, Col.ink, true); y += 64
+                for (o in inCat.map { it.owner ?: "" }.distinct()) {
+                    val mine = inCat.filter { (it.owner ?: "") == o }
+                    if (m.teamView && o.isNotBlank()) { g.t("$o · ${mine.size}", pad, y + 6, 22f, Col.brand, true); y += 30 }
+                    val xs = listOf(pad, pad + 290, pad + 500, pad + 820); val rowH = 58f
+                    g.rect(pad, y, w - pad * 2, 40f, Col.zebra, 6f)
+                    listOf("Lead", "Phone (tap to call)", "Webinar", "Calls").forEachIndexed { i, hh -> g.t(hh, xs[i] + 12, y + 27, 18f, Col.muted, true) }
+                    y += 46
+                    mine.forEachIndexed { i, r ->
+                        if (i % 2 == 1) g.rect(pad, y - 2, w - pad * 2, rowH, Col.zebra)
+                        g.t(g.fit(r.name ?: "", 22f, true, 270f), xs[0] + 12, y + 26, 22f, Col.ink, true)
+                        if (r.tag.isNotBlank() && r.tag != HOT_CATS[r.cat]) g.t(g.fit(r.tag, 16f, false, 270f), xs[0] + 12, y + 48, 16f, Col.muted)
+                        val ph = r.phone ?: ""; val pw = g.t(ph, xs[1] + 12, y + 32, 22f, Col.link, true)
+                        links += TelLink((xs[1] + 6) * sc, (y + 6) * sc, (pw + 14) * sc, 40f * sc, ph.filter { it.isDigit() || it == '+' })
+                        g.t(g.fit(r.web, 20f, false, 300f), xs[2] + 12, y + 32, 20f, Col.ink)
+                        g.t(g.fit(r.work, 20f, false, w - pad - xs[3] - 16), xs[3] + 12, y + 32, 20f, Col.ink)
+                        y += rowH }
+                    y += 14
+                }
+            }
+            if (m.hotTotal > m.hotShown) { g.t("+${m.hotTotal - m.hotShown} more — download the full list in Closer OS", pad, y + 10, 20f, Col.muted); y += 40 }
+        }
+        g.t("Made with Closer OS", pad, h - 28, 20f, Col.faint)
+        return y + 60
     }
-    txt("Made with Closer OS", pad, h - 40f, 24f, 0xFF98A2B3.toInt(), false)
-    return b to links
+    val h = draw(null, 0f)
+    val b = Bitmap.createBitmap((w * sc).toInt(), (h * sc).toInt(), Bitmap.Config.ARGB_8888); val c = Canvas(b); c.scale(sc, sc); draw(c, h)
+    return b to links.toList()
 }
 
 /** One-page PDF of the full list with tap-to-call links (written by hand: Android's PdfDocument can't add links). */

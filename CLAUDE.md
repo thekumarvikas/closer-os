@@ -2193,3 +2193,11 @@ intelligence → Play Store launch.
   "Leads connected", "Outcomes saved x of y calls that connected (dialled + received)", team "N leads connected".
 - Nov 22 finding: Cancer's Nikhil saved 0 outcomes on 47 connected calls (21 Nov) — "Display over other apps" off on his phone
   (app_errors after-call traces), app 0.27.3. Owner told how to fix. Possible later: show "pop-up off" on Team page + summary.
+- Summary image v3 (Nov 22, migration 0119 hot_leads.by_owner, app 0.29.1): the IMAGE is ONE phone-shaped page (4:5, drawn at 2×
+  = 2160 px wide so WhatsApp keeps it sharp): header · plan line · hot leads as a category × team member count table (empty
+  categories hidden; personal view = totals + "Call first" top 5 with phone) · yesterday/today in 2 lines · team table (members
+  with calls) + "No calls: …". No lead list in the image. The PDF = full list (renderList / listBitmap) with every phone number a
+  tap-to-call link (hand-written PDF with /Annots /URI tel:… — Android PdfDocument can't add links). WhatsApp text: hot leads
+  grouped by team member, name · phone once + one short line (watch min · ✓ pitch · chats · polls · attended/registered only when
+  > 1 · talked · calls · WA). Web = Download image / Download PDF only; app = Send image / Send PDF only for managers / owners /
+  individuals (reps: download only).

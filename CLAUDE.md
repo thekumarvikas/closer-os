@@ -2259,3 +2259,10 @@ intelligence → Play Store launch.
   card dropped from the PDF), Team table grouped DIALLED (calls · conn · talk · avg) | RECEIVED (calls · talk · avg) | missed ·
   all talk · leads · sales (sd() short durations, size-aware table header/padding in kit/Kit).
 - Owner confirmed (Nov 22): "Avg per call" = talk time ÷ CONNECTED calls only (never ÷ all dialled). Keep this everywhere.
+
+## Pending (owner, Nov 22 2026 — "don't build right now")
+- Serial No. (#) column on ALL tables (dashboard + app lists/tables).
+- Call log list: show outcome + notes; the team member's phone number used to dial (sim number); a filter on EVERY column
+  header; ▶ play button, or the exact reason when there is no recording (device_status missingReason etc.).
+- Notes on the web: mic icon for voice typing on every notes box (browser speech recognition); "Write a note" button
+  directly on call-log rows (add_lead_note / the call's notes).

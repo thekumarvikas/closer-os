@@ -57,9 +57,9 @@ export function hotSections(rows: HotRow[], total: number, team: boolean): Secti
   if (total > rows.length) out.push({ title: `+${total - rows.length} more hot leads`, lines: [{ label: 'Open Closer OS', value: 'to see all and download' }] })
   return out
 }
-export type TeamRow = { name: string; dialled: number; connected: number; talk: string; sales: number; calls: boolean }
+export type TeamRow = { name: string; total: number; dialled: number; connected: number; talk: string; sales: number; calls: boolean }
 export type Card = { header: string; sub: string; plan: string[]; hotTotal: number; cols: string[]; grid: { label: string; vals: number[]; total: number }[]
-  top: HotRow[]; yesterday: string[]; resultsTitle: string; team: TeamRow[]; noCalls: string[]; team_view: boolean; stats: Line[]; extra: string[] }
+  top: HotRow[]; yesterday: string[]; resultsTitle: string; team: TeamRow[]; noCalls: string[]; team_view: boolean; stats: Line[]; extra: string[]; at: string }
 export type Model = { title: string; sub: string; tiles: Line[]; plan: Section; hot: { total: number; note: string; rows: HotRow[] }
   results: Section[]; team: TeamRow[]; sections: Section[]; card?: Card; team_view?: boolean }
 
@@ -73,7 +73,9 @@ const dayName = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en
 export function buildModel(s: Summary, money: (v: number) => string, nameOf: (id: string | null) => string = () => ''): Model {
   const st = s.stats, tz = s.tz
   const res = s.kind === 'morning' ? 'Yesterday' : 'Today'
+  const total = st.dialled + st.received + st.missed
   const tiles: Line[] = [
+    { label: 'Total calls', value: `${total}` },
     { label: 'Dialled', value: `${st.dialled}` },
     { label: 'Connected', value: `${pc(st.connected, st.dialled)}%` },
     { label: 'Leads connected', value: `${st.leads_connected} of ${st.leads}` },
@@ -82,6 +84,7 @@ export function buildModel(s: Summary, money: (v: number) => string, nameOf: (id
   ]
   const results: Section[] = []
   results.push({ title: `${res} · calls`, lines: [
+    { label: 'Total calls', value: `${total}` },
     { label: 'Dialled', value: `${st.dialled}` },
     { label: 'Connected calls', value: `${st.connected} of ${st.dialled} dialled (${pc(st.connected, st.dialled)}%)` },
     { label: 'Received', value: `${st.received}` },
@@ -97,7 +100,7 @@ export function buildModel(s: Summary, money: (v: number) => string, nameOf: (id
     { label: 'Sales', value: st.sales ? `${st.sales} · ${money(st.revenue)}` : '0' },
     { label: 'Interested', value: `${st.interested}` },
     ...(st.call_later ? [{ label: 'Asked to call later', value: `${st.call_later}` }] : []),
-    { label: 'Outcomes saved (connected calls)', value: `${st.conn_outcome} of ${st.conversations}` },
+    { label: 'Outcomes saved', value: `${st.conn_outcome} of ${st.conversations}` },
   ] })
   const b = bestHour(st.hours)
   if (b) results.push({ title: 'Best hour', lines: [{ label: slot(b.hr), value: `${b.conn} connected · ${dur(b.talk)}` }] })
@@ -108,7 +111,7 @@ export function buildModel(s: Summary, money: (v: number) => string, nameOf: (id
   ] })
   const dupNames = new Set((s.people ?? []).map(p => p.name).filter((n, i, a) => a.indexOf(n) !== i))
   const team: TeamRow[] = [...(s.people ?? [])].sort((a, b) => b.stats.talk - a.stats.talk || b.stats.dialled - a.stats.dialled).map(p => ({
-    name: dupNames.has(p.name) && p.email ? `${p.name} (${p.email})` : p.name, dialled: p.stats.dialled, connected: p.stats.leads_connected,
+    name: dupNames.has(p.name) && p.email ? `${p.name} (${p.email.split('@')[0]})` : p.name, total: p.stats.dialled + p.stats.received + p.stats.missed, dialled: p.stats.dialled, connected: p.stats.leads_connected,
     talk: dur(p.stats.talk), sales: p.stats.sales, calls: p.stats.dialled + p.stats.received > 0 }))
   const pl = s.plan, plan: Line[] = []
   if (!s.working_day) plan.push({ label: 'Holiday', value: pl.follow_ups ? 'follow-ups are lined up if you want to call' : 'no calls planned' })
@@ -122,9 +125,9 @@ export function buildModel(s: Summary, money: (v: number) => string, nameOf: (id
   const planSec: Section = { title: `${planDay} · plan`, lines: plan }
   const rows = hotRows(pl.hot.list, nameOf, tz)
   const hotSec = hotSections(rows, pl.hot.total, s.team)
-  const teamSec: Section[] = team.length ? [{ title: 'Team', lines: team.map(t => ({ label: t.name, value: t.calls ? `${t.dialled} dialled · ${t.connected} leads connected · ${t.talk} · ${t.sales} sale${t.sales === 1 ? '' : 's'}` : 'no calls' })) }] : []
+  const teamSec: Section[] = team.length ? [{ title: 'Team', lines: team.map(t => ({ label: t.name, value: t.calls ? `${t.total} calls · ${t.dialled} dialled · ${t.connected} leads connected · ${t.talk} · ${t.sales} sale${t.sales === 1 ? '' : 's'}` : 'no calls' })) }] : []
   const sections = s.kind === 'morning' ? [planSec, ...hotSec, ...results, ...teamSec] : [...results, ...teamSec, planSec, ...hotSec]
-  const now = new Date().toLocaleTimeString('en-IN', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).toUpperCase()
+  const now = 'Made ' + new Date().toLocaleString('en-IN', { timeZone: tz, day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }).replace(' am', ' AM').replace(' pm', ' PM')
   // One-page image: numbers only (names + details live in the PDF).
   const byOwner = pl.hot.by_owner ?? []
   const owners = s.team ? [...new Set(byOwner.map(b => b.owner))].sort((a, b) => nameOf(a).localeCompare(nameOf(b))) : []
@@ -137,14 +140,15 @@ export function buildModel(s: Summary, money: (v: number) => string, nameOf: (id
     sub: `${s.team ? s.org_name : s.who ?? ''} · ${dayName(s.plan_day)}`, team_view: s.team,
     plan: [planBits.join(' · '), ...pl.webinars.map(w => `${w.name} ${new Date(w.at).toLocaleTimeString('en-IN', { timeZone: tz, hour: 'numeric', minute: '2-digit' })} · ${w.leads} to remind`)],
     hotTotal: pl.hot.total, cols: s.team ? owners.map(o => nameOf(o).split(' ')[0] || 'Unassigned') : [], grid, top: rows.slice(0, 5),
-    stats: [{ label: 'Dialled', value: `${st.dialled}` }, { label: 'Connected', value: `${pc(st.connected, st.dialled)}%` },
+    at: now, stats: [{ label: 'Total calls', value: `${total}` }, { label: 'Dialled', value: `${st.dialled}` }, { label: 'Connected', value: `${pc(st.connected, st.dialled)}%` },
       { label: 'Received', value: `${st.received}` }, { label: 'Missed', value: `${st.missed}` },
       { label: 'Leads connected', value: `${st.leads_connected}` }, { label: 'Talked 1 min+', value: `${st.leads_1min}` },
-      { label: 'Talk time', value: dur(st.talk) }, { label: 'Sales', value: st.sales ? `${st.sales}` : '0' }],
-    extra: [b ? `Best hour ${slot(b.hr)} · ${b.conn} connected` : '', `Outcomes saved ${st.conn_outcome} of ${st.conversations}`,
+      { label: 'Talk time', value: dur(st.talk) }, { label: 'Sales', value: st.sales ? `${st.sales}` : '0' },
+      { label: 'Outcomes saved', value: `${st.conn_outcome} of ${st.conversations}` }],
+    extra: [b ? `Best hour ${slot(b.hr)} · ${b.conn} connected` : '',
       st.fu_due ? `Follow-ups on time ${st.fu_on_time} of ${st.fu_due}` : '', st.missed_open ? `${st.missed_open} missed callers not called back` : '',
       st.interested ? `Interested ${st.interested}` : '', st.sales ? `Revenue ${money(st.revenue)}` : ''].filter(Boolean),
-    resultsTitle: res, yesterday: [`Dialled ${st.dialled} · Connected ${pc(st.connected, st.dialled)}% · Leads connected ${st.leads_connected}`,
+    resultsTitle: res, yesterday: [`Calls ${total} · Dialled ${st.dialled} · Connected ${pc(st.connected, st.dialled)}% · Leads connected ${st.leads_connected}`,
       `Talk ${dur(st.talk)} · Outcomes saved ${st.conn_outcome} of ${st.conversations} · Sales ${st.sales}${st.sales ? ` (${money(st.revenue)})` : ''}`],
     team: team.filter(t => t.calls), noCalls: team.filter(t => !t.calls).map(t => t.name) }
   return { card, team_view: s.team, title: `${s.kind === 'morning' ? 'Morning' : 'Evening'} summary`,
@@ -221,14 +225,14 @@ export async function toImage(m: Model): Promise<Blob> {
   const draw = (g: CanvasRenderingContext2D | null, H: number) => {
     const { t, fit, rect, head, table } = kit(g, W, pad)
     rect(0, 0, W, H, '#ffffff'); rect(0, 0, W, 176, C.brand)
-    t('Closer OS', pad, 54, 24, '#cfe7e3', 600); t(k.header, pad, 112, 48, '#ffffff', 700); t(fit(k.sub, 26, 400, W - pad * 2), pad, 152, 26, '#cfe7e3')
+    t('Closer OS', pad, 54, 24, '#cfe7e3', 600); t(k.at, W - pad, 54, 22, '#cfe7e3', 500, 'right'); t(k.header, pad, 112, 48, '#ffffff', 700); t(fit(k.sub, 26, 400, W - pad * 2), pad, 152, 26, '#cfe7e3')
     let y = 226
     // 8 number tiles
     y = head(k.resultsTitle, y)
-    const tw = (W - pad * 2 - 3 * 14) / 4
-    k.stats.forEach((st, i) => { const x = pad + (i % 4) * (tw + 14), yy = y + Math.floor(i / 4) * 104
-      rect(x, yy, tw, 92, C.zebra, 12); t(st.label, x + 16, yy + 32, 20, C.muted, 600); t(st.value, x + 16, yy + 76, 34, C.ink, 700) })
-    y += 2 * 104 + 30
+    const per = 5, tw = (W - pad * 2 - (per - 1) * 12) / per, rowsN = Math.ceil(k.stats.length / per)
+    k.stats.forEach((st, i) => { const x = pad + (i % per) * (tw + 12), yy = y + Math.floor(i / per) * 104
+      rect(x, yy, tw, 92, C.zebra, 12); t(fit(st.label, 18, 600, tw - 24), x + 14, yy + 32, 18, C.muted, 600); t(fit(st.value, 32, 700, tw - 24), x + 14, yy + 74, 32, C.ink, 700) })
+    y += rowsN * 104 + 26
     k.extra.forEach(e => { t('• ' + e, pad, y, 24, C.muted); y += 36 })
     y += 18
     y = head(m.title.startsWith('Morning') ? 'Today · plan' : 'Tomorrow · plan', y)
@@ -239,15 +243,15 @@ export async function toImage(m: Model): Promise<Blob> {
       const cols: [string, number, CanvasTextAlign][] = [['Category', 4, 'left'], ...k.cols.map(c => [c, 1.3, 'right'] as [string, number, CanvasTextAlign]), ['Total', 1.3, 'right']]
       y = table(y, cols, k.grid.map(r => [r.label, ...r.vals.map(String), String(r.total)]))
       if (k.top.length) {
-        t('Call first', pad, y, 22, C.muted, 700); y += 34
+        y += 14; t('Call first', pad, y, 22, C.muted, 700); y += 30
         y = table(y, [['Lead', 3.2, 'left'], ['Phone', 2.2, 'left'], ['Why', 3, 'left']],
           k.top.map(r => [r.name + (k.team_view && r.owner ? ` · ${r.owner.split(' ')[0]}` : ''), fmtPh(r.phone), r.tag || r.web]), 22, 44)
       }
     }
     if (k.team.length) {
       y = head('Team', y)
-      y = table(y, [['Team member', 4, 'left'], ['Dialled', 1.4, 'right'], ['Leads conn.', 1.8, 'right'], ['Talk', 1.6, 'right'], ['Sales', 1.2, 'right']],
-        k.team.map(r => [r.name, String(r.dialled), String(r.connected), r.talk, String(r.sales)]), 24, 46)
+      y = table(y, [['Team member', 4, 'left'], ['Calls', 1.2, 'right'], ['Dialled', 1.4, 'right'], ['Leads conn.', 1.8, 'right'], ['Talk', 1.6, 'right'], ['Sales', 1.2, 'right']],
+        k.team.map(r => [r.name, String(r.total), String(r.dialled), String(r.connected), r.talk, String(r.sales)]), 24, 46)
       if (k.noCalls.length) { t(fit(`No calls: ${k.noCalls.join(', ')}`, 22, 400, W - pad * 2), pad, y, 22, C.faint); y += 34 }
     }
     t('Made with Closer OS', pad, H - 28, 20, C.faint)
@@ -267,20 +271,40 @@ export async function renderList(m: Model): Promise<{ canvas: HTMLCanvasElement;
     const { t, fit, rect, head, table } = kit(g, W, pad)
     rect(0, 0, W, H, '#ffffff'); rect(0, 0, W, 190, C.brand)
     const [who, ...rest] = m.sub.split(' · ')
-    t('Closer OS', pad, 54, 24, '#cfe7e3', 600); t(m.title, pad, 110, 48, '#ffffff', 700)
-    t(fit(who, 26, 600, W - pad * 2), pad, 146, 26, '#ffffff', 600); t(fit(rest.join(' · '), 22, 400, W - pad * 2), pad, 176, 22, '#cfe7e3')
+    const at = rest.find(x => x.startsWith('Made ')) ?? ''
+    t('Closer OS', pad, 54, 24, '#cfe7e3', 600); t(at, W - pad, 54, 22, '#cfe7e3', 500, 'right'); t(m.title, pad, 110, 48, '#ffffff', 700)
+    t(fit(who, 26, 600, W - pad * 2), pad, 146, 26, '#ffffff', 600); t(fit(rest.filter(x => x !== at).join(' · '), 22, 400, W - pad * 2), pad, 176, 22, '#cfe7e3')
     let y = 240
     const sections = m.sections.filter(s => !/^(🔥|⭐|📝|\+)/.test(s.title))
+    const cards: Section[] = []
+    // Key/value sections as cards, two per row: label left, value right, inside the same card — easy to scan.
+    const cardGrid = (y0: number, list: Section[]) => {
+      const gap = 20, cw = (W - pad * 2 - gap) / 2, lh = 42
+      for (let i = 0; i < list.length; i += 2) {
+        const pair = list.slice(i, i + 2), h = 64 + Math.max(...pair.map(p => p.lines.length)) * lh + 10
+        pair.forEach((sec, j) => { const x = pad + j * (cw + gap)
+          rect(x, y0, cw, h, C.line, 14); rect(x + 1.5, y0 + 1.5, cw - 3, h - 3, '#ffffff', 13)
+          t(fit(sec.title.toUpperCase(), 20, 700, cw - 40), x + 20, y0 + 40, 20, C.brand, 700)
+          sec.lines.forEach((l, n) => { const yy = y0 + 64 + n * lh
+            if (n % 2 === 0) rect(x + 10, yy, cw - 20, lh, C.zebra, 6)
+            const vw = Math.min(cw * 0.55, t(l.value, 0, -999, 21, C.ink, 700))
+            t(fit(l.label, 20, 400, cw - 50 - vw), x + 22, yy + 28, 20, C.muted)
+            t(fit(l.value, 21, 700, cw * 0.55), x + cw - 22, yy + 28, 21, C.ink, 700, 'right') }) })
+        y0 += h + gap
+      }
+      return y0 + 6
+    }
     for (const s of sections) {
       if (s.title === 'Team') {
+        y = cardGrid(y, cards.splice(0))
         y = head('Team', y)
-        y = table(y, [['Team member', 4, 'left'], ['Dialled', 1.4, 'right'], ['Leads conn.', 1.8, 'right'], ['Talk', 1.6, 'right'], ['Sales', 1.2, 'right']],
-          m.team.map(r => [r.name, r.calls ? String(r.dialled) : '—', r.calls ? String(r.connected) : '—', r.calls ? r.talk : '—', r.calls ? String(r.sales) : '—']), 24, 46)
+        y = table(y, [['Team member', 4, 'left'], ['Calls', 1.2, 'right'], ['Dialled', 1.4, 'right'], ['Leads conn.', 1.8, 'right'], ['Talk', 1.6, 'right'], ['Sales', 1.2, 'right']],
+          m.team.map(r => [r.name, r.calls ? String(r.total) : '—', r.calls ? String(r.dialled) : '—', r.calls ? String(r.connected) : '—', r.calls ? r.talk : '—', r.calls ? String(r.sales) : '—']), 24, 46)
         continue
       }
-      y = head(s.title, y)
-      y = table(y, [['', 2, 'left'], ['', 3, 'right']], s.lines.map(l => [l.label, l.value]), 24, 46)
+      cards.push(s)
     }
+    y = cardGrid(y, cards)
     if (m.hot.rows.length) {
       y = head(`Hot leads · ${m.hot.total}`, y)
       for (const ln of wrap(m.hot.note, 80)) { t(ln, pad, y, 20, C.faint, 400); y += 28 }
@@ -294,7 +318,7 @@ export async function renderList(m: Model): Promise<{ canvas: HTMLCanvasElement;
         for (const o of owners) {
           const mine = inCat.filter(r => r.owner === o)
           if (m.team_view && o) { t(`${o} · ${mine.length}`, pad, y + 6, 22, C.brand, 700); y += 30 }
-          const xs = [pad, pad + 290, pad + 500, pad + 820], rowH = 58
+          const xs = [pad, pad + 270, pad + 490, pad + 750], rowH = 58
           rect(pad, y, W - pad * 2, 40, C.zebra, 6)
           ;['Lead', 'Phone (tap to call)', 'Webinar', 'Calls'].forEach((h, i) => t(h, xs[i] + 12, y + 27, 18, C.muted, 700))
           y += 46
@@ -304,8 +328,13 @@ export async function renderList(m: Model): Promise<{ canvas: HTMLCanvasElement;
             if (r.tag && r.tag !== HOT_CATS[r.cat]) t(fit(r.tag, 16, 400, 270), xs[0] + 12, y + 48, 16, C.muted)
             const ph = fmtPh(r.phone), pw = t(ph, xs[1] + 12, y + 32, 22, C.link, 600)
             links.push({ x: xs[1] + 6, y: y + 6, w: pw + 14, h: 40, phone: (r.phone ?? '').replace(/[^\d+]/g, '') })
-            t(fit(r.web, 20, 400, 300), xs[2] + 12, y + 32, 20, C.ink)
-            t(fit(r.work, 20, 400, W - pad - xs[3] - 16), xs[3] + 12, y + 32, 20, C.ink)
+            // Webinar + calls cells wrap onto two lines instead of being cut off.
+            const two = (txt: string, x: number, w: number) => { const parts = txt.split(' · '); let l1 = '', i = 0
+              for (; i < parts.length; i++) { const nx = l1 ? l1 + ' · ' + parts[i] : parts[i]; if (fit(nx, 18, 400, w) !== nx && l1) break; l1 = nx }
+              const l2 = parts.slice(i).join(' · ')
+              t(fit(l1, 18, 400, w), x, l2 ? y + 24 : y + 32, 18, C.ink); if (l2) t(fit(l2, 18, 400, w), x, y + 47, 18, C.muted) }
+            two(r.web, xs[2] + 12, xs[3] - xs[2] - 24)
+            two(r.work, xs[3] + 12, W - pad - xs[3] - 20)
             y += rowH })
           y += 14
         }

@@ -2220,3 +2220,6 @@ intelligence → Play Store launch.
   they apply, clickable), 6 tiles with ▲▼, Team table (recency dot, numbers open a calls list → lead drawer) or rep comparison,
   by-hour bars, webinar card, hot leads. "/" is the Dashboard for every role now (reps used to land on My desk).
   "Get started" + old calling-activity table removed. Test: web/tests/summary-test.cjs (owner + rep screenshots).
+- Summary v5 (Nov 22, app 0.29.4): "Total calls" (dialled + received + missed) in tiles, calls section, team tables (Calls column);
+  image = 10 tiles (5 per row) + "Made <date, time>" top-right; PDF header has the same time; PDF key/value sections = cards two
+  per row (label left, value right); hot table Webinar/Calls cells wrap onto 2 lines (no "…"); duplicate names show email user part.

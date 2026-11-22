@@ -2245,3 +2245,6 @@ intelligence → Play Store launch.
   same_person_pairs also checks secondary numbers/emails (lead_phones / lead_emails). The 5 name/typo merges of 0122 were undone
   (leads restored, own calls/origins moved back, webinar rows re-added, activity 'unmerged'); Possible duplicates lists only
   exact number/email groups. Cron 'auto-merge-people' (10 min) keeps running with the exact rule.
+- 0124: apply_zoom_report keeps the Zoom file's OTHER number / email on the matched lead (lead_phones / lead_emails, label
+  Secondary, source 'zoom'). Example: Rajesh Kumar Singh (Cancer) registered twice with …508 (one lead) and joined Zoom with the
+  same email but another number — that number was dropped before; now kept (only for uploads from now on; old files must be re-uploaded).

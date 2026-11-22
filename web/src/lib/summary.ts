@@ -13,7 +13,7 @@ export type Summary = { kind: 'morning' | 'evening'; day: string; plan_day: stri
   plan: { follow_ups: number; overdue: number; hot: { total: number; by_cat: Record<string, number>; by_owner?: { owner: string | null; cat: number; n: number }[]; list: HotLead[] }; no_next: number; webinars: { name: string; at: string; leads: number }[] } }
 export type Line = { label: string; value: string; phone?: string }
 export type Section = { title: string; lines: Line[]; note?: string }
-export type HotRow = { lead_id: string; name: string; phone: string; owner: string; cat: number; why: string; activity: string; done: string; when: string; short: string }
+export type HotRow = { lead_id: string; name: string; phone: string; owner: string; cat: number; why: string; activity: string; done: string; when: string; short: string; web: string; work: string; tag: string }
 export const HOT_CATS: Record<number, string> = { 1: 'Ready to pay', 2: 'Hot', 3: 'Interested', 4: 'Positive — follow up',
   5: 'Came back + active in Zoom', 6: 'Came back (attended 2+ webinars)', 7: 'Active in Zoom once', 8: 'Talked, not tagged yet — ask the team member' }
 export const HOT_GROUP = (c: number) => c <= 4 ? '🔥 Hot — tagged or positive outcome' : c <= 7 ? '⭐ Potentially hot — attended, not talked to yet' : '❓ Talked, not tagged yet'
@@ -36,7 +36,11 @@ export function hotRows(list: HotLead[], nameOf: (id: string | null) => string, 
     const short = [h.watch ? `${h.watch} min` : '', h.pitch ? '✓ pitch' : '', h.chats ? `${h.chats} chat${h.chats > 1 ? 's' : ''}` : '', h.polls ? 'polls' : '',
       h.att > 1 ? `attended ${h.att}×` : '', h.reg > 1 ? `registered ${h.reg}×` : '',
       h.talk ? `talked ${h.talk < 60 ? `${h.talk}s` : `${Math.round(h.talk / 60)}m`}` : 'not talked', `${h.calls} call${h.calls === 1 ? '' : 's'}`, h.wa ? `${h.wa} WA` : ''].filter(Boolean).join(' · ')
-    return { lead_id: h.lead_id, name: h.name, phone: h.phone, owner, cat: h.cat, why, activity, done, short,
+    const web = [h.watch ? `${h.watch} min` : 'joined', h.pitch ? '✓ pitch' : '', h.chats ? `${h.chats} chat${h.chats > 1 ? 's' : ''}` : '', h.polls ? 'polls' : '',
+      h.att > 1 ? `${h.att} webinars` : '', h.reg > 1 ? `registered ${h.reg}×` : ''].filter(Boolean).join(' · ')
+    const work = [h.talk ? (h.talk < 60 ? `${h.talk}s talk` : `${Math.round(h.talk / 60)}m talk`) : 'no talk', `${h.calls} call${h.calls === 1 ? '' : 's'}`, h.wa ? `${h.wa} WA` : ''].filter(Boolean).join(' · ')
+    const tag = h.cat <= 4 ? [h.tag, h.outcome].filter(Boolean).join(' · ') : ''
+    return { lead_id: h.lead_id, name: h.name, phone: h.phone, owner, cat: h.cat, why, activity, done, short, web, work, tag,
       when: [h.last_talk ? `Last talked ${when(h.last_talk)}` : '', h.next ? `Next call ${when(h.next)}` : ''].filter(Boolean).join(' · ') }
   })
 }
@@ -55,7 +59,7 @@ export function hotSections(rows: HotRow[], total: number, team: boolean): Secti
 }
 export type TeamRow = { name: string; dialled: number; connected: number; talk: string; sales: number; calls: boolean }
 export type Card = { header: string; sub: string; plan: string[]; hotTotal: number; cols: string[]; grid: { label: string; vals: number[]; total: number }[]
-  top: HotRow[]; yesterday: string[]; resultsTitle: string; team: TeamRow[]; noCalls: string[]; team_view: boolean }
+  top: HotRow[]; yesterday: string[]; resultsTitle: string; team: TeamRow[]; noCalls: string[]; team_view: boolean; stats: Line[]; extra: string[] }
 export type Model = { title: string; sub: string; tiles: Line[]; plan: Section; hot: { total: number; note: string; rows: HotRow[] }
   results: Section[]; team: TeamRow[]; sections: Section[]; card?: Card; team_view?: boolean }
 
@@ -93,7 +97,7 @@ export function buildModel(s: Summary, money: (v: number) => string, nameOf: (id
     { label: 'Sales', value: st.sales ? `${st.sales} · ${money(st.revenue)}` : '0' },
     { label: 'Interested', value: `${st.interested}` },
     ...(st.call_later ? [{ label: 'Asked to call later', value: `${st.call_later}` }] : []),
-    { label: 'Outcomes saved', value: `${st.conn_outcome} of ${st.conversations} calls that connected (dialled + received)` },
+    { label: 'Outcomes saved (connected calls)', value: `${st.conn_outcome} of ${st.conversations}` },
   ] })
   const b = bestHour(st.hours)
   if (b) results.push({ title: 'Best hour', lines: [{ label: slot(b.hr), value: `${b.conn} connected · ${dur(b.talk)}` }] })
@@ -132,7 +136,14 @@ export function buildModel(s: Summary, money: (v: number) => string, nameOf: (id
   const card: Card = { header: `${s.kind === 'morning' ? 'Morning' : 'Evening'} summary`,
     sub: `${s.team ? s.org_name : s.who ?? ''} · ${dayName(s.plan_day)}`, team_view: s.team,
     plan: [planBits.join(' · '), ...pl.webinars.map(w => `${w.name} ${new Date(w.at).toLocaleTimeString('en-IN', { timeZone: tz, hour: 'numeric', minute: '2-digit' })} · ${w.leads} to remind`)],
-    hotTotal: pl.hot.total, cols: s.team ? owners.map(o => nameOf(o).split(' ')[0] || 'Unassigned') : [], grid, top: s.team ? [] : rows.slice(0, 5),
+    hotTotal: pl.hot.total, cols: s.team ? owners.map(o => nameOf(o).split(' ')[0] || 'Unassigned') : [], grid, top: rows.slice(0, 5),
+    stats: [{ label: 'Dialled', value: `${st.dialled}` }, { label: 'Connected', value: `${pc(st.connected, st.dialled)}%` },
+      { label: 'Received', value: `${st.received}` }, { label: 'Missed', value: `${st.missed}` },
+      { label: 'Leads connected', value: `${st.leads_connected}` }, { label: 'Talked 1 min+', value: `${st.leads_1min}` },
+      { label: 'Talk time', value: dur(st.talk) }, { label: 'Sales', value: st.sales ? `${st.sales}` : '0' }],
+    extra: [b ? `Best hour ${slot(b.hr)} · ${b.conn} connected` : '', `Outcomes saved ${st.conn_outcome} of ${st.conversations}`,
+      st.fu_due ? `Follow-ups on time ${st.fu_on_time} of ${st.fu_due}` : '', st.missed_open ? `${st.missed_open} missed callers not called back` : '',
+      st.interested ? `Interested ${st.interested}` : '', st.sales ? `Revenue ${money(st.revenue)}` : ''].filter(Boolean),
     resultsTitle: res, yesterday: [`Dialled ${st.dialled} · Connected ${pc(st.connected, st.dialled)}% · Leads connected ${st.leads_connected}`,
       `Talk ${dur(st.talk)} · Outcomes saved ${st.conn_outcome} of ${st.conversations} · Sales ${st.sales}${st.sales ? ` (${money(st.revenue)})` : ''}`],
     team: team.filter(t => t.calls), noCalls: team.filter(t => !t.calls).map(t => t.name) }
@@ -170,111 +181,145 @@ const wrap = (t: string, n = 62) => { const out: string[] = []; let line = ''
 const F = 'Inter, system-ui, sans-serif'
 const toPng = (c: HTMLCanvasElement) => new Promise<Blob>(r => c.toBlob(b => r(b!), 'image/png'))
 
-/** ONE phone-shaped picture (4:5, drawn at 2× so WhatsApp keeps it sharp): numbers only, no lead list. */
+type Link = { x: number; y: number; w: number; h: number; phone: string }
+const C = { brand: '#0e5e57', brandSoft: '#e8f3f1', ink: '#1d2433', muted: '#5b6576', faint: '#98a2b3', line: '#e3e7ee', zebra: '#f7f8fa', link: '#0b63c5' }
+/** Tiny drawing kit shared by the image and the PDF. Measure-only when g is null. */
+function kit(g: CanvasRenderingContext2D | null, W: number, pad: number) {
+  const meas = document.createElement('canvas').getContext('2d')!
+  const ctx = () => g ?? meas
+  const t = (txt: string, x: number, y: number, size: number, color: string, weight = 400, align: CanvasTextAlign = 'left') => {
+    const c = ctx(); c.font = `${weight} ${size}px ${F}`
+    if (g) { g.fillStyle = color; g.textAlign = align; g.fillText(txt, x, y); g.textAlign = 'left' }
+    return c.measureText(txt).width }
+  const fit = (txt: string, size: number, weight: number, max: number) => { const c = ctx(); c.font = `${weight} ${size}px ${F}`
+    if (c.measureText(txt).width <= max) return txt
+    let v = txt; while (v.length > 2 && c.measureText(v + '…').width > max) v = v.slice(0, -1); return v + '…' }
+  const rect = (x: number, y: number, w: number, h: number, color: string, r = 0) => { if (!g) return; g.fillStyle = color
+    if (r) { g.beginPath(); g.roundRect(x, y, w, h, r); g.fill() } else g.fillRect(x, y, w, h) }
+  const head = (txt: string, y: number) => { y += 22; t(txt.toUpperCase(), pad, y, 24, C.brand, 700); rect(pad, y + 12, W - pad * 2, 2, C.line); return y + 40 }
+  /** A table: header row + zebra rows. cols = [title, width share, align]. Returns new y. */
+  const table = (y: number, cols: [string, number, CanvasTextAlign][], rows: string[][], size = 26, rowH = 50) => {
+    const inner = W - pad * 2, tot = cols.reduce((a, c) => a + c[1], 0), xs: number[] = []
+    let x = pad; cols.forEach(c => { xs.push(x); x += inner * c[1] / tot })
+    if (cols.some(c => c[0])) {
+      rect(pad, y, inner, rowH - 6, C.brandSoft, 8)
+      cols.forEach((c, i) => { const w = inner * c[1] / tot; t(fit(c[0], 20, 700, w - 24), c[2] === 'right' ? xs[i] + w - 14 : xs[i] + 14, y + rowH / 2 + 2, 20, C.brand, 700, c[2]) })
+      y += rowH }
+    rows.forEach((r, ri) => {
+      if (ri % 2) rect(pad, y - 4, inner, rowH, C.zebra)
+      cols.forEach((c, i) => { const w = inner * c[1] / tot; t(fit(r[i] ?? '', size, i === 0 ? 500 : 600, w - 24), c[2] === 'right' ? xs[i] + w - 14 : xs[i] + 14, y + rowH / 2 + 4, size, C.ink, i === 0 ? 500 : 600, c[2]) })
+      y += rowH })
+    return y + 16 }
+  return { t, fit, rect, head, table }
+}
+
+/** ONE phone-shaped picture (4:5, drawn at 2× so WhatsApp keeps it sharp). */
 export async function toImage(m: Model): Promise<Blob> {
   const k = m.card
   if (!k) return toPng((await renderList(m)).canvas)
   const W = 1080, pad = 56, S = 2
-  const colW = 120, labW = W - pad * 2 - (k.cols.length + 1) * colW
-  let need = 230 + 60 + k.plan.length * 44 + 40
-  if (k.hotTotal) need += 70 + (k.cols.length ? 50 : 0) + k.grid.length * 52 + (k.top.length ? 30 + k.top.length * 76 : 0) + 30
-  need += 60 + k.yesterday.length * 46 + 30
-  if (k.team.length) need += 60 + 46 + k.team.length * 48 + (k.noCalls.length ? 50 : 0)
-  need += 70
-  const H = Math.max(Math.round(W * 1.25), need)
+  const draw = (g: CanvasRenderingContext2D | null, H: number) => {
+    const { t, fit, rect, head, table } = kit(g, W, pad)
+    rect(0, 0, W, H, '#ffffff'); rect(0, 0, W, 176, C.brand)
+    t('Closer OS', pad, 54, 24, '#cfe7e3', 600); t(k.header, pad, 112, 48, '#ffffff', 700); t(fit(k.sub, 26, 400, W - pad * 2), pad, 152, 26, '#cfe7e3')
+    let y = 226
+    // 8 number tiles
+    y = head(k.resultsTitle, y)
+    const tw = (W - pad * 2 - 3 * 14) / 4
+    k.stats.forEach((st, i) => { const x = pad + (i % 4) * (tw + 14), yy = y + Math.floor(i / 4) * 104
+      rect(x, yy, tw, 92, C.zebra, 12); t(st.label, x + 16, yy + 32, 20, C.muted, 600); t(st.value, x + 16, yy + 76, 34, C.ink, 700) })
+    y += 2 * 104 + 30
+    k.extra.forEach(e => { t('• ' + e, pad, y, 24, C.muted); y += 36 })
+    y += 18
+    y = head(m.title.startsWith('Morning') ? 'Today · plan' : 'Tomorrow · plan', y)
+    k.plan.forEach(l => { t(fit(l, 26, 500, W - pad * 2), pad, y, 26, C.ink, 500); y += 38 })
+    y += 18
+    if (k.hotTotal) {
+      y = head(`Hot leads · ${k.hotTotal}`, y)
+      const cols: [string, number, CanvasTextAlign][] = [['Category', 4, 'left'], ...k.cols.map(c => [c, 1.3, 'right'] as [string, number, CanvasTextAlign]), ['Total', 1.3, 'right']]
+      y = table(y, cols, k.grid.map(r => [r.label, ...r.vals.map(String), String(r.total)]))
+      if (k.top.length) {
+        t('Call first', pad, y, 22, C.muted, 700); y += 34
+        y = table(y, [['Lead', 3.2, 'left'], ['Phone', 2.2, 'left'], ['Why', 3, 'left']],
+          k.top.map(r => [r.name + (k.team_view && r.owner ? ` · ${r.owner.split(' ')[0]}` : ''), fmtPh(r.phone), r.tag || r.web]), 22, 44)
+      }
+    }
+    if (k.team.length) {
+      y = head('Team', y)
+      y = table(y, [['Team member', 4, 'left'], ['Dialled', 1.4, 'right'], ['Leads conn.', 1.8, 'right'], ['Talk', 1.6, 'right'], ['Sales', 1.2, 'right']],
+        k.team.map(r => [r.name, String(r.dialled), String(r.connected), r.talk, String(r.sales)]), 24, 46)
+      if (k.noCalls.length) { t(fit(`No calls: ${k.noCalls.join(', ')}`, 22, 400, W - pad * 2), pad, y, 22, C.faint); y += 34 }
+    }
+    t('Made with Closer OS', pad, H - 28, 20, C.faint)
+    return y + 50
+  }
+  const H = Math.max(Math.round(W * 1.25), draw(null, 0))
   const c = document.createElement('canvas'); c.width = W * S; c.height = H * S
-  const g = c.getContext('2d')!; g.scale(S, S)
-  const t = (txt: string, x: number, y: number, size: number, color: string, weight = 400, align: CanvasTextAlign = 'left') => {
-    g.font = `${weight} ${size}px ${F}`; g.fillStyle = color; g.textAlign = align; g.fillText(txt, x, y); g.textAlign = 'left' }
-  const head = (txt: string, y: number) => { t(txt.toUpperCase(), pad, y, 26, '#0e5e57', 700); g.fillStyle = '#e3e7ee'; g.fillRect(pad, y + 14, W - pad * 2, 2) }
-  g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H)
-  g.fillStyle = '#0e5e57'; g.fillRect(0, 0, W, 190)
-  t('Closer OS', pad, 62, 28, '#cfe7e3', 600); t(k.header, pad, 122, 52, '#ffffff', 700); t(k.sub, pad, 165, 28, '#cfe7e3')
-  let y = 250
-  head(m.title.startsWith('Morning') ? 'Today · plan' : 'Tomorrow · plan', y); y += 58
-  for (const l of k.plan) { t(l, pad, y, 30, '#1d2433', 500); y += 44 }
-  y += 30
-  if (k.hotTotal) {
-    head(`Hot leads · ${k.hotTotal}`, y); y += 56
-    const colX = (i: number) => pad + labW + colW * i + colW
-    if (k.cols.length) { k.cols.forEach((n, i) => t(n.length > 8 ? n.slice(0, 7) + '…' : n, colX(i), y, 24, '#6b7280', 600, 'right')); t('Total', colX(k.cols.length), y, 24, '#6b7280', 600, 'right'); y += 48 }
-    for (const r of k.grid) {
-      t(r.label, pad, y, 30, '#1d2433', 500)
-      r.vals.forEach((v, i) => t(String(v), colX(i), y, 30, v ? '#1d2433' : '#c3c9d4', 600, 'right'))
-      t(String(r.total), k.cols.length ? colX(k.cols.length) : W - pad, y, 32, '#0e5e57', 700, 'right'); y += 52
-    }
-    if (k.top.length) {
-      y += 14; t('Call first', pad, y, 24, '#6b7280', 600); y += 40
-      for (const [i, r] of k.top.entries()) { t(`${i + 1}. ${r.name}`, pad, y, 30, '#1d2433', 600); t(fmtPh(r.phone), W - pad, y, 26, '#0e5e57', 500, 'right'); y += 34
-        t(r.short.length > 60 ? r.short.slice(0, 59) + '…' : r.short, pad + 30, y, 24, '#4a5263'); y += 42 }
-    }
-    y += 26
-  }
-  head(k.resultsTitle, y); y += 58
-  for (const l of k.yesterday) { t(l, pad, y, 28, '#1d2433', 500); y += 46 }
-  y += 26
-  if (k.team.length) {
-    head('Team', y); y += 54
-    const cx = [W - pad - 390, W - pad - 250, W - pad - 110, W - pad]
-    ;['Dialled', 'Leads conn.', 'Talk', 'Sales'].forEach((h, i) => t(h, cx[i], y, 22, '#6b7280', 600, 'right')); y += 44
-    for (const r of k.team) {
-      t(r.name.length > 22 ? r.name.slice(0, 21) + '…' : r.name, pad, y, 28, '#1d2433', 500)
-      ;[String(r.dialled), String(r.connected), r.talk, String(r.sales)].forEach((v, i) => t(v, cx[i], y, 28, '#1d2433', 600, 'right')); y += 48
-    }
-    if (k.noCalls.length) { y += 6; t(`No calls: ${k.noCalls.join(', ')}`.slice(0, 80), pad, y, 24, '#6b7280'); y += 44 }
-  }
-  t('Made with Closer OS', pad, H - 34, 22, '#98a2b3')
+  const g = c.getContext('2d')!; g.scale(S, S); draw(g, H)
   return toPng(c)
 }
 
-/** Long picture of every section (used inside the PDF). Returns where each phone number was drawn (for tap-to-call). */
-export async function renderList(m: Model): Promise<{ canvas: HTMLCanvasElement; links: { x: number; y: number; w: number; h: number; phone: string }[] }> {
-  const W = 1080, pad = 64, row = 56
-  const noteLines = (t?: string) => t ? wrap(t).length : 0
-  const h = 260 + m.sections.reduce((t, s) => t + 90 + s.lines.reduce((t, l) => t + (l.value.length > 44 ? 56 + wrap(l.value).length * 36 + 14 : row), 0) + noteLines(s.note) * 40 + (s.note ? 16 : 0), 0) + 80
-  const c = document.createElement('canvas'); c.width = W; c.height = h
-  const g = c.getContext('2d')!
-  const links: { x: number; y: number; w: number; h: number; phone: string }[] = []
-  g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, h)
-  g.fillStyle = '#0e5e57'; g.fillRect(0, 0, W, 200)
-  g.fillStyle = '#ffffff'; g.font = `600 30px ${F}`; g.fillText('Closer OS', pad, 70)
-  g.font = `700 54px ${F}`; g.fillText(m.title, pad, 135)
-  g.font = `400 28px ${F}`; g.fillStyle = '#cfe7e3'; g.fillText(m.sub, pad, 180)
-  let y = 270
-  for (const s of m.sections) {
-    g.fillStyle = '#0e5e57'; g.font = `700 32px ${F}`; g.fillText(s.title.toUpperCase(), pad, y)
-    g.fillStyle = '#e3e7ee'; g.fillRect(pad, y + 18, W - pad * 2, 2)
-    y += 70
-    if (s.note) {
-      g.font = `italic 400 26px ${F}`; g.fillStyle = '#6b7280'
-      for (const ln of wrap(s.note)) { g.fillText(ln, pad, y); y += 40 }
-      y += 16
-    }
-    for (const l of s.lines) {
-      if (l.value.length > 44) {
-        g.font = `600 30px ${F}`; g.fillStyle = '#1d2433'; g.fillText(l.label, pad, y)
-        if (l.phone) {
-          const x = pad + g.measureText(l.label + '   ').width
-          g.font = `600 28px ${F}`; g.fillStyle = '#0b63c5'; g.fillText(`📞 ${l.phone}`, x, y)
-          links.push({ x: x - 6, y: y - 30, w: g.measureText(`📞 ${l.phone}`).width + 12, h: 40, phone: l.phone.replace(/[^\d+]/g, '') })
-        }
-        y += 42
-        g.font = `400 26px ${F}`; g.fillStyle = '#4a5263'
-        for (const ln of wrap(l.value)) { g.fillText(ln, pad + 24, y); y += 36 }
-        y += 14; continue
+/** The PDF page: clean header, tables, hot leads grouped by category → team member, tap-to-call phones. */
+export async function renderList(m: Model): Promise<{ canvas: HTMLCanvasElement; links: Link[] }> {
+  const W = 1080, pad = 56, S = 1.5
+  const links: Link[] = []
+  const draw = (g: CanvasRenderingContext2D | null, H: number) => {
+    const { t, fit, rect, head, table } = kit(g, W, pad)
+    rect(0, 0, W, H, '#ffffff'); rect(0, 0, W, 190, C.brand)
+    const [who, ...rest] = m.sub.split(' · ')
+    t('Closer OS', pad, 54, 24, '#cfe7e3', 600); t(m.title, pad, 110, 48, '#ffffff', 700)
+    t(fit(who, 26, 600, W - pad * 2), pad, 146, 26, '#ffffff', 600); t(fit(rest.join(' · '), 22, 400, W - pad * 2), pad, 176, 22, '#cfe7e3')
+    let y = 240
+    const sections = m.sections.filter(s => !/^(🔥|⭐|❓|\+)/.test(s.title))
+    for (const s of sections) {
+      if (s.title === 'Team') {
+        y = head('Team', y)
+        y = table(y, [['Team member', 4, 'left'], ['Dialled', 1.4, 'right'], ['Leads conn.', 1.8, 'right'], ['Talk', 1.6, 'right'], ['Sales', 1.2, 'right']],
+          m.team.map(r => [r.name, r.calls ? String(r.dialled) : '—', r.calls ? String(r.connected) : '—', r.calls ? r.talk : '—', r.calls ? String(r.sales) : '—']), 24, 46)
+        continue
       }
-      g.font = `400 30px ${F}`; g.fillStyle = '#4a5263'
-      const label = l.label.length > 36 ? l.label.slice(0, 35) + '…' : l.label
-      g.fillText(label, pad, y)
-      g.font = `600 30px ${F}`; g.fillStyle = '#1d2433'; g.textAlign = 'right'
-      let v = l.value; while (g.measureText(v).width > W - pad * 2 - g.measureText(label).width - 40 && v.length > 4) v = v.slice(0, -2)
-      g.fillText(v === l.value ? v : v + '…', W - pad, y); g.textAlign = 'left'
-      y += row
+      y = head(s.title, y)
+      y = table(y, [['', 2, 'left'], ['', 3, 'right']], s.lines.map(l => [l.label, l.value]), 24, 46)
     }
-    y += 20
+    if (m.hot.rows.length) {
+      y = head(`Hot leads · ${m.hot.total}`, y)
+      for (const ln of wrap(m.hot.note, 80)) { t(ln, pad, y, 20, C.faint, 400); y += 28 }
+      y += 12
+      const cats = [...new Set(m.hot.rows.map(r => r.cat))]
+      for (const cat of cats) {
+        const inCat = m.hot.rows.filter(r => r.cat === cat)
+        rect(pad, y - 4, W - pad * 2, 50, cat <= 4 ? '#fff4e5' : cat <= 7 ? '#fff9db' : '#eef2ff', 10)
+        t(`${cat <= 4 ? '🔥' : cat <= 7 ? '⭐' : '❓'}  ${HOT_CATS[cat]} · ${inCat.length}`, pad + 16, y + 30, 24, C.ink, 700); y += 64
+        const owners = [...new Set(inCat.map(r => r.owner))]
+        for (const o of owners) {
+          const mine = inCat.filter(r => r.owner === o)
+          if (m.team_view && o) { t(`${o} · ${mine.length}`, pad, y + 6, 22, C.brand, 700); y += 30 }
+          const xs = [pad, pad + 290, pad + 500, pad + 820], rowH = 58
+          rect(pad, y, W - pad * 2, 40, C.zebra, 6)
+          ;['Lead', 'Phone (tap to call)', 'Webinar', 'Calls'].forEach((h, i) => t(h, xs[i] + 12, y + 27, 18, C.muted, 700))
+          y += 46
+          mine.forEach((r, i) => {
+            if (i % 2) rect(pad, y - 2, W - pad * 2, rowH, C.zebra)
+            t(fit(r.name, 22, 600, 270), xs[0] + 12, y + 26, 22, C.ink, 600)
+            if (r.tag && r.tag !== HOT_CATS[r.cat]) t(fit(r.tag, 16, 400, 270), xs[0] + 12, y + 48, 16, C.muted)
+            const ph = fmtPh(r.phone), pw = t(ph, xs[1] + 12, y + 32, 22, C.link, 600)
+            links.push({ x: xs[1] + 6, y: y + 6, w: pw + 14, h: 40, phone: (r.phone ?? '').replace(/[^\d+]/g, '') })
+            t(fit(r.web, 20, 400, 300), xs[2] + 12, y + 32, 20, C.ink)
+            t(fit(r.work, 20, 400, W - pad - xs[3] - 16), xs[3] + 12, y + 32, 20, C.ink)
+            y += rowH })
+          y += 14
+        }
+      }
+      if (m.hot.total > m.hot.rows.length) { t(`+${m.hot.total - m.hot.rows.length} more — download the full list in Closer OS`, pad, y + 10, 20, C.muted); y += 40 }
+    }
+    t('Made with Closer OS', pad, H - 28, 20, C.faint)
+    return y + 60
   }
-  g.fillStyle = '#98a2b3'; g.font = `400 24px ${F}`; g.fillText('Made with Closer OS', pad, h - 40)
-  return { canvas: c, links }
+  const H = draw(null, 0)
+  links.length = 0
+  const c = document.createElement('canvas'); c.width = W * S; c.height = H * S
+  const g = c.getContext('2d')!; g.scale(S, S); draw(g, H)
+  return { canvas: c, links: links.map(l => ({ x: l.x * S, y: l.y * S, w: l.w * S, h: l.h * S, phone: l.phone })) }
 }
 
 /** A one-page PDF holding the summary picture (no library: a tiny PDF with one JPEG). */

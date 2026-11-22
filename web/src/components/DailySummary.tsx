@@ -10,7 +10,7 @@ import { buildModel, toImage, toPdf, toText, type Summary } from '../lib/summary
 import { Card, Spinner } from './ui'
 import { Ph } from './Copy'
 import LeadDrawer from '../pages/LeadDrawer'
-import { hotRows, hotSections, HOT_CATS, HOT_GROUP, HOT_NOTE, type Line, type Section, type HotLead, type HotRow, type Model } from '../lib/summary'
+import { hotRows, HOT_CATS, HOT_GROUP, HOT_NOTE, type Line, type Section, type HotLead, type HotRow, type Model } from '../lib/summary'
 import { downloadCsv } from '../lib/report'
 
 function save(blob: Blob, name: string) {
@@ -49,7 +49,7 @@ export default function DailySummary() {
       return
     }
     const m: Model = { title: 'Hot leads', sub: `${data.team ? `${data.org_name} · Team` : data.who ?? ''} · ${full.total} leads`, tiles: [], plan: { title: '', lines: [] },
-      hot: { total: full.total, note: HOT_NOTE, rows: [] }, results: [], team: [], sections: hotSections(hotRows(full.list, nameOf, data.tz), full.total, data.team) }
+      hot: { total: full.total, note: HOT_NOTE, rows: hotRows(full.list, nameOf, data.tz) }, results: [], team: [], sections: [], team_view: data.team }
     save(kindOf === 'pdf' ? await toPdf(m) : await toImage(m), `${stamp}.${kindOf === 'pdf' ? 'pdf' : 'png'}`)
   }
   useEffect(() => {

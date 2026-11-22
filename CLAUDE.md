@@ -2209,3 +2209,14 @@ intelligence → Play Store launch.
   (—), hot leads = coloured category band once → team member heading once → table Lead (+tag only if ≠ category) · Phone (tap to
   call) · Webinar (min · pitch · chats · polls · N webinars · registered N×) · Calls (talk · calls · WA). HotRow/SumLine carry web /
   work / tag. "Download full list" PDF uses the same hot tables.
+
+## New Dashboard (Nov 22 2026, migration 0120)
+- dashboard_data(org, period today|yesterday|7d, team?) = one call: kpi + prev (day_stats; today vs same clock time yesterday),
+  people (whole company activity; sales/outcomes/last call/sync/pop-up only for visible users), attention (unassigned NEW leads
+  7 days — old ones ignored on purpose, calls without outcome, follow-ups due/overdue), webinars (next: reminder called/talked/by
+  caller; last: sales calls to attendees), hot (hot_leads top 5 + by_cat). Owner/admin = company + team picker, manager = own
+  teams, rep = own numbers + "Me vs team average" + leaderboard.
+- pages/Overview.tsx: header (team · period · "Today's summary" button → DailySummary in a modal), attention chips (only when
+  they apply, clickable), 6 tiles with ▲▼, Team table (recency dot, numbers open a calls list → lead drawer) or rep comparison,
+  by-hour bars, webinar card, hot leads. "/" is the Dashboard for every role now (reps used to land on My desk).
+  "Get started" + old calling-activity table removed. Test: web/tests/summary-test.cjs (owner + rep screenshots).

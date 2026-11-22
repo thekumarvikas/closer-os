@@ -31,12 +31,16 @@ const log = (...a) => console.log('•', ...a);
     const p = await (await browser.newContext({ viewport: { width: 1280, height: 1000 } })).newPage(); p.setDefaultTimeout(20000)
     p.on('pageerror', e => errors.push(e.message))
     await p.goto('http://localhost:4173/'); await p.fill('input[type=email]', 'sum-owner@closeros-test.dev'); await p.fill('input[type=password]', 'Test-12345-abc'); await p.click('button[type=submit]')
-    await p.waitForTimeout(4000); await p.goto('http://localhost:4173/'); await p.waitForSelector('text=Copy text'); await p.click('text=🌙 Evening'); await p.waitForTimeout(2500)
+    await p.waitForTimeout(4000); await p.goto('http://localhost:4173/'); await p.waitForSelector('text=Leads connected'); await p.waitForTimeout(1500); await p.screenshot({ path: `${SHOTS}/dash-owner.png` }); log('shot dashboard')
+    await p.click('text=Today\'s summary'); await p.waitForSelector('text=Copy text'); await p.click('text=🌙 Evening'); await p.waitForTimeout(2500)
     await p.screenshot({ path: `${SHOTS}/summary-evening.png`, fullPage: false }); log('shot evening')
     await p.click('text=☀️ Morning'); await p.waitForTimeout(2500); await p.screenshot({ path: `${SHOTS}/summary-morning.png` }); log('shot morning')
     await p.click('text=🌙 Evening'); await p.waitForTimeout(2000)
     const [img] = await Promise.all([p.waitForEvent('download'), p.click('button:has-text("Image")')]); await img.saveAs(`${SHOTS}/summary.png`); log('image saved')
     const [pdf] = await Promise.all([p.waitForEvent('download'), p.click('button:has-text("PDF")')]); await pdf.saveAs(`${SHOTS}/summary.pdf`); log('pdf saved')
+    const q = await (await browser.newContext({ viewport: { width: 1280, height: 1000 } })).newPage(); q.on('pageerror', e => errors.push(e.message))
+    await q.goto('http://localhost:4173/'); await q.fill('input[type=email]', 'sum-rep1@closeros-test.dev'); await q.fill('input[type=password]', 'Test-12345-abc'); await q.click('button[type=submit]')
+    await q.waitForSelector('text=Me vs team average', { timeout: 20000 }); await q.waitForTimeout(1500); await q.screenshot({ path: `${SHOTS}/dash-rep.png` }); log('shot rep dashboard')
     log('browser errors:', errors.length ? errors : 'none'); if (errors.length) fails++
     await browser.close()
   } catch (e) { console.error('FAILED', e); fails++ } finally {

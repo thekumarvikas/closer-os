@@ -27,7 +27,7 @@ const BuyerAnalysis = lazy(() => import('./pages/BuyerAnalysis'))
 import SetPassword, { useRecoveryMode } from './pages/SetPassword'
 
 export default function App() {
-  const { session, loading, org, isAdmin, isManager, profile, role } = useSession()
+  const { session, loading, org, isAdmin, isManager, profile } = useSession()
   const [recovery, recoveryDone] = useRecoveryMode()
   if (loading) return <Spinner />
   if (!session) return <AuthPage />
@@ -38,7 +38,7 @@ export default function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route index element={role === 'rep' ? <Desk /> : <Overview />} />
+        <Route index element={<Overview />} />
         <Route path="desk" element={<Desk />} />
         <Route path="reports" element={<Reports />} />
         <Route path="webinars" element={<Batches />} />

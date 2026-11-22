@@ -2248,3 +2248,6 @@ intelligence → Play Store launch.
 - 0124: apply_zoom_report keeps the Zoom file's OTHER number / email on the matched lead (lead_phones / lead_emails, label
   Secondary, source 'zoom'). Example: Rajesh Kumar Singh (Cancer) registered twice with …508 (one lead) and joined Zoom with the
   same email but another number — that number was dropped before; now kept (only for uploads from now on; old files must be re-uploaded).
+- 0125 (Nov 22): every number / email a lead ever arrived with (lead_origins) kept as Secondary on that lead (all clients).
+  Cancer's two Zoom attendee files (16 + 19 Nov) re-read once by hand: 7 extra numbers + 27 extra emails added, no merges needed.
+  Going forward: lead_arrived + apply_zoom_report (0124) keep every other number/email; auto-merge only on an exact shared one.

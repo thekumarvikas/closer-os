@@ -1,3 +1,4 @@
+import { fillMessage } from '../lib/fill'
 import { NoteBox, MicButton, addSpoken } from '../components/NoteBox'
 import { Ph, Em } from '../components/Copy'
 import { tagGroupsFor, linesFor } from '../lib/notes'
@@ -214,8 +215,7 @@ function WhatsAppWeb({ lead, repName, onClose }: { lead: Lead; repName: string; 
   const [tpls, setTpls] = useState<{ id: string; name: string; body: string }[]>([])
   const [text, setText] = useState('')
   useEffect(() => { supabase.from('message_templates').select('id, name, body').eq('org_id', org.id).eq('is_active', true).order('position').then(({ data }) => setTpls(data ?? [])) }, [org.id])
-  const fill = (b: string) => b.replace(/\{\{leadName\}\}/g, lead.name.split(' ')[0] || '').replace(/\{\{leadFullName\}\}/g, lead.name).replace(/\{\{repName\}\}/g, repName.split(' ')[0])
-    .replace(/\{\{companyName\}\}/g, org.name).replace(/\{\{city\}\}/g, lead.city ?? '').replace(/\{\{profession\}\}/g, lead.profession ?? '').replace(/\{\{[a-zA-Z]+\}\}/g, '')
+  const fill = (b: string) => fillMessage(b, lead, { companyName: String(org.settings?.business_name ?? org.name), repName, timezone: org.timezone, batch: null })
   return (
     <div className="mt-4 rounded-lg border border-slate-200 p-3">
       <div className="mb-2 flex items-center justify-between"><span className="text-sm font-semibold">WhatsApp message</span><button onClick={onClose}><X className="h-4 w-4" /></button></div>

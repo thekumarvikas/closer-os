@@ -3,7 +3,8 @@ import { useRef, useState } from 'react'
 
 /** Fill-ins replaced for each lead when the message is sent. */
 export const FILL_INS: [string, string][] = [['First name', '{{leadName}}'], ['Full name', '{{leadFullName}}'], ['My name', '{{repName}}'],
-  ['Company', '{{companyName}}'], ['Event', '{{batchName}}'], ['Event date', '{{batchDate}}'], ['City', '{{city}}'],
+  ['Company', '{{companyName}}'], ['Event', '{{batchName}}'], ['Event date', '{{batchDate}}'], ['Event time', '{{batchTime}}'],
+  ['Joining link', '{{joinLink}}'], ['Time left', '{{timeLeft}}'], ['City', '{{city}}'],
   ['Profession', '{{profession}}'], ['Next call', '{{followUpTime}}']]
 
 /** A message box with tappable fill-ins: click one to insert it at the cursor (typing "{" highlights them). */

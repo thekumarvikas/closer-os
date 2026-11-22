@@ -331,6 +331,7 @@ private suspend fun saveQuick(ctx: Context, info: AfterCall.Info, lead: Lead?, o
                               note: String = "", tags: List<String> = emptyList(), lostReason: String? = null): String? {
     val c = info.call ?: return "Couldn't find this call in the phone's call history yet — wait 2 seconds and tap Save again"
     val co = info.co
+    com.closeros.app.data.WaContext.saved(lead?.phone ?: c.phone, o.category)
     val store = LocalStore(ctx)
     val payload = buildJsonObject {
         put("id", c.id); put("org_id", co.orgId)
@@ -401,8 +402,9 @@ private fun WhatsAppStep(info: AfterCall.Info, savedLine: String?, sending: Bool
     val co = info.co
     val number = info.number.orEmpty()
     val lead = info.lead ?: Lead(id = "", org_id = co.orgId, phone = number)
-    val company = co.templates.filter { it.owner_id == null }
-    val mine = co.templates.filter { it.owner_id != null }
+    val ordered = com.closeros.app.data.WaContext.order(co.templates, lead.phone.ifBlank { number })
+    val company = ordered.filter { it.owner_id == null }
+    val mine = ordered.filter { it.owner_id != null }
     fun send(t: com.closeros.app.data.Template) {
         val text = fillTemplateText(t.body, lead, co.name, co.timezone, co.repName)
         // Counted only after the rep confirms it went (asked next time Closer OS is open).
@@ -432,7 +434,7 @@ private fun WhatsAppStep(info: AfterCall.Info, savedLine: String?, sending: Bool
         if (list.isNotEmpty()) Text(title, fontSize = 12.sp, color = Brand.muted, fontWeight = FontWeight.SemiBold)
         list.forEach { t ->
             Column(Modifier.fillMaxWidth().border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(12.dp)).clickable(enabled = !sending) { send(t) }.padding(12.dp)) {
-                Text((if (t.media_path != null) "📎 " else "") + t.name, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                Text((if (com.closeros.app.data.WaContext.matches(t, lead.phone.ifBlank { number })) "⭐ " else "") + (if (t.media_path != null) "📎 " else "") + t.name, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                 Text(fillTemplateText(t.body, lead, co.name, co.timezone, co.repName), fontSize = 13.sp, color = Brand.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }

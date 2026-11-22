@@ -37,7 +37,7 @@ const log = (...a) => console.log('•', ...a);
     const { data: act } = await admin.from('lead_activities').select('data').eq('org_id', org).eq('kind', 'note'); log('notes saved:', act?.length); if (!act?.length) fails++
     await p.screenshot({ path: `${SHOTS}/calls-note.png` })
     await p.selectOption('select >> nth=7', { index: 1 }).catch(() => {}); await p.click('text=Apply filters'); await p.waitForTimeout(2500); await p.screenshot({ path: `${SHOTS}/calls-filtered.png` }); log('filtered')
-    await p.goto('http://localhost:4173/leads'); await p.waitForSelector('table >> text=Anita Verma'); await p.waitForTimeout(1000); await p.screenshot({ path: `${SHOTS}/leads.png` }); log('shot leads'); await p.goto('http://localhost:4173/reports'); await p.waitForTimeout(5000); await p.click('text=Team'); await p.waitForTimeout(3000); await p.screenshot({ path: `${SHOTS}/reports-team.png` })
+    await p.goto('http://localhost:4173/leads'); await p.waitForSelector('table >> text=Anita Verma'); await p.waitForTimeout(1000); await p.screenshot({ path: `${SHOTS}/leads.png` }); log('shot leads'); await p.goto('http://localhost:4173/settings'); await p.waitForTimeout(4000); const h = p.locator('text=Company WhatsApp messages'); await h.scrollIntoViewIfNeeded(); await p.waitForTimeout(2500); await p.screenshot({ path: `${SHOTS}/templates.png` }); log('shot templates'); await p.goto('http://localhost:4173/reports'); await p.waitForTimeout(5000); await p.click('text=Team'); await p.waitForTimeout(3000); await p.screenshot({ path: `${SHOTS}/reports-team.png` })
     log('browser errors:', errors.length ? errors : 'none'); if (errors.length) fails++
     await browser.close()
   } catch (e) { console.error('FAILED', e); fails++ } finally {

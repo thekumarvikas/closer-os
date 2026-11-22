@@ -1,5 +1,6 @@
 package com.closeros.app.ui
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -553,8 +554,14 @@ fun WhatsAppPicker(vm: AppViewModel, lead: Lead, onDismiss: () -> Unit) {
     fun close() { vm.waDraft = null; onDismiss() }
     val first = lead.name.substringBefore(' ')
     // Personal app: every message is the person's own — no "company" anywhere.
-    val company = if (vm.isSolo) emptyList() else vm.templates.filter { it.owner_id == null }
-    val mine = if (vm.isSolo) vm.templates else vm.templates.filter { it.owner_id != null }
+    var q by remember { mutableStateOf("") }
+    var tag by remember { mutableStateOf<String?>(null) }
+    val allTags = remember(vm.templates) { vm.templates.flatMap { it.tags }.distinct().sorted() }
+    val pool = com.closeros.app.data.WaContext.order(vm.templates, lead.phone).filter { t ->
+        (tag == null || tag in t.tags) && (q.isBlank() || "${t.name} ${t.body} ${t.tags.joinToString(" ")}".contains(q.trim(), ignoreCase = true)) }
+    val company = if (vm.isSolo) emptyList() else pool.filter { it.owner_id == null }
+    val mine = if (vm.isSolo) pool else pool.filter { it.owner_id != null }
+    fun star(t: com.closeros.app.data.Template) = if (com.closeros.app.data.WaContext.matches(t, lead.phone)) "⭐ " else ""
     fun pick(t: com.closeros.app.data.Template) {
         d.text = vm.fillTemplate(t.body, lead); d.own = null; d.chosen = t
         d.picked = t.media_path?.let { CompanyMedia(it, t.media_type, t.media_name) }
@@ -564,10 +571,15 @@ fun WhatsAppPicker(vm: AppViewModel, lead: Lead, onDismiss: () -> Unit) {
         title = { Text(if (text == null) "Choose a message" else "WhatsApp to ${first.ifBlank { fmtPhone(lead.phone) }}") },
         text = {
             if (text == null) Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (vm.templates.size > 5) OutlinedTextField(q, { q = it }, placeholder = { Text("Search messages") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                if (allTags.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    allTags.forEach { t -> FilterChip(selected = tag == t, onClick = { tag = if (tag == t) null else t }, label = { Text("#$t", fontSize = 12.sp) }) }
+                }
+                if (company.isEmpty() && mine.isEmpty() && (q.isNotBlank() || tag != null)) Text("No message matches.", color = Brand.muted, fontSize = 13.sp)
                 if (company.isNotEmpty()) Text("Company messages", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Brand.muted)
-                company.forEach { t -> TemplateRow(vm, (if (t.media_path != null) mediaIcon(t.media_type) + " " else "") + t.name, vm.fillTemplate(t.body, lead), null) { pick(t) } }
+                company.forEach { t -> TemplateRow(vm, star(t) + (if (t.media_path != null) mediaIcon(t.media_type) + " " else "") + t.name, vm.fillTemplate(t.body, lead), null) { pick(t) } }
                 if (mine.isNotEmpty()) Text("My messages", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Brand.muted, modifier = Modifier.padding(top = 6.dp))
-                mine.forEach { t -> TemplateRow(vm, (if (t.media_path != null) mediaIcon(t.media_type) + " " else "") + t.name, vm.fillTemplate(t.body, lead), null) { pick(t) } }
+                mine.forEach { t -> TemplateRow(vm, star(t) + (if (t.media_path != null) mediaIcon(t.media_type) + " " else "") + t.name, vm.fillTemplate(t.body, lead), null) { pick(t) } }
                 TextButton(onClick = { d.text = "Hi ${first.ifBlank { "there" }}, "; d.picked = null; d.chosen = null }) { Text("✏️ Write a new message") }
                 TextButton(onClick = { close(); vm.showMessages = true }) { Text("⚙ Add or edit my messages", color = Brand.muted, fontSize = 13.sp) }
             } else Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -286,6 +286,7 @@ export function BatchForm({ batch, onClose, onSaved }: { batch?: Batch; onClose:
   const [hot, setHot] = useState(batch?.hot_minutes ?? 60)
   const [pitch, setPitch] = useState<string>(batch?.pitch_minute != null ? String(batch.pitch_minute) : '')
   const [target, setTarget] = useState(batch?.guided_target_pct ?? 70)
+  const [link, setLink] = useState(batch?.join_link ?? '')
   const holdout = batch?.holdout_pct ?? 0   // test group option removed from the form (owner); old batches keep theirs
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -298,7 +299,7 @@ export function BatchForm({ batch, onClose, onSaved }: { batch?: Batch; onClose:
     const utc = new Date(asUtc.toLocaleString('en-US', { timeZone: 'UTC' }))
     const webinar_at = new Date(asUtc.getTime() - (zoned.getTime() - utc.getTime())).toISOString()
     const row = { name: name.trim(), kind, webinar_at, hot_minutes: hot, guided_target_pct: target, holdout_pct: holdout,
-      pitch_minute: pitch.trim() === '' ? null : Math.max(0, Math.round(Number(pitch))) }
+      pitch_minute: pitch.trim() === '' ? null : Math.max(0, Math.round(Number(pitch))), join_link: link.trim() || null }
     const { error } = batch
       ? await supabase.from('batches').update(row).eq('id', batch.id)
       : await supabase.from('batches').insert({ ...row, org_id: org.id, created_by: session?.user.id })
@@ -323,6 +324,7 @@ export function BatchForm({ batch, onClose, onSaved }: { batch?: Batch; onClose:
         <Field label="Hot lead = watched at least (minutes)"><input className="input" type="number" min={0} value={hot} onChange={e => setHot(Number(e.target.value))} /></Field>
         <Field label="Pitch / payment link shown at (minute)" hint="e.g. 80. People who watched this long saw the pitch. Leave empty if not known yet.">
           <input className="input" type="number" min={0} value={pitch} onChange={e => setPitch(e.target.value)} placeholder="e.g. 80" /></Field>
+        <div className="sm:col-span-2"><Field label="Joining link (Zoom / Meet)" hint="Sent in WhatsApp messages with the {{joinLink}} fill-in."><input className="input" value={link} onChange={e => setLink(e.target.value)} placeholder="https://zoom.us/j/…" /></Field></div>
         <Field label="Guided target (%)"><input className="input" type="number" min={0} max={100} value={target} onChange={e => setTarget(Number(e.target.value))} /></Field>
         <div className="sm:col-span-2"><ErrorBox error={error} /></div>
       </form>

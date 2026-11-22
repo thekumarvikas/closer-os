@@ -1696,6 +1696,8 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Saves the outcome. If there is no internet it is kept on the phone and sent later. */
     fun saveOutcome(payload: JsonObject, onDone: () -> Unit) = viewModelScope.launch {
+        runCatching { val oid = (payload["outcome_id"] as? kotlinx.serialization.json.JsonPrimitive)?.content
+            com.closeros.app.data.WaContext.saved((payload["phone"] as? kotlinx.serialization.json.JsonPrimitive)?.content, outcomes.firstOrNull { it.id == oid }?.category) }
         com.closeros.app.data.LocalReports.recordOutcome(ctx, payload)   // my reports count it right away, even offline
         val sent = runCatching { Repo.logCall(payload) }
         if (sent.isFailure) {
@@ -1777,6 +1779,9 @@ fun fillTemplateText(body: String, lead: Lead, companyName: String, timezone: St
         "companyName" to companyName.trim(),
         "batchName" to (b?.name ?: "the session"),
         "batchDate" to t(b?.webinar_at),
+        "batchTime" to (b?.webinar_at?.let { runCatching { java.time.format.DateTimeFormatter.ofPattern("h:mm a").withZone(tz).format(com.closeros.app.data.parseInstant(it)) }.getOrNull() } ?: ""),
+        "joinLink" to b?.join_link.orEmpty().trim(),
+        "timeLeft" to timeLeftText(b?.webinar_at),
         "followUpTime" to t(lead.next_follow_up_at).ifBlank { "a convenient time" },
         "city" to lead.city.orEmpty().trim(),
         "profession" to lead.profession.orEmpty().trim(),
@@ -1789,11 +1794,26 @@ fun fillTemplateText(body: String, lead: Lead, companyName: String, timezone: St
     return out.replace(Regex("[ \t]{2,}"), " ").replace(Regex("[ \t]+([,.!?])"), "$1").replace(Regex(",\\s*([.!?])"), "$1")
 }
 
+/** "2 hours" / "45 minutes" / "3 days" until the webinar; blank once it has started. */
+fun timeLeftText(iso: String?): String {
+    val at = iso?.let { runCatching { com.closeros.app.data.parseInstant(it).toEpochMilli() }.getOrNull() } ?: return ""
+    val m = ((at - System.currentTimeMillis()) / 60_000.0).roundToLongSafe()
+    if (m <= 0) return ""
+    if (m < 60) return "$m minutes"
+    val h = Math.round(m / 60.0)
+    if (h < 48) return if (h == 1L) "1 hour" else "$h hours"
+    return "${Math.round(h / 24.0)} days"
+}
+private fun Double.roundToLongSafe(): Long = Math.round(this)
+
 /** Fill-ins in [body] this lead has nothing for — shown before sending so the rep can add them by hand. */
 fun missingFillIns(body: String, lead: Lead, companyName: String): List<String> {
     val b = lead.latestBatch?.batch
     return listOfNotNull(
         "webinar date".takeIf { "{{batchDate}}" in body && b?.webinar_at == null },
+        "webinar time".takeIf { "{{batchTime}}" in body && b?.webinar_at == null },
+        "joining link (add it to the webinar on the dashboard)".takeIf { "{{joinLink}}" in body && b?.join_link.isNullOrBlank() },
+        "time left (the webinar isn't coming up)".takeIf { "{{timeLeft}}" in body && timeLeftText(b?.webinar_at).isBlank() },
         "business name".takeIf { "{{companyName}}" in body && companyName.isBlank() },
         "city".takeIf { "{{city}}" in body && lead.city.isNullOrBlank() },
         "profession".takeIf { "{{profession}}" in body && lead.profession.isNullOrBlank() },

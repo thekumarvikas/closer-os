@@ -59,7 +59,7 @@ object CallSync {
         fun isLead(phone: String) = leadPhones == null || com.closeros.app.ui.normalizePhone(phone, prefix) in leadPhones
         for (chunk in entries.chunked(200)) {
             val send = chunk.filter { isLead(it.phone) }
-            if (send.isNotEmpty()) sent += Repo.syncCalls(orgId, phoneCallsJson(send, device))
+            if (send.isNotEmpty()) { sent += Repo.syncCalls(orgId, phoneCallsJson(send, device)); runCatching { Repo.setRings(CallKind.ringSecs(ctx, send)) } }
             store.callLogCursorMs = chunk.last().startedAtMs
         }
         // 2a) Older calls with lead numbers, from the phone's whole call history — so each lead's call count is complete.

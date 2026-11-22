@@ -59,7 +59,42 @@ object CallKind {
             else -> null
         }
         sp.edit().putLong("idle", now).putString("kind", kind).apply()
+        // Ringing time: incoming = rang until answered / dropped; outgoing = line time (talk is taken off once the call log has it).
+        runCatching {
+            val e = when (kind) {
+                "incoming" -> org.json.JSONObject().put("s", ring).put("r", off - ring)
+                "missed" -> org.json.JSONObject().put("s", ring).put("r", now - ring)
+                "outgoing" -> org.json.JSONObject().put("s", off).put("l", now - off)
+                else -> null
+            }
+            if (e != null) {
+                val arr = org.json.JSONArray(sp.getString("rings", "[]"))
+                arr.put(e)
+                val keep = org.json.JSONArray(); val from = maxOf(0, arr.length() - 300)
+                for (i in from until arr.length()) keep.put(arr.get(i))
+                sp.edit().putString("rings", keep.toString()).apply()
+            }
+        }
         return kind
+    }
+
+    /** Seconds each call rang, for calls in the phone's call log (matched by start time ± 15 s). */
+    fun ringSecs(ctx: Context, calls: List<LogCall>): Map<String, Int> {
+        val arr = runCatching { org.json.JSONArray(p(ctx).getString("rings", "[]")) }.getOrNull() ?: return emptyMap()
+        val es = (0 until arr.length()).map { arr.getJSONObject(it) }
+        val out = HashMap<String, Int>()
+        for (c in calls) {
+            if (c.channel == "whatsapp") continue
+            val e = es.minByOrNull { kotlin.math.abs(it.getLong("s") - c.startedAtMs) } ?: continue
+            if (kotlin.math.abs(e.getLong("s") - c.startedAtMs) > 15_000) continue
+            val sec = when {
+                e.has("r") -> (e.getLong("r") / 1000).toInt()
+                e.has("l") -> ((e.getLong("l") / 1000) - c.durationSec).toInt()
+                else -> continue
+            }
+            if (sec in 0..600) out[c.id] = sec
+        }
+        return out
     }
 }
 

@@ -74,7 +74,8 @@ fun pickFile(ctx: android.content.Context, vm: AppViewModel, target: String) {
 // ───────────── Fill-ins: tap to insert {{leadName}} etc. ─────────────
 
 val FILL_INS = listOf("First name" to "{{leadName}}", "Full name" to "{{leadFullName}}", "My name" to "{{repName}}",
-    "Company" to "{{companyName}}", "Event" to "{{batchName}}", "Event date" to "{{batchDate}}", "City" to "{{city}}",
+    "Company" to "{{companyName}}", "Event" to "{{batchName}}", "Event date" to "{{batchDate}}", "Event time" to "{{batchTime}}",
+    "Joining link" to "{{joinLink}}", "Time left" to "{{timeLeft}}", "City" to "{{city}}",
     "Profession" to "{{profession}}", "Next call" to "{{followUpTime}}")
 
 /**

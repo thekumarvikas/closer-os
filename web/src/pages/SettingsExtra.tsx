@@ -5,7 +5,8 @@ import Papa from 'papaparse'
 import readXlsxFile from 'read-excel-file'
 import { Plus, Trash2, Upload, CheckCircle2 } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
-import { useOrg } from '../lib/session'
+import { useOrg, useSession } from '../lib/session'
+import { fillMessage, missingFillIns, type FillBatch } from '../lib/fill'
 import type { ProfessionCategory } from '../lib/types'
 import { Button, Card, ErrorBox, Field, Modal } from '../components/ui'
 import { ask } from '../lib/dialogs'
@@ -161,63 +162,149 @@ function BuyersUpload({ onClose, onDone }: { onClose: () => void; onDone: () => 
   )
 }
 
-interface Template { id: string; name: string; body: string; position: number; is_active: boolean; media_path: string | null; media_type: string | null; media_name: string | null }
-const variables = ['{{leadName}}', '{{repName}}', '{{companyName}}', '{{batchName}}', '{{batchDate}}', '{{followUpTime}}', '{{city}}', '{{profession}}']
-
-/** WhatsApp messages reps can pick in the app; variables are filled in for each lead. */
-function TemplateBody({ body, onSave }: { body: string; onSave: (v: string) => void }) {
-  const [v, setV] = useState(body)
-  return <MessageBox className="min-h-[70px]" value={v} onChange={setV} onBlur={onSave} />
-}
+interface Template { id: string; name: string; body: string; position: number; is_active: boolean; media_path: string | null; media_type: string | null; media_name: string | null; tags: string[]; show_for: string[] }
+/** After which calls a message is offered first in the app (outcome categories). */
+const SHOW_FOR: [string, string][] = [['positive', 'Interested'], ['connected', 'Talked'], ['not_connected', "Didn't pick"], ['lost', 'Not interested'], ['won', 'Sale']]
+interface PreviewLead { id: string; name: string; city: string | null; profession: string | null; next_follow_up_at: string | null }
+interface TplRow { template_id: string | null; name: string; sent: number; leads: number; senders: number; bought: number }
 
 export function WhatsAppTemplates() {
   const { org } = useOrg()
+  const { profile } = useSession()
   const [rows, setRows] = useState<Template[]>([])
   const [version, setVersion] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [q, setQ] = useState('')
+  const [tag, setTag] = useState('')
+  const [lq, setLq] = useState('')
+  const [found, setFound] = useState<PreviewLead[]>([])
+  const [lead, setLead] = useState<PreviewLead | null>(null)
+  const [batch, setBatch] = useState<FillBatch | null>(null)
+  const [report, setReport] = useState<TplRow[] | null>(null)
   useEffect(() => {
     supabase.from('message_templates').select('*').eq('org_id', org.id).is('owner_id', null).order('position').then(({ data }) => setRows((data ?? []) as Template[]))
   }, [org.id, version])
+  useEffect(() => {
+    supabase.rpc('template_report', { p_org: org.id, p_from: new Date(Date.now() - 30 * 864e5).toISOString(), p_to: new Date().toISOString() })
+      .then(({ data }) => setReport(((data as { rows?: TplRow[] })?.rows ?? [])))
+  }, [org.id])
+  // Preview lead: search, or the newest lead to start with.
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      let query = supabase.from('leads').select('id,name,city,profession,next_follow_up_at').eq('org_id', org.id).is('deleted_at', null).order('created_at', { ascending: false }).limit(8)
+      if (lq.trim().length >= 2) {
+        const { data: ids } = await supabase.rpc('search_leads', { p_org: org.id, p_q: lq.trim(), p_limit: 8 })
+        query = query.in('id', (ids as string[])?.length ? ids as string[] : ['00000000-0000-0000-0000-000000000000'])
+      }
+      const { data } = await query
+      const list = (data ?? []) as PreviewLead[]
+      setFound(list); if (!lead && list[0]) setLead(list[0])
+    }, 250)
+    return () => clearTimeout(t)
+  }, [org.id, lq])  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!lead) return
+    supabase.from('batch_leads').select('batch:batches(name,webinar_at,join_link)').eq('lead_id', lead.id).then(({ data }) => {
+      const bs = ((data ?? []) as unknown as { batch: FillBatch | null }[]).map(x => x.batch).filter(Boolean) as FillBatch[]
+      bs.sort((a, b) => b.webinar_at.localeCompare(a.webinar_at)); setBatch(bs[0] ?? null)
+    })
+  }, [lead])
   async function run(p: PromiseLike<{ error: unknown }>) { const { error } = await p; setError(error ? errorText(error) : null); setVersion(v => v + 1) }
+  const allTags = [...new Set(rows.flatMap(r => r.tags ?? []))].sort()
+  const shown = rows.filter(t => (!tag || (t.tags ?? []).includes(tag)) && (!q.trim() || `${t.name} ${t.body} ${(t.tags ?? []).join(' ')}`.toLowerCase().includes(q.trim().toLowerCase())))
+  const fillOpts = { companyName: String(org.settings?.business_name ?? org.name), repName: profile?.full_name ?? '', timezone: org.timezone, batch }
   return (
     <Card className="p-5 lg:col-span-2">
       <h2 className="font-semibold">Company WhatsApp messages</h2>
-      <p className="mb-3 mt-1 text-sm text-slate-500">Every rep sees these in the app (reps can also save their own). Reps pick one before WhatsApp opens; an attached photo, video or PDF is sent with it. Use variables — they are replaced for each lead: {variables.map(v => <code key={v} className="mr-1 rounded bg-slate-100 px-1 text-xs">{v}</code>)}</p>
+      <p className="mb-3 mt-1 text-sm text-slate-500">Every rep sees these in the app (reps can also save their own). Click a fill-in to put it in the message — it is replaced for each lead. Choose after which calls a message is offered first.</p>
       <ErrorBox error={error} />
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <input className="input !w-56" placeholder="Search messages" value={q} onChange={e => setQ(e.target.value)} />
+        {allTags.length > 0 && <>
+          <button onClick={() => setTag('')} className={`rounded-full border px-2.5 py-0.5 text-xs ${!tag ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-slate-200 text-slate-600'}`}>All</button>
+          {allTags.map(t => <button key={t} onClick={() => setTag(tag === t ? '' : t)} className={`rounded-full border px-2.5 py-0.5 text-xs ${tag === t ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-slate-200 text-slate-600'}`}>#{t}</button>)}
+        </>}
+        <div className="relative ml-auto">
+          <span className="mr-2 text-xs text-slate-500">Preview for</span>
+          <input className="input !inline-block !w-48 !py-1.5 text-sm" placeholder="Search a lead" value={lq} onChange={e => setLq(e.target.value)} />
+          <select className="input !ml-1 !inline-block !w-48 !py-1.5 text-sm" value={lead?.id ?? ''} onChange={e => setLead(found.find(f => f.id === e.target.value) ?? null)}>
+            {lead && !found.some(f => f.id === lead.id) && <option value={lead.id}>{lead.name}</option>}
+            {found.map(f => <option key={f.id} value={f.id}>{f.name || 'No name'}{f.city ? ` · ${f.city}` : ''}</option>)}
+          </select>
+        </div>
+      </div>
       <div className="space-y-3">
-        {rows.map(t => (
-          <div key={t.id} className={`rounded-lg border border-slate-200 p-3 ${t.is_active ? '' : 'opacity-60'}`}>
-            <div className="mb-2 flex items-center gap-2">
-              <input className="input !py-1.5 font-medium" defaultValue={t.name} onBlur={e => e.target.value.trim() && e.target.value !== t.name && run(supabase.from('message_templates').update({ name: e.target.value.trim() }).eq('id', t.id))} />
-              <button className="whitespace-nowrap text-xs text-brand-700 hover:underline" onClick={() => run(supabase.from('message_templates').update({ is_active: !t.is_active }).eq('id', t.id))}>{t.is_active ? 'Hide' : 'Show'}</button>
-              <button className="text-slate-400 hover:text-red-600" aria-label="Delete" onClick={() => ask(`Delete "${t.name}"?`).then(ok => { if (ok) void run(supabase.from('message_templates').delete().eq('id', t.id)) })}><Trash2 className="h-4 w-4" /></button>
-            </div>
-            <TemplateBody body={t.body} onSave={v => v !== t.body && run(supabase.from('message_templates').update({ body: v }).eq('id', t.id))} />
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-              {t.media_path ? <>
-                <span className="rounded bg-slate-100 px-2 py-0.5">{t.media_type?.startsWith('image') ? '🖼️' : t.media_type?.startsWith('video') ? '🎬' : '📄'} {t.media_name}</span>
-                <button className="text-xs text-red-600 hover:underline" onClick={async () => {
-                  await supabase.storage.from('template-media').remove([t.media_path!])
-                  run(supabase.from('message_templates').update({ media_path: null, media_type: null, media_name: null }).eq('id', t.id))
-                }}>Remove attachment</button>
-              </> : <label className="cursor-pointer text-xs text-brand-700 hover:underline">
-                📎 Attach photo, video or PDF (max 16 MB)
-                <input type="file" className="hidden" accept="image/*,video/*,application/pdf" onChange={async e => {
-                  const file = e.target.files?.[0]; if (!file) return
-                  if (file.size > 16 * 1024 * 1024) return setError('That file is bigger than 16 MB — WhatsApp won\'t send it.')
-                  const path = `${org.id}/${t.id}-${Date.now()}-${file.name.replace(/[^A-Za-z0-9._-]/g, '_')}`
-                  const up = await supabase.storage.from('template-media').upload(path, file, { contentType: file.type })
-                  if (up.error) return setError(errorText(up.error))
-                  run(supabase.from('message_templates').update({ media_path: path, media_type: file.type || 'application/octet-stream', media_name: file.name }).eq('id', t.id))
-                }} />
-              </label>}
-            </div>
-          </div>
-        ))}
+        {shown.map(t => <TemplateCard key={t.id} t={t} org={org.id} run={run} setError={setError} preview={lead ? (b: string) => ({ text: fillMessage(b, lead, fillOpts), missing: missingFillIns(b, lead, fillOpts) }) : null} />)}
+        {shown.length === 0 && <p className="text-sm text-slate-500">No message matches.</p>}
       </div>
       <Button variant="secondary" className="mt-3" onClick={() => run(supabase.from('message_templates').insert({ org_id: org.id, name: 'New message', body: 'Hi {{leadName}}, ', position: (rows.at(-1)?.position ?? 0) + 1 }))}>
         <Plus className="h-4 w-4" /> Add message</Button>
+      <div className="mt-6">
+        <h3 className="text-sm font-semibold">How each message is doing <span className="font-normal text-slate-500">· last 30 days</span></h3>
+        <p className="mb-2 text-xs text-slate-500">"Bought" = leads with a verified sale within 7 days after getting the message.</p>
+        {!report ? <p className="text-xs text-slate-400">Loading…</p> : report.length === 0 ? <p className="text-sm text-slate-500">No WhatsApp messages sent from Closer OS in the last 30 days.</p> : (
+          <table className="w-full table-fixed text-sm">
+            <thead className="bg-slate-50"><tr><th className="th w-[40%]">Message</th><th className="th !text-right">Sent</th><th className="th !text-right">Leads</th><th className="th !text-right">Sent by</th><th className="th !text-right">Bought</th></tr></thead>
+            <tbody className="divide-y divide-slate-100">{report.map((r, i) => (
+              <tr key={i}><td className="truncate px-3 py-1.5">{r.name}</td><td className="px-3 py-1.5 text-right tabular-nums">{r.sent}</td>
+                <td className="px-3 py-1.5 text-right tabular-nums">{r.leads}</td><td className="px-3 py-1.5 text-right tabular-nums">{r.senders}</td>
+                <td className="px-3 py-1.5 text-right tabular-nums">{r.bought} <span className="text-xs text-slate-400">{r.leads ? `${Math.round(r.bought * 100 / r.leads)}%` : ''}</span></td></tr>))}
+            </tbody>
+          </table>)}
+      </div>
     </Card>
+  )
+}
+
+function TemplateCard({ t, org, run, setError, preview }: { t: Template; org: string; run: (p: PromiseLike<{ error: unknown }>) => Promise<void>; setError: (e: string | null) => void
+  preview: ((b: string) => { text: string; missing: string[] }) | null }) {
+  const [body, setBody] = useState(t.body)
+  const p = preview?.(body)
+  const showFor = t.show_for ?? []
+  return (
+    <div className={`rounded-lg border border-slate-200 p-3 ${t.is_active ? '' : 'opacity-60'}`}>
+      <div className="mb-2 flex items-center gap-2">
+        <input className="input !py-1.5 font-medium" defaultValue={t.name} onBlur={e => e.target.value.trim() && e.target.value !== t.name && run(supabase.from('message_templates').update({ name: e.target.value.trim() }).eq('id', t.id))} />
+        <input className="input !w-56 !py-1.5 text-xs" placeholder="Tags, e.g. reminder, fees" defaultValue={(t.tags ?? []).join(', ')}
+          onBlur={e => { const v = e.target.value.split(',').map(x => x.trim().replace(/^#/, '').toLowerCase()).filter(Boolean); if (v.join() !== (t.tags ?? []).join()) void run(supabase.from('message_templates').update({ tags: v }).eq('id', t.id)) }} />
+        <button className="whitespace-nowrap text-xs text-brand-700 hover:underline" onClick={() => run(supabase.from('message_templates').update({ is_active: !t.is_active }).eq('id', t.id))}>{t.is_active ? 'Hide' : 'Show'}</button>
+        <button className="text-slate-400 hover:text-red-600" aria-label="Delete" onClick={() => ask(`Delete "${t.name}"?`).then(ok => { if (ok) void run(supabase.from('message_templates').delete().eq('id', t.id)) })}><Trash2 className="h-4 w-4" /></button>
+      </div>
+      <div className="mb-2 flex flex-wrap items-center gap-1 text-xs">
+        <span className="text-slate-500">Offer first after:</span>
+        {SHOW_FOR.map(([k, l]) => { const on = showFor.includes(k)
+          return <button key={k} onClick={() => run(supabase.from('message_templates').update({ show_for: on ? showFor.filter(x => x !== k) : [...showFor, k] }).eq('id', t.id))}
+            className={`rounded-full border px-2 py-0.5 ${on ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{on ? '✓ ' : ''}{l}</button> })}
+        {showFor.length === 0 && <span className="text-slate-400">(any call)</span>}
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <MessageBox className="min-h-[90px]" value={body} onChange={setBody} onBlur={v => v !== t.body && run(supabase.from('message_templates').update({ body: v }).eq('id', t.id))} />
+        {p && <div className="rounded-lg bg-[#e7fbe0] p-3 text-sm">
+          <p className="mb-1 text-xs font-medium text-slate-500">Preview — how the lead sees it</p>
+          <p className="whitespace-pre-wrap text-slate-800">{p.text}</p>
+          {p.missing.length > 0 && <p className="mt-2 text-xs text-amber-700">⚠ Nothing to fill for: {p.missing.join(', ')} — it is left out.</p>}
+        </div>}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+        {t.media_path ? <>
+          <span className="rounded bg-slate-100 px-2 py-0.5">{t.media_type?.startsWith('image') ? '🖼️' : t.media_type?.startsWith('video') ? '🎬' : '📄'} {t.media_name}</span>
+          <button className="text-xs text-red-600 hover:underline" onClick={async () => {
+            await supabase.storage.from('template-media').remove([t.media_path!])
+            void run(supabase.from('message_templates').update({ media_path: null, media_type: null, media_name: null }).eq('id', t.id))
+          }}>Remove attachment</button>
+        </> : <label className="cursor-pointer text-xs text-brand-700 hover:underline">
+          📎 Attach photo, video or PDF (max 16 MB)
+          <input type="file" className="hidden" accept="image/*,video/*,application/pdf" onChange={async e => {
+            const file = e.target.files?.[0]; if (!file) return
+            if (file.size > 16 * 1024 * 1024) return setError('That file is bigger than 16 MB — WhatsApp won\'t send it.')
+            const path = `${org}/${t.id}-${Date.now()}-${file.name.replace(/[^A-Za-z0-9._-]/g, '_')}`
+            const up = await supabase.storage.from('template-media').upload(path, file, { contentType: file.type })
+            if (up.error) return setError(errorText(up.error))
+            void run(supabase.from('message_templates').update({ media_path: path, media_type: file.type || 'application/octet-stream', media_name: file.name }).eq('id', t.id))
+          }} />
+        </label>}
+      </div>
+    </div>
   )
 }
 

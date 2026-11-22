@@ -188,13 +188,28 @@ data class LeadFact(val key: String, val label: String, val options: List<String
     val chat: List<WebChat> = emptyList(), val polls: List<WebPoll> = emptyList(),
 )
 @Serializable data class Person(val user_id: String, val name: String = "", val role: String = "rep")
-@Serializable data class BatchMini(val name: String = "", val webinar_at: String? = null)
+@Serializable data class BatchMini(val name: String = "", val webinar_at: String? = null, val join_link: String? = null)
 @Serializable data class BatchLink(val watch_minutes: Int? = null, val attended: Boolean = false, val batch: BatchMini? = null,
     val batch_id: String? = null, val is_holdout: Boolean = false,
     /** Webinar engagement: 0–100 (watch + present at pitch + chat + polls) and its one-line reason. */
     val warmth: Int = 0, val warm_reason: String? = null, val saw_pitch: Boolean? = null)
 @Serializable data class Template(val id: String, val name: String, val body: String, val position: Int = 0, val owner_id: String? = null,
-    val media_path: String? = null, val media_type: String? = null, val media_name: String? = null)
+    val media_path: String? = null, val media_type: String? = null, val media_name: String? = null,
+    val tags: List<String> = emptyList(), val show_for: List<String> = emptyList())
+
+/** The outcome just saved for a number, so the WhatsApp step offers the messages meant for it first (dashboard "Offer first after"). */
+object WaContext {
+    @Volatile private var phone: String? = null; @Volatile private var category: String? = null; @Volatile private var at = 0L
+    fun saved(phone: String?, category: String?) { this.phone = phone?.filter { it.isDigit() }?.takeLast(10); this.category = category; at = System.currentTimeMillis() }
+    /** Messages for this outcome first (tagged "matches"), then the rest in their usual order. */
+    fun order(list: List<Template>, phone: String?): List<Template> {
+        val cat = category?.takeIf { System.currentTimeMillis() - at < 15 * 60_000 && phone?.filter { it.isDigit() }?.takeLast(10) == this.phone } ?: return list
+        val (hit, rest) = list.partition { cat in it.show_for }
+        return hit + rest
+    }
+    fun matches(t: Template, phone: String?): Boolean =
+        category != null && System.currentTimeMillis() - at < 15 * 60_000 && phone?.filter { it.isDigit() }?.takeLast(10) == this.phone && category in t.show_for
+}
 
 @Serializable data class Outcome(
     val id: String, val code: String, val label: String, val category: String, val form: String? = null,
@@ -332,7 +347,7 @@ object TalkBands {
 
 @Serializable data class TodayStats(val calls: Int = 0, val connected: Int = 0, val talkSec: Int = 0, val notPicked: Int = 0, val missed: Int = 0)
 
-private const val LEAD_COLUMNS = "*, batch_leads(batch_id, is_holdout, watch_minutes, attended, warmth, warm_reason, saw_pitch, batch:batches(name, webinar_at))"
+private const val LEAD_COLUMNS = "*, batch_leads(batch_id, is_holdout, watch_minutes, attended, warmth, warm_reason, saw_pitch, batch:batches(name, webinar_at, join_link))"
 
 object Repo {
     private val db get() = Backend.client.postgrest
@@ -1017,6 +1032,12 @@ object Repo {
     }
 
     /** Uploads call-log entries. Returns how many were stored. */
+    /** Ringing seconds per call id (measured on the phone). */
+    suspend fun setRings(rings: Map<String, Int>) {
+        if (rings.isEmpty()) return
+        db.rpc("set_call_ring", buildJsonObject { put("p_rows", buildJsonArray { rings.forEach { (id, s) -> add(buildJsonObject { put("id", id); put("ring_sec", s) }) } }) })
+    }
+
     suspend fun syncCalls(orgId: String, calls: JsonArray): Int {
         val res = db.rpc("sync_calls", buildJsonObject { put("p_org", orgId); put("p_calls", calls) })
         return json.parseToJsonElement(res.data).jsonObject["synced"]?.jsonPrimitive?.intOrNull ?: 0

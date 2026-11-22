@@ -2274,3 +2274,17 @@ intelligence → Play Store launch.
   addSpoken) on call-log notes, Desk notes + WhatsApp text + "Add a note", LeadDrawer note + key facts, Reviews, Announcements,
   and every MessageBox (FillIns.tsx). Speech-to-text only, nothing recorded. Test: web/tests/calllog-test.cjs.
 - App: not changed (its lists aren't tables).
+
+## Ringing time + message upgrades (Nov 23 2026, migrations 0127–0128, app 0.29.8)
+- Ringing time: calls.ring_sec + set_call_ring(rows) (own calls). App CallKind keeps the RINGING/OFFHOOK/IDLE times per call
+  (prefs call_kind "rings", last 300): incoming = answer − ring, missed = idle − ring, outgoing = line time − talk (matched to
+  the call-log entry ± 15 s, CallKind.ringSecs) → Repo.setRings after each sync_calls chunk. Only calls made with 0.29.8+.
+  Web call log shows "rang Ns" under Length; CSV "Ringing (sec)".
+- Message templates: message_templates.tags[] + show_for[] (outcome categories positive/connected/not_connected/lost/won =
+  "Offer first after"), batches.join_link (webinar form "Joining link"), template_report(org, from, to) (sent, leads, senders,
+  leads with a verified sale within 7 days). New fill-ins {{batchTime}} {{joinLink}} {{timeLeft}} (web lib/fill.ts fillMessage /
+  missingFillIns — same rules as app fillTemplateText; FILL_INS in web FillIns.tsx + app SequenceScreens.kt). Dashboard Settings →
+  Company WhatsApp messages: search + tag chips, tags box, "Offer first after" chips, live WhatsApp-style preview for a chosen lead
+  (with missing fill-in warning), "How each message is doing · last 30 days". App: data/WaContext (outcome just saved for a number,
+  15 min) → pop-up step 2 + WhatsApp picker list matching messages first with ⭐; picker search (> 5 messages) + #tag chips;
+  LeadIndex cursor v13 (join_link).

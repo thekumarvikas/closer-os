@@ -2258,3 +2258,4 @@ intelligence → Play Store launch.
   Avg per connected call · Not called back), Leads row (leads · connected · 1 min+ · interested · outcomes saved · sales; Results
   card dropped from the PDF), Team table grouped DIALLED (calls · conn · talk · avg) | RECEIVED (calls · talk · avg) | missed ·
   all talk · leads · sales (sd() short durations, size-aware table header/padding in kit/Kit).
+- Owner confirmed (Nov 22): "Avg per call" = talk time ÷ CONNECTED calls only (never ÷ all dialled). Keep this everywhere.

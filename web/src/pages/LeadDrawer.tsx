@@ -1,3 +1,4 @@
+import { NoteBox, MicButton, addSpoken } from '../components/NoteBox'
 import LeadContacts, { NameTags, useLeadContacts } from '../components/LeadContacts'
 import { Ph } from '../components/Copy'
 import LeadWebinars from '../components/LeadWebinars'
@@ -173,7 +174,7 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
                   </button>
                 ) : (
                   <div className="space-y-2">
-                    <textarea className="input min-h-[80px]" value={facts} onChange={e => setFacts(e.target.value)} />
+                    <NoteBox className="min-h-[80px]" value={facts} onChange={setFacts} />
                     <div className="flex gap-2">
                       <Button onClick={async () => { const { error } = await supabase.rpc('set_key_facts', { p_lead: leadId, p_text: facts }); if (error) return setError(errorText(error)); setFacts(null); load() }}>Save</Button>
                       <Button variant="ghost" onClick={() => setFacts(null)}>Cancel</Button>
@@ -203,7 +204,7 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
                 )}
                 {lead.notes && <pre className="mb-2 whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-sans text-sm text-slate-700">{lead.notes}</pre>}
                 <div className="flex gap-2">
-                  <input className="input" placeholder="Add a note…" value={note} onChange={e => setNote(e.target.value)} onKeyDown={e => e.key === 'Enter' && addNote()} />
+                  <input className="input" placeholder="Add a note…" value={note} onChange={e => setNote(e.target.value)} onKeyDown={e => e.key === 'Enter' && addNote()} /><MicButton className="self-center" onText={t => setNote(n => addSpoken(n, t))} />
                   <Button variant="secondary" onClick={addNote} disabled={!note.trim()}>Add</Button>
                 </div>
               </section>

@@ -1,3 +1,4 @@
+import { NoteBox } from '../components/NoteBox'
 import { useEffect, useMemo, useState } from 'react'
 import { ClipboardCheck, Shuffle } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
@@ -177,8 +178,8 @@ function ReviewModal({ call, review, criteria, dir, onClose }: { call: CallItem 
         <p className={`text-right text-sm font-semibold ${pctColor(pct)}`}>Score: {pct ?? '—'}{pct !== null && '%'}</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="What went well"><textarea className="input min-h-[80px]" value={wentWell} onChange={e => setWentWell(e.target.value)} /></Field>
-        <Field label="What to improve"><textarea className="input min-h-[80px]" value={improve} onChange={e => setImprove(e.target.value)} /></Field>
+        <Field label="What went well"><NoteBox className="min-h-[80px]" value={wentWell} onChange={setWentWell} /></Field>
+        <Field label="What to improve"><NoteBox className="min-h-[80px]" value={improve} onChange={setImprove} /></Field>
         <div className="sm:col-span-2 grid gap-3 sm:grid-cols-[1fr_180px]">
           <Field label="Coaching task (optional)" hint="e.g. Listen to 3 top calls on price objections; practise the closing script"><input className="input" value={task} onChange={e => setTask(e.target.value)} /></Field>
           <Field label="Task due"><input type="date" className="input" value={due} onChange={e => setDue(e.target.value)} /></Field>

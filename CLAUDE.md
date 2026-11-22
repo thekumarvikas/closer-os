@@ -2260,9 +2260,17 @@ intelligence → Play Store launch.
   all talk · leads · sales (sd() short durations, size-aware table header/padding in kit/Kit).
 - Owner confirmed (Nov 22): "Avg per call" = talk time ÷ CONNECTED calls only (never ÷ all dialled). Keep this everywhere.
 
-## Pending (owner, Nov 22 2026 — "don't build right now")
-- Serial No. (#) column on ALL tables (dashboard + app lists/tables).
-- Call log list: show outcome + notes; the team member's phone number used to dial (sim number); a filter on EVERY column
-  header; ▶ play button, or the exact reason when there is no recording (device_status missingReason etc.).
-- Notes on the web: mic icon for voice typing on every notes box (browser speech recognition); "Write a note" button
-  directly on call-log rows (add_lead_note / the call's notes).
+## Serial no., call log upgrade, web voice typing (Nov 23 2026, website only)
+- # column on EVERY dashboard table via CSS counters (web/src/index.css): any <table> gets a "#" header cell + row numbers;
+  paged tables set style={{ counterReset: `sn ${page * PAGE}` }} on the tbody (Calls, Leads); rows with one wide colSpan
+  cell (player / note editor / empty) and tr.no-sn get no number; table.no-sn opts a whole table out.
+- Call log (components/CallLog.tsx): columns # · When · Lead · Type · Length · Recording · Outcome & notes · Team member ·
+  Dialled from (SIM number, or the member's phone / "Not known"). Filters sit in a row under every heading (hour; name/number +
+  sales/reminder; type + phone/WA; length; recording; outcome; team member; SIM number or "WhatsApp"), applied with Apply
+  filters. Recording column = ▶ Play, "⏳ Uploading…", "No talk", "WhatsApp calls can't be recorded", or a short red reason
+  (shortMissingReason in CallColors.tsx; full missingReason on hover). Notes shown in full (3 lines); "✎ Write a note" opens an
+  inline NoteBox → add_lead_note ("About the call on <time>: …").
+- Voice typing on the web: components/NoteBox.tsx (MicButton = browser SpeechRecognition, en-IN; NoteBox = textarea + mic;
+  addSpoken) on call-log notes, Desk notes + WhatsApp text + "Add a note", LeadDrawer note + key facts, Reviews, Announcements,
+  and every MessageBox (FillIns.tsx). Speech-to-text only, nothing recorded. Test: web/tests/calllog-test.cjs.
+- App: not changed (its lists aren't tables).

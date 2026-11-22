@@ -1,3 +1,4 @@
+import { MicButton } from './NoteBox'
 import { useRef, useState } from 'react'
 
 /** Fill-ins replaced for each lead when the message is sent. */
@@ -24,6 +25,7 @@ export function MessageBox({ value, onChange, onBlur, className = 'min-h-[80px]'
         onChange={e => { onChange(e.target.value); const p = e.target.selectionStart; setBrace(e.target.value[p - 1] === '{' && e.target.value[p - 2] !== '{') }}
         onBlur={e => onBlur?.(e.target.value)} />
       <div className="mt-1 flex flex-wrap items-center gap-1">
+        <MicButton className="!h-6 !w-6" onText={t => insert((value && !/\s$/.test(value.slice(0, ref.current?.selectionStart ?? value.length)) ? ' ' : '') + t)} />
         <span className={`text-xs ${brace ? 'font-semibold text-brand-700' : 'text-slate-500'}`}>{brace ? 'Pick a fill-in:' : 'Insert:'}</span>
         {FILL_INS.map(([l, v]) => (
           <button key={v} type="button" onMouseDown={e => e.preventDefault()} onClick={() => insert(v)}

@@ -1,3 +1,4 @@
+import { NoteBox } from '../components/NoteBox'
 import { useEffect, useState } from 'react'
 import { BellRing, Megaphone, Send } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
@@ -111,7 +112,7 @@ function Compose({ dir, onClose }: { dir: NonNullable<ReturnType<typeof useDirec
       <ErrorBox error={error} />
       <div className="space-y-3">
         <Field label="Title"><input className="input" value={title} onChange={e => setTitle(e.target.value)} maxLength={80} placeholder="e.g. New course price from Monday" /></Field>
-        <Field label="Message"><textarea className="input min-h-[140px]" value={body} onChange={e => setBody(e.target.value)} /></Field>
+        <Field label="Message"><NoteBox className="min-h-[140px]" value={body} onChange={setBody} /></Field>
         <div>
           <span className="label">Send to</span>
           <div className="flex gap-2 text-sm">

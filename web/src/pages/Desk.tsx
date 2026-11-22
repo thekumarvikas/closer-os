@@ -1,3 +1,4 @@
+import { NoteBox, MicButton, addSpoken } from '../components/NoteBox'
 import { Ph, Em } from '../components/Copy'
 import { tagGroupsFor, linesFor } from '../lib/notes'
 import { lostReasons } from '../lib/lostReasons'
@@ -192,7 +193,7 @@ function LeadPanel({ lead, dir, onCall, onFull, busy }: { lead: Lead; dir: Direc
       {lead.key_facts && <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">📌 {lead.key_facts}</div>}
       <div className="mt-4">
         <h3 className="mb-2 text-sm font-semibold"><StickyNote className="mr-1 inline h-4 w-4" />Notes</h3>
-        <div className="mb-2 flex gap-2"><input className="input" placeholder="Add a note…" value={note} onChange={e => setNote(e.target.value)} onKeyDown={e => e.key === 'Enter' && addNote()} /><Button variant="secondary" onClick={addNote} disabled={!note.trim()}>Add</Button></div>
+        <div className="mb-2 flex gap-2"><input className="input" placeholder="Add a note…" value={note} onChange={e => setNote(e.target.value)} onKeyDown={e => e.key === 'Enter' && addNote()} /><MicButton className="self-center" onText={t => setNote(n => addSpoken(n, t))} /><Button variant="secondary" onClick={addNote} disabled={!note.trim()}>Add</Button></div>
         {notes.length === 0 ? <p className="text-sm text-slate-500">No notes yet.</p> : (
           <ul className="space-y-2">{notes.map((n, i) => (
             <li key={i} className="rounded-lg bg-slate-50 p-2.5 text-sm">
@@ -219,7 +220,7 @@ function WhatsAppWeb({ lead, repName, onClose }: { lead: Lead; repName: string; 
     <div className="mt-4 rounded-lg border border-slate-200 p-3">
       <div className="mb-2 flex items-center justify-between"><span className="text-sm font-semibold">WhatsApp message</span><button onClick={onClose}><X className="h-4 w-4" /></button></div>
       <div className="mb-2 flex flex-wrap gap-1">{tpls.map(t => <button key={t.id} onClick={() => setText(fill(t.body))} className="rounded-full border border-slate-200 px-2.5 py-1 text-xs hover:bg-slate-50">{t.name}</button>)}</div>
-      <textarea className="input min-h-[90px]" value={text} onChange={e => setText(e.target.value)} placeholder="Pick a message above or type one" />
+      <NoteBox className="min-h-[90px]" value={text} onChange={setText} placeholder="Pick a message above or type one" />
       <Button className="mt-2" onClick={() => { window.open(`https://wa.me/${lead.phone.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`, '_blank'); onClose() }}>Open in WhatsApp</Button>
     </div>
   )
@@ -319,7 +320,7 @@ function OutcomePanel({ call, dir, onClose, onSaved }: { call: NeedCall; dir: Di
       {lines.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{lines.map(l => <button key={l.text} title="Adds the sentence — fill the ___ gaps"
         onClick={() => { const t = l.text.replace(/\[[^\]]*\]/g, '___'); setNotes(n => n.trim() ? `${n.trim().replace(/\.$/, '')}. ${t}` : t) }}
         className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs text-slate-800 hover:bg-indigo-100">✎ {l.text.replace(/\[[^\]]*\]/g, '…')}</button>)}</div>}
-      <textarea className="input mt-2 min-h-[70px]" placeholder="Notes from this call" value={notes} onChange={e => setNotes(e.target.value)} />
+      <div className="mt-2"><NoteBox className="min-h-[70px]" placeholder="Notes from this call" value={notes} onChange={setNotes} /></div>
       {allTags.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{allTags.map(t => <button key={t} onClick={() => setTags(x => x.includes(t) ? x.filter(y => y !== t) : [...x, t])} className={`rounded-full px-2.5 py-1 text-xs ${tags.includes(t) ? 'bg-brand-700 text-white' : 'bg-slate-100 text-slate-700'}`}>{tags.includes(t) ? '✓ ' : '+ '}{t}</button>)}</div>}
       <Button className="mt-4 w-full" onClick={save} loading={busy} disabled={!canSave}>Save outcome</Button>
     </Card>

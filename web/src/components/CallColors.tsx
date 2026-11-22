@@ -56,3 +56,16 @@ export function missingReason(d: RecDevice | undefined): string {
   if (d.rec_last_error) return 'No recording uploaded: ' + d.rec_last_error
   return 'No recording uploaded for this call (the file was not found or not uploaded yet).'
 }
+
+/** One short line for the call log's Recording column; the full reason (missingReason) shows on hover. */
+export function shortMissingReason(d: RecDevice | undefined): string {
+  if (!d) return 'Phone not reporting yet'
+  if (d.default_dialer === 'com.google.android.dialer') return "Google Phone app can't share recordings"
+  if (d.default_dialer && !/android\.(dialer|incallui|contacts)|samsung|miui|xiaomi|coloros|oppo|vivo|bbk|oneplus|motorola|realme|huawei|honor|asus|nothing|telecom/i.test(d.default_dialer))
+    return "Phone app doesn't record calls"
+  if (!d.rec_folder_set) return 'Recordings folder not chosen'
+  if ((d.rec_files_found ?? 0) === 0) return 'No recording files on the phone'
+  if ((d.rec_matched ?? 0) === 0) return "Files found, but none match this call"
+  if (d.rec_last_error) return 'Upload failed'
+  return 'Recording file not found'
+}

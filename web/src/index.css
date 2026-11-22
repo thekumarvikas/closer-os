@@ -20,3 +20,17 @@
   main .table-fixed { table-layout: auto; }
   main { padding-left: 0.75rem !important; padding-right: 0.75rem !important; }
 }
+
+/* Serial number (#) on every table (owner, Nov 2026). Pages with paging set
+   style={{ counterReset: `sn ${offset}` }} on the tbody. A row that is only one
+   wide cell (expanded player, notes, empty message) and rows marked .no-sn get no number. */
+table:not(.no-sn) > tbody { counter-reset: sn; }
+table:not(.no-sn) > thead > tr::before { content: ''; display: table-cell; width: 2.5rem; }
+table:not(.no-sn) > thead > tr:first-child::before { content: '#'; padding: .5rem .25rem .5rem .75rem; font-size: .75rem; font-weight: 600; color: #64748b; text-align: right; vertical-align: middle; }
+table:not(.no-sn) > tbody > tr::before { content: ''; display: table-cell; width: 2.5rem; }
+table:not(.no-sn) > tbody > tr:not(.no-sn):not(:has(> td[colspan]:only-child))::before {
+  counter-increment: sn; content: counter(sn); padding: .5rem .25rem .5rem .75rem;
+  font-size: .75rem; color: #94a3b8; text-align: right; vertical-align: inherit; font-variant-numeric: tabular-nums;
+}
+table:not(.no-sn) > tfoot > tr::before { content: ''; display: table-cell; }
+table.no-sn > thead > tr::before, table.no-sn > tbody > tr::before, table.no-sn > tfoot > tr::before { content: none; display: none; }

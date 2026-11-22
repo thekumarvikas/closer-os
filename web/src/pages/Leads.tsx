@@ -340,7 +340,7 @@ export default function Leads() {
                   <SortTh k="signup_at" label="Signed up" sort={sort} onSort={setSort} />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100" style={{ counterReset: `sn ${page * PAGE}` }}>
                 {leads.map(l => {
                   const st = dir.stageOf(l.stage_id)
                   const overdue = l.next_follow_up_at && new Date(l.next_follow_up_at) < new Date()

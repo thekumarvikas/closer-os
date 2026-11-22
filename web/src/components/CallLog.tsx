@@ -1,6 +1,6 @@
 import { Ph } from './Copy'
 import { Fragment, useCallback, useEffect, useState } from 'react'
-import { Download, ChevronLeft, ChevronRight, Search, MicOff, PhoneCall, Play } from 'lucide-react'
+import { Download, ChevronLeft, ChevronRight, MicOff, PhoneCall, Play } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import type { Directory } from '../lib/directory'
 import { downloadCsv } from '../lib/report'
@@ -12,13 +12,15 @@ import AudioPlayer from './AudioPlayer'
 import { usePersisted } from '../lib/persist'
 import { useFilters } from '../lib/filters'
 import { SortTh, type SortDir } from '../lib/sort'
-import { CallColorKey, CallType, missingReason, type RecDevice } from './CallColors'
+import { CallColorKey, CallType, missingReason, shortMissingReason, type RecDevice } from './CallColors'
+import { NoteBox } from './NoteBox'
+import { toast } from '../lib/dialogs'
 
 export interface CallLogFilters { from?: string; to?: string; users: string[]; dir?: 'all' | 'out' | 'in'; ch?: 'all' | 'phone' | 'whatsapp'
   /** Opened from a report: hour of day (company time) and the kind of call. */
   hour?: number; kind?: '' | 'conn' | 'not_picked' | 'missed' | 'rejected' | 'out' | 'in' } // ISO instants; empty = all time
 interface Row {
-  id: string; user_id: string; phone: string; direction: string; started_at: string; duration_sec: number
+  id: string; user_id: string; lead_id: string | null; phone: string; direction: string; started_at: string; duration_sec: number
   notes: string | null; outcome_id: string | null; recording_status: string; recording_path: string | null; sim_number: string | null; sim_slot: number | null; sim_label: string | null
   channel: string; contact_name: string | null; purpose: string | null; from_history: boolean; local_hour: number | null
   lead: { name: string; profession: string | null; city: string | null; call_count: number | null; conversation_count: number | null; next_follow_up_at: string | null; source: string | null } | null
@@ -32,7 +34,7 @@ const durations: [string, string, number | null, number | null][] = [
 ]
 const typeName: Record<string, string> = { outgoing: 'Dialled', incoming: 'Received', missed: 'Missed', rejected: 'Declined' }
 const PAGE = 100
-const SELECT = 'id,user_id,phone,direction,started_at,duration_sec,notes,outcome_id,recording_status,recording_path,sim_number,sim_slot,sim_label,channel,contact_name,purpose,from_history,local_hour,batch:batches(name),lead:leads(name,profession,city,call_count,conversation_count,next_follow_up_at,source)'
+const SELECT = 'id,user_id,lead_id,phone,direction,started_at,duration_sec,notes,outcome_id,recording_status,recording_path,sim_number,sim_slot,sim_label,channel,contact_name,purpose,from_history,local_hour,batch:batches(name),lead:leads(name,profession,city,call_count,conversation_count,next_follow_up_at,source)'
 
 /** Complete, filterable call history (all time unless dates are given). */
 export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome, page: pageFilters }: {
@@ -44,14 +46,27 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
   const [count, setCount] = useState(0)
   const [page, setPage] = useState(0)
   // Filters wait for "Apply filters" (owner's rule for every dashboard page).
-  const lf = useFilters('calllog.f', { q: '', type: '', len: 'any', via: '', oc: '', purpose: '', rec: '', hour: '', kind: '' }, { session: true })
-  const { q, type, len, via, purpose, rec } = lf.applied
+  const lf = useFilters('calllog.f', { q: '', type: '', len: 'any', via: '', oc: '', purpose: '', rec: '', hour: '', kind: '', mem: '', sim: '' }, { session: true })
+  const { q, type, len, via, purpose, rec, mem, sim } = lf.applied
   const hour = lf.applied.hour !== '' ? Number(lf.applied.hour) : f.hour
   const kind = lf.applied.kind || f.kind || ''
   const oc = setOutcome ? outcome : lf.applied.oc
   const [error, setError] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [playing, setPlaying] = useState<string | null>(null)
+  const [noting, setNoting] = useState<string | null>(null)
+  const [noteText, setNoteText] = useState('')
+  const [savingNote, setSavingNote] = useState(false)
+  const [added, setAdded] = useState<Record<string, string[]>>({})
+  async function saveNote(c: Row) {
+    const t = noteText.trim(); if (!t || !c.lead_id) return
+    setSavingNote(true)
+    const { error } = await supabase.rpc('add_lead_note', { p_lead: c.lead_id, p_text: `About the call on ${fmtDateTime(c.started_at, org)}: ${t}`, p_tags: [] })
+    setSavingNote(false)
+    if (error) return toast(errorText(error))
+    setAdded(a => ({ ...a, [c.id]: [...(a[c.id] ?? []), t] })); setNoting(null); setNoteText('')
+    toast(`Note added to ${c.lead?.name || 'the lead'}`)
+  }
   const [sort, setSort] = usePersisted<[string, SortDir]>('calls.sort', ['started_at', 'desc'])
   const [devices, setDevices] = useState<Map<string, RecDevice>>(new Map())
   useEffect(() => {
@@ -69,6 +84,10 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
     if (f.from) query = query.gte('started_at', f.from)
     if (f.to) query = query.lt('started_at', f.to)
     if (f.users.length) query = query.in('user_id', f.users)
+    if (mem) query = query.eq('user_id', mem)
+    const simD = sim.replace(/\D/g, '')
+    if (sim === 'wa') query = query.eq('channel', 'whatsapp')
+    else if (simD) query = query.like('sim_number', `%${simD}%`)
     if (type) query = query.eq('direction', type)
     else if (f.dir === 'out') query = query.eq('direction', 'outgoing')
     else if (f.dir === 'in') query = query.in('direction', ['incoming', 'missed', 'rejected'])
@@ -92,9 +111,9 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
     if (digits.length >= 4) query = query.like('phone', `%${digits}%`)
     else if (byName) query = query.ilike('lead.name', `%${term.replace(/[%,()]/g, '')}%`)
     return query
-  }, [org.id, f, q, type, len, oc, via, sort, purpose, rec, hour, kind])
+  }, [org.id, f, q, type, len, oc, via, sort, purpose, rec, hour, kind, mem, sim])
 
-  useEffect(() => { setPage(0) }, [f, q, type, len, oc, via, sort, purpose, rec, hour, kind])
+  useEffect(() => { setPage(0) }, [f, q, type, len, oc, via, sort, purpose, rec, hour, kind, mem, sim])
   useEffect(() => {
     setRows(null)
     const t = setTimeout(() => {
@@ -117,6 +136,17 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
         typeName[c.direction] ?? c.direction, c.duration_sec, dir.outcomeOf(c.outcome_id)?.label ?? '', c.notes ?? '', c.recording_status === 'uploaded' ? 'Yes' : '']))
   }
 
+  function recCell(c: Row) {
+    if (c.recording_status === 'uploaded' || c.recording_status === 'expired')
+      return <PlayButton call={c} status={c.recording_status} open={playing === c.id} onPlay={() => setPlaying(p => p === c.id ? null : c.id)} />
+    if (c.channel === 'whatsapp') return <span className="text-xs text-slate-400" title="Android doesn't let any app record WhatsApp calls">WhatsApp calls can't be recorded</span>
+    if (!c.duration_sec || c.direction === 'missed' || c.direction === 'rejected') return <span className="text-xs text-slate-400" title="Nobody talked, so there is nothing to record">No talk</span>
+    const d = devices.get(c.user_id)
+    if (c.recording_status === 'pending' && d?.rec_folder_set && Date.now() - new Date(c.started_at).getTime() < 20 * 60_000)
+      return <span className="text-xs text-slate-500" title="It usually arrives within 5 minutes of the call">⏳ Uploading…</span>
+    return <span className="inline-flex cursor-help items-start gap-1 text-xs text-red-600" title={missingReason(d)}><MicOff className="mt-0.5 h-3 w-3 shrink-0" />{shortMissingReason(d)}</span>
+  }
+  const fsel = 'w-full rounded-md border border-slate-200 bg-white px-1.5 py-1 text-xs font-normal text-slate-700 focus:border-brand-500 focus:outline-none'
   const dirty = lf.dirty || !!pageFilters?.dirty
   const active = lf.active + (pageFilters?.active ?? 0) + (setOutcome && outcome ? 1 : 0)
   const applyAll = () => { lf.apply(); pageFilters?.apply() }
@@ -125,35 +155,7 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[200px] flex-1">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-          <input className="input pl-9" placeholder="Search name or number" value={lf.draft.q} onChange={e => lf.set({ q: e.target.value })}
-            onKeyDown={e => { if (e.key === 'Enter') applyAll() }} />
-        </div>
-        <select className="input !w-auto" value={lf.draft.type} onChange={e => lf.set({ type: e.target.value })}>
-          <option value="">All types</option><option value="outgoing">Dialled</option><option value="incoming">Received</option>
-          <option value="missed">Missed</option><option value="rejected">Declined</option>
-        </select>
-        <select className="input !w-auto" value={lf.draft.via} onChange={e => lf.set({ via: e.target.value })}>
-          <option value="">Phone + WhatsApp</option><option value="phone">Phone calls</option><option value="whatsapp">WhatsApp calls</option>
-        </select>
-        <select className="input !w-auto" value={setOutcome ? outcome : lf.draft.oc} onChange={e => setOutcome ? setOutcome(e.target.value) : lf.set({ oc: e.target.value })}>
-          <option value="">All outcomes</option><option value="none">No outcome yet</option><option value={HIST}>Before Closer OS / outside the app</option>
-          {dir.outcomes.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
-        </select>
-        <select className="input !w-auto" value={lf.draft.purpose} onChange={e => lf.set({ purpose: e.target.value })}>
-          <option value="">Sales + reminder</option><option value="sales">Sales calls</option><option value="reminder">Reminder calls</option>
-        </select>
-        <select className="input !w-auto" value={lf.draft.rec} onChange={e => lf.set({ rec: e.target.value })}>
-          <option value="">Recording: any</option><option value="yes">With recording</option><option value="no">Talked, no recording</option>
-        </select>
-        <select className="input !w-auto" value={lf.draft.hour} onChange={e => lf.set({ hour: e.target.value })}>
-          <option value="">{f.hour !== undefined ? `Hour: ${hourLabel(f.hour)} – ${hourLabel((f.hour + 1) % 24)}` : 'Any hour'}</option>
-          {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{hourLabel(h)} – {hourLabel((h + 1) % 24)}</option>)}
-        </select>
-        <select className="input !w-auto" value={lf.draft.len} onChange={e => lf.set({ len: e.target.value })}>
-          {durations.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-        </select>
+        <span className="mr-auto text-sm text-slate-500">Filter from the boxes under each column heading, then press Apply.</span>
         <button type="button" onClick={applyAll} disabled={!dirty}
           className={`rounded-lg px-3 py-2 text-sm font-medium transition ${dirty ? 'bg-brand-600 text-white shadow-sm hover:bg-brand-700' : 'bg-slate-100 text-slate-400'}`}>Apply filters{dirty ? ' •' : ''}</button>
         <button type="button" onClick={clearAll} disabled={active === 0 && !dirty}
@@ -173,11 +175,36 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
         {!rows ? <Spinner /> : rows.length === 0 ? <Empty icon={<PhoneCall className="h-6 w-6" />} title="No calls match" text="Calls from the Closer OS app appear here automatically." /> : (
           <table className="w-full table-fixed text-sm">
             <thead className="bg-slate-50"><tr>
-              <SortTh k="started_at" label="When" className="w-[15%]" sort={sort} onSort={setSort} /><th className="th w-[21%]">Lead</th><th className="th w-[11%]">Type</th>
-              <SortTh k="duration_sec" label="Length" className="w-[9%] !text-right" sort={sort} onSort={setSort} />
-              <th className="th w-[20%]">Outcome</th><th className="th w-[24%]" title="Who made / took the call, and the SIM number (or WhatsApp) it was on">Team member · dialled from</th>
+              <SortTh k="started_at" label="When" className="w-[11%]" sort={sort} onSort={setSort} /><th className="th w-[17%]">Lead</th><th className="th w-[8%]">Type</th>
+              <SortTh k="duration_sec" label="Length" className="w-[7%] !text-right" sort={sort} onSort={setSort} />
+              <th className="th w-[13%]">Recording</th><th className="th w-[20%]">Outcome &amp; notes</th>
+              <th className="th w-[11%]">Team member</th><th className="th w-[13%]" title="The team member's SIM number the call was made on (or WhatsApp)">Dialled from</th>
+            </tr>
+            <tr className="no-sn border-t border-slate-200 bg-white align-top">
+              <td className="px-1.5 py-1.5"><select className={fsel} value={lf.draft.hour} onChange={e => lf.set({ hour: e.target.value })}>
+                <option value="">{f.hour !== undefined ? hourLabel(f.hour) : 'Any hour'}</option>
+                {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{hourLabel(h)} – {hourLabel((h + 1) % 24)}</option>)}</select></td>
+              <td className="space-y-1 px-1.5 py-1.5"><input className={fsel} placeholder="Name or number" value={lf.draft.q} onChange={e => lf.set({ q: e.target.value })} onKeyDown={e => { if (e.key === 'Enter') applyAll() }} />
+                <select className={fsel} value={lf.draft.purpose} onChange={e => lf.set({ purpose: e.target.value })}>
+                  <option value="">Sales + reminder</option><option value="sales">Sales calls</option><option value="reminder">Reminder calls</option></select></td>
+              <td className="space-y-1 px-1.5 py-1.5"><select className={fsel} value={lf.draft.type} onChange={e => lf.set({ type: e.target.value })}>
+                <option value="">All</option><option value="outgoing">Dialled</option><option value="incoming">Received</option><option value="missed">Missed</option><option value="rejected">Declined</option></select>
+                <select className={fsel} value={lf.draft.via} onChange={e => lf.set({ via: e.target.value })}>
+                  <option value="">Phone + WA</option><option value="phone">Phone</option><option value="whatsapp">WhatsApp</option></select></td>
+              <td className="px-1.5 py-1.5"><select className={fsel} value={lf.draft.len} onChange={e => lf.set({ len: e.target.value })}>
+                {durations.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></td>
+              <td className="px-1.5 py-1.5"><select className={fsel} value={lf.draft.rec} onChange={e => lf.set({ rec: e.target.value })}>
+                <option value="">Any</option><option value="yes">With recording</option><option value="no">Talked, no recording</option></select></td>
+              <td className="px-1.5 py-1.5"><select className={fsel} value={setOutcome ? outcome : lf.draft.oc} onChange={e => setOutcome ? setOutcome(e.target.value) : lf.set({ oc: e.target.value })}>
+                <option value="">All outcomes</option><option value="none">No outcome yet</option><option value={HIST}>Before Closer OS</option>
+                {dir.outcomes.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}</select></td>
+              <td className="px-1.5 py-1.5"><select className={fsel} value={lf.draft.mem} onChange={e => lf.set({ mem: e.target.value })}>
+                <option value="">Everyone</option>
+                {dir.members.filter(m => !f.users.length || f.users.includes(m.user_id)).map(m => <option key={m.user_id} value={m.user_id}>{dir.nameOf(m.user_id)}</option>)}</select></td>
+              <td className="px-1.5 py-1.5"><input className={fsel} placeholder="SIM number" value={lf.draft.sim === 'wa' ? 'WhatsApp' : lf.draft.sim}
+                onChange={e => lf.set({ sim: /^wh/i.test(e.target.value) ? 'wa' : e.target.value })} onKeyDown={e => { if (e.key === 'Enter') applyAll() }} /></td>
             </tr></thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100" style={{ counterReset: `sn ${page * PAGE}` }}>
               {rows.map(c => (<Fragment key={c.id}>
                 <tr className="align-top hover:bg-slate-50">
                   <td className="px-3 py-2 text-slate-600">{fmtDateTime(c.started_at, org)}</td>
@@ -185,20 +212,23 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
                     <span className={`block truncate ${c.lead || c.contact_name ? 'text-xs text-slate-500' : ''}`}><Ph v={c.phone} />{c.lead && (c.lead.profession || c.lead.city) ? ` · ${[c.lead.profession, c.lead.city].filter(Boolean).join(' · ')}` : ''}</span>
                     {c.lead && <span className="block truncate text-xs text-slate-400">{c.lead.call_count ?? 0} calls · {c.lead.conversation_count ?? 0} conversations{c.lead.source ? ` · ${c.lead.source}` : ''}</span>}
                     {c.batch && <span className="block truncate text-xs text-brand-700">{c.purpose === 'reminder' ? 'Reminder' : 'Sales'} · {c.batch.name}</span>}</td>
-                  <td className="px-3 py-2"><CallType direction={c.direction} duration={c.duration_sec} channel={c.channel} />
-                    {c.recording_status === 'pending' && c.channel !== 'whatsapp' && c.duration_sec > 0 && devices.get(c.user_id)?.rec_folder_set
-                      && Date.now() - new Date(c.started_at).getTime() < 20 * 60_000
-                      ? <span title="Recording uploading — it usually arrives within 5 minutes of the call" className="ml-1 inline-block cursor-help text-xs">⏳</span> : null}
-                    {c.recording_status === 'missing' ? <span title={missingReason(devices.get(c.user_id))} className="ml-1 inline-block cursor-help"><MicOff className="inline h-3 w-3 text-red-500" /></span> : null}
-                    {(c.recording_status === 'uploaded' || c.recording_status === 'expired') && <PlayButton call={c} status={c.recording_status} open={playing === c.id} onPlay={() => setPlaying(p => p === c.id ? null : c.id)} />}</td>
+                  <td className="px-3 py-2"><CallType direction={c.direction} duration={c.duration_sec} channel={c.channel} /></td>
                   <td className="px-3 py-2 text-right tabular-nums">{c.duration_sec ? dur(c.duration_sec) : '—'}</td>
-                  <td className="px-3 py-2"><span className="block truncate">{dir.outcomeOf(c.outcome_id)?.label ?? (c.from_history ? <span className="text-xs text-slate-400" title="This call was read from the phone's history (made before Closer OS was installed or outside the app) — no outcome is expected">Before Closer OS</span> : <span className="text-slate-400">—</span>)}</span>
+                  <td className="px-3 py-2">{recCell(c)}</td>
+                  <td className="px-3 py-2"><span className="block">{dir.outcomeOf(c.outcome_id)?.label ?? (c.from_history ? <span className="text-xs text-slate-400" title="This call was read from the phone's history (made before Closer OS was installed or outside the app) — no outcome is expected">Before Closer OS</span> : <span className="text-slate-400">No outcome yet</span>)}</span>
                     {c.lead?.next_follow_up_at && <span className="block truncate text-xs text-slate-500">Next call {fmtDateTime(c.lead.next_follow_up_at, org)}</span>}
-                    {c.notes && <span className="block truncate text-xs text-slate-500" title={c.notes}>{c.notes}</span>}</td>
-                  <td className="truncate px-3 py-2">{dir.nameOf(c.user_id)}
-                    <span className="block truncate text-xs text-slate-500" title="The number the call was on">{from(c) === '—' ? (dir.phoneOf(c.user_id) || '') : `via ${from(c)}`}</span></td>
+                    {c.notes && <span className="line-clamp-3 block whitespace-pre-wrap text-xs text-slate-600" title={c.notes}>📝 {c.notes}</span>}
+                    {(added[c.id] ?? []).map((t, i) => <span key={i} className="block whitespace-pre-wrap text-xs text-slate-600">📝 {t}</span>)}
+                    {c.lead_id ? <button onClick={() => { setNoting(n => n === c.id ? null : c.id); setNoteText('') }} className="mt-0.5 text-xs font-medium text-brand-700 hover:underline">✎ Write a note</button> : null}</td>
+                  <td className="truncate px-3 py-2">{dir.nameOf(c.user_id)}</td>
+                  <td className="px-3 py-2 text-xs tabular-nums" title="The number the call was on">{from(c) === '—' ? <span className="text-slate-400" title="The SIM number isn't known — the rep confirms it once in the app">{dir.phoneOf(c.user_id) ? fmtPhone(dir.phoneOf(c.user_id)) : 'Not known'}</span> : from(c)}</td>
                 </tr>
-                {playing === c.id && <tr><td colSpan={6} className="bg-emerald-50/50 px-3 py-2"><RecordingPlayer call={c} onClose={() => setPlaying(null)} /></td></tr>}
+                {noting === c.id && <tr><td colSpan={8} className="bg-slate-50 px-3 py-2">
+                  <p className="mb-1 text-xs text-slate-500">Note for {c.lead?.name || 'this lead'} about this call — speak with the mic or type. It goes into the lead's notes.</p>
+                  <NoteBox className="min-h-[70px]" value={noteText} onChange={setNoteText} placeholder="What happened on this call?" autoFocus />
+                  <div className="mt-2 flex gap-2"><Button onClick={() => saveNote(c)} loading={savingNote} disabled={!noteText.trim()}>Save note</Button>
+                    <Button variant="ghost" onClick={() => setNoting(null)}>Cancel</Button></div></td></tr>}
+                {playing === c.id && <tr><td colSpan={8} className="bg-emerald-50/50 px-3 py-2"><RecordingPlayer call={c} onClose={() => setPlaying(null)} /></td></tr>}
               </Fragment>))}
             </tbody>
           </table>
@@ -214,7 +244,7 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
         )}
         {rows && count > 0 && count <= PAGE && <p className="border-t border-slate-100 px-4 py-2 text-xs text-slate-500">{count.toLocaleString('en-IN')} calls</p>}
       </Card>
-      <p className="text-xs text-slate-500"><Badge color="gray">Tip</Badge> “via …” under the team member is the SIM number the call was made on (each rep confirms their SIM numbers once in the app). Click “When” or “Length” to sort.</p>
+      <p className="text-xs text-slate-500"><Badge color="gray">Tip</Badge> “Dialled from” is the SIM number the call was made on (each rep confirms their SIM numbers once in the app). Hover a red recording reason for the full explanation. Click “When” or “Length” to sort.</p>
     </div>
   )
 }

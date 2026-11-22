@@ -16,7 +16,7 @@ export type Section = { title: string; lines: Line[]; note?: string }
 export type HotRow = { lead_id: string; name: string; phone: string; owner: string; cat: number; why: string; activity: string; done: string; when: string; short: string; web: string; work: string; tag: string }
 export const HOT_CATS: Record<number, string> = { 1: 'Ready to pay', 2: 'Hot', 3: 'Interested', 4: 'Positive — follow up',
   5: 'Came back + active in Zoom', 6: 'Came back (attended 2+ webinars)', 7: 'Active in Zoom once', 8: 'Talked, not tagged yet — ask the team member' }
-export const HOT_GROUP = (c: number) => c <= 4 ? '🔥 Hot — tagged or positive outcome' : c <= 7 ? '⭐ Potentially hot — attended, not talked to yet' : '❓ Talked, not tagged yet'
+export const HOT_GROUP = (c: number) => c <= 4 ? '🔥 Hot — tagged or positive outcome' : c <= 7 ? '⭐ Potentially hot — attended, not talked to yet' : '📝 Talked, not tagged yet'
 export const HOT_NOTE = 'Hot = tagged Ready to pay / Hot / Interested or a positive outcome. Potentially hot = attended webinars (2+ times, or chatted / answered polls) but nobody has talked to them yet. Inside each category: most webinar minutes first, then most talk time with the team.'
 export const fmtPh = (p: string) => { const m = /^\+91(\d{5})(\d{5})$/.exec(p ?? ''); return m ? `+91 ${m[1]} ${m[2]}` : p ?? '' }
 const mins = (sec: number) => `${Math.round(sec / 60)} min`
@@ -129,7 +129,7 @@ export function buildModel(s: Summary, money: (v: number) => string, nameOf: (id
   const byOwner = pl.hot.by_owner ?? []
   const owners = s.team ? [...new Set(byOwner.map(b => b.owner))].sort((a, b) => nameOf(a).localeCompare(nameOf(b))) : []
   const cats = [1, 2, 3, 4, 5, 6, 7, 8].filter(c => (pl.hot.by_cat?.[String(c)] ?? 0) > 0)
-  const grid = cats.map(c => ({ label: (c <= 4 ? '🔥 ' : c <= 7 ? '⭐ ' : '❓ ') + (c === 8 ? 'Not tagged yet' : HOT_CATS[c]),
+  const grid = cats.map(c => ({ label: (c <= 4 ? '🔥 ' : c <= 7 ? '⭐ ' : '📝 ') + (c === 8 ? 'Not tagged yet' : HOT_CATS[c]),
     vals: s.team ? owners.map(o => byOwner.find(b => b.owner === o && b.cat === c)?.n ?? 0) : [], total: pl.hot.by_cat?.[String(c)] ?? 0 }))
   const planBits = [`Follow-ups due ${pl.follow_ups}`, pl.overdue ? `Overdue ${pl.overdue}` : '', st.missed_open ? `Missed callers ${st.missed_open}` : '',
     pl.no_next ? `Interested, no next call ${pl.no_next}` : ''].filter(Boolean)
@@ -156,7 +156,7 @@ export function buildModel(s: Summary, money: (v: number) => string, nameOf: (id
 export function toText(m: Model): string {
   const out = [`*Closer OS · ${m.title}*`, m.sub]
   for (const s of m.sections) {
-    if (s.title.startsWith('🔥') || s.title.startsWith('⭐') || s.title.startsWith('❓') || s.title.startsWith('+')) continue
+    if (s.title.startsWith('🔥') || s.title.startsWith('⭐') || s.title.startsWith('📝') || s.title.startsWith('+')) continue
     out.push('', `*${s.title}*`, ...s.lines.map(l => `${l.label}: ${l.value}`))
     if (s.title.endsWith('· plan') && m.hot.rows.length) {
       const owners = [...new Set(m.hot.rows.map(r => r.owner))]
@@ -270,7 +270,7 @@ export async function renderList(m: Model): Promise<{ canvas: HTMLCanvasElement;
     t('Closer OS', pad, 54, 24, '#cfe7e3', 600); t(m.title, pad, 110, 48, '#ffffff', 700)
     t(fit(who, 26, 600, W - pad * 2), pad, 146, 26, '#ffffff', 600); t(fit(rest.join(' · '), 22, 400, W - pad * 2), pad, 176, 22, '#cfe7e3')
     let y = 240
-    const sections = m.sections.filter(s => !/^(🔥|⭐|❓|\+)/.test(s.title))
+    const sections = m.sections.filter(s => !/^(🔥|⭐|📝|\+)/.test(s.title))
     for (const s of sections) {
       if (s.title === 'Team') {
         y = head('Team', y)
@@ -289,7 +289,7 @@ export async function renderList(m: Model): Promise<{ canvas: HTMLCanvasElement;
       for (const cat of cats) {
         const inCat = m.hot.rows.filter(r => r.cat === cat)
         rect(pad, y - 4, W - pad * 2, 50, cat <= 4 ? '#fff4e5' : cat <= 7 ? '#fff9db' : '#eef2ff', 10)
-        t(`${cat <= 4 ? '🔥' : cat <= 7 ? '⭐' : '❓'}  ${HOT_CATS[cat]} · ${inCat.length}`, pad + 16, y + 30, 24, C.ink, 700); y += 64
+        t(`${cat <= 4 ? '🔥' : cat <= 7 ? '⭐' : '📝'}  ${HOT_CATS[cat]} · ${inCat.length}`, pad + 16, y + 30, 24, C.ink, 700); y += 64
         const owners = [...new Set(inCat.map(r => r.owner))]
         for (const o of owners) {
           const mine = inCat.filter(r => r.owner === o)

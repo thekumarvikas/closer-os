@@ -77,7 +77,7 @@ private fun bestHour(hours: List<JsonObject>): JsonObject? {
 
 val HOT_CATS = mapOf(1 to "Ready to pay", 2 to "Hot", 3 to "Interested", 4 to "Positive — follow up",
     5 to "Came back + active in Zoom", 6 to "Came back (attended 2+ webinars)", 7 to "Active in Zoom once", 8 to "Talked, not tagged yet — ask the team member")
-fun hotGroup(c: Int) = if (c <= 4) "🔥 Hot — tagged or positive outcome" else if (c <= 7) "⭐ Potentially hot — attended, not talked to yet" else "❓ Talked, not tagged yet"
+fun hotGroup(c: Int) = if (c <= 4) "🔥 Hot — tagged or positive outcome" else if (c <= 7) "⭐ Potentially hot — attended, not talked to yet" else "📝 Talked, not tagged yet"
 const val HOT_NOTE = "Hot = tagged Ready to pay / Hot / Interested or a positive outcome. Potentially hot = attended webinars (2+ times, or chatted / answered polls) but nobody has talked to them yet. Inside each category: most webinar minutes first, then most talk time with the team."
 
 /** Hot leads grouped by category (same rules as the dashboard). */
@@ -181,12 +181,12 @@ fun buildSummary(s: JsonObject, currency: String, hotOverride: JsonObject? = nul
     fun dn(k: String) = runCatching { LocalDate.parse(s.t(k)).format(DateTimeFormatter.ofPattern("EEE, d MMM")) }.getOrDefault(s.t(k) ?: "")
     val day = "Plan for ${dn("plan_day")} · Results of ${dn("day")}"
     val who = if (s["team"]?.jsonPrimitive?.booleanOrNull == true) "${s.t("org_name")} · Team" else s.t("who") ?: ""
-    val hotLines = out.filter { it.title.startsWith("🔥") || it.title.startsWith("⭐") || it.title.startsWith("❓") }.flatMap { it.lines }
+    val hotLines = out.filter { it.title.startsWith("🔥") || it.title.startsWith("⭐") || it.title.startsWith("📝") }.flatMap { it.lines }
     val byCat = hotObj?.get("by_cat") as? JsonObject
     val byOwner = (hotObj?.get("by_owner") as? JsonArray)?.map { it.jsonObject } ?: emptyList()
     val owners = if (team) byOwner.map { it.t("owner") }.distinct().sortedBy { ownerName[it] ?: "" } else emptyList()
     val grid = (1..8).filter { (byCat?.i(it.toString()) ?: 0) > 0 }.map { c ->
-        Triple((if (c <= 4) "🔥 " else if (c <= 7) "⭐ " else "❓ ") + (if (c == 8) "Not tagged yet" else HOT_CATS[c] ?: ""),
+        Triple((if (c <= 4) "🔥 " else if (c <= 7) "⭐ " else "📝 ") + (if (c == 8) "Not tagged yet" else HOT_CATS[c] ?: ""),
             owners.map { o -> byOwner.firstOrNull { it.t("owner") == o && it.i("cat") == c }?.i("n") ?: 0 }, byCat?.i(c.toString()) ?: 0) }
     val people = (s["people"] as? JsonArray)?.map { it.jsonObject } ?: emptyList()
     val withCalls = people.filter { val ps = it["stats"]!!.jsonObject; ps.i("dialled") + ps.i("received") > 0 }
@@ -215,7 +215,7 @@ fun buildSummary(s: JsonObject, currency: String, hotOverride: JsonObject? = nul
 fun summaryText(m: SumModel): String {
     val out = mutableListOf("*Closer OS · ${m.title}*", m.sub)
     for (sec in m.sections) {
-        if (sec.title.startsWith("🔥") || sec.title.startsWith("⭐") || sec.title.startsWith("❓") || sec.title.startsWith("+")) continue
+        if (sec.title.startsWith("🔥") || sec.title.startsWith("⭐") || sec.title.startsWith("📝") || sec.title.startsWith("+")) continue
         out += ""; out += "*${sec.title}*"; sec.lines.forEach { out += "${it.label}: ${it.value}" }
         if (sec.title.endsWith("· plan") && m.hot.isNotEmpty()) {
             m.hot.groupBy { it.owner ?: "" }.forEach { (o, rows) ->
@@ -310,7 +310,7 @@ fun listBitmap(m: SumModel): Pair<Bitmap, List<TelLink>> {
         g.t(g.fit(parts.first(), 26f, true, w - pad * 2), pad, 146f, 26f, 0xFFFFFFFF, true); g.t(g.fit(parts.drop(1).joinToString(" · "), 22f, false, w - pad * 2), pad, 176f, 22f, 0xFFCFE7E3)
         var y = 218f
         for (sec in m.sections) {
-            if (listOf("🔥", "⭐", "❓", "+").any { sec.title.startsWith(it) }) continue
+            if (listOf("🔥", "⭐", "📝", "+").any { sec.title.startsWith(it) }) continue
             y = g.head(sec.title, y)
             if (sec.title == "Team") {
                 val k = m.card
@@ -326,7 +326,7 @@ fun listBitmap(m: SumModel): Pair<Bitmap, List<TelLink>> {
             for (cat in m.hot.map { it.cat }.distinct()) {
                 val inCat = m.hot.filter { it.cat == cat }
                 g.rect(pad, y - 4, w - pad * 2, 50f, if (cat <= 4) 0xFFFFF4E5 else if (cat <= 7) 0xFFFFF9DB else 0xFFEEF2FF, 10f)
-                g.t("${if (cat <= 4) "🔥" else if (cat <= 7) "⭐" else "❓"}  ${HOT_CATS[cat]} · ${inCat.size}", pad + 16, y + 30, 24f, Col.ink, true); y += 64
+                g.t("${if (cat <= 4) "🔥" else if (cat <= 7) "⭐" else "📝"}  ${HOT_CATS[cat]} · ${inCat.size}", pad + 16, y + 30, 24f, Col.ink, true); y += 64
                 for (o in inCat.map { it.owner ?: "" }.distinct()) {
                     val mine = inCat.filter { (it.owner ?: "") == o }
                     if (m.teamView && o.isNotBlank()) { g.t("$o · ${mine.size}", pad, y + 6, 22f, Col.brand, true); y += 30 }

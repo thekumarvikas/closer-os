@@ -58,16 +58,20 @@ export function hotSections(rows: HotRow[], total: number, team: boolean): Secti
   if (total > rows.length) out.push({ title: `+${total - rows.length} more hot leads`, lines: [{ label: 'Open Closer OS', value: 'to see all and download' }] })
   return out
 }
-export type TeamRow = { name: string; total: number; dialled: number; connected: number; talk: string; sales: number; calls: boolean }
+export type TeamRow = { name: string; total: number; dialled: number; connected: number; talk: string; sales: number; calls: boolean
+  out?: string[] }
 export type Card = { header: string; sub: string; plan: string[]; hotTotal: number; cols: string[]; grid: { label: string; vals: number[]; total: number }[]
   top: HotRow[]; yesterday: string[]; resultsTitle: string; team: TeamRow[]; noCalls: string[]; team_view: boolean; stats: Line[]; extra: string[]; at: string }
 export type Model = { title: string; sub: string; tiles: Line[]; plan: Section; hot: { total: number; note: string; rows: HotRow[] }
-  results: Section[]; team: TeamRow[]; sections: Section[]; card?: Card; team_view?: boolean }
+  results: Section[]; team: TeamRow[]; activity?: string[][]; leadsRow?: string[]; sections: Section[]; card?: Card; team_view?: boolean }
 
 const hl = (h: number) => `${h % 12 || 12} ${h < 12 ? 'AM' : 'PM'}`
 const slot = (h: number) => `${hl(h)} – ${hl((h + 1) % 24)}`
 export const dur = (s: number) => { s = Math.round(s); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60)
   return h ? `${h}h ${m}m` : m ? `${m}m ${s % 60}s` : `${s}s` }
+/** Short duration for tight tables: 1h 5m · 18m · 2m 40s · 45s. */
+const sd = (x: number) => { x = Math.round(x); const h = Math.floor(x / 3600), m = Math.floor((x % 3600) / 60)
+  return h ? `${h}h ${m}m` : m >= 10 ? `${m}m` : m ? `${m}m ${x % 60}s` : `${x}s` }
 const pc = (a: number, b: number) => b ? Math.round(a * 100 / b) : 0
 const dayName = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
 
@@ -120,7 +124,11 @@ export function buildModel(s: Summary, money: (v: number) => string, nameOf: (id
   const dupNames = new Set((s.people ?? []).map(p => p.name).filter((n, i, a) => a.indexOf(n) !== i))
   const team: TeamRow[] = [...(s.people ?? [])].sort((a, b) => b.stats.talk - a.stats.talk || b.stats.dialled - a.stats.dialled).map(p => ({
     name: dupNames.has(p.name) && p.email ? `${p.name} (${p.email.split('@')[0]})` : p.name, total: p.stats.dialled + p.stats.received + p.stats.missed, dialled: p.stats.dialled, connected: p.stats.leads_connected,
-    talk: dur(p.stats.talk), sales: p.stats.sales, calls: p.stats.dialled + p.stats.received > 0 }))
+    talk: dur(p.stats.talk), sales: p.stats.sales, calls: p.stats.dialled + p.stats.received > 0,
+    // one-glance row: dialled · connected · talk · avg | received · talk · avg | missed | total talk · leads connected · sales
+    out: [`${p.stats.dialled}`, `${p.stats.connected}`, sd(p.stats.talk_out ?? 0), p.stats.connected ? sd((p.stats.talk_out ?? 0) / p.stats.connected) : '—',
+      `${p.stats.received}`, sd(p.stats.talk_in ?? 0), p.stats.received ? sd((p.stats.talk_in ?? 0) / p.stats.received) : '—',
+      `${p.stats.missed}`, sd(p.stats.talk), `${p.stats.leads_connected}`, `${p.stats.sales}`] }))
   const pl = s.plan, plan: Line[] = []
   if (!s.working_day) plan.push({ label: 'Holiday', value: pl.follow_ups ? 'follow-ups are lined up if you want to call' : 'no calls planned' })
   plan.push({ label: 'Follow-ups due', value: `${pl.follow_ups}` })
@@ -160,7 +168,15 @@ export function buildModel(s: Summary, money: (v: number) => string, nameOf: (id
     resultsTitle: res, yesterday: [`Calls ${total} · Dialled ${st.dialled} · Connected ${pc(st.connected, st.dialled)}% · Leads connected ${st.leads_connected}`,
       `Talk ${dur(st.talk)} · Outcomes saved ${st.conn_outcome} of ${st.conversations} · Sales ${st.sales}${st.sales ? ` (${money(st.revenue)})` : ''}`],
     team: team.filter(t => t.calls), noCalls: team.filter(t => !t.calls).map(t => t.name) }
-  return { card, team_view: s.team, title: `${s.kind === 'morning' ? 'Morning' : 'Evening'} summary`,
+  const avg = (t: number, n: number) => n ? dur(t / n) : '—'
+  const activity = [
+    ['Dialled', `${st.dialled}`, `${st.connected} (${pc(st.connected, st.dialled)}%)`, dur(st.talk_out ?? 0), avg(st.talk_out ?? 0, st.connected), '—'],
+    ['Received', `${st.received}`, `${st.received}`, dur(st.talk_in ?? 0), avg(st.talk_in ?? 0, st.received), '—'],
+    ['Missed', `${st.missed}`, '—', '—', '—', `${st.missed_open}`],
+    ['Total', `${total}`, `${st.connected + st.received}`, dur(st.talk), avg(st.talk, st.connected + st.received), `${st.missed_open}`]]
+  const leadsRow = [`${st.leads}`, `${st.leads_connected} (${pc(st.leads_connected, st.leads)}%)`, `${st.leads_1min} (${pc(st.leads_1min, st.leads)}%)`,
+    `${st.interested}`, `${st.conn_outcome} of ${st.conversations}`, st.sales ? `${st.sales} · ${money(st.revenue)}` : '0']
+  return { activity, leadsRow, card, team_view: s.team, title: `${s.kind === 'morning' ? 'Morning' : 'Evening'} summary`,
     sub: `${s.team ? `${s.org_name} · Team` : s.who ?? ''} · Plan for ${dayName(s.plan_day)} · Results of ${dayName(s.day)} · ${now}`,
     tiles, plan: planSec, hot: { total: pl.hot.total, note: HOT_NOTE, rows }, results, team, sections }
 }
@@ -216,11 +232,11 @@ function kit(g: CanvasRenderingContext2D | null, W: number, pad: number) {
     let x = pad; cols.forEach(c => { xs.push(x); x += inner * c[1] / tot })
     if (cols.some(c => c[0])) {
       rect(pad, y, inner, rowH - 6, C.brandSoft, 8)
-      cols.forEach((c, i) => { const w = inner * c[1] / tot; t(fit(c[0], 20, 700, w - 24), c[2] === 'right' ? xs[i] + w - 14 : xs[i] + 14, y + rowH / 2 + 2, 20, C.brand, 700, c[2]) })
+      cols.forEach((c, i) => { const w = inner * c[1] / tot; const g2 = size < 20 ? 6 : 12; t(fit(c[0], Math.min(20, size), 700, w - g2 * 2), c[2] === 'right' ? xs[i] + w - g2 : xs[i] + g2, y + rowH / 2 + 2, Math.min(20, size), C.brand, 700, c[2]) })
       y += rowH }
     rows.forEach((r, ri) => {
       if (ri % 2) rect(pad, y - 4, inner, rowH, C.zebra)
-      cols.forEach((c, i) => { const w = inner * c[1] / tot; t(fit(r[i] ?? '', size, i === 0 ? 500 : 600, w - 24), c[2] === 'right' ? xs[i] + w - 14 : xs[i] + 14, y + rowH / 2 + 4, size, C.ink, i === 0 ? 500 : 600, c[2]) })
+      cols.forEach((c, i) => { const w = inner * c[1] / tot; const g2 = size < 20 ? 6 : 12; t(fit(r[i] ?? '', size, i === 0 ? 500 : 600, w - g2 * 2), c[2] === 'right' ? xs[i] + w - g2 : xs[i] + g2, y + rowH / 2 + 4, size, C.ink, i === 0 ? 500 : 600, c[2]) })
       y += rowH })
     return y + 16 }
   return { t, fit, rect, head, table }
@@ -311,11 +327,30 @@ export async function renderList(m: Model): Promise<{ canvas: HTMLCanvasElement;
       return y0 + 6
     }
     for (const s of sections) {
+      if (m.activity && / · calls$/.test(s.title)) {
+        y = cardGrid(y, cards.splice(0))
+        y = head(s.title.replace(' · calls', ' · call activity'), y)
+        y = table(y, [['', 2.2, 'left'], ['Calls', 1.4, 'right'], ['Connected', 2, 'right'], ['Talk time', 1.8, 'right'], ['Avg per call', 1.8, 'right'], ['Not called back', 2.1, 'right']],
+          m.activity, 24, 48)
+        t('Avg per call = talk time ÷ connected calls.', pad, y - 2, 18, C.faint); y += 22
+        continue
+      }
+      if (m.leadsRow && / · leads$/.test(s.title)) {
+        y = head(s.title, y)
+        y = table(y, [['Leads', 1.2, 'right'], ['Connected', 1.9, 'right'], ['Talked 1 min+', 1.9, 'right'], ['Interested', 1.5, 'right'], ['Outcomes saved', 2, 'right'], ['Sales', 1.6, 'right']], [m.leadsRow], 24, 48)
+        continue
+      }
+      if (m.leadsRow && s.title === 'Results') continue
       if (s.title === 'Team') {
         y = cardGrid(y, cards.splice(0))
         y = head('Team', y)
-        y = table(y, [['Team member', 4, 'left'], ['Calls', 1.2, 'right'], ['Dialled', 1.4, 'right'], ['Leads conn.', 1.8, 'right'], ['Talk', 1.6, 'right'], ['Sales', 1.2, 'right']],
-          m.team.map(r => [r.name, r.calls ? String(r.total) : '—', r.calls ? String(r.dialled) : '—', r.calls ? String(r.connected) : '—', r.calls ? r.talk : '—', r.calls ? String(r.sales) : '—']), 24, 46)
+        const inner = W - pad * 2
+        rect(pad + inner * 2 / 14.5, y - 14, inner * 4.5 / 14.5 - 6, 22, '#e8f3f1', 6); t('DIALLED', pad + inner * 4.25 / 14.5, y + 2, 15, C.brand, 700, 'center')
+        rect(pad + inner * 6.5 / 14.5, y - 14, inner * 3.5 / 14.5 - 6, 22, '#eef2ff', 6); t('RECEIVED', pad + inner * 8.25 / 14.5, y + 2, 15, '#3346a8', 700, 'center'); y += 16
+        y = table(y, [['Member', 2, 'left'], ['Calls', 1, 'right'], ['Conn.', 1, 'right'], ['Talk', 1.2, 'right'], ['Avg', 1.3, 'right'],
+            ['Calls', 1, 'right'], ['Talk', 1.2, 'right'], ['Avg', 1.3, 'right'], ['Missed', 1.2, 'right'], ['All talk', 1.2, 'right'], ['Leads', 1.1, 'right'], ['Sales', 1, 'right']],
+          m.team.map(r => [r.name, ...(r.calls && r.out ? r.out : Array(11).fill('—'))]), 18, 44)
+        t('Conn. = dialled calls that connected · Avg = talk ÷ connected calls · Leads = leads connected', pad, y - 2, 17, C.faint); y += 22
         continue
       }
       cards.push(s)

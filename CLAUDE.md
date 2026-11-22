@@ -2251,3 +2251,10 @@ intelligence → Play Store launch.
 - 0125 (Nov 22): every number / email a lead ever arrived with (lead_origins) kept as Secondary on that lead (all clients).
   Cancer's two Zoom attendee files (16 + 19 Nov) re-read once by hand: 7 extra numbers + 27 extra emails added, no merges needed.
   Going forward: lead_arrived + apply_zoom_report (0124) keep every other number/email; auto-merge only on an exact shared one.
+- 0126 (Nov 22): one registration per webinar — leads.arrivals ("Repeated ×N") = distinct webinars registered (else distinct
+  sources); same webinar sent twice by a sheet/webhook/import = 1. recount_arrivals(lead) from lead_arrived, batch_leads trigger
+  and merge_leads; all leads recounted (855 had been over-counted). reg_count was already per webinar.
+- Summary PDF v7 (app 0.29.7): one-glance tables — Call activity (Dialled / Received / Missed / Total × Calls · Connected · Talk ·
+  Avg per connected call · Not called back), Leads row (leads · connected · 1 min+ · interested · outcomes saved · sales; Results
+  card dropped from the PDF), Team table grouped DIALLED (calls · conn · talk · avg) | RECEIVED (calls · talk · avg) | missed ·
+  all talk · leads · sales (sd() short durations, size-aware table header/padding in kit/Kit).

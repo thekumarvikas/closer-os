@@ -56,7 +56,8 @@ data class SumCard(val header: String, val sub: String, val planTitle: String, v
     val grid: List<Triple<String, List<Int>, Int>>, val top: List<SumLine>, val resultsTitle: String, val yesterday: List<String>,
     val team: List<List<String>>, val noCalls: List<String>, val stats: List<Pair<String, String>> = emptyList(), val extra: List<String> = emptyList(), val at: String = "")
 data class SumModel(val title: String, val sub: String, val sections: List<SumSection>, val hotTotal: Int = 0, val hotShown: Int = 0,
-    val card: SumCard? = null, val hot: List<SumLine> = emptyList(), val teamView: Boolean = false)
+    val card: SumCard? = null, val hot: List<SumLine> = emptyList(), val teamView: Boolean = false,
+    val activity: List<List<String>> = emptyList(), val leadsRow: List<String> = emptyList(), val teamWide: List<List<String>> = emptyList())
 fun fmtPh(p: String?) = p?.let { Regex("^\\+91(\\d{5})(\\d{5})$").find(it)?.let { m -> "+91 ${m.groupValues[1]} ${m.groupValues[2]}" } ?: it } ?: ""
 
 private fun JsonObject.n(k: String) = this[k]?.jsonPrimitive?.doubleOrNull ?: 0.0
@@ -64,6 +65,8 @@ private fun JsonObject.i(k: String) = n(k).toInt()
 private fun JsonObject.t(k: String) = this[k]?.jsonPrimitive?.contentOrNull
 private fun hl(h: Int) = "${if (h % 12 == 0) 12 else h % 12} ${if (h < 12) "AM" else "PM"}"
 private fun slot(h: Int) = "${hl(h)} – ${hl((h + 1) % 24)}"
+/** Short duration for tight tables: 1h 5m · 18m · 2m 40s · 45s. */
+private fun sd(x: Int): String { val h = x / 3600; val m = x % 3600 / 60; return if (h > 0) "${h}h ${m}m" else if (m >= 10) "${m}m" else if (m > 0) "${m}m ${x % 60}s" else "${x}s" }
 private fun pct(a: Int, b: Int) = if (b > 0) a * 100 / b else 0
 private fun d(sec: Int): String { val h = sec / 3600; val m = sec % 3600 / 60; return if (h > 0) "${h}h ${m}m" else if (m > 0) "${m}m ${sec % 60}s" else "${sec}s" }
 
@@ -221,8 +224,24 @@ fun buildSummary(s: JsonObject, currency: String, hotOverride: JsonObject? = nul
             if (st.i("fu_due") > 0) "Follow-ups on time ${st.i("fu_on_time")} of ${st.i("fu_due")}" else null,
             if (open > 0) "$open missed callers not called back" else null, if (st.i("interested") > 0) "Interested ${st.i("interested")}" else null),
         "Made " + ZonedDateTime.now(tz).format(DateTimeFormatter.ofPattern("d MMM yyyy, h:mm a")))
+    fun avg(t: Int, n: Int) = if (n > 0) d(t / n) else "—"
+    val conn = st.i("connected"); val rec = st.i("received")
+    val activity = listOf(
+        listOf("Dialled", "$dialled", "$conn (${pct(conn, dialled)}%)", d(st.i("talk_out")), avg(st.i("talk_out"), conn), "—"),
+        listOf("Received", "$rec", "$rec", d(st.i("talk_in")), avg(st.i("talk_in"), rec), "—"),
+        listOf("Missed", "$missed", "—", "—", "—", "$open"),
+        listOf("Total", "$totalCalls", "${conn + rec}", d(st.i("talk")), avg(st.i("talk"), conn + rec), "$open"))
+    val leadsRow = listOf("$leads", "${st.i("leads_connected")} (${pct(st.i("leads_connected"), leads)}%)", "${st.i("leads_1min")} (${pct(st.i("leads_1min"), leads)}%)",
+        "${st.i("interested")}", "${st.i("conn_outcome")} of ${st.i("conversations")}", if (st.i("sales") > 0) "${st.i("sales")} · ${money(st.n("revenue"))}" else "0")
+    val teamWide = (s["people"] as? JsonArray)?.map { it.jsonObject }?.sortedByDescending { it["stats"]!!.jsonObject.i("talk") }?.map { p ->
+        val ps = p["stats"]!!.jsonObject; val c = ps.i("connected"); val r = ps.i("received")
+        if (ps.i("dialled") + r + ps.i("missed") == 0) listOf(p.t("name") ?: "") + List(11) { "—" }
+        else listOf(p.t("name") ?: "", "${ps.i("dialled")}", "$c", sd(ps.i("talk_out")), if (c > 0) sd(ps.i("talk_out") / c) else "—",
+            "$r", sd(ps.i("talk_in")), if (r > 0) sd(ps.i("talk_in") / r) else "—", "${ps.i("missed")}", sd(ps.i("talk")), "${ps.i("leads_connected")}", "${ps.i("sales")}")
+    } ?: emptyList()
     return SumModel("${if (morning) "Morning" else "Evening"} summary", "$who · $day · Made ${ZonedDateTime.now(tz).format(DateTimeFormatter.ofPattern("d MMM yyyy, h:mm a"))}", out,
-        hotTotal = hotObj?.i("total") ?: 0, hotShown = hotList.size, card = card, hot = hotLines, teamView = team)
+        hotTotal = hotObj?.i("total") ?: 0, hotShown = hotList.size, card = card, hot = hotLines, teamView = team,
+        activity = activity, leadsRow = leadsRow, teamWide = teamWide)
 }
 
 fun summaryText(m: SumModel): String {
@@ -255,6 +274,7 @@ private class Kit(val c: Canvas?, val w: Float, val pad: Float) {
     fun t(s: String, x: Float, y: Float, size: Float, color: Long, bold: Boolean = false, right: Boolean = false): Float {
         font(size, bold); p.color = color.toInt(); p.textAlign = if (right) Paint.Align.RIGHT else Paint.Align.LEFT
         c?.drawText(s, x, y, p); p.textAlign = Paint.Align.LEFT; return p.measureText(s) }
+    fun tc(s: String, x: Float, y: Float, size: Float, color: Long) { font(size, true); p.color = color.toInt(); p.textAlign = Paint.Align.CENTER; c?.drawText(s, x, y, p); p.textAlign = Paint.Align.LEFT }
     fun mw(s: String, size: Float, bold: Boolean): Float { font(size, bold); return p.measureText(s) }
     fun fit(s: String, size: Float, bold: Boolean, max: Float): String { font(size, bold); if (p.measureText(s) <= max) return s
         var v = s; while (v.length > 2 && p.measureText("$v…") > max) v = v.dropLast(1); return "$v…" }
@@ -265,9 +285,10 @@ private class Kit(val c: Canvas?, val w: Float, val pad: Float) {
     fun table(y0: Float, cols: List<Triple<String, Float, Boolean>>, rows: List<List<String>>, size: Float = 26f, rowH: Float = 50f): Float {
         var y = y0; val inner = w - pad * 2; val tot = cols.sumOf { it.second.toDouble() }.toFloat()
         val xs = mutableListOf<Float>(); var x = pad; cols.forEach { xs += x; x += inner * it.second / tot }
+        val g2 = if (size < 20) 6f else 12f
         fun cell(i: Int, s: String, yy: Float, sz: Float, col: Long, bold: Boolean) { val cw = inner * cols[i].second / tot
-            t(fit(s, sz, bold, cw - 24), if (cols[i].third) xs[i] + cw - 14 else xs[i] + 14, yy, sz, col, bold, cols[i].third) }
-        if (cols.any { it.first.isNotEmpty() }) { rect(pad, y, inner, rowH - 6, Col.soft, 8f); cols.forEachIndexed { i, cc -> cell(i, cc.first, y + rowH / 2 + 2, 20f, Col.brand, true) }; y += rowH }
+            t(fit(s, sz, bold, cw - g2 * 2), if (cols[i].third) xs[i] + cw - g2 else xs[i] + g2, yy, sz, col, bold, cols[i].third) }
+        if (cols.any { it.first.isNotEmpty() }) { rect(pad, y, inner, rowH - 6, Col.soft, 8f); cols.forEachIndexed { i, cc -> cell(i, cc.first, y + rowH / 2 + 2, minOf(20f, size), Col.brand, true) }; y += rowH }
         rows.forEachIndexed { ri, r -> if (ri % 2 == 1) rect(pad, y - 4, inner, rowH, Col.zebra)
             cols.indices.forEach { i -> cell(i, r.getOrElse(i) { "" }, y + rowH / 2 + 4, size, Col.ink, i > 0) }; y += rowH }
         return y + 16 }
@@ -345,12 +366,31 @@ fun listBitmap(m: SumModel): Pair<Bitmap, List<TelLink>> {
             cards.clear(); y += 6 }
         for (sec in m.sections) {
             if (listOf("🔥", "⭐", "📝", "+").any { sec.title.startsWith(it) }) continue
+            if (m.activity.isNotEmpty() && sec.title.endsWith(" · calls")) {
+                cardGrid(); y = g.head(sec.title.replace(" · calls", " · call activity"), y)
+                y = g.table(y, listOf(Triple("", 2.2f, false), Triple("Calls", 1.4f, true), Triple("Connected", 2f, true), Triple("Talk time", 1.8f, true),
+                    Triple("Avg per call", 1.8f, true), Triple("Not called back", 2.1f, true)), m.activity, 24f, 48f)
+                g.t("Avg per call = talk time ÷ connected calls.", pad, y - 2, 18f, Col.faint); y += 22
+                continue
+            }
+            if (m.leadsRow.isNotEmpty() && sec.title.endsWith(" · leads")) {
+                y = g.head(sec.title, y)
+                y = g.table(y, listOf(Triple("Leads", 1.2f, true), Triple("Connected", 1.9f, true), Triple("Talked 1 min+", 1.9f, true), Triple("Interested", 1.5f, true),
+                    Triple("Outcomes saved", 2f, true), Triple("Sales", 1.6f, true)), listOf(m.leadsRow), 24f, 48f)
+                continue
+            }
+            if (m.leadsRow.isNotEmpty() && sec.title == "Results") continue
             if (sec.title != "Team") { cards += sec; continue }
             cardGrid(); y = g.head(sec.title, y)
             if (sec.title == "Team") {
-                val k = m.card
-                val rows = (k?.team ?: emptyList()) + (k?.noCalls ?: emptyList()).map { listOf(it, "—", "—", "—", "—", "—") }
-                y = g.table(y, listOf(Triple("Team member", 4f, false), Triple("Calls", 1.2f, true), Triple("Dialled", 1.4f, true), Triple("Leads conn.", 1.8f, true), Triple("Talk", 1.6f, true), Triple("Sales", 1.2f, true)), rows, 24f, 46f)
+                val inner = w - pad * 2
+                g.rect(pad + inner * 2f / 14.5f, y - 14, inner * 4.5f / 14.5f - 6, 22f, 0xFFE8F3F1, 6f); g.tc("DIALLED", pad + inner * 4.25f / 14.5f, y + 2, 15f, Col.brand)
+                g.rect(pad + inner * 6.5f / 14.5f, y - 14, inner * 3.5f / 14.5f - 6, 22f, 0xFFEEF2FF, 6f); g.tc("RECEIVED", pad + inner * 8.25f / 14.5f, y + 2, 15f, 0xFF3346A8)
+                y += 16
+                y = g.table(y, listOf(Triple("Member", 2f, false), Triple("Calls", 1f, true), Triple("Conn.", 1f, true), Triple("Talk", 1.2f, true), Triple("Avg", 1.3f, true),
+                    Triple("Calls", 1f, true), Triple("Talk", 1.2f, true), Triple("Avg", 1.3f, true), Triple("Missed", 1.2f, true), Triple("All talk", 1.2f, true),
+                    Triple("Leads", 1.1f, true), Triple("Sales", 1f, true)), m.teamWide, 18f, 44f)
+                g.t("Conn. = dialled calls that connected · Avg = talk ÷ connected calls · Leads = leads connected", pad, y - 2, 17f, Col.faint); y += 22
             }
         }
         cardGrid()

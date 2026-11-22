@@ -98,6 +98,7 @@ class MainActivity : ComponentActivity() {
         visible = true
         com.closeros.app.calls.AfterCall.Overlay.hide(applicationContext)
         vm.foreground = true
+        runCatching { com.closeros.app.calls.PopupGuard.check(applicationContext) }
         vm.onResume()
     }
 

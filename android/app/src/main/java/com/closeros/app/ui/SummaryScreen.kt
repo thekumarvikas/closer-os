@@ -82,7 +82,7 @@ const val HOT_NOTE = "Hot = tagged Ready to pay / Hot / Interested or a positive
 
 /** Hot leads grouped by category (same rules as the dashboard). */
 fun hotSections(list: List<JsonObject>, total: Int, tz: ZoneId, team: Boolean, nameOf: (String?) -> String): List<SumSection> {
-    fun whenTxt(v: String?, pat: String) = v?.let { runCatching { com.closeros.app.data.parseInstant(it).atZone(tz).format(DateTimeFormatter.ofPattern(pat)) }.getOrNull() }
+    fun whenTxt(v: String?, pat: String) = v?.let { runCatching { com.closeros.app.data.parseInstant(it).atZone(tz).format(DateTimeFormatter.ofPattern(pat, java.util.Locale.ENGLISH)) }.getOrNull() }
     val out = mutableListOf<SumSection>(); var title = ""; var lines = mutableListOf<SumLine>()
     list.forEachIndexed { i, h ->
         val cat = h.i("cat"); val owner = nameOf(h.t("owner"))
@@ -101,12 +101,14 @@ fun hotSections(list: List<JsonObject>, total: Int, tz: ZoneId, team: Boolean, n
         val whenLine = listOfNotNull(whenTxt(h.t("last_talk"), "d MMM, h:mm a")?.let { "Last talked $it" }, whenTxt(h.t("next"), "d MMM, h:mm a")?.let { "Next call $it" }).joinToString(" · ")
         val t = "${hotGroup(cat)} · ${HOT_CATS[cat]}"
         if (t != title) { if (lines.isNotEmpty()) out += SumSection(title, lines); title = t; lines = mutableListOf() }
-        val short = listOfNotNull(if (watch > 0) "$watch min" else null, if (h["pitch"]?.jsonPrimitive?.booleanOrNull == true) "✓ pitch" else null,
+        val last = whenTxt(h.t("last_at"), "d MMM")?.let { "Last $it · ${h.i("last_min")} min" + (if (h["last_pitch"]?.jsonPrimitive?.booleanOrNull == true) " ✓ pitch" else "") }
+        val pitchAny = h["pitch"]?.jsonPrimitive?.booleanOrNull == true
+        val short = listOfNotNull(last ?: (if (watch > 0) "$watch min" else null), if (att > 1) "total $watch min" else null, if (last == null && pitchAny) "✓ pitch" else null,
             h.i("chats").takeIf { it > 0 }?.let { "$it chat${if (it > 1) "s" else ""}" }, if (h.i("polls") > 0) "polls" else null,
             if (att > 1) "attended $att×" else null, if (h.i("reg") > 1) "registered ${h.i("reg")}×" else null,
             if (talkSec > 0) "talked " + (if (talkSec < 60) "${talkSec}s" else "${talkSec / 60}m") else "not talked",
             "$calls call${if (calls == 1) "" else "s"}", if (wa > 0) "$wa WA" else null).joinToString(" · ")
-        val web = listOfNotNull(if (watch > 0) "$watch min" else "joined", if (h["pitch"]?.jsonPrimitive?.booleanOrNull == true) "✓ pitch" else null,
+        val web = listOfNotNull(last ?: (if (watch > 0) "$watch min" else "joined"), if (att > 1) "total $watch min" else if (last == null && pitchAny) "✓ pitch" else null,
             h.i("chats").takeIf { it > 0 }?.let { "$it chat${if (it > 1) "s" else ""}" }, if (h.i("polls") > 0) "polls" else null,
             if (att > 1) "$att webinars" else null, if (h.i("reg") > 1) "registered ${h.i("reg")}×" else null).joinToString(" · ")
         val work = listOfNotNull(if (talkSec > 0) (if (talkSec < 60) "${talkSec}s talk" else "${talkSec / 60}m talk") else "no talk",
@@ -138,7 +140,9 @@ fun buildSummary(s: JsonObject, currency: String, hotOverride: JsonObject? = nul
         SumLine("Connected calls", "${st.i("connected")} of $dialled dialled (${pct(st.i("connected"), dialled)}%)"),
         SumLine("Received", "${st.i("received")}"),
         SumLine("Missed", "$missed" + if (missed > 0) (if (open > 0) " ($open not called back)" else " (all called back)") else ""),
-        SumLine("Talk time", d(st.i("talk")))))
+        SumLine("Talk time · dialled", d(st.i("talk_out"))),
+        SumLine("Talk time · received", d(st.i("talk_in"))),
+        SumLine("Total talk time", d(st.i("talk")))))
     done += SumSection("$res · leads", listOf(
         SumLine("Total leads", "$leads"),
         SumLine("Leads connected", "${st.i("leads_connected")} of $leads (${pct(st.i("leads_connected"), leads)}%)"),
@@ -148,6 +152,13 @@ fun buildSummary(s: JsonObject, currency: String, hotOverride: JsonObject? = nul
         SumLine("Interested", "${st.i("interested")}"),
         if (st.i("call_later") > 0) SumLine("Asked to call later", "${st.i("call_later")}") else null,
         SumLine("Outcomes saved", "${st.i("conn_outcome")} of ${st.i("conversations")}")))
+    run { // plan vs done
+        val plH = s["plan"]?.jsonObject?.get("hot") as? JsonObject
+        val pv = listOfNotNull(
+            if (st.i("fu_due") > 0) SumLine("Follow-ups planned", "${st.i("fu_on_time") + st.i("fu_late")} of ${st.i("fu_due")} called (${st.i("fu_on_time")} on time)") else null,
+            if (missed > 0) SumLine("Missed callers", "${st.i("called_back")} of ${st.i("called_back") + open} called back") else null,
+            if ((plH?.i("total") ?: 0) > 0) SumLine("Hot leads", "${plH!!.i("talked_24h")} of ${plH.i("total")} talked to in the last 24 h") else null)
+        if (pv.isNotEmpty()) done += SumSection("Plan vs done", pv) }
     bestHour((st["hours"] as? JsonArray)?.map { it.jsonObject } ?: emptyList())?.let {
         done += SumSection("Best hour", listOf(SumLine(slot(it.i("hr")), "${it.i("conn")} connected · ${d(it.i("talk"))}"))) }
     if (st.i("fu_due") > 0) done += SumSection("Follow-ups", listOfNotNull(
@@ -168,7 +179,7 @@ fun buildSummary(s: JsonObject, currency: String, hotOverride: JsonObject? = nul
     if (open > 0) plan += SumLine("Missed callers to call back", "$open")
     if (pl.i("no_next") > 0) plan += SumLine("Interested, no next call planned", "${pl.i("no_next")}")
     (pl["webinars"] as? JsonArray)?.map { it.jsonObject }?.forEach { w ->
-        val at = runCatching { com.closeros.app.data.parseInstant(w.t("at")!!).atZone(tz).format(DateTimeFormatter.ofPattern("h:mm a")) }.getOrDefault("")
+        val at = runCatching { com.closeros.app.data.parseInstant(w.t("at")!!).atZone(tz).format(DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.ENGLISH)) }.getOrDefault("")
         plan += SumLine(w.t("name") ?: "Webinar", "$at · ${w.i("leads")} leads to remind")
     }
     val hotObj = hotOverride ?: (pl["hot"] as? JsonObject)
@@ -197,7 +208,7 @@ fun buildSummary(s: JsonObject, currency: String, hotOverride: JsonObject? = nul
         "${if (morning) "Today" else "Tomorrow"} · plan",
         listOf(listOfNotNull("Follow-ups due ${pl.i("follow_ups")}", if (pl.i("overdue") > 0) "Overdue ${pl.i("overdue")}" else null,
             if (open > 0) "Missed callers $open" else null, if (pl.i("no_next") > 0) "Interested, no next call ${pl.i("no_next")}" else null).joinToString(" · ")) +
-            ((pl["webinars"] as? JsonArray)?.map { it.jsonObject }?.map { w -> "${w.t("name")} ${runCatching { com.closeros.app.data.parseInstant(w.t("at")!!).atZone(tz).format(DateTimeFormatter.ofPattern("h:mm a")) }.getOrDefault("")} · ${w.i("leads")} to remind" } ?: emptyList()),
+            ((pl["webinars"] as? JsonArray)?.map { it.jsonObject }?.map { w -> "${w.t("name")} ${runCatching { com.closeros.app.data.parseInstant(w.t("at")!!).atZone(tz).format(DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.ENGLISH)) }.getOrDefault("")} · ${w.i("leads")} to remind" } ?: emptyList()),
         hotObj?.i("total") ?: 0, owners.map { (ownerName[it] ?: "").substringBefore(' ').ifBlank { "Unassigned" } }, grid,
         hotLines.take(5), res,
         listOf("Calls $totalCalls · Dialled $dialled · Connected ${pct(st.i("connected"), dialled)}% · Leads connected ${st.i("leads_connected")}",
@@ -205,7 +216,7 @@ fun buildSummary(s: JsonObject, currency: String, hotOverride: JsonObject? = nul
         withCalls.map { val ps = it["stats"]!!.jsonObject; listOf(it.t("name") ?: "", "${ps.i("dialled") + ps.i("received") + ps.i("missed")}", "${ps.i("dialled")}", "${ps.i("leads_connected")}", d(ps.i("talk")), "${ps.i("sales")}") },
         people.filter { it !in withCalls }.map { it.t("name") ?: "" },
         listOf("Total calls" to "$totalCalls", "Dialled" to "$dialled", "Connected" to "${pct(st.i("connected"), dialled)}%", "Received" to "${st.i("received")}", "Missed" to "$missed",
-            "Leads connected" to "${st.i("leads_connected")}", "Talked 1 min+" to "${st.i("leads_1min")}", "Talk time" to d(st.i("talk")), "Sales" to "${st.i("sales")}", "Outcomes saved" to "${st.i("conn_outcome")} of ${st.i("conversations")}"),
+            "Leads connected" to "${st.i("leads_connected")}", "Talked 1 min+" to "${st.i("leads_1min")}", "Talk · dialled" to d(st.i("talk_out")), "Talk · received" to d(st.i("talk_in")), "Total talk" to d(st.i("talk")), "Sales" to "${st.i("sales")}", "Outcomes saved" to "${st.i("conn_outcome")} of ${st.i("conversations")}"),
         listOfNotNull(bestHour((st["hours"] as? JsonArray)?.map { it.jsonObject } ?: emptyList())?.let { "Best hour ${slot(it.i("hr"))} · ${it.i("conn")} connected" },
             if (st.i("fu_due") > 0) "Follow-ups on time ${st.i("fu_on_time")} of ${st.i("fu_due")}" else null,
             if (open > 0) "$open missed callers not called back" else null, if (st.i("interested") > 0) "Interested ${st.i("interested")}" else null),
@@ -244,6 +255,7 @@ private class Kit(val c: Canvas?, val w: Float, val pad: Float) {
     fun t(s: String, x: Float, y: Float, size: Float, color: Long, bold: Boolean = false, right: Boolean = false): Float {
         font(size, bold); p.color = color.toInt(); p.textAlign = if (right) Paint.Align.RIGHT else Paint.Align.LEFT
         c?.drawText(s, x, y, p); p.textAlign = Paint.Align.LEFT; return p.measureText(s) }
+    fun mw(s: String, size: Float, bold: Boolean): Float { font(size, bold); return p.measureText(s) }
     fun fit(s: String, size: Float, bold: Boolean, max: Float): String { font(size, bold); if (p.measureText(s) <= max) return s
         var v = s; while (v.length > 2 && p.measureText("$v…") > max) v = v.dropLast(1); return "$v…" }
     fun rect(x: Float, y: Float, rw: Float, rh: Float, color: Long, r: Float = 0f) { c ?: return; p.color = color.toInt()
@@ -270,7 +282,7 @@ fun summaryBitmap(m: SumModel): Bitmap {
         g.rect(0f, 0f, w, h, 0xFFFFFFFF); g.rect(0f, 0f, w, 176f, Col.brand)
         g.t("Closer OS", pad, 54f, 24f, 0xFFCFE7E3, true); g.t(k.at, w - pad, 54f, 22f, 0xFFCFE7E3, false, true); g.t(k.header, pad, 112f, 48f, 0xFFFFFFFF, true); g.t(g.fit(k.sub, 26f, false, w - pad * 2), pad, 152f, 26f, 0xFFCFE7E3)
         var y = g.head(k.resultsTitle, 204f)
-        val per = 5; val tw = (w - pad * 2 - (per - 1) * 12) / per; val rowsN = (k.stats.size + per - 1) / per
+        val per = 4; val tw = (w - pad * 2 - (per - 1) * 12) / per; val rowsN = (k.stats.size + per - 1) / per
         k.stats.forEachIndexed { i, (l, v) -> val x = pad + (i % per) * (tw + 12); val yy = y + (i / per) * 104
             g.rect(x, yy, tw, 92f, Col.zebra, 12f); g.t(g.fit(l, 18f, true, tw - 24), x + 14, yy + 32, 18f, Col.muted, true); g.t(g.fit(v, 32f, true, tw - 24), x + 14, yy + 74, 32f, Col.ink, true) }
         y += rowsN * 104 + 26
@@ -283,7 +295,7 @@ fun summaryBitmap(m: SumModel): Bitmap {
                 k.grid.map { (l, v, tot) -> listOf(l) + v.map { "$it" } + "$tot" })
             if (k.top.isNotEmpty()) { g.t("Call first", pad, y + 10, 22f, Col.muted, true); y += 44
                 y = g.table(y, listOf(Triple("Lead", 3.2f, false), Triple("Phone", 2.2f, false), Triple("Why", 3f, false)),
-                    k.top.map { listOf((it.name ?: "") + (if (m.teamView && !it.owner.isNullOrBlank()) " · ${it.owner!!.substringBefore(' ')}" else ""), it.phone ?: "", it.tag.ifBlank { it.web }) }, 22f, 44f) }
+                    k.top.map { listOf((it.name ?: "") + (if (m.teamView && !it.owner.isNullOrBlank()) " · ${it.owner!!.substringBefore(' ')}" else ""), it.phone ?: "", it.tag.ifBlank { it.web.split(" · ").take(2).joinToString(" · ") }) }, 22f, 44f) }
         }
         if (k.team.isNotEmpty()) {
             y = g.head("Team", y)
@@ -314,15 +326,21 @@ fun listBitmap(m: SumModel): Pair<Bitmap, List<TelLink>> {
         var y = 236f
         // Key/value sections as cards, two per row: label left, value right inside the card.
         val cards = mutableListOf<SumSection>()
-        fun cardGrid(): Unit { val gap = 20f; val cw = (w - pad * 2 - gap) / 2; val lh = 42f
-            cards.chunked(2).forEach { pair -> val hh = 64 + pair.maxOf { it.lines.size } * lh + 10
-                pair.forEachIndexed { j, sec -> val x = pad + j * (cw + gap)
+        fun cardGrid(): Unit { val gap = 20f; val half = (w - pad * 2 - gap) / 2; val full = w - pad * 2; val lh = 42f
+            // A card is full width when any line would not fit in half the page — text is never cut.
+            fun wide(sec: SumSection) = sec.lines.any { g.mw(it.label, 20f, false) + g.mw(it.value, 21f, true) + 80 > half }
+            val rows = mutableListOf<MutableList<SumSection>>()
+            cards.forEach { sec -> val last = rows.lastOrNull()
+                if (!wide(sec) && last != null && last.size == 1 && !wide(last[0])) last += sec else rows += mutableListOf(sec) }
+            rows.forEach { row -> val cw = if (row.size == 1 && wide(row[0])) full else half
+                val hh = 64 + row.maxOf { it.lines.size } * lh + 10
+                row.forEachIndexed { j, sec -> val x = pad + j * (cw + gap)
                     g.rect(x, y, cw, hh, Col.line, 14f); g.rect(x + 1.5f, y + 1.5f, cw - 3, hh - 3, 0xFFFFFFFF, 13f)
                     g.t(g.fit(sec.title.uppercase(), 20f, true, cw - 40), x + 20, y + 40, 20f, Col.brand, true)
                     sec.lines.forEachIndexed { n, l -> val yy = y + 64 + n * lh
                         if (n % 2 == 0) g.rect(x + 10, yy, cw - 20, lh, Col.zebra, 6f)
-                        val v = g.fit(l.value, 21f, true, cw * 0.55f); val vw = g.t(v, x + cw - 22, yy + 28, 21f, Col.ink, true, true)
-                        g.t(g.fit(l.label, 20f, false, cw - 50 - vw), x + 22, yy + 28, 20f, Col.muted) } }
+                        val v = g.fit(l.value, 21f, true, cw * 0.6f); val vw = g.t(v, x + cw - 22, yy + 28, 21f, Col.ink, true, true)
+                        g.t(g.fit(l.label, 20f, false, cw - 56 - vw), x + 22, yy + 28, 20f, Col.muted) } }
                 y += hh + gap }
             cards.clear(); y += 6 }
         for (sec in m.sections) {
@@ -348,22 +366,23 @@ fun listBitmap(m: SumModel): Pair<Bitmap, List<TelLink>> {
                 for (o in inCat.map { it.owner ?: "" }.distinct()) {
                     val mine = inCat.filter { (it.owner ?: "") == o }
                     if (m.teamView && o.isNotBlank()) { g.t("$o · ${mine.size}", pad, y + 6, 22f, Col.brand, true); y += 30 }
-                    val xs = listOf(pad, pad + 270, pad + 490, pad + 750); val rowH = 58f
+                    val xs = listOf(pad, pad + 270, pad + 490, pad + 750); val rowH = 72f
                     g.rect(pad, y, w - pad * 2, 40f, Col.zebra, 6f)
                     listOf("Lead", "Phone (tap to call)", "Webinar", "Calls").forEachIndexed { i, hh -> g.t(hh, xs[i] + 12, y + 27, 18f, Col.muted, true) }
                     y += 46
                     mine.forEachIndexed { i, r ->
                         if (i % 2 == 1) g.rect(pad, y - 2, w - pad * 2, rowH, Col.zebra)
-                        g.t(g.fit(r.name ?: "", 22f, true, 270f), xs[0] + 12, y + 26, 22f, Col.ink, true)
+                        g.t(g.fit(r.name ?: "", 22f, true, 240f), xs[0] + 12, if (r.tag.isNotBlank() && r.tag != HOT_CATS[r.cat]) y + 26 else y + 32, 22f, Col.ink, true)
                         if (r.tag.isNotBlank() && r.tag != HOT_CATS[r.cat]) g.t(g.fit(r.tag, 16f, false, 270f), xs[0] + 12, y + 48, 16f, Col.muted)
                         val ph = r.phone ?: ""; val pw = g.t(ph, xs[1] + 12, y + 32, 22f, Col.link, true)
                         links += TelLink((xs[1] + 6) * sc, (y + 6) * sc, (pw + 14) * sc, 40f * sc, ph.filter { it.isDigit() || it == '+' })
                         // Webinar + calls wrap onto two lines instead of being cut off.
-                        fun two(txt: String, x: Float, cw: Float) { val ps = txt.split(" · "); var l1 = ""; var i = 0
-                            while (i < ps.size) { val nx = if (l1.isEmpty()) ps[i] else "$l1 · ${ps[i]}"; if (l1.isNotEmpty() && g.fit(nx, 18f, false, cw) != nx) break; l1 = nx; i++ }
-                            val l2 = ps.drop(i).joinToString(" · ")
-                            g.t(g.fit(l1, 18f, false, cw), x, if (l2.isEmpty()) y + 32 else y + 24, 18f, Col.ink)
-                            if (l2.isNotEmpty()) g.t(g.fit(l2, 18f, false, cw), x, y + 47, 18f, Col.muted) }
+                        fun two(txt: String, x: Float, cw: Float) { val lines = mutableListOf<String>(); var cur = ""
+                            txt.split(" · ").forEach { p -> val nx = if (cur.isEmpty()) p else "$cur · $p"
+                                if (cur.isNotEmpty() && g.fit(nx, 18f, false, cw) != nx) { lines += cur; cur = p } else cur = nx }
+                            if (cur.isNotEmpty()) lines += cur
+                            val top = y + 32 - (minOf(lines.size, 3) - 1) * 10
+                            lines.take(3).forEachIndexed { i, l -> g.t(g.fit(l, 18f, false, cw), x, top + i * 21, 18f, if (i == 0) Col.ink else Col.muted) } }
                         two(r.web, xs[2] + 12, xs[3] - xs[2] - 24); two(r.work, xs[3] + 12, w - pad - xs[3] - 20)
                         y += rowH }
                     y += 14

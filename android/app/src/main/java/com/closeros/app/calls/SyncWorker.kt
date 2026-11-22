@@ -23,6 +23,7 @@ import java.util.concurrent.TimeUnit
 /** Sends unsent outcomes and new call-log entries to Closer OS. Safe to run any number of times. */
 object CallSync {
     suspend fun run(ctx: Context): Result<Int> = runCatching {
+        runCatching { PopupGuard.check(ctx) }
         val store = LocalStore(ctx)
         val orgId = store.orgId ?: return@runCatching 0
         if (Backend.uid == null) return@runCatching 0

@@ -10,6 +10,7 @@ import { Button, Card, ErrorBox, Modal, Spinner } from '../components/ui'
 import { dur } from '../components/terms'
 import { HOT_CATS, fmtPh, type HotLead } from '../lib/summary'
 import LeadDrawer from './LeadDrawer'
+import { Ph } from '../components/Copy'
 
 type Stats = { dialled: number; connected: number; received: number; missed: number; missed_open: number; conversations: number; talk: number
   leads_connected: number; conn_outcome: number; sales: number; revenue: number; fu_due: number; hours: { hr: number; conn: number; talk: number; pos: number }[] }
@@ -272,8 +273,8 @@ function CallsModal({ orgId, from, user, kind, title, onClose, onLead, outcomeOf
     {!rows ? <Spinner /> : rows.length === 0 ? <p className="py-6 text-center text-sm text-slate-500">No calls.</p> :
       <div className="max-h-[65vh] overflow-y-auto"><table className="w-full text-sm"><tbody className="divide-y divide-slate-100">{rows.map(r =>
         <tr key={r.id} className={r.lead_id ? 'cursor-pointer hover:bg-slate-50' : ''} onClick={() => r.lead_id && onLead(r.lead_id)}>
-          <td className="py-1.5 text-slate-500">{new Date(r.started_at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}</td>
-          <td className="py-1.5">{r.lead?.name || fmtPh(r.phone)}</td>
+          <td className="py-1.5 text-slate-500">{new Date(r.started_at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }).toUpperCase()}</td>
+          <td className="py-1.5">{r.lead?.name || 'Not in lead list'}<span className="block text-xs text-slate-500" onClick={e => e.stopPropagation()}><Ph v={r.phone} /></span></td>
           <td className="py-1.5 text-slate-500">{r.direction === 'outgoing' ? 'Dialled' : r.direction === 'incoming' ? 'Received' : 'Missed'}</td>
           <td className="py-1.5 text-right tabular-nums">{r.duration_sec ? dur(r.duration_sec) : '—'}</td>
           <td className="py-1.5 pl-3 text-slate-600">{r.outcome_id ? outcomeOf(r.outcome_id) : ''}</td></tr>)}</tbody></table></div>}

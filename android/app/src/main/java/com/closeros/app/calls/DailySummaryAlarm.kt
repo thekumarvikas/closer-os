@@ -63,7 +63,12 @@ object DailySummaryAlarm {
             if (!working && (if (kind == "morning") n(pl, "follow_ups") == 0 else !anything)) return
             val talk = n(st, "talk"); val t = if (talk >= 3600) "${talk / 3600}h ${talk % 3600 / 60}m" else "${talk / 60}m"
             val line = "${n(st, "dialled")} dialled · ${n(st, "connected")} connected · $t talk" + (if (n(st, "sales") > 0) " · ${n(st, "sales")} sale${if (n(st, "sales") > 1) "s" else ""}" else "") +
-                "\n${if (kind == "morning") "Today" else "Tomorrow"}: ${n(pl, "follow_ups")} follow-ups · ${n(pl, "hot")} hot leads"
+                "\n${if (kind == "morning") "Today" else "Tomorrow"}: ${n(pl, "follow_ups")} follow-ups · ${(pl["hot"] as? kotlinx.serialization.json.JsonObject)?.let { n(it, "total") } ?: 0} hot leads"
+            // The person's own summary picture goes in the notification (expand to see it; tap to open / send).
+            val pic = runCatching {
+                val big = com.closeros.app.ui.summaryBitmap(com.closeros.app.ui.buildSummary(s, m.organization.currency))
+                android.graphics.Bitmap.createScaledBitmap(big, 1080, big.height * 1080 / big.width, true)
+            }.getOrNull()
             val nm = ctx.getSystemService(NotificationManager::class.java)
             if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(NotificationChannel(CHANNEL, "Daily summary", NotificationManager.IMPORTANCE_DEFAULT)
                 .apply { description = "Morning (8 AM) and evening (9:30 PM) summary" })
@@ -71,7 +76,8 @@ object DailySummaryAlarm {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             val title = if (kind == "morning") "☀️ Your morning summary" else "🌙 Your evening summary"
             val note = NotificationCompat.Builder(ctx, CHANNEL).setSmallIcon(com.closeros.app.R.drawable.ic_notif).setColor(0xFF0E5E57.toInt())
-                .setContentTitle(title).setContentText(line.substringBefore('\n')).setStyle(NotificationCompat.BigTextStyle().bigText(line))
+                .setContentTitle(title).setContentText(line.substringBefore('\n')).setStyle(pic?.let { NotificationCompat.BigPictureStyle().bigPicture(it).setSummaryText(line.substringBefore('\n')) }
+                    ?: NotificationCompat.BigTextStyle().bigText(line))
                 .setAutoCancel(true).setContentIntent(open).build()
             runCatching { nm.notify(if (kind == "morning") 7401 else 7402, note) }
         } catch (e: Exception) { com.closeros.app.data.AppLog.error(ctx, "daily-summary", e) }

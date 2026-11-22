@@ -2,15 +2,15 @@
 import { bestHour } from '../components/HourInsights'
 
 export type DayStats = { dialled: number; connected: number; received: number; missed: number; missed_open: number; conversations: number
-  talk: number; leads: number; leads_connected: number; leads_1min: number; calls_1min: number; conn_outcome: number
+  talk: number; talk_out?: number; talk_in?: number; called_back?: number; leads: number; leads_connected: number; leads_1min: number; calls_1min: number; conn_outcome: number
   interested: number; call_later: number; sales: number; revenue: number
   hours: { hr: number; conn: number; talk: number; pos: number }[]; fu_due: number; fu_on_time: number; fu_late: number; fu_missed: number }
 export type HotLead = { lead_id: string; name: string; phone: string; owner: string | null; cat: number; tag: string | null; outcome: string | null
-  reg: number; att: number; watch: number; best: number | null; best_at: string | null; pitch: boolean; chats: number; polls: number
+  reg: number; att: number; watch: number; best: number | null; best_at: string | null; pitch: boolean; last_at?: string | null; last_min?: number | null; last_pitch?: boolean | null; chats: number; polls: number
   talk: number; talk_by: { user: string; sec: number }[]; calls: number; wa: number; last_talk: string | null; next: string | null }
 export type Summary = { kind: 'morning' | 'evening'; day: string; plan_day: string; tz: string; team: boolean; org_name: string; who: string | null
   working_day: boolean; stats: DayStats; people: { user_id: string; name: string; email: string | null; stats: DayStats }[] | null
-  plan: { follow_ups: number; overdue: number; hot: { total: number; by_cat: Record<string, number>; by_owner?: { owner: string | null; cat: number; n: number }[]; list: HotLead[] }; no_next: number; webinars: { name: string; at: string; leads: number }[] } }
+  plan: { follow_ups: number; overdue: number; hot: { total: number; talked_24h?: number; by_cat: Record<string, number>; by_owner?: { owner: string | null; cat: number; n: number }[]; list: HotLead[] }; no_next: number; webinars: { name: string; at: string; leads: number }[] } }
 export type Line = { label: string; value: string; phone?: string }
 export type Section = { title: string; lines: Line[]; note?: string }
 export type HotRow = { lead_id: string; name: string; phone: string; owner: string; cat: number; why: string; activity: string; done: string; when: string; short: string; web: string; work: string; tag: string }
@@ -33,10 +33,11 @@ export function hotRows(list: HotLead[], nameOf: (id: string | null) => string, 
     const by = (h.talk_by ?? []).filter(t => t.sec > 0)
     const talk = h.talk ? `Talked ${mins(h.talk)}${by.length > 1 ? ` (${by.map(t => `${nameOf(t.user).split(' ')[0]} ${mins(t.sec)}`).join(', ')})` : ''}` : 'Not talked yet'
     const done = [talk, `${h.calls} call${h.calls === 1 ? '' : 's'}`, h.wa ? `${h.wa} WhatsApp` : ''].filter(Boolean).join(' · ')
-    const short = [h.watch ? `${h.watch} min` : '', h.pitch ? '✓ pitch' : '', h.chats ? `${h.chats} chat${h.chats > 1 ? 's' : ''}` : '', h.polls ? 'polls' : '',
+    const last = h.last_at ? `Last ${day(h.last_at)} · ${h.last_min ?? 0} min${h.last_pitch ? ' ✓ pitch' : ''}` : ''
+    const short = [last || (h.watch ? `${h.watch} min` : ''), h.att > 1 ? `total ${h.watch} min` : '', !last && h.pitch ? '✓ pitch' : '', h.chats ? `${h.chats} chat${h.chats > 1 ? 's' : ''}` : '', h.polls ? 'polls' : '',
       h.att > 1 ? `attended ${h.att}×` : '', h.reg > 1 ? `registered ${h.reg}×` : '',
       h.talk ? `talked ${h.talk < 60 ? `${h.talk}s` : `${Math.round(h.talk / 60)}m`}` : 'not talked', `${h.calls} call${h.calls === 1 ? '' : 's'}`, h.wa ? `${h.wa} WA` : ''].filter(Boolean).join(' · ')
-    const web = [h.watch ? `${h.watch} min` : 'joined', h.pitch ? '✓ pitch' : '', h.chats ? `${h.chats} chat${h.chats > 1 ? 's' : ''}` : '', h.polls ? 'polls' : '',
+    const web = [last || (h.watch ? `${h.watch} min` : 'joined'), h.att > 1 ? `total ${h.watch} min` : (!last && h.pitch ? '✓ pitch' : ''), h.chats ? `${h.chats} chat${h.chats > 1 ? 's' : ''}` : '', h.polls ? 'polls' : '',
       h.att > 1 ? `${h.att} webinars` : '', h.reg > 1 ? `registered ${h.reg}×` : ''].filter(Boolean).join(' · ')
     const work = [h.talk ? (h.talk < 60 ? `${h.talk}s talk` : `${Math.round(h.talk / 60)}m talk`) : 'no talk', `${h.calls} call${h.calls === 1 ? '' : 's'}`, h.wa ? `${h.wa} WA` : ''].filter(Boolean).join(' · ')
     const tag = h.cat <= 4 ? [h.tag, h.outcome].filter(Boolean).join(' · ') : ''
@@ -89,7 +90,9 @@ export function buildModel(s: Summary, money: (v: number) => string, nameOf: (id
     { label: 'Connected calls', value: `${st.connected} of ${st.dialled} dialled (${pc(st.connected, st.dialled)}%)` },
     { label: 'Received', value: `${st.received}` },
     { label: 'Missed', value: `${st.missed}${st.missed ? (st.missed_open ? ` (${st.missed_open} not called back)` : ' (all called back)') : ''}` },
-    { label: 'Talk time', value: dur(st.talk) },
+    { label: 'Talk time · dialled', value: dur(st.talk_out ?? 0) },
+    { label: 'Talk time · received', value: dur(st.talk_in ?? 0) },
+    { label: 'Total talk time', value: dur(st.talk) },
   ] })
   results.push({ title: `${res} · leads`, lines: [
     { label: 'Total leads', value: `${st.leads}` },
@@ -102,6 +105,11 @@ export function buildModel(s: Summary, money: (v: number) => string, nameOf: (id
     ...(st.call_later ? [{ label: 'Asked to call later', value: `${st.call_later}` }] : []),
     { label: 'Outcomes saved', value: `${st.conn_outcome} of ${st.conversations}` },
   ] })
+  const pv: Line[] = []
+  if (st.fu_due) pv.push({ label: 'Follow-ups planned', value: `${st.fu_on_time + st.fu_late} of ${st.fu_due} called (${st.fu_on_time} on time)` })
+  if (st.missed) pv.push({ label: 'Missed callers', value: `${st.called_back ?? 0} of ${(st.called_back ?? 0) + st.missed_open} called back` })
+  if (s.plan.hot.total) pv.push({ label: 'Hot leads', value: `${s.plan.hot.talked_24h ?? 0} of ${s.plan.hot.total} talked to in the last 24 h` })
+  if (pv.length) results.push({ title: 'Plan vs done', lines: pv })
   const b = bestHour(st.hours)
   if (b) results.push({ title: 'Best hour', lines: [{ label: slot(b.hr), value: `${b.conn} connected · ${dur(b.talk)}` }] })
   if (st.fu_due) results.push({ title: 'Follow-ups', lines: [
@@ -119,7 +127,7 @@ export function buildModel(s: Summary, money: (v: number) => string, nameOf: (id
   if (pl.overdue) plan.push({ label: 'Overdue from earlier', value: `${pl.overdue}` })
   if (st.missed_open) plan.push({ label: 'Missed callers to call back', value: `${st.missed_open}` })
   if (pl.no_next) plan.push({ label: 'Interested, no next call planned', value: `${pl.no_next}` })
-  pl.webinars.forEach(w => plan.push({ label: w.name, value: `${new Date(w.at).toLocaleTimeString('en-IN', { timeZone: tz, hour: 'numeric', minute: '2-digit' })} · ${w.leads} leads to remind` }))
+  pl.webinars.forEach(w => plan.push({ label: w.name, value: `${new Date(w.at).toLocaleTimeString('en-IN', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).toUpperCase()} · ${w.leads} leads to remind` }))
   plan.push({ label: 'Hot leads', value: `${pl.hot.total}` })
   const planDay = s.kind === 'morning' ? 'Today' : 'Tomorrow'
   const planSec: Section = { title: `${planDay} · plan`, lines: plan }
@@ -138,12 +146,13 @@ export function buildModel(s: Summary, money: (v: number) => string, nameOf: (id
     pl.no_next ? `Interested, no next call ${pl.no_next}` : ''].filter(Boolean)
   const card: Card = { header: `${s.kind === 'morning' ? 'Morning' : 'Evening'} summary`,
     sub: `${s.team ? s.org_name : s.who ?? ''} · ${dayName(s.plan_day)}`, team_view: s.team,
-    plan: [planBits.join(' · '), ...pl.webinars.map(w => `${w.name} ${new Date(w.at).toLocaleTimeString('en-IN', { timeZone: tz, hour: 'numeric', minute: '2-digit' })} · ${w.leads} to remind`)],
+    plan: [planBits.join(' · '), ...pl.webinars.map(w => `${w.name} ${new Date(w.at).toLocaleTimeString('en-IN', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).toUpperCase()} · ${w.leads} to remind`)],
     hotTotal: pl.hot.total, cols: s.team ? owners.map(o => nameOf(o).split(' ')[0] || 'Unassigned') : [], grid, top: rows.slice(0, 5),
     at: now, stats: [{ label: 'Total calls', value: `${total}` }, { label: 'Dialled', value: `${st.dialled}` }, { label: 'Connected', value: `${pc(st.connected, st.dialled)}%` },
       { label: 'Received', value: `${st.received}` }, { label: 'Missed', value: `${st.missed}` },
       { label: 'Leads connected', value: `${st.leads_connected}` }, { label: 'Talked 1 min+', value: `${st.leads_1min}` },
-      { label: 'Talk time', value: dur(st.talk) }, { label: 'Sales', value: st.sales ? `${st.sales}` : '0' },
+      { label: 'Talk · dialled', value: dur(st.talk_out ?? 0) }, { label: 'Talk · received', value: dur(st.talk_in ?? 0) },
+      { label: 'Total talk', value: dur(st.talk) }, { label: 'Sales', value: st.sales ? `${st.sales}` : '0' },
       { label: 'Outcomes saved', value: `${st.conn_outcome} of ${st.conversations}` }],
     extra: [b ? `Best hour ${slot(b.hr)} · ${b.conn} connected` : '',
       st.fu_due ? `Follow-ups on time ${st.fu_on_time} of ${st.fu_due}` : '', st.missed_open ? `${st.missed_open} missed callers not called back` : '',
@@ -229,7 +238,7 @@ export async function toImage(m: Model): Promise<Blob> {
     let y = 226
     // 8 number tiles
     y = head(k.resultsTitle, y)
-    const per = 5, tw = (W - pad * 2 - (per - 1) * 12) / per, rowsN = Math.ceil(k.stats.length / per)
+    const per = 4, tw = (W - pad * 2 - (per - 1) * 12) / per, rowsN = Math.ceil(k.stats.length / per)
     k.stats.forEach((st, i) => { const x = pad + (i % per) * (tw + 12), yy = y + Math.floor(i / per) * 104
       rect(x, yy, tw, 92, C.zebra, 12); t(fit(st.label, 18, 600, tw - 24), x + 14, yy + 32, 18, C.muted, 600); t(fit(st.value, 32, 700, tw - 24), x + 14, yy + 74, 32, C.ink, 700) })
     y += rowsN * 104 + 26
@@ -245,7 +254,7 @@ export async function toImage(m: Model): Promise<Blob> {
       if (k.top.length) {
         y += 14; t('Call first', pad, y, 22, C.muted, 700); y += 30
         y = table(y, [['Lead', 3.2, 'left'], ['Phone', 2.2, 'left'], ['Why', 3, 'left']],
-          k.top.map(r => [r.name + (k.team_view && r.owner ? ` · ${r.owner.split(' ')[0]}` : ''), fmtPh(r.phone), r.tag || r.web]), 22, 44)
+          k.top.map(r => [r.name + (k.team_view && r.owner ? ` · ${r.owner.split(' ')[0]}` : ''), fmtPh(r.phone), r.tag || r.web.split(' · ').slice(0, 2).join(' · ')]), 22, 44)
       }
     }
     if (k.team.length) {
@@ -279,17 +288,24 @@ export async function renderList(m: Model): Promise<{ canvas: HTMLCanvasElement;
     const cards: Section[] = []
     // Key/value sections as cards, two per row: label left, value right, inside the same card — easy to scan.
     const cardGrid = (y0: number, list: Section[]) => {
-      const gap = 20, cw = (W - pad * 2 - gap) / 2, lh = 42
-      for (let i = 0; i < list.length; i += 2) {
-        const pair = list.slice(i, i + 2), h = 64 + Math.max(...pair.map(p => p.lines.length)) * lh + 10
-        pair.forEach((sec, j) => { const x = pad + j * (cw + gap)
+      const gap = 20, half = (W - pad * 2 - gap) / 2, full = W - pad * 2, lh = 42
+      const meas = (txt: string, size: number, weight: number) => { const c = document.createElement('canvas').getContext('2d')!; c.font = `${weight} ${size}px ${F}`; return c.measureText(txt).width }
+      // A card is full width when any of its lines would not fit in half the page — never cut text.
+      const wide = (sec: Section) => sec.lines.some(l => meas(l.label, 20, 400) + meas(l.value, 21, 700) + 80 > half)
+      const rows: Section[][] = []
+      for (const sec of list) { const last = rows[rows.length - 1]
+        if (!wide(sec) && last && last.length === 1 && !wide(last[0])) last.push(sec); else rows.push([sec]) }
+      for (const row of rows) {
+        const cw = row.length === 1 && wide(row[0]) ? full : half
+        const h = 64 + Math.max(...row.map(p => p.lines.length)) * lh + 10
+        row.forEach((sec, j) => { const x = pad + j * (cw + gap)
           rect(x, y0, cw, h, C.line, 14); rect(x + 1.5, y0 + 1.5, cw - 3, h - 3, '#ffffff', 13)
           t(fit(sec.title.toUpperCase(), 20, 700, cw - 40), x + 20, y0 + 40, 20, C.brand, 700)
           sec.lines.forEach((l, n) => { const yy = y0 + 64 + n * lh
             if (n % 2 === 0) rect(x + 10, yy, cw - 20, lh, C.zebra, 6)
-            const vw = Math.min(cw * 0.55, t(l.value, 0, -999, 21, C.ink, 700))
-            t(fit(l.label, 20, 400, cw - 50 - vw), x + 22, yy + 28, 20, C.muted)
-            t(fit(l.value, 21, 700, cw * 0.55), x + cw - 22, yy + 28, 21, C.ink, 700, 'right') }) })
+            const vw = Math.min(cw * 0.6, meas(l.value, 21, 700))
+            t(fit(l.label, 20, 400, cw - 56 - vw), x + 22, yy + 28, 20, C.muted)
+            t(fit(l.value, 21, 700, cw * 0.6), x + cw - 22, yy + 28, 21, C.ink, 700, 'right') }) })
         y0 += h + gap
       }
       return y0 + 6
@@ -318,21 +334,22 @@ export async function renderList(m: Model): Promise<{ canvas: HTMLCanvasElement;
         for (const o of owners) {
           const mine = inCat.filter(r => r.owner === o)
           if (m.team_view && o) { t(`${o} · ${mine.length}`, pad, y + 6, 22, C.brand, 700); y += 30 }
-          const xs = [pad, pad + 270, pad + 490, pad + 750], rowH = 58
+          const xs = [pad, pad + 270, pad + 490, pad + 750], rowH = 72
           rect(pad, y, W - pad * 2, 40, C.zebra, 6)
           ;['Lead', 'Phone (tap to call)', 'Webinar', 'Calls'].forEach((h, i) => t(h, xs[i] + 12, y + 27, 18, C.muted, 700))
           y += 46
           mine.forEach((r, i) => {
             if (i % 2) rect(pad, y - 2, W - pad * 2, rowH, C.zebra)
-            t(fit(r.name, 22, 600, 270), xs[0] + 12, y + 26, 22, C.ink, 600)
+            t(fit(r.name, 22, 600, 240), xs[0] + 12, r.tag && r.tag !== HOT_CATS[r.cat] ? y + 26 : y + 32, 22, C.ink, 600)
             if (r.tag && r.tag !== HOT_CATS[r.cat]) t(fit(r.tag, 16, 400, 270), xs[0] + 12, y + 48, 16, C.muted)
             const ph = fmtPh(r.phone), pw = t(ph, xs[1] + 12, y + 32, 22, C.link, 600)
             links.push({ x: xs[1] + 6, y: y + 6, w: pw + 14, h: 40, phone: (r.phone ?? '').replace(/[^\d+]/g, '') })
             // Webinar + calls cells wrap onto two lines instead of being cut off.
-            const two = (txt: string, x: number, w: number) => { const parts = txt.split(' · '); let l1 = '', i = 0
-              for (; i < parts.length; i++) { const nx = l1 ? l1 + ' · ' + parts[i] : parts[i]; if (fit(nx, 18, 400, w) !== nx && l1) break; l1 = nx }
-              const l2 = parts.slice(i).join(' · ')
-              t(fit(l1, 18, 400, w), x, l2 ? y + 24 : y + 32, 18, C.ink); if (l2) t(fit(l2, 18, 400, w), x, y + 47, 18, C.muted) }
+            const two = (txt: string, x: number, w: number) => { const parts = txt.split(' · '), lines: string[] = []; let cur = ''
+              for (const p of parts) { const nx = cur ? cur + ' · ' + p : p; if (cur && fit(nx, 18, 400, w) !== nx) { lines.push(cur); cur = p } else cur = nx }
+              if (cur) lines.push(cur)
+              const top = y + 32 - (Math.min(lines.length, 3) - 1) * 10
+              lines.slice(0, 3).forEach((l, i) => t(fit(l, 18, 400, w), x, top + i * 21, 18, i ? C.muted : C.ink)) }
             two(r.web, xs[2] + 12, xs[3] - xs[2] - 24)
             two(r.work, xs[3] + 12, W - pad - xs[3] - 20)
             y += rowH })

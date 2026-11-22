@@ -122,6 +122,7 @@ object AfterCall {
             !allowed(ctx) -> "\"Display over other apps\" is off"
             else -> null
         }
+        if (blockedBy != null) runCatching { PopupGuard.check(ctx) }
         suspend fun canShow() = blockedBy == null && !MainActivity.visible
         var shown = false
         suspend fun showOrUpdate(info: Info) = withContext(Dispatchers.Main) {

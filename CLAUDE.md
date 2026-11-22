@@ -2223,3 +2223,10 @@ intelligence → Play Store launch.
 - Summary v5 (Nov 22, app 0.29.4): "Total calls" (dialled + received + missed) in tiles, calls section, team tables (Calls column);
   image = 10 tiles (5 per row) + "Made <date, time>" top-right; PDF header has the same time; PDF key/value sections = cards two
   per row (label left, value right); hot table Webinar/Calls cells wrap onto 2 lines (no "…"); duplicate names show email user part.
+- Summary v6 (Nov 22, migration 0121, app 0.29.5): hot_leads rows carry last_at / last_min / last_pitch (LATEST webinar attended) +
+  talked_24h; Webinar cell = "Last 19 Nov · 113 min ✓ pitch · total N min · …" (wraps up to 3 lines, rows 72 px). day_stats adds
+  talk_out / talk_in / called_back → "Talk time · dialled / · received / Total talk time" (lines + image tiles, 4 per row) and a
+  "Plan vs done" card (follow-ups called of planned, missed callers called back, hot leads talked to in 24 h). PDF cards go full
+  width when a line wouldn't fit half (never cut). App: calls/PopupGuard.kt = ongoing red notification while "Display over other
+  apps" is off (checked on sync, app open, call end; skipped when the rep chose pop-up Off); 8 AM / 9:30 PM summary notification now
+  carries the person's own summary picture (BigPictureStyle). Dashboard calls list shows the phone number (copyable).

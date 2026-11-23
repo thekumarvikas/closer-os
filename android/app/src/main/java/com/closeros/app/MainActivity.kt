@@ -90,7 +90,7 @@ class MainActivity : ComponentActivity() {
         i?.getStringExtra("summary")?.let { vm.summaryKind = it; i.removeExtra("summary") }
         i?.getStringExtra("checkin")?.let { if (it == "go") vm.checkInGo() else vm.openCheckIn(); i.removeExtra("checkin") }
         i?.getStringExtra("open_tab")?.let { if (it == "leads") { vm.tab = Tab.Leads; vm.reloadLeads() }; if (it == "sequences") { vm.showSequences = true; vm.loadSequences(); vm.loadSeqDue() }
-            if (it == "wa_due") vm.startSeqQueue(); i.removeExtra("open_tab") }
+            if (it == "wa_due") vm.startSeqQueue(); if (it == "setup") vm.showSetup = true; i.removeExtra("open_tab") }
     }
 
     override fun onResume() {

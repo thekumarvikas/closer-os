@@ -2358,3 +2358,14 @@ intelligence → Play Store launch.
   Reminder calls / each work type. Custom types are labels only (Option A): their calls use sales outcomes.
 - NOT yet in the app: hourly check-in + "Select your work SIM" card still show for people marked "Doesn't call" (they normally
   don't use the app); a work type with its own outcomes (Option B) only if the owner asks.
+
+## vivo pop-up + Android 11 package visibility (v0.29.10, Nov 23 2026)
+- Dimple (Get Closers, vivo V2236, Android 12, Google Phone dialer): after-call traces "\"Display over other apps\" is off".
+- App: PhoneSetup.vivoPermIntent (com.vivo.permissionmanager SoftPermissionDetailActivity / com.iqoo.secure
+  SoftPermissionDetailActivity / PurviewTabActivity, extra "packagename", exported check) → overlay item on vivo/iQOO opens
+  vivo's own Closer OS permission page (Floating windows + "Display pop-up windows while running in background"), fallback =
+  ACTION_MANAGE_OVERLAY_PERMISSION; extra Confirm item "vivopopup". PopupGuard notification now opens Closer OS → Phone setup
+  (MainActivity open_tab "setup") instead of the plain Android screen.
+- FIX: AndroidManifest <queries> had no phone-maker packages → on Android 11+ resolveActivity() returned null for every brand
+  screen (Xiaomi / vivo / OPPO autostart + pop-up screens, dialer call settings) so those steps were silently missing. Added
+  <package> entries for the security apps + dialers. Add any new brand package here too.

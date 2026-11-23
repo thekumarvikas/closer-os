@@ -25,9 +25,11 @@ object PopupGuard {
         if (!off) { nm.cancel(ID); return }
         if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(NotificationChannel(CHANNEL, "After-call pop-up is off", NotificationManager.IMPORTANCE_HIGH)
             .apply { description = "Shown until the after-call pop-up is turned on" })
-        val fix = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${ctx.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        // Opens Closer OS → Phone setup, which sends the rep to the right screen for this phone (vivo / Xiaomi have their own).
+        val fix = Intent(ctx, com.closeros.app.MainActivity::class.java).putExtra("open_tab", "setup")
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         val pi = PendingIntent.getActivity(ctx, ID, fix, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val text = "Your calls are not getting outcomes saved. Tap here → turn ON \"Display over other apps\" for Closer OS."
+        val text = "Your calls are not getting outcomes saved. Tap here → Phone setup → \"After-call pop-up\" → turn it on."
         val n = NotificationCompat.Builder(ctx, CHANNEL).setSmallIcon(com.closeros.app.R.drawable.ic_notif).setColor(0xFFB91C1C.toInt())
             .setContentTitle("⚠ After-call pop-up is OFF").setContentText(text).setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setOngoing(true).setOnlyAlertOnce(true).setContentIntent(pi).setPriority(NotificationCompat.PRIORITY_HIGH).build()

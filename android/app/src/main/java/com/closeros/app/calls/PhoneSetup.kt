@@ -72,6 +72,18 @@ object PhoneSetup {
             .firstOrNull { it.resolveActivity(ctx.packageManager) != null }
     }
 
+    /** vivo / iQOO keep "Floating windows" and "Pop-up windows in the background" on their own per-app permission page. */
+    private fun vivoPermIntent(ctx: Context): Intent? {
+        if (brand !in setOf("vivo", "iqoo")) return null
+        val pm = ctx.packageManager
+        fun ok(i: Intent) = runCatching { pm.resolveActivity(i, 0)?.activityInfo?.exported == true }.getOrDefault(false)
+        return listOf(
+            Intent("permission.intent.action.softPermissionDetail").setClassName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.SoftPermissionDetailActivity"),
+            Intent().setClassName("com.iqoo.secure", "com.iqoo.secure.safeguard.SoftPermissionDetailActivity"),
+            Intent().setClassName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.PurviewTabActivity"),
+        ).map { it.putExtra("packagename", ctx.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }.firstOrNull { ok(it) }
+    }
+
     /**
      * The screen with the call-recording switch, as close as this phone allows: Xiaomi / Redmi / POCO's own
      * "Call recording" page, else the Phone app's call settings. Second = which kind opened ("rec" | "settings").
@@ -133,10 +145,18 @@ object PhoneSetup {
             steps = "Turn on \"Closer OS\" and tap Allow, then come back." + if (Build.VERSION.SDK_INT >= 33)
                 "\nIf it says \"Restricted setting\": tap \"Open app info\" below → ⋮ (top right) → \"Allow restricted settings\" → confirm, then come back and tap Turn on again." else "")
         if (store.afterCallMode != "off") {
+            val overlayStd = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${ctx.packageName}"))
+            val vivo = vivoPermIntent(ctx)
             list += Item("overlay", "After-call pop-up", "When a call ends, a card pops up over any app so you can save the outcome right away — even when Closer OS is closed.",
                 Settings.canDrawOverlays(ctx), Kind.Special,
-                intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${ctx.packageName}")),
-                steps = "Find Closer OS and turn on \"Display over other apps\" (on some phones: \"Appear on top\" or \"Display pop-up windows\"), then come back.")
+                intent = vivo ?: overlayStd,
+                steps = if (vivo != null) "On this vivo page: turn on \"Floating windows\" (or \"Display over other apps\") AND \"Display pop-up windows while running in background\" for Closer OS, then come back."
+                    else "Find Closer OS and turn on \"Display over other apps\" (on some phones: \"Appear on top\" or \"Display pop-up windows\"), then come back.",
+                fallback = if (vivo != null) overlayStd else null,
+                fallbackSteps = "Find Closer OS and turn on \"Display over other apps\", then come back.")
+            if (vivo != null) list += Item("vivopopup", "Pop-ups in the background (vivo)", "vivo also blocks pop-ups from apps running in the background unless this is on.",
+                store.confirmed("vivopopup"), Kind.Confirm, intent = vivo,
+                steps = "On the Closer OS page turn on \"Display pop-up windows while running in background\" (and \"Floating windows\" if you see it). Then come back and tap \"Done\".")
             miuiPopupIntent(ctx)?.let { list += Item("miuipopup", "Pop-ups in the background (${Build.MANUFACTURER})", "Your phone also blocks pop-ups from apps running in the background unless this is on.",
                 store.confirmed("miuipopup"), Kind.Confirm, intent = it,
                 steps = "Turn on \"Display pop-up windows while running in the background\" and \"Display pop-up window\" (set to Always allow). Then come back and tap \"Done\".") }

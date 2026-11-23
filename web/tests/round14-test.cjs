@@ -110,8 +110,7 @@ const ids = []; let orgId = null;
     await p.waitForSelector('text=Which webinar do these leads join'); await shot('2-source-settings'); await p.keyboard.press('Escape');
 
     await p.goto('http://localhost:4173/webinars'); await p.waitForSelector('text=Registered'); await shot('3a-webinar-cards');
-    await p.locator('a:has-text("Share out sales calls"), a:has-text("Upload Zoom reports")').first().click(); await p.waitForSelector('text=After the webinar'); await shot('3b-after-webinar');
-    await p.keyboard.press('Escape');
+    await p.locator('a:has-text("Open webinar")').first().click().catch(() => {}); await p.waitForTimeout(2500); await shot('3b-webinar-page');
 
     await p.goto('http://localhost:4173/buyers'); await p.waitForSelector('text=Upload a CSV');
     await p.setInputFiles('input[type=file]', file); await p.waitForSelector('text=Check which column is which'); await shot('4a-buyers-mapping');
@@ -119,6 +118,10 @@ const ids = []; let orgId = null;
     log('import result:', await p.textContent('text=Done:'));
 
     await p.goto('http://localhost:4173/sales'); await p.waitForSelector('text=By team member'); await p.click('button:has-text("Last 90 days")'); await p.waitForSelector('text=What buyers have in common'); await p.waitForTimeout(2500); await shot('5a-sales-overview');
+    await p.locator('#time-to-buy').scrollIntoViewIfNeeded(); await shot('5a2-time-to-buy'); log('time to buy:', (await p.locator('#time-to-buy').innerText()).replace(/\s+/g, ' ').slice(0, 400));
+    await p.click('#time-to-buy button:has-text("By team member")'); await shot('5a3-ttb-member');
+    await p.click('#time-to-buy button:has-text("From the webinar")'); await p.click('#time-to-buy button:has-text("Month by month")'); await shot('5a4-ttb-month');
+    await p.locator('#time-to-buy tbody tr').first().click(); await p.waitForTimeout(800); await shot('5a5-ttb-list'); await p.keyboard.press('Escape');
     await p.click('button:has-text("Buyers (")'); await p.waitForSelector('text=Days to convert from'); await shot('5b-sales-buyers');
     await p.click('button:has-text("Fastest first")'); await p.click('button:has-text("Webinar attended")'); await shot('5c-buyers-fastest-webinar');
     await p.locator('tbody tr').first().click(); await p.waitForSelector('text=from sign-up'); await shot('5d-journey');

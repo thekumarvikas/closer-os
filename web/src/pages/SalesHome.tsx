@@ -30,6 +30,7 @@ type F = { from: string; to: string; user: string; product: string; webinar: str
 const PAY: Record<Buyer['pay_status'], [string, 'green' | 'amber' | 'red' | 'gray']> = {
   full: ['Fully paid', 'green'], part: ['Part paid', 'amber'], unpaid: ['Not paid yet', 'red'], refunded: ['Refunded', 'gray'] }
 const days = (v: number | null | undefined) => v == null || v < 0 ? '—' : v < 1 ? 'same day' : `${Math.round(v)} day${Math.round(v) === 1 ? '' : 's'}`
+const avgDays = (v: number | null | undefined) => v == null ? '—' : v < 1 ? 'same day' : `${v} day${v === 1 ? '' : 's'}`
 const pctOf = (a: number, b: number) => b > 0 ? Math.round(a / b * 100) : 0
 
 function todayIn(tz: string) { return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()) }
@@ -171,7 +172,7 @@ function TimeToBuy({ buyers, dir, onOpen }: { buyers: Buyer[]; dir: Directory; o
           {([['Shortest', st.min, paid.filter(b => Number(dv(b)) === st.min)], ['Average', st.avg, paid], ['Longest', st.max, paid.filter(b => Number(dv(b)) === st.max)]] as [string, number, Buyer[]][]).map(([l, v, rows]) =>
             <button key={l} onClick={() => show(`${l}: ${days(v)}`, rows)} className="rounded-lg border border-slate-200 p-3 text-left hover:border-brand-400">
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{l}</p>
-              <p className="mt-1 text-xl font-semibold tabular-nums">{l === 'Average' ? `${v} days` : days(v)}</p></button>)}
+              <p className="mt-1 text-xl font-semibold tabular-nums">{l === 'Average' ? avgDays(v) : days(v)}</p></button>)}
         </div>
         <div className="mt-4 mb-2 flex flex-wrap gap-1 text-xs">
           {([['spread', 'How many paid when'], ['member', 'By team member'], ['webinar', 'By webinar'], ['month', 'Month by month']] as const).map(([k, l]) =>
@@ -191,7 +192,7 @@ function TimeToBuy({ buyers, dir, onOpen }: { buyers: Buyer[]; dir: Directory; o
             <tbody>{rowsFor.map(g => (
               <tr key={g.label} className="cursor-pointer border-t border-slate-100 hover:bg-slate-50" onClick={() => show(g.label, g.rows)}>
                 <td className="truncate py-1.5 font-medium">{g.label}</td><td className="tabular-nums">{g.st.n}</td>
-                <td>{days(g.st.min)}</td><td className="font-medium">{g.st.avg} days</td><td>{days(g.st.max)}</td></tr>))}</tbody>
+                <td>{days(g.st.min)}</td><td className="font-medium">{avgDays(g.st.avg)}</td><td>{days(g.st.max)}</td></tr>))}</tbody>
           </table>
         )}
       </>}
@@ -254,7 +255,7 @@ function Overview({ d, t, dir, drill, fromTs, toTs, onRemoved, onOpenBuyer }: { 
         <Tile label="Sales" value={t.sales} sub={`${t.full} fully paid · ${t.part} part paid`} onClick={() => drill({})} />
         <Tile label="Collected" value={fmtMoney(t.collected, org)} tone="green" sub="money received" onClick={() => drill({})} />
         <Tile label="Pending" value={fmtMoney(t.pending, org)} tone={t.pending > 0 ? 'red' : undefined} sub={`${t.pending_orders} order${t.pending_orders === 1 ? '' : 's'} with balance due`} onClick={() => drill({}, 'pending')} />
-        <Tile label="Days to buy · sign-up → paid" value={t.days_signup_avg == null ? '—' : `${t.days_signup_avg} days`} sub="average · see “How long buyers take” below" onClick={() => document.getElementById('time-to-buy')?.scrollIntoView({ behavior: 'smooth' })} />
+        <Tile label="Days to buy · sign-up → paid" value={avgDays(t.days_signup_avg)} sub="average · see “How long buyers take” below" onClick={() => document.getElementById('time-to-buy')?.scrollIntoView({ behavior: 'smooth' })} />
       </div>
 
       <TimeToBuy buyers={(d.buyers ?? []) as Buyer[]} dir={dir} onOpen={onOpenBuyer} />

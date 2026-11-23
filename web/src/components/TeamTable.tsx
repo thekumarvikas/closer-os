@@ -45,6 +45,7 @@ export default function TeamTable({ dir, version, onChanged, onRemove }: {
   const [tick, setTick] = useState(0)
   const [syncing, setSyncing] = useState<Record<string, boolean>>({})
   const [menu, setMenu] = useState<string | null>(null)
+  const [clearFor, setClearFor] = useState<{ users: string[] | null; name: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -94,11 +95,15 @@ export default function TeamTable({ dir, version, onChanged, onRemove }: {
           press <b>Sync now</b> on their row. If it doesn't help, their phone is off, offline, or needs Battery "No restrictions" (app → Settings → Phone setup).</p>
       )}
 
+      {clearFor && <ClearOutcomes org={org.id} tz={org.timezone} users={clearFor.users} name={clearFor.name} onClose={() => setClearFor(null)} onDone={onChanged} />}
       <Card className="overflow-visible">
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
           <p className="text-sm text-slate-500">{dir.members.filter(m => m.status === 'active').length} active · work SIMs in use: {sims.filter(s => s.status === 'active').length}</p>
-          {isAdmin && devices.size > 0 && <Button variant="secondary" className="!py-1.5" loading={syncing.all} onClick={() => syncNow()}>
-            <RefreshCw className="h-4 w-4" /> Sync all phones</Button>}
+          <div className="flex gap-2">
+            {isAdmin && <Button variant="ghost" className="!py-1.5" onClick={() => setClearFor({ users: null, name: 'the whole team' })}>Clear old outcomes…</Button>}
+            {isAdmin && devices.size > 0 && <Button variant="secondary" className="!py-1.5" loading={syncing.all} onClick={() => syncNow()}>
+              <RefreshCw className="h-4 w-4" /> Sync all phones</Button>}
+          </div>
         </div>
         <table className="w-full table-fixed text-sm">
           <thead className="bg-slate-50"><tr>
@@ -166,6 +171,7 @@ export default function TeamTable({ dir, version, onChanged, onRemove }: {
                       <button className="block w-full px-3 py-2 text-left hover:bg-slate-50"
                         onClick={() => run(supabase.from('org_members').update({ status: m.status === 'active' ? 'deactivated' : 'active' }).eq('org_id', org.id).eq('user_id', m.user_id))}>
                         {m.status === 'active' ? 'Deactivate' : 'Reactivate'}</button>
+                      <button className="block w-full px-3 py-2 text-left hover:bg-slate-50" onClick={() => { setMenu(null); setClearFor({ users: [m.user_id], name: dir.nameOf(m.user_id) }) }}>Clear old outcomes…</button>
                       <button className="block w-full px-3 py-2 text-left text-red-600 hover:bg-red-50" onClick={() => { setMenu(null); onRemove(m.user_id) }}>Delete…</button>
                     </RowMenu>}
                   </td>
@@ -209,6 +215,46 @@ function MemberWork({ m, canEdit, types, onSave }: { m: Member; canEdit: boolean
       {all.length > 0 && <div className="flex flex-wrap gap-1">{all.map(t => { const on = mine.includes(t)
         return <button key={t} type="button" onClick={() => onSave({ work_types: on ? mine.filter(x => x !== t) : [...mine, t] })}
           className={`rounded-full border px-2 py-0.5 text-[11px] ${on ? 'border-brand-600 bg-brand-50 text-brand-800' : 'border-slate-200 text-slate-400'}`}>{on ? '✓ ' : '+ '}{t}</button> })}</div>}
+    </div>
+  )
+}
+
+/** Clear the backlog of calls without an outcome (one person or the whole team) up to a cut-off. */
+function ClearOutcomes({ org, tz, users, name, onClose, onDone }: { org: string; tz: string; users: string[] | null; name: string; onClose: () => void; onDone: () => void }) {
+  const [when, setWhen] = useState<'now' | 'today' | 'tomorrow'>('now')
+  const [count, setCount] = useState<number | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const cutoff = () => {
+    if (when === 'now') return new Date().toISOString()
+    // midnight (start of today / tomorrow) in the company's time zone
+    const [y, mo, d] = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()).split('-').map(Number)
+    const utc = Date.UTC(y, mo - 1, d + (when === 'tomorrow' ? 1 : 0))
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' })
+      .formatToParts(new Date(utc)).map(x => [x.type, x.value]))
+    const asTz = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute)
+    return new Date(utc - (asTz - utc)).toISOString()
+  }
+  useEffect(() => { setCount(null); supabase.rpc('clear_outcomes', { p_org: org, p_users: users, p_cutoff: cutoff(), p_preview: true })
+    .then(({ data, error }) => error ? setErr(errorText(error)) : setCount((data as { calls: number }).calls)) }, [when]) // eslint-disable-line react-hooks/exhaustive-deps
+  async function go() {
+    setBusy(true); const { data, error } = await supabase.rpc('clear_outcomes', { p_org: org, p_users: users, p_cutoff: cutoff() }); setBusy(false)
+    if (error) return setErr(errorText(error))
+    toast(`Cleared ${(data as { calls: number }).calls} calls for ${name}. Their phone stops asking about them.`); onDone(); onClose()
+  }
+  const opts = [['now', 'Everything before now'], ['today', 'Everything before today'], ['tomorrow', 'Everything before tomorrow']] as const
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl" onClick={e => e.stopPropagation()}>
+        <h3 className="font-semibold">Clear old outcomes · {name}</h3>
+        <p className="mt-1 text-sm text-slate-500">Calls without an outcome before the time you pick get a grey label "No outcome — cleared by manager". The app stops asking about them. Calls after it still need an outcome and next follow-up as usual.</p>
+        <div className="mt-3 space-y-1.5">{opts.map(([k, l]) => (
+          <label key={k} className="flex items-center gap-2 text-sm"><input type="radio" checked={when === k} onChange={() => setWhen(k)} /> {l}</label>))}</div>
+        <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm">{count == null ? 'Counting…' : count === 0 ? 'Nothing to clear.' : <><b>{count}</b> call{count === 1 ? '' : 's'} without an outcome will be cleared.</>}</p>
+        {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
+        <div className="mt-4 flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button onClick={go} loading={busy} disabled={!count}>Clear {count ?? ''} calls</Button></div>
+      </div>
     </div>
   )
 }

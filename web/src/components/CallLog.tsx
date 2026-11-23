@@ -22,11 +22,12 @@ export interface CallLogFilters { from?: string; to?: string; users: string[]; d
 interface Row {
   id: string; user_id: string; lead_id: string | null; ring_sec: number | null; phone: string; direction: string; started_at: string; duration_sec: number
   notes: string | null; outcome_id: string | null; recording_status: string; recording_path: string | null; sim_number: string | null; sim_slot: number | null; sim_label: string | null
-  channel: string; contact_name: string | null; purpose: string | null; from_history: boolean; local_hour: number | null
+  channel: string; contact_name: string | null; purpose: string | null; from_history: boolean; outcome_cleared_at: string | null; local_hour: number | null
   lead: { name: string; profession: string | null; city: string | null; call_count: number | null; conversation_count: number | null; next_follow_up_at: string | null; source: string | null } | null
   batch: { name: string } | null
 }
 const HIST = '00000000-0000-0000-0000-000000000001'
+const CLEARED = '00000000-0000-0000-0000-000000000002'
 const hourLabel = (h: number) => `${h % 12 || 12} ${h < 12 ? 'AM' : 'PM'}`
 const durations: [string, string, number | null, number | null][] = [
   ['any', 'Any length', null, null], ['0', 'Not connected (0s)', 0, 0], ['1-30', '1–30 sec', 1, 30],
@@ -34,7 +35,7 @@ const durations: [string, string, number | null, number | null][] = [
 ]
 const typeName: Record<string, string> = { outgoing: 'Dialled', incoming: 'Received', missed: 'Missed', rejected: 'Declined' }
 const PAGE = 100
-const SELECT = 'id,user_id,lead_id,ring_sec,phone,direction,started_at,duration_sec,notes,outcome_id,recording_status,recording_path,sim_number,sim_slot,sim_label,channel,contact_name,purpose,from_history,local_hour,batch:batches(name),lead:leads(name,profession,city,call_count,conversation_count,next_follow_up_at,source)'
+const SELECT = 'id,user_id,lead_id,ring_sec,phone,direction,started_at,duration_sec,notes,outcome_id,recording_status,recording_path,sim_number,sim_slot,sim_label,channel,contact_name,purpose,from_history,outcome_cleared_at,local_hour,batch:batches(name),lead:leads(name,profession,city,call_count,conversation_count,next_follow_up_at,source)'
 
 /** Complete, filterable call history (all time unless dates are given). */
 export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome, page: pageFilters }: {
@@ -103,7 +104,8 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
     if (rec === 'yes') query = query.eq('recording_status', 'uploaded')
     else if (rec === 'no') query = query.gt('duration_sec', 0).neq('recording_status', 'uploaded').eq('channel', 'phone')
     if (oc === HIST) query = query.is('outcome_id', null).eq('from_history', true)
-    else if (oc === 'none') query = query.is('outcome_id', null).eq('from_history', false)
+    else if (oc === CLEARED) query = query.is('outcome_id', null).not('outcome_cleared_at', 'is', null)
+    else if (oc === 'none') query = query.is('outcome_id', null).eq('from_history', false).is('outcome_cleared_at', null)
     else if (oc) query = query.eq('outcome_id', oc)
     const d = durations.find(x => x[0] === len)!
     if (d[2] !== null) query = query.gte('duration_sec', d[2])
@@ -196,7 +198,7 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
               <td className="px-1.5 py-1.5"><select className={fsel} value={lf.draft.rec} onChange={e => lf.set({ rec: e.target.value })}>
                 <option value="">Any</option><option value="yes">With recording</option><option value="no">Talked, no recording</option></select></td>
               <td className="px-1.5 py-1.5"><select className={fsel} value={setOutcome ? outcome : lf.draft.oc} onChange={e => setOutcome ? setOutcome(e.target.value) : lf.set({ oc: e.target.value })}>
-                <option value="">All outcomes</option><option value="none">No outcome yet</option><option value={HIST}>Before Closer OS</option>
+                <option value="">All outcomes</option><option value="none">No outcome yet</option><option value={HIST}>Before Closer OS</option><option value={CLEARED}>Cleared by manager</option>
                 {dir.outcomes.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}</select></td>
               <td className="px-1.5 py-1.5"><select className={fsel} value={lf.draft.mem} onChange={e => lf.set({ mem: e.target.value })}>
                 <option value="">Everyone</option>
@@ -215,7 +217,7 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
                   <td className="px-3 py-2"><CallType direction={c.direction} duration={c.duration_sec} channel={c.channel} /></td>
                   <td className="px-3 py-2 text-right tabular-nums">{c.duration_sec ? dur(c.duration_sec) : '—'}{c.ring_sec != null && <span className="block text-xs text-slate-400" title="How long the phone rang before it was answered or dropped">rang {dur(c.ring_sec)}</span>}</td>
                   <td className="px-3 py-2">{recCell(c)}</td>
-                  <td className="px-3 py-2"><span className="block">{dir.outcomeOf(c.outcome_id)?.label ?? (c.from_history ? <span className="text-xs text-slate-400" title="This call was read from the phone's history (made before Closer OS was installed or outside the app) — no outcome is expected">Before Closer OS</span> : <span className="text-slate-400">No outcome yet</span>)}</span>
+                  <td className="px-3 py-2"><span className="block">{dir.outcomeOf(c.outcome_id)?.label ?? (c.outcome_cleared_at ? <span className="text-xs text-slate-400" title="A manager cleared the old calls without an outcome — no outcome is expected">No outcome — cleared by manager</span> : c.from_history ? <span className="text-xs text-slate-400" title="This call was read from the phone's history (made before Closer OS was installed or outside the app) — no outcome is expected">Before Closer OS</span> : <span className="text-slate-400">No outcome yet</span>)}</span>
                     {c.lead?.next_follow_up_at && <span className="block truncate text-xs text-slate-500">Next call {fmtDateTime(c.lead.next_follow_up_at, org)}</span>}
                     {c.notes && <span className="line-clamp-3 block whitespace-pre-wrap text-xs text-slate-600" title={c.notes}>📝 {c.notes}</span>}
                     {(added[c.id] ?? []).map((t, i) => <span key={i} className="block whitespace-pre-wrap text-xs text-slate-600">📝 {t}</span>)}

@@ -2369,3 +2369,14 @@ intelligence → Play Store launch.
 - FIX: AndroidManifest <queries> had no phone-maker packages → on Android 11+ resolveActivity() returned null for every brand
   screen (Xiaomi / vivo / OPPO autostart + pop-up screens, dialer call settings) so those steps were silently missing. Added
   <package> entries for the security apps + dialers. Add any new brand package here too.
+
+## Clear old outcomes (Nov 23 2026, migration 0145, website; works with installed apps)
+- Owner: Nikhil (Cancer) had 268 calls without outcomes and the app's mandatory-outcome check blocked his next calls.
+- calls.outcome_cleared_at / outcome_cleared_by, org_members.outcome_from. clear_outcomes(org, users|null = everyone I see, cutoff,
+  preview) (managers; can_see_user; audit outcomes.cleared; push_wake 'sync'); calls_with_outcome also returns cleared calls and
+  calls before outcome_from → the app's checkUnloggedCalls skips them WITHOUT an app update; trigger t_call_before_outcome_from
+  clears calls synced later for a time before the cut-off. outcome_report puts them under fixed id 00000000-…-0002 (grey "cleared
+  by manager", like HIST …-0001); dashboard_data no_outcome + my_calls_needing_outcome ignore them.
+- Web: Team page ⋯ "Clear old outcomes…" per person + header "Clear old outcomes…" (whole team, admins) → ClearOutcomes modal
+  (before now / before today / before tomorrow in company tz, live count). Call log label + filter "Cleared by manager";
+  Outcomes report grey row. A real outcome can still be added to a cleared call later.

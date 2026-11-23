@@ -20,6 +20,7 @@ const categoryInfo: Record<string, { label: string; color: 'gray' | 'green' | 'r
 const BAR = '#156D63'
 /** Calls read from the phone's history (made before Closer OS / outside the app) — no outcome expected. */
 export const HIST = '00000000-0000-0000-0000-000000000001'
+export const CLEARED = '00000000-0000-0000-0000-000000000002'
 
 export default function OutcomeReportView({ org, dir, from, to, users, fileTag, onOpenOutcome, callDir = 'all', channel = 'all' }: {
   org: Organization; dir: Directory; from: string; to: string; users: string[]; fileTag: string; callDir?: Dir; channel?: Channel
@@ -43,7 +44,7 @@ export default function OutcomeReportView({ org, dir, from, to, users, fileTag, 
   const used = dir.outcomes.filter(o => o.is_active || r.byOutcome.has(o.id))
   const get = (m: Map<string | null, OutcomeCell>, id: string | null) => m.get(id) ?? { calls: 0, leads: 0, amount: 0, deal_value: 0, dur: 0 }
   const hist = get(r.byOutcome, HIST).calls
-  const filled = r.total.calls - get(r.byOutcome, null).calls - hist
+  const filled = r.total.calls - get(r.byOutcome, null).calls - hist - get(r.byOutcome, CLEARED).calls
   const [showUnused, setShowUnused] = [unused, setUnused]
   const sumCat = (m: Map<string | null, OutcomeCell>, cats: string[]) =>
     dir.outcomes.filter(o => cats.includes(o.category)).reduce((s, o) => s + get(m, o.id).calls, 0)
@@ -91,7 +92,7 @@ export default function OutcomeReportView({ org, dir, from, to, users, fileTag, 
         {(() => {
           const rows = used.map(o => ({ o, c: get(r.byOutcome, o.id) }))
           const shown = rows.filter(x => x.c.calls > 0), idle = rows.filter(x => x.c.calls === 0)
-          const nf = get(r.byOutcome, null), hc = get(r.byOutcome, HIST)
+          const nf = get(r.byOutcome, null), hc = get(r.byOutcome, HIST), cl = get(r.byOutcome, CLEARED)
           const max2 = Math.max(1, ...shown.map(x => x.c.calls))
           return <>
             <ul className="space-y-0.5">
@@ -115,6 +116,8 @@ export default function OutcomeReportView({ org, dir, from, to, users, fileTag, 
               <span>⚠ <b>{nf.calls.toLocaleString('en-IN')}</b> calls made with Closer OS have no outcome yet ({nf.leads} leads)</span><span className="text-xs font-medium underline">See them</span></button>}
             {hc.calls > 0 && <button onClick={() => onOpenOutcome(HIST)} className="mt-2 flex w-full items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-left text-sm text-slate-600 hover:bg-slate-100">
               <span><b>{hc.calls.toLocaleString('en-IN')}</b> calls from the phone's history (before Closer OS / outside the app) — no outcome needed</span><span className="text-xs font-medium underline">See them</span></button>}
+            {cl.calls > 0 && <button onClick={() => onOpenOutcome(CLEARED)} className="mt-2 flex w-full items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-left text-sm text-slate-600 hover:bg-slate-100">
+              <span><b>{cl.calls.toLocaleString('en-IN')}</b> calls without an outcome cleared by a manager — no outcome needed</span><span className="text-xs font-medium underline">See them</span></button>}
           </>
         })()}
       </Card>
@@ -137,7 +140,7 @@ export default function OutcomeReportView({ org, dir, from, to, users, fileTag, 
           </tr></thead>
           <tbody className="divide-y divide-slate-100">
             {[...(view === 'employees' ? r.byUser : r.byDay)].sort((a, b) => view === 'employees' ? b[1].total.calls - a[1].total.calls : 0).map(([k, v]) => {
-              const f = v.total.calls - get(v.outcomes, null).calls - get(v.outcomes, HIST).calls
+              const f = v.total.calls - get(v.outcomes, null).calls - get(v.outcomes, HIST).calls - get(v.outcomes, CLEARED).calls
               return (
                 <tr key={k} className="hover:bg-slate-50">
                   <td className="td sticky left-0 bg-white font-medium">{view === 'employees' ? dir.nameOf(k) : fmtYmd(k, true)}</td>

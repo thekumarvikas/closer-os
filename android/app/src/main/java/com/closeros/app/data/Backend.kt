@@ -328,7 +328,7 @@ object TalkBands {
 @Serializable data class BestTime(val hour: Int? = null, val source: String, val picked: Int? = null, val tries: Int? = null, val rate: Int? = null,
     val total_picked: Int? = null, val total_tries: Int? = null)
 
-@Serializable data class CallRequest(val id: String, val lead_id: String, val purpose: String = "sales", val batch_id: String? = null)
+@Serializable data class CallRequest(val id: String, val lead_id: String, val purpose: String = "sales", val batch_id: String? = null, val phone: String? = null)
 
 @Serializable data class LeadMini(val name: String = "", val phone: String = "", val dial_count: Int = 0, val conversation_count: Int = 0, val call_count: Int = 0,
     val last_outcome_id: String? = null, val key_facts: String? = null, val profession: String? = null, val city: String? = null, val total_talk_sec: Int = 0,

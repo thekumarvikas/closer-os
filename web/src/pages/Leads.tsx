@@ -1,4 +1,5 @@
 import { AllPh, useOtherPhones } from '../components/Copy'
+import { lenText } from '../components/LastCall'
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { intentLevels, intentOf } from '../lib/intents'
 import { IntentBadge } from '../components/Intent'
@@ -7,7 +8,7 @@ import { Plus, Upload, Search, Users, ChevronLeft, ChevronRight, UserPlus, Downl
 import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
 import { useDirectory, type Directory } from '../lib/directory'
-import { fmtDate, fmtDateTime, fmtPhone, fmtMoney } from '../lib/format'
+import { fmtDate, fmtDateTime, fmtMoney } from '../lib/format'
 import { downloadCsv } from '../lib/report'
 import type { Lead } from '../lib/types'
 import { Badge, Button, Card, Empty, ErrorBox, Field, Modal, PageHeader, Spinner } from '../components/ui'
@@ -158,9 +159,9 @@ export default function Leads() {
     const extra = [...new Set(all.flatMap(l => Object.keys(l.custom ?? {})))]
     downloadCsv(`closer-os-leads_${new Date().toISOString().slice(0, 10)}.csv`,
       ['Name', 'Phone', 'Email', 'City', 'State', 'Company', 'Profession', 'Source', 'Campaign', 'Stage', 'Assigned to', 'Assigned on', 'Signed up', 'Added on',
-       'Last call', 'Last outcome', 'Next follow-up', 'Deal value', 'Tags', 'Key facts', 'Notes', ...extra.map(k => fieldLabel(fields, k))],
+       'Last call', 'Last call length', 'Last outcome', 'Next follow-up', 'Deal value', 'Tags', 'Key facts', 'Notes', ...extra.map(k => fieldLabel(fields, k))],
       all.map(l => [l.name, l.phone, l.email ?? '', l.city ?? '', l.state ?? '', l.company ?? '', l.profession ?? '', l.source ?? '', l.campaign ?? '',
-        dir.stageOf(l.stage_id)?.name ?? '', dir.nameOf(l.assigned_to), d(l.assigned_at), d(l.signup_at), d(l.created_at), d(l.last_call_at),
+        dir.stageOf(l.stage_id)?.name ?? '', dir.nameOf(l.assigned_to), d(l.assigned_at), d(l.signup_at), d(l.created_at), d(l.last_call_at), lenText((l as any).last_call_sec),
         dir.outcomeOf(l.last_outcome_id)?.label ?? '', d(l.next_follow_up_at), l.deal_value ?? '', (l.tags ?? []).join(', '), l.key_facts ?? '', l.notes ?? '',
         ...extra.map(k => String(l.custom?.[k] ?? ''))]))
   }
@@ -319,8 +320,8 @@ export default function Leads() {
                   setAllMatching(false); const s = new Set(selected); if (s.has(l.id)) s.delete(l.id); else s.add(l.id); setSelected(s) }} />}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5"><span className="truncate font-medium text-slate-900">{l.name || 'No name'}</span>{l.do_not_call && <Badge color="red">DNC</Badge>}{(l.arrivals ?? 1) > 1 && <Badge color="gray">🔁 ×{l.arrivals}</Badge>}<IntentBadge level={intentOf(org, (l as any).intent)} /></div>
-                  <div className="text-xs text-slate-500">{[[l.phone, ...(otherPhones.get(l.id) ?? [])].filter(Boolean).map(p => fmtPhone(p)).join(' / '), l.city, l.assigned_to ? dir.nameOf(l.assigned_to) : 'Unassigned'].filter(Boolean).join(' · ')}</div>
-                  <div className="text-xs text-brand-700">{(l.call_count ?? 0) === 0 ? 'Not called yet' : `${l.call_count} calls · ${l.conversation_count ?? 0} conversations`}{dir.outcomeOf(l.last_outcome_id) ? ` · ${dir.outcomeOf(l.last_outcome_id)!.label}` : ''}</div>
+                  <div className="text-xs text-slate-500"><span onClick={e => e.stopPropagation()}><AllPh main={l.phone} others={otherPhones.get(l.id)} lead={l.id} /></span>{[l.city, l.assigned_to ? dir.nameOf(l.assigned_to) : 'Unassigned'].filter(Boolean).map(x => ` · ${x}`).join('')}</div>
+                  <div className="text-xs text-brand-700">{(l.call_count ?? 0) === 0 ? 'Not called yet' : `${l.call_count} calls · ${l.conversation_count ?? 0} conversations · last ${fmtDateTime(l.last_call_at!, org)} · ${lenText((l as any).last_call_sec)}`}{dir.outcomeOf(l.last_outcome_id) ? ` · ${dir.outcomeOf(l.last_outcome_id)!.label}` : ''}</div>
                   {l.next_follow_up_at && <div className={`text-xs ${new Date(l.next_follow_up_at) < new Date() ? 'font-medium text-red-600' : 'text-slate-500'}`}>Next call {fmtDate(l.next_follow_up_at, org)}</div>}
                 </div>
               </div>))}
@@ -353,13 +354,14 @@ export default function Leads() {
                         }} /></td>}
                       <td className="td"><div className="font-medium text-slate-900">{l.name || <span className="text-slate-400">No name</span>}
                         {l.do_not_call && <Badge color="red">DNC</Badge>}{(l.arrivals ?? 1) > 1 && <span title="Came in more than once"> <Badge color="gray">🔁 Repeated ×{l.arrivals}</Badge></span>} <IntentBadge level={intentOf(org, (l as any).intent)} /></div>
-                        <div className="text-xs tabular-nums text-slate-500"><AllPh main={l.phone} others={otherPhones.get(l.id)} />{l.city ? ` · ${l.city}` : ''}</div>
+                        <div className="text-xs tabular-nums text-slate-500"><AllPh main={l.phone} others={otherPhones.get(l.id)} lead={l.id} />{l.city ? ` · ${l.city}` : ''}</div>
                         {(l as any).was_deleted_at && <div className="text-[11px] text-amber-700" title="This person was deleted earlier and came back (registered again or in a new file)">↩ Was deleted {fmtDate((l as any).was_deleted_at, org)} · came back</div>}</td>
                       <td className="td">{l.assigned_to ? dir.nameOf(l.assigned_to) : <span className="text-amber-700">Unassigned</span>}</td>
                       <td className="td whitespace-nowrap text-slate-600">{(l.call_count ?? 0) === 0 ? <span className="text-slate-400">Not called</span> : <>
                         <div>{l.call_count} call{l.call_count === 1 ? '' : 's'}</div>
                         <div className="text-xs text-slate-500">{l.conversation_count ?? 0} talked{l.total_talk_sec ? ` · ${dur(l.total_talk_sec)}` : ''}</div></>}</td>
-                      <td className="td text-slate-600">{l.last_call_at ? <><div className="whitespace-nowrap">{fmtDate(l.last_call_at, org)}</div>
+                      <td className="td text-slate-600">{l.last_call_at ? <><div className="whitespace-nowrap">{fmtDateTime(l.last_call_at, org)}</div>
+                        <div className="text-xs text-slate-500">lasted {lenText((l as any).last_call_sec)}</div>
                         <div className="text-xs text-slate-500">{dir.outcomeOf(l.last_outcome_id)?.label ?? 'No outcome'}</div></> : '—'}</td>
                       <td className={`td whitespace-nowrap ${overdue ? 'font-medium text-red-600' : 'text-slate-600'}`}>{l.next_follow_up_at ? <>{fmtDate(l.next_follow_up_at, org)}{overdue && <div className="text-xs">overdue</div>}</> : '—'}</td>
                       <td className="td">{st ? <Badge color={st.is_won ? 'green' : st.is_lost ? 'red' : 'brand'}>{st.name}</Badge> : <Badge>New</Badge>}

@@ -1,5 +1,6 @@
 import { Ph } from './Copy'
 import { useEffect, useState } from 'react'
+import { LastCall, useLastCalls, lenText } from './LastCall'
 import { Download } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 
@@ -107,15 +108,16 @@ function BandLeads({ batch, dir, pick, onClose, scope }: { batch: Batch; dir: Di
     else { if (pick.from != null) q = q.gte('watch_minutes', pick.from); if (pick.to != null) q = q.lte('watch_minutes', pick.to) }
     q.then(({ data, error }) => error ? setError(errorText(error)) : setRows((data ?? []) as unknown as Row[]))
   }, [batch.id, pick, scope])
+  const lastCalls = useLastCalls((rows ?? []).map(r => r.lead.id))
   return (
     <Modal open wide onClose={onClose} title={`${pick.title}${rows ? ` · ${rows.length} leads` : ''}`} footer={rows && rows.length > 0 ? (
-      <Button variant="secondary" onClick={() => downloadCsv(`${batch.name}_${pick.title}.csv`, ['Name', 'Phone', 'City', 'Rep', 'Watched (min)', 'Present at the payment link', 'Chat messages', 'Polls answered', 'Warmth', 'Calls', 'Talked', 'Talk time'],
-        rows.map(r => [r.lead.name ?? '', r.lead.phone, r.lead.city ?? '', r.lead.assigned_to ? dir.nameOf(r.lead.assigned_to) : '', r.watch_minutes ?? '', r.saw_pitch == null ? '' : r.saw_pitch ? 'Yes' : 'No', r.chat_count, r.poll_answered, r.warmth, r.lead.dial_count, r.lead.has_talked ? 'Yes' : 'No', hms(r.lead.total_talk_sec)]))}>
+      <Button variant="secondary" onClick={() => downloadCsv(`${batch.name}_${pick.title}.csv`, ['Name', 'Phone', 'City', 'Rep', 'Watched (min)', 'Present at the payment link', 'Chat messages', 'Polls answered', 'Warmth', 'Calls', 'Talked', 'Talk time', 'Last call', 'Last call length'],
+        rows.map(r => [r.lead.name ?? '', r.lead.phone, r.lead.city ?? '', r.lead.assigned_to ? dir.nameOf(r.lead.assigned_to) : '', r.watch_minutes ?? '', r.saw_pitch == null ? '' : r.saw_pitch ? 'Yes' : 'No', r.chat_count, r.poll_answered, r.warmth, r.lead.dial_count, r.lead.has_talked ? 'Yes' : 'No', hms(r.lead.total_talk_sec), lastCalls.get(r.lead.id)?.at ?? '', lenText(lastCalls.get(r.lead.id)?.sec)]))}>
         <Download className="h-4 w-4" /> CSV</Button>) : undefined}>
       <ErrorBox error={error} />
       {!rows ? <Spinner /> : rows.length === 0 ? <p className="text-sm text-slate-500">No leads here.</p> : (
         <table className="w-full table-fixed text-sm">
-          <thead><tr><th className="th w-[34%]">Lead</th><th className="th">Rep</th><th className="th">Watched</th><th className="th">Warmth</th><th className="th">Calls</th><th className="th">Talk time</th></tr></thead>
+          <thead><tr><th className="th w-[34%]">Lead</th><th className="th">Rep</th><th className="th">Watched</th><th className="th">Warmth</th><th className="th">Calls</th><th className="th">Talk time</th><th className="th">Last call</th></tr></thead>
           <tbody className="divide-y divide-slate-100">
             {rows.map(r => (
               <tr key={r.lead.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setOpen(r.lead.id)}>
@@ -126,6 +128,7 @@ function BandLeads({ batch, dir, pick, onClose, scope }: { batch: Batch; dir: Di
                   <span className="block text-xs text-slate-500">{[r.chat_count ? `💬 ${r.chat_count}` : '', r.poll_answered ? `📊 ${r.poll_answered}` : ''].filter(Boolean).join(' ')}</span></td>
                 <td className="td tabular-nums">{r.lead.dial_count}</td>
                 <td className="td tabular-nums">{r.lead.has_talked ? hms(r.lead.total_talk_sec) : '—'}</td>
+                <td className="td text-slate-600"><LastCall at={lastCalls.get(r.lead.id)?.at} sec={lastCalls.get(r.lead.id)?.sec} /></td>
               </tr>
             ))}
           </tbody>

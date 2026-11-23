@@ -39,6 +39,12 @@ const check = (ok, what) => { if (!ok) fails++; log(ok ? 'OK  ' : 'FAIL', what) 
       const { count } = await admin.from('leads').select('id', { count: 'exact', head: true }).eq('org_id', org.id); log('leads in company:', count) }
     await p.goto(`http://localhost:4173/webinars/${b.id}`); await p.waitForTimeout(6000); await shot('6a-webinar')
     const t = p.locator('input[type=time]'); if (await t.count()) { await t.fill('20:08'); await p.waitForTimeout(500); log('clock entry:', await p.locator('text=/= minute/').first().innerText().catch(()=>'none')); await shot('6-clock') } else log('no clock input')
+    await p.click('button:has-text("Minutes into the webinar")'); await p.fill('input[type=number]', '65'); await p.waitForTimeout(400)
+    log('minute line:', await p.locator('text=/Minute 65 =/').first().innerText().catch(()=>'none'))
+    await p.goto('http://localhost:4173/leads'); await p.waitForTimeout(5000)
+    log('call icons on Leads page:', await p.locator('button[title^="Call "]').count(), '· last-call cells:', await p.locator('text=/lasted|Not called/').count()); await shot('7-leads')
+    await p.locator('button[title^="Call "]:visible').first().click(); await p.waitForTimeout(1500)
+    log('after call click:', await p.locator('text=/Calling|not in your leads|phone/').first().innerText().catch(()=>'none'))
     log('browser errors:', errors.length ? errors : 'none');
     await browser.close();
   } catch (e) { console.error('FAILED', e); fails++ } finally {

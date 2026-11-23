@@ -1,8 +1,9 @@
 // One-tap copy next to every phone number and email (owner, Nov 21 2026). Click the icon (or press long on the text on a
 // phone) to copy; a small "Copied" toast confirms. The number itself never starts a call.
-import { Copy as CopyIcon } from 'lucide-react'
+import { Copy as CopyIcon, Phone as PhoneIcon } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, errorText } from '../lib/supabase'
+import { useSession } from '../lib/session'
 import { fmtPhone } from '../lib/format'
 import { toast } from '../lib/dialogs'
 
@@ -28,9 +29,29 @@ export function Copyable({ value, label, what }: { value?: string | null; label?
 }
 
 /** A phone number, formatted, with copy. */
-export function Ph({ v }: { v?: string | null }) {
+export function Ph({ v, lead, noCall }: { v?: string | null; lead?: string | null; noCall?: boolean }) {
   if (!v) return null
-  return <Copyable value={v} label={fmtPhone(v)} what="Number copied" />
+  return <span className="inline-flex items-center"><Copyable value={v} label={fmtPhone(v)} what="Number copied" />{!noCall && <CallBtn phone={v} lead={lead} />}</span>
+}
+
+/** 📞 next to a number: asks MY Closer OS phone app to dial this exact number (like "Call on my phone" in My desk). */
+export function CallBtn({ phone, lead }: { phone: string; lead?: string | null }) {
+  const { org, support } = useSession()
+  if (!org || support) return null
+  async function call(e: React.MouseEvent) {
+    e.stopPropagation(); e.preventDefault()
+    const { data, error } = await supabase.rpc('request_call_phone', { p_org: org!.id, p_phone: phone, p_lead: lead ?? null })
+    if (error) return toast(errorText(error))
+    toast(`📞 Calling ${fmtPhone(phone)} on your phone…`)
+    const id = (data as { id: string }).id
+    window.setTimeout(async () => {
+      const { data: r } = await supabase.from('call_requests').select('status').eq('id', id).maybeSingle()
+      if ((r as { status: string } | null)?.status === 'pending')
+        toast('Your phone hasn’t picked it up yet — open Closer OS on your phone (it calls within a few seconds while open).')
+    }, 10000)
+  }
+  return <button type="button" title={`Call ${fmtPhone(phone)} from my phone (Closer OS app)`} aria-label={`Call ${phone}`} onClick={call}
+    className="ml-0.5 inline-flex shrink-0 rounded p-0.5 align-middle text-slate-400 hover:bg-emerald-50 hover:text-emerald-700"><PhoneIcon className="h-3.5 w-3.5" /></button>
 }
 export function Em({ v }: { v?: string | null }) {
   if (!v) return null
@@ -55,7 +76,7 @@ export function useOtherPhones(ids: string[]) {
   return map
 }
 /** The main number plus every other number, each with its own copy button. */
-export function AllPh({ main, others }: { main?: string | null; others?: string[] }) {
+export function AllPh({ main, others, lead }: { main?: string | null; others?: string[]; lead?: string | null }) {
   const rest = (others ?? []).filter(p => p && p !== main)
-  return <span className="inline-flex flex-wrap items-center gap-x-2"><Ph v={main} />{rest.map(p => <span key={p} className="text-slate-400"><Ph v={p} /></span>)}</span>
+  return <span className="inline-flex flex-wrap items-center gap-x-2"><Ph v={main} lead={lead} />{rest.map(p => <span key={p} className="text-slate-400"><Ph v={p} lead={lead} /></span>)}</span>
 }

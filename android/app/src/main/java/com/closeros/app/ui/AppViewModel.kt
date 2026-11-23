@@ -1653,7 +1653,9 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
         checkingRequests = true
         try {
             val r = runCatching { Repo.claimCallRequest() }.getOrNull() ?: return@launch
-            val lead = runCatching { Repo.lead(r.lead_id) }.getOrNull() ?: return@launch
+            val found = runCatching { Repo.lead(r.lead_id) }.getOrNull() ?: return@launch
+            // The website's 📞 next to a number sends THAT number (it may be the lead's second number).
+            val lead = r.phone?.takeIf { it.isNotBlank() && it != found.phone }?.let { found.copy(phone = it) } ?: found
             remoteRequestId = r.id; remoteCall = true
             callContext = r.purpose to r.batch_id
             message = "Calling ${lead.name.ifBlank { lead.phone }} (from your laptop)"

@@ -1,5 +1,6 @@
 import { Ph } from './Copy'
 import { useEffect, useState } from 'react'
+import { LastCall, useLastCalls } from './LastCall'
 import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
 import type { Directory } from '../lib/directory'
@@ -15,17 +16,19 @@ const mins = (sec: number) => sec >= 3600 ? `${Math.floor(sec / 3600)}h ${Math.r
 export function LeadListModal({ title, leads, dir, onClose }: { title: string; leads: J[] | null; dir: Directory; onClose: () => void }) {
   const [open, setOpen] = useState<string | null>(null)
   const name = (id: string | null) => dir.members.find(m => m.user_id === id)?.profile?.full_name ?? '—'
+  const lastCalls = useLastCalls((leads ?? []).map(l => l.id))
   return (
     <Modal open onClose={onClose} title={`${title}${leads ? ` (${leads.length})` : ''}`} wide>
       {!leads ? <Spinner /> : leads.length === 0 ? <p className="text-sm text-slate-500">No leads.</p> : (
         <div className="max-h-[60vh] overflow-y-auto">
           <table className="w-full table-fixed text-sm">
-            <thead className="text-left text-xs text-slate-500"><tr><th className="w-[30%] py-1">Lead</th><th>Assigned to</th><th>Dials</th><th>Talk</th><th>WA</th><th className="w-[25%]">Last outcome</th></tr></thead>
+            <thead className="text-left text-xs text-slate-500"><tr><th className="w-[30%] py-1">Lead</th><th>Assigned to</th><th>Dials</th><th>Talk</th><th>WA</th><th className="w-[20%]">Last call</th><th className="w-[20%]">Last outcome</th></tr></thead>
             <tbody>{leads.map(l => (
               <tr key={l.id} className="cursor-pointer border-t border-slate-100 hover:bg-slate-50" onClick={() => setOpen(l.id)}>
                 <td className="py-1.5"><div className="truncate font-medium">{l.name || fmtPhone(l.phone)}</div><div className="truncate text-xs text-slate-500"><Ph v={l.phone} /></div></td>
                 <td className="truncate">{name(l.assigned_to)}</td><td>{l.call_count ?? l.dial_count} <span className="text-xs text-slate-400">({l.conversation_count ?? 0} talked)</span></td>
                 <td>{mins(l.total_talk_sec ?? 0)}</td><td>{l.wa_count}</td>
+                <td className="text-xs"><LastCall at={lastCalls.get(l.id)?.at} sec={lastCalls.get(l.id)?.sec} /></td>
                 <td className="truncate">{dir.outcomes.find(o => o.id === l.last_outcome_id)?.label ?? '—'}</td>
               </tr>))}</tbody>
           </table>

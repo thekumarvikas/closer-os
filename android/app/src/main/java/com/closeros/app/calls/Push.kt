@@ -65,6 +65,8 @@ class PushService : FirebaseMessagingService() {
                 AppLog.error(applicationContext, "push", null, kind = "info", message = "sync requested from the dashboard")
                 CallSync.syncNow(applicationContext)
             }
+            // The website's 📞 (or My desk) asked this phone to call: Closer OS dials as soon as it is open.
+            "call" -> callAlert(message.data["label"])
             // A lead was just assigned to me / one of my leads registered again → notify at once.
             "leads" -> runBlocking {
                 runCatching { com.closeros.app.data.Backend.ensureFreshSession() }
@@ -73,5 +75,22 @@ class PushService : FirebaseMessagingService() {
                 CallSync.syncNow(applicationContext)
             }
         }
+    }
+
+    private fun callAlert(label: String?) {
+        val ctx = applicationContext
+        val nm = ctx.getSystemService(android.app.NotificationManager::class.java)
+        if (android.os.Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(android.app.NotificationChannel("web_calls", "Calls started from the website",
+            android.app.NotificationManager.IMPORTANCE_HIGH))
+        val open = android.app.PendingIntent.getActivity(ctx, 7301, android.content.Intent(ctx, com.closeros.app.MainActivity::class.java)
+            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
+        val n = androidx.core.app.NotificationCompat.Builder(ctx, "web_calls")
+            .setSmallIcon(com.closeros.app.R.drawable.ic_notif).setColor(0xFF0F766E.toInt())
+            .setContentTitle("📞 Call ${label ?: "a lead"} — tap to call")
+            .setContentText("You started this call on the website. Tap and Closer OS dials it.")
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH).setCategory(androidx.core.app.NotificationCompat.CATEGORY_CALL)
+            .setAutoCancel(true).setTimeoutAfter(120_000).setContentIntent(open).build()
+        runCatching { nm.notify(7301, n) }
     }
 }

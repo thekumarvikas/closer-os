@@ -2401,3 +2401,11 @@ intelligence → Play Store launch.
     18 Nov bulk delete). Web: Leads "↩ Was deleted … · came back", LeadDrawer note.
   · Search finds second numbers / emails (0148). Leads list (desktop + phone cards) and LeadDrill show ALL numbers, each with
     copy (useOtherPhones / AllPh in components/Copy.tsx). App lists not yet.
+- Nov 24 2026 (migrations 0149–0150, app 0.29.11): PaymentLink minutes box shows "Minute N = <clock> (counted from <start>)".
+  📞 next to EVERY lead phone on the web (components/Copy.tsx Ph → CallBtn; Ph noCall to hide): request_call_phone(org, phone,
+  lead?) finds the lead (find_lead incl. second numbers) → request_call(lead, …, p_phone) → call_requests.phone; claim returns
+  phone; app dials that exact number (CallRequest.phone); request_call push_wakes kind 'call' → app notification "📞 Call … —
+  tap to call" (Push.kt callAlert) — the phone dials once Closer OS is open. Not-a-lead numbers → "add it as a lead first".
+  RULE: every table showing a lead with call details shows LAST CALL time + length: leads.last_call_sec (trigger t_lead_last_call),
+  components/LastCall.tsx (useLastCalls, LastCall, lenText) in Leads (desktop, phone cards, CSV), LeadDrill, WatchBands list,
+  Round9Reports LeadListModal. Add it to any new lead table.

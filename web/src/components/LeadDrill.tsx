@@ -1,4 +1,5 @@
 import { AllPh, useOtherPhones } from './Copy'
+import { LastCall, useLastCalls, lenText } from './LastCall'
 import { useEffect, useState } from 'react'
 import { Download, X } from 'lucide-react'
 import { errorText } from '../lib/supabase'
@@ -26,6 +27,7 @@ export function LeadDrill({ title, sub, load, dir, onClose, ownerLabel = 'Team m
   const { org } = useOrg()
   const [rows, setRows] = useState<DrillRow[] | null>(null)
   const otherPhones = useOtherPhones((rows ?? []).map(r => r.lead_id))
+  const lastCalls = useLastCalls((rows ?? []).map(r => r.lead_id))
   const [open, setOpen] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => { load().then(setRows).catch(e => { setError(errorText(e)); setRows([]) }) }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -37,9 +39,10 @@ export function LeadDrill({ title, sub, load, dir, onClose, ownerLabel = 'Team m
   function csv() {
     if (!rows) return
     downloadCsv(`${fileName ?? title}.csv`.replace(/[^\w .()-]+/g, '_'),
-      ['Name', 'Phone', ownerLabel, 'Registered', 'Watched (min)', 'Calls', 'Longest call', 'Talk time', 'Last outcome', 'Earlier webinar'],
+      ['Name', 'Phone', ownerLabel, 'Registered', 'Watched (min)', 'Calls', 'Longest call', 'Talk time', 'Last call', 'Last call length', 'Last outcome', 'Earlier webinar'],
       rows.map(r => [r.name, r.phone, r.owner ? dir.nameOf(r.owner) : 'Unassigned', r.registered === false ? 'No — joined without registering' : 'Yes',
         r.watch_minutes ?? '', r.calls ?? '', r.longest ? hms(r.longest) : '', r.talk ? hms(r.talk) : '',
+        lastCalls.get(r.lead_id)?.at ?? '', lenText(lastCalls.get(r.lead_id)?.sec),
         dir.outcomeOf(r.outcome_id ?? null)?.label ?? '', prevText(r)]))
   }
 
@@ -62,7 +65,7 @@ export function LeadDrill({ title, sub, load, dir, onClose, ownerLabel = 'Team m
             <table className="min-w-full divide-y divide-slate-100">
               <thead className="sticky top-0 z-10 bg-slate-50"><tr>
                 <th className="th">Lead</th><th className="th">{ownerLabel}</th>
-                <th className="th text-right">Watched</th><th className="th text-right">Calls</th><th className="th text-right">Longest</th>
+                <th className="th text-right">Watched</th><th className="th text-right">Calls</th><th className="th text-right">Longest</th><th className="th">Last call</th>
                 <th className="th">Last outcome</th>
               </tr></thead>
               <tbody className="divide-y divide-slate-100">
@@ -70,7 +73,7 @@ export function LeadDrill({ title, sub, load, dir, onClose, ownerLabel = 'Team m
                   <tr key={r.lead_id} className="cursor-pointer hover:bg-slate-50" onClick={() => setOpen(r.lead_id)}>
                     <td className="td">
                       <p className="font-medium">{r.name || 'No name'}</p>
-                      <p className="text-xs text-slate-500"><AllPh main={r.phone} others={otherPhones.get(r.lead_id)} /></p>
+                      <p className="text-xs text-slate-500"><AllPh main={r.phone} others={otherPhones.get(r.lead_id)} lead={r.lead_id} /></p>
                       {showReg && r.registered === false && <p className="text-[11px] font-medium text-blue-700">Joined without registering</p>}
                       {showPrev && prevText(r) && <p className="text-[11px] text-slate-500">Earlier webinar: {prevText(r)}</p>}
                     </td>
@@ -78,6 +81,7 @@ export function LeadDrill({ title, sub, load, dir, onClose, ownerLabel = 'Team m
                     <td className="td text-right tabular-nums">{r.watch_minutes == null ? '—' : `${r.watch_minutes} min`}</td>
                     <td className="td text-right tabular-nums">{r.calls ?? 0}</td>
                     <td className="td text-right tabular-nums">{r.calls ? hms(r.longest ?? 0) : '—'}</td>
+                    <td className="td text-slate-600"><LastCall at={lastCalls.get(r.lead_id)?.at} sec={lastCalls.get(r.lead_id)?.sec} /></td>
                     <td className="td">{dir.outcomeOf(r.outcome_id ?? null)?.label ?? '—'}</td>
                   </tr>
                 ))}

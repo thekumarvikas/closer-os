@@ -77,6 +77,7 @@ export default function PaymentLinkCard({ batch, dir, canEdit, onSaved }: { batc
         <label className="text-sm">
           <span className="block text-xs text-slate-600">Enter the minute at which the payment link was dropped in the webinar</span>
           <input className="input !w-32" type="number" min={0} placeholder="e.g. 65" value={min} onChange={e => setMin(e.target.value)} />
+          {min.trim() !== '' && Number(min) >= 0 && <span className="mt-1 block text-xs text-amber-800">Minute {Math.round(Number(min))} = <b>{clock(Math.round(Number(min)))}</b> (counted from {startClock}, when the webinar opened). Is that right? If not, use Clock time.</span>}
         </label>)}
       <Button loading={busy} disabled={by === 'time' ? (tmMin == null || tmMin < 0) : min.trim() === ''}
         onClick={() => save(by === 'time' ? tmMin! : Math.max(0, Math.round(Number(min))))}>Save</Button>

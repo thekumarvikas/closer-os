@@ -2385,3 +2385,5 @@ intelligence → Play Store launch.
   85 real attendees read as 25. Fixed (only splice when found) and re-applied: 85 joined (49 registered via sheet + 36 direct
   link), 7 missing attendees added as leads. Only that webinar was uploaded while the bug existed (since Nov 21). Never call
   splice with an indexOf result without checking >= 0.
+  Same day: 2 attendees were matched to DELETED leads via lead_phones (find_lead, apply_zoom_report, import_leads had no
+  deleted_at check on that probe) → hidden from counts (83). Migration 0146 fixes all three; re-applied → 85.

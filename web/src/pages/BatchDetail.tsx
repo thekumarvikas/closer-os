@@ -443,7 +443,7 @@ function ZoomUpload({ batch, dir, file, onClose, onDone }: { batch: Batch; dir: 
     const teamPhones = new Set(dir.members.map(m => dir.phoneOf(m.user_id).replace(/\D/g, '').slice(-10)).filter(x => x.length === 10))
     // One person = rows linked by the same email OR the same phone (Zoom's later join rows often carry only the email).
     const people: A[] = []
-    const byEmail = new Map<string, A>(), byPhone = new Map<string, A>(), byName = new Map<string, A>()
+    const byEmail = new Map<string, A>(), byPhone = new Map<string, A>()
     const merge = (a: A, b: A) => {
       if (a === b) return a
       a.minutes += b.minutes; if (b.registered) a.registered = true
@@ -467,12 +467,12 @@ function ZoomUpload({ batch, dir, file, onClose, onDone }: { batch: Batch; dir: 
       const jw = cols.join >= 0 ? parseWall(g('join'), dmy) : null, lw = cols.leave >= 0 ? parseWall(g('leave'), dmy) : null
       const sess = jw && lw ? { join: wallToUtc(jw, org.timezone), leave: wallToUtc(lw, org.timezone) } : null
       const row: A = { name, email, phone, minutes, ...(reg ? { registered: true } : {}), ...(sess ? { sessions: [sess] } : {}), emails: new Set(email ? [email] : []), phones: new Set(p10.length >= 8 ? [p10] : []) }
-      let cur: A | undefined = (email && byEmail.get(email)) || (p10 && byPhone.get(p10)) || (!email && !p10 ? byName.get(name.toLowerCase()) : undefined)
+      // Combine ONLY on the exact same email or phone (owner, Nov 24): never by name — different people share names.
+      let cur: A | undefined = (email && byEmail.get(email)) || (p10 && byPhone.get(p10)) || undefined
       const other = p10 ? byPhone.get(p10) : undefined
       if (cur) { cur = merge(cur, row); if (other && other !== cur) cur = merge(cur, other) }
       else { cur = row; people.push(row) }
       cur.emails.forEach(e => byEmail.set(e, cur!)); cur.phones.forEach(p => byPhone.set(p, cur!))
-      if (!email && !p10) byName.set(name.toLowerCase(), cur)
     }
     const map = new Map(people.map((p, i) => [String(i), p]))
     // Someone on two devices at once has overlapping sessions: count the time once, not twice.

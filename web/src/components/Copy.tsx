@@ -1,7 +1,8 @@
 // One-tap copy next to every phone number and email (owner, Nov 21 2026). Click the icon (or press long on the text on a
 // phone) to copy; a small "Copied" toast confirms. The number itself never starts a call.
 import { Copy as CopyIcon } from 'lucide-react'
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { supabase } from '../lib/supabase'
 import { fmtPhone } from '../lib/format'
 import { toast } from '../lib/dialogs'
 
@@ -34,4 +35,27 @@ export function Ph({ v }: { v?: string | null }) {
 export function Em({ v }: { v?: string | null }) {
   if (!v) return null
   return <Copyable value={v} what="Email copied" />
+}
+
+/** Every OTHER number a lead has (second numbers from Zoom, re-registrations, imports) for a list of leads — one query. */
+export function useOtherPhones(ids: string[]) {
+  const [map, setMap] = useState<Map<string, string[]>>(new Map())
+  const key = ids.join(',')
+  useEffect(() => {
+    if (!ids.length) { setMap(new Map()); return }
+    let off = false
+    supabase.from('lead_phones').select('lead_id, phone').in('lead_id', ids.slice(0, 1000)).then(({ data }) => {
+      if (off) return
+      const m = new Map<string, string[]>()
+      for (const r of (data ?? []) as { lead_id: string; phone: string }[]) m.set(r.lead_id, [...(m.get(r.lead_id) ?? []), r.phone])
+      setMap(m)
+    })
+    return () => { off = true }
+  }, [key]) // eslint-disable-line react-hooks/exhaustive-deps
+  return map
+}
+/** The main number plus every other number, each with its own copy button. */
+export function AllPh({ main, others }: { main?: string | null; others?: string[] }) {
+  const rest = (others ?? []).filter(p => p && p !== main)
+  return <span className="inline-flex flex-wrap items-center gap-x-2"><Ph v={main} />{rest.map(p => <span key={p} className="text-slate-400"><Ph v={p} /></span>)}</span>
 }

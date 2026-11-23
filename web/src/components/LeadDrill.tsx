@@ -1,4 +1,4 @@
-import { Ph } from './Copy'
+import { AllPh, useOtherPhones } from './Copy'
 import { useEffect, useState } from 'react'
 import { Download, X } from 'lucide-react'
 import { errorText } from '../lib/supabase'
@@ -25,6 +25,7 @@ export function LeadDrill({ title, sub, load, dir, onClose, ownerLabel = 'Team m
   { title: string; sub?: string; load: () => Promise<DrillRow[]>; dir: Directory; onClose: () => void; ownerLabel?: string; fileName?: string }) {
   const { org } = useOrg()
   const [rows, setRows] = useState<DrillRow[] | null>(null)
+  const otherPhones = useOtherPhones((rows ?? []).map(r => r.lead_id))
   const [open, setOpen] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => { load().then(setRows).catch(e => { setError(errorText(e)); setRows([]) }) }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -69,7 +70,7 @@ export function LeadDrill({ title, sub, load, dir, onClose, ownerLabel = 'Team m
                   <tr key={r.lead_id} className="cursor-pointer hover:bg-slate-50" onClick={() => setOpen(r.lead_id)}>
                     <td className="td">
                       <p className="font-medium">{r.name || 'No name'}</p>
-                      <p className="text-xs text-slate-500"><Ph v={r.phone} /></p>
+                      <p className="text-xs text-slate-500"><AllPh main={r.phone} others={otherPhones.get(r.lead_id)} /></p>
                       {showReg && r.registered === false && <p className="text-[11px] font-medium text-blue-700">Joined without registering</p>}
                       {showPrev && prevText(r) && <p className="text-[11px] text-slate-500">Earlier webinar: {prevText(r)}</p>}
                     </td>

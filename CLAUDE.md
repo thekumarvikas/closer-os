@@ -2390,3 +2390,14 @@ intelligence → Play Store launch.
 - Zoom count check (Nov 24 2026): ZoomUpload reads the summary "Unique Viewers" + Host/Panelist rows; compares with attendees
   read + hosts + bots/own team. Gap > max(3, 5%) → red warning, Save blocked until "I've checked the file — save anyway"; else a
   green "Count check" line. tests/zoom-count-test.cjs (real 23 Nov file: Zoom 87 = 85 + 1 host + 1 bot).
+- Owner round on Zoom rules (Nov 24 2026, migrations 0146–0148):
+  · Payment link: "Clock time" (default) or "Minutes into the webinar"; clock time = same day as the webinar start (company tz),
+    converted to pitch_minute (PaymentLink.tsx).
+  · Zoom rows combine ONLY on exact email or phone — never by name (byName removed).
+  · Deleted leads come back (0147): AFTER INSERT trigger t_lead_came_back — a new lead whose number/email (incl. second
+    contacts) matches a DELETED, unmerged lead folds it in (merge_leads accepts deleted others under closeros.system); new lead
+    keeps its sheet sign-up time; leads.was_deleted_at / came_back_at + activity 'came_back'; zoom_upload_undo sets
+    delete_kind 'zoom_undo' (those fold back quietly, no flag). fold_deleted_twins() backfilled Cancer: 1,567 leads (their
+    18 Nov bulk delete). Web: Leads "↩ Was deleted … · came back", LeadDrawer note.
+  · Search finds second numbers / emails (0148). Leads list (desktop + phone cards) and LeadDrill show ALL numbers, each with
+    copy (useOtherPhones / AllPh in components/Copy.tsx). App lists not yet.

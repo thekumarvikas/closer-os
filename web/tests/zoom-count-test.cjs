@@ -37,6 +37,8 @@ const check = (ok, what) => { if (!ok) fails++; log(ok ? 'OK  ' : 'FAIL', what) 
       check(!bl?.some(x => /Fireflies|Notetaker/i.test(x.leads.name)), 'note-taker bot not added')
       check(bl?.filter(x => x.attended).length === 85, 'all 85 attendees joined (Zoom said 87 incl. host + bot)')
       const { count } = await admin.from('leads').select('id', { count: 'exact', head: true }).eq('org_id', org.id); log('leads in company:', count) }
+    await p.goto(`http://localhost:4173/webinars/${b.id}`); await p.waitForTimeout(6000); await shot('6a-webinar')
+    const t = p.locator('input[type=time]'); if (await t.count()) { await t.fill('20:08'); await p.waitForTimeout(500); log('clock entry:', await p.locator('text=/= minute/').first().innerText().catch(()=>'none')); await shot('6-clock') } else log('no clock input')
     log('browser errors:', errors.length ? errors : 'none');
     await browser.close();
   } catch (e) { console.error('FAILED', e); fails++ } finally {

@@ -14,7 +14,7 @@ import { X, Phone, MapPin, Building2, GraduationCap } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
 import type { Directory } from '../lib/directory'
-import { fmtDateTime, fmtDuration, fmtMoney } from '../lib/format'
+import { fmtDate, fmtDateTime, fmtDuration, fmtMoney } from '../lib/format'
 import type { Call, FollowUp, Lead, ProfessionCategory } from '../lib/types'
 import { Badge, Button, ErrorBox, Spinner } from '../components/ui'
 import { ask } from '../lib/dialogs'
@@ -162,6 +162,7 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
 
               <LeadSales leadId={leadId} />
               <LeadOrigins leadId={leadId} arrivals={(lead as any).arrivals ?? 1} />
+              {(lead as any).was_deleted_at && <p className="rounded-lg bg-amber-50 p-2 text-xs text-amber-900">↩ This person was <b>deleted on {fmtDate((lead as any).was_deleted_at, org)}</b> and came back {(lead as any).came_back_at ? `on ${fmtDate((lead as any).came_back_at, org)}` : ''} (registered again or in a new file). Their earlier history is kept here.</p>}
               <LeadProfileCard leadId={leadId} profile={(lead as any).profile ?? {}} onChanged={() => { load(); onChanged() }} />
               <PinnedNotes leadId={leadId} pins={((lead as any).pinned ?? []) as Pin[]} onChanged={load} />
               <LeadObjections ids={(lead as any).objections ?? []} />

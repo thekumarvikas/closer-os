@@ -6,6 +6,7 @@ import type { Batch } from '../lib/types'
 import { Button, Card } from './ui'
 import { LeadDrill, type DrillRow } from './LeadDrill'
 import { toast } from '../lib/dialogs'
+import { wallToUtc } from '../lib/zoom'
 
 /* "Payment link dropped" (owner, Nov 2026): who was in the webinar when the payment link was dropped in the chat.
    Present = in the room for the 10 minutes around it (5 before, 5 after; short drops are fine). Every number opens its people. */
@@ -25,6 +26,8 @@ export default function PaymentLinkCard({ batch, dir, canEdit, onSaved }: { batc
   const { org } = useOrg()
   const [r, setR] = useState<Report | null>(null)
   const [min, setMin] = useState('')
+  const [by, setBy] = useState<'time' | 'minute'>('time')
+  const [tm, setTm] = useState('')
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [drill, setDrill] = useState<string | null>(null)
@@ -49,13 +52,34 @@ export default function PaymentLinkCard({ batch, dir, canEdit, onSaved }: { batc
       {sub && <p className="text-xs opacity-70">{sub}</p>}
     </button>)
 
+  // Clock time on the webinar's own day (company time zone) → minutes after the webinar started.
+  const startDay = new Intl.DateTimeFormat('en-CA', { timeZone: org.timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(r.started_at))
+  const fromClock = (t: string): number | null => {
+    const m = t.match(/^(\d{1,2}):(\d{2})$/); if (!m) return null
+    const [y, M, d] = startDay.split('-').map(Number)
+    const at = Date.parse(wallToUtc({ y, M, d, h: +m[1], m: +m[2], s: 0 }, org.timezone))
+    return Math.round((at - Date.parse(r.started_at)) / 60000)
+  }
+  const tmMin = tm ? fromClock(tm) : null
+  const startClock = new Date(r.started_at).toLocaleTimeString('en-IN', { timeZone: org.timezone, hour: 'numeric', minute: '2-digit' })
   const entry = (
     <div className="flex flex-wrap items-end gap-2">
-      <label className="text-sm">
-        <span className="block text-xs text-slate-600">Enter the minute at which the payment link was dropped in the webinar</span>
-        <input className="input !w-32" type="number" min={0} placeholder="e.g. 65" value={min} onChange={e => setMin(e.target.value)} />
-      </label>
-      <Button loading={busy} disabled={min.trim() === ''} onClick={() => save(Math.max(0, Math.round(Number(min))))}>Save</Button>
+      <div className="w-full flex gap-1 text-xs">
+        {(['time', 'minute'] as const).map(k => <button key={k} onClick={() => setBy(k)} className={`rounded-full border px-3 py-1 ${by === k ? 'border-brand-600 bg-brand-50 text-brand-800' : 'border-slate-200 text-slate-600'}`}>{k === 'time' ? 'Clock time' : 'Minutes into the webinar'}</button>)}
+      </div>
+      {by === 'time' ? (
+        <label className="text-sm">
+          <span className="block text-xs text-slate-600">What time was the payment link dropped? (webinar started at {startClock})</span>
+          <input className="input !w-36" type="time" value={tm} onChange={e => setTm(e.target.value)} />
+          {tmMin != null && <span className={`mt-1 block text-xs ${tmMin < 0 ? 'text-red-700' : 'text-slate-500'}`}>{tmMin < 0 ? 'That is before the webinar started' : `= minute ${tmMin} of the webinar`}</span>}
+        </label>
+      ) : (
+        <label className="text-sm">
+          <span className="block text-xs text-slate-600">Enter the minute at which the payment link was dropped in the webinar</span>
+          <input className="input !w-32" type="number" min={0} placeholder="e.g. 65" value={min} onChange={e => setMin(e.target.value)} />
+        </label>)}
+      <Button loading={busy} disabled={by === 'time' ? (tmMin == null || tmMin < 0) : min.trim() === ''}
+        onClick={() => save(by === 'time' ? tmMin! : Math.max(0, Math.round(Number(min))))}>Save</Button>
       {r.minute != null && <Button variant="ghost" onClick={() => setEditing(false)}>Cancel</Button>}
       {r.chat_link?.minute != null && r.chat_link.minute !== r.minute && (
         <div className="w-full rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-sm text-emerald-900">
@@ -69,10 +93,10 @@ export default function PaymentLinkCard({ batch, dir, canEdit, onSaved }: { batc
     <Card className="mb-4 p-4">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <p className="font-semibold">💳 Payment link dropped</p>
-        {r.minute != null && canEdit && !editing && <button className="text-sm text-brand-700 hover:underline" onClick={() => { setMin(String(r.minute)); setEditing(true) }}>Change minute</button>}
+        {r.minute != null && canEdit && !editing && <button className="text-sm text-brand-700 hover:underline" onClick={() => { setMin(String(r.minute)); setEditing(true) }}>Change time</button>}
       </div>
       {r.minute == null || editing ? (
-        canEdit ? <div className="rounded-lg bg-amber-50 p-3">{!editing && <p className="mb-2 text-sm text-amber-900">Set the minute to see who was in the webinar when your payment link was dropped — your most likely buyers.</p>}{entry}</div>
+        canEdit ? <div className="rounded-lg bg-amber-50 p-3">{!editing && <p className="mb-2 text-sm text-amber-900">Set the time the link was dropped to see who was in the webinar when your payment link was dropped — your most likely buyers.</p>}{entry}</div>
           : <p className="text-sm text-slate-500">The payment link minute hasn't been set for this webinar yet.</p>
       ) : (<>
         <p className="mb-3 text-sm text-slate-600">At <b>minute {r.minute}</b> ({clock(r.minute)}). “Present” = in the webinar from 5 minutes before to 5 minutes after the link (short drops allowed).

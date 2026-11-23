@@ -1,4 +1,4 @@
-import { Ph } from '../components/Copy'
+import { AllPh, useOtherPhones } from '../components/Copy'
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { intentLevels, intentOf } from '../lib/intents'
 import { IntentBadge } from '../components/Intent'
@@ -54,6 +54,7 @@ export default function Leads() {
   const dir = useDirectory(org.id, version)
   const fields = useLeadFields(org.id)
   const [leads, setLeads] = useState<Lead[] | null>(null)
+  const otherPhones = useOtherPhones((leads ?? []).map(l => l.id))
   const [count, setCount] = useState(0)
   const [page, setPage] = useState(0)
   const f = useFilters<LeadFilter>('leads.filters', NO_FILTERS)
@@ -318,7 +319,7 @@ export default function Leads() {
                   setAllMatching(false); const s = new Set(selected); if (s.has(l.id)) s.delete(l.id); else s.add(l.id); setSelected(s) }} />}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5"><span className="truncate font-medium text-slate-900">{l.name || 'No name'}</span>{l.do_not_call && <Badge color="red">DNC</Badge>}{(l.arrivals ?? 1) > 1 && <Badge color="gray">🔁 ×{l.arrivals}</Badge>}<IntentBadge level={intentOf(org, (l as any).intent)} /></div>
-                  <div className="text-xs text-slate-500">{[fmtPhone(l.phone), l.city, l.assigned_to ? dir.nameOf(l.assigned_to) : 'Unassigned'].filter(Boolean).join(' · ')}</div>
+                  <div className="text-xs text-slate-500">{[[l.phone, ...(otherPhones.get(l.id) ?? [])].filter(Boolean).map(p => fmtPhone(p)).join(' / '), l.city, l.assigned_to ? dir.nameOf(l.assigned_to) : 'Unassigned'].filter(Boolean).join(' · ')}</div>
                   <div className="text-xs text-brand-700">{(l.call_count ?? 0) === 0 ? 'Not called yet' : `${l.call_count} calls · ${l.conversation_count ?? 0} conversations`}{dir.outcomeOf(l.last_outcome_id) ? ` · ${dir.outcomeOf(l.last_outcome_id)!.label}` : ''}</div>
                   {l.next_follow_up_at && <div className={`text-xs ${new Date(l.next_follow_up_at) < new Date() ? 'font-medium text-red-600' : 'text-slate-500'}`}>Next call {fmtDate(l.next_follow_up_at, org)}</div>}
                 </div>
@@ -352,7 +353,8 @@ export default function Leads() {
                         }} /></td>}
                       <td className="td"><div className="font-medium text-slate-900">{l.name || <span className="text-slate-400">No name</span>}
                         {l.do_not_call && <Badge color="red">DNC</Badge>}{(l.arrivals ?? 1) > 1 && <span title="Came in more than once"> <Badge color="gray">🔁 Repeated ×{l.arrivals}</Badge></span>} <IntentBadge level={intentOf(org, (l as any).intent)} /></div>
-                        <div className="text-xs tabular-nums text-slate-500"><Ph v={l.phone} />{l.city ? ` · ${l.city}` : ''}</div></td>
+                        <div className="text-xs tabular-nums text-slate-500"><AllPh main={l.phone} others={otherPhones.get(l.id)} />{l.city ? ` · ${l.city}` : ''}</div>
+                        {(l as any).was_deleted_at && <div className="text-[11px] text-amber-700" title="This person was deleted earlier and came back (registered again or in a new file)">↩ Was deleted {fmtDate((l as any).was_deleted_at, org)} · came back</div>}</td>
                       <td className="td">{l.assigned_to ? dir.nameOf(l.assigned_to) : <span className="text-amber-700">Unassigned</span>}</td>
                       <td className="td whitespace-nowrap text-slate-600">{(l.call_count ?? 0) === 0 ? <span className="text-slate-400">Not called</span> : <>
                         <div>{l.call_count} call{l.call_count === 1 ? '' : 's'}</div>

@@ -2380,3 +2380,8 @@ intelligence → Play Store launch.
 - Web: Team page ⋯ "Clear old outcomes…" per person + header "Clear old outcomes…" (whole team, admins) → ClearOutcomes modal
   (before now / before today / before tomorrow in company tz, live count). Call log label + filter "Cleared by manager";
   Outcomes report grey row. A real outcome can still be added to a cleared call later.
+- BUG FIXED (Nov 24 2026): Zoom upload grouping (BatchDetail ZoomUpload attendees) — merge() did people.splice(indexOf(b)) on a NEW
+  row not yet in the list → indexOf -1 removed the LAST person each time someone's 2nd join row was merged. 23 Nov Cancer file:
+  85 real attendees read as 25. Fixed (only splice when found) and re-applied: 85 joined (49 registered via sheet + 36 direct
+  link), 7 missing attendees added as leads. Only that webinar was uploaded while the bug existed (since Nov 21). Never call
+  splice with an indexOf result without checking >= 0.

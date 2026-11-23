@@ -429,7 +429,8 @@ function ZoomUpload({ batch, dir, file, onClose, onDone }: { batch: Batch; dir: 
       if (b.sessions) a.sessions = [...(a.sessions ?? []), ...b.sessions]
       if (!a.phone) a.phone = b.phone; if (!a.email) a.email = b.email; if (!a.name) a.name = b.name
       b.emails.forEach(e => { a.emails.add(e); byEmail.set(e, a) }); b.phones.forEach(p => { a.phones.add(p); byPhone.set(p, a) })
-      people.splice(people.indexOf(b), 1)
+      // b may be a new row that was never added to the list: only remove it when it is there (indexOf -1 would remove the LAST person).
+      const i = people.indexOf(b); if (i >= 0) people.splice(i, 1)
       return a
     }
     for (const r of table.slice(1)) {

@@ -1,4 +1,5 @@
 import { Ph } from './Copy'
+import LeadDrawer from '../pages/LeadDrawer'
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import { Download, ChevronLeft, ChevronRight, MicOff, PhoneCall, Play } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
@@ -58,6 +59,7 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
   const [noting, setNoting] = useState<string | null>(null)
   const [noteText, setNoteText] = useState('')
   const [savingNote, setSavingNote] = useState(false)
+  const [openLead, setOpenLead] = useState<string | null>(null)
   const [added, setAdded] = useState<Record<string, string[]>>({})
   async function saveNote(c: Row) {
     const t = noteText.trim(); if (!t || !c.lead_id) return
@@ -208,9 +210,10 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
             </tr></thead>
             <tbody className="divide-y divide-slate-100" style={{ counterReset: `sn ${page * PAGE}` }}>
               {rows.map(c => (<Fragment key={c.id}>
-                <tr className="align-top hover:bg-slate-50">
+                <tr className={`align-top hover:bg-slate-50 ${c.lead_id ? 'cursor-pointer' : ''}`} title={c.lead_id ? 'Click to open the lead — full history' : undefined}
+                  onClick={e => { if (!c.lead_id || (e.target as HTMLElement).closest('button,a,input,select,textarea,audio')) return; setOpenLead(c.lead_id) }}>
                   <td className="px-3 py-2 text-slate-600">{fmtDateTime(c.started_at, org)}</td>
-                  <td className="truncate px-3 py-2">{c.lead ? <span className="font-medium">{c.lead.name || 'No name'}</span> : c.contact_name ? <span className="font-medium">{c.contact_name}</span> : null}
+                  <td className="truncate px-3 py-2">{c.lead ? <span className="font-medium text-brand-700 hover:underline">{c.lead.name || 'No name'}</span> : c.contact_name ? <span className="font-medium">{c.contact_name}</span> : null}
                     <span className={`block truncate ${c.lead || c.contact_name ? 'text-xs text-slate-500' : ''}`}><Ph v={c.phone} />{c.lead && (c.lead.profession || c.lead.city) ? ` · ${[c.lead.profession, c.lead.city].filter(Boolean).join(' · ')}` : ''}</span>
                     {c.lead && <span className="block truncate text-xs text-slate-400">{c.lead.call_count ?? 0} calls · {c.lead.conversation_count ?? 0} conversations{c.lead.source ? ` · ${c.lead.source}` : ''}</span>}
                     {c.batch && <span className="block truncate text-xs text-brand-700">{c.purpose === 'reminder' ? 'Reminder' : 'Sales'} · {c.batch.name}</span>}</td>
@@ -246,7 +249,8 @@ export default function CallLog({ org, dir, f, fileTag, outcome = '', setOutcome
         )}
         {rows && count > 0 && count <= PAGE && <p className="border-t border-slate-100 px-4 py-2 text-xs text-slate-500">{count.toLocaleString('en-IN')} calls</p>}
       </Card>
-      <p className="text-xs text-slate-500"><Badge color="gray">Tip</Badge> “Dialled from” is the SIM number the call was made on (each rep confirms their SIM numbers once in the app). Hover a red recording reason for the full explanation. Click “When” or “Length” to sort.</p>
+      <p className="text-xs text-slate-500"><Badge color="gray">Tip</Badge> “Dialled from” is the SIM number the call was made on (each rep confirms their SIM numbers once in the app). Hover a red recording reason for the full explanation. Click “When” or “Length” to sort. Click a call to open that lead's full history.</p>
+      {openLead && <LeadDrawer leadId={openLead} dir={dir} onClose={() => setOpenLead(null)} onChanged={() => {}} />}
     </div>
   )
 }

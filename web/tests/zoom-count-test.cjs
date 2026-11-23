@@ -45,6 +45,12 @@ const check = (ok, what) => { if (!ok) fails++; log(ok ? 'OK  ' : 'FAIL', what) 
     log('call icons on Leads page:', await p.locator('button[title^="Call "]').count(), '· last-call cells:', await p.locator('text=/lasted|Not called/').count()); await shot('7-leads')
     await p.locator('button[title^="Call "]:visible').first().click(); await p.waitForTimeout(1500)
     log('after call click:', await p.locator('text=/Calling|not in your leads|phone/').first().innerText().catch(()=>'none'))
+    { const { data: l1 } = await admin.from('leads').select('id, phone').eq('org_id', org.id).limit(1).single()
+      const { error: ce } = await admin.from('calls').insert({ id: require('crypto').randomUUID(), org_id: org.id, lead_id: l1.id, user_id: uid, phone: l1.phone, direction: 'outgoing', started_at: new Date().toISOString(), duration_sec: 75 })
+      if (ce) log('call insert error', ce.message)
+      await p.goto('http://localhost:4173/calls'); await p.waitForTimeout(5000)
+      await p.locator('tbody tr.cursor-pointer td:nth-child(2)').first().click({ position: { x: 5, y: 5 } }); await p.waitForTimeout(2500)
+      log('drawer opened from call log:', await p.locator('text=/Where is this lead|Contact/').count() > 0); await shot('8-calllog-drawer') }
     log('browser errors:', errors.length ? errors : 'none');
     await browser.close();
   } catch (e) { console.error('FAILED', e); fails++ } finally {

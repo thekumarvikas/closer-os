@@ -37,7 +37,7 @@ export function Ph({ v, lead, noCall }: { v?: string | null; lead?: string | nul
 /** 📞 next to a number: asks MY Closer OS phone app to dial this exact number (like "Call on my phone" in My desk). */
 export function CallBtn({ phone, lead }: { phone: string; lead?: string | null }) {
   const { org, support } = useSession()
-  if (!org || support) return null
+  if (!org || support?.mode === 'view') return null
   async function call(e: React.MouseEvent) {
     e.stopPropagation(); e.preventDefault()
     const { data, error } = await supabase.rpc('request_call_phone', { p_org: org!.id, p_phone: phone, p_lead: lead ?? null })
@@ -51,7 +51,7 @@ export function CallBtn({ phone, lead }: { phone: string; lead?: string | null }
     }, 10000)
   }
   return <button type="button" title={`Call ${fmtPhone(phone)} from my phone (Closer OS app)`} aria-label={`Call ${phone}`} onClick={call}
-    className="ml-0.5 inline-flex shrink-0 rounded p-0.5 align-middle text-slate-400 hover:bg-emerald-50 hover:text-emerald-700"><PhoneIcon className="h-3.5 w-3.5" /></button>
+    className="ml-0.5 inline-flex shrink-0 rounded p-0.5 align-middle text-emerald-600 hover:bg-emerald-50 hover:text-emerald-800"><PhoneIcon className="h-3.5 w-3.5" /></button>
 }
 export function Em({ v }: { v?: string | null }) {
   if (!v) return null

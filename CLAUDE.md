@@ -2409,3 +2409,5 @@ intelligence → Play Store launch.
   RULE: every table showing a lead with call details shows LAST CALL time + length: leads.last_call_sec (trigger t_lead_last_call),
   components/LastCall.tsx (useLastCalls, LastCall, lenText) in Leads (desktop, phone cards, CSV), LeadDrill, WatchBands list,
   Round9Reports LeadListModal. Add it to any new lead table.
+- Nov 24 2026: Call log rows open the LeadDrawer (side panel, full history) — whole row clickable except buttons/inputs; lead name
+  shown as a link. 📞 CallBtn is green and also shows during an EDIT support visit (hidden only in view-only visits).

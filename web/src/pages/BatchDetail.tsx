@@ -369,6 +369,10 @@ function ZoomUpload({ batch, dir, file, onClose, onDone }: { batch: Batch; dir: 
   const [assignMode, setAssignMode] = useState<'rules' | 'user' | 'none'>('none')
   const [assignTo, setAssignTo] = useState('')
   const [imported, setImported] = useState<string | null>(null)
+  // Zoom's own head-count from the report summary ("Unique Viewers") + hosts/panelists listed above the attendees.
+  const [zoomViewers, setZoomViewers] = useState<number | null>(null)
+  const [hostCount, setHostCount] = useState(0)
+  const [countOk, setCountOk] = useState(false)
 
   async function read(f: File) {
     setError(null)
@@ -407,6 +411,23 @@ function ZoomUpload({ batch, dir, file, onClose, onDone }: { batch: Batch; dir: 
         const g = (t: string) => parts.find(x => x.type === t)?.value
         setStarted(`${g('year')}-${g('month')}-${g('day')}T${g('hour')}:${g('minute')}`)
       }
+      // Zoom's own count, to check our reading against (summary row "Unique Viewers", value on the next row).
+      let uv: number | null = null
+      for (let i = 0; i < start && uv == null; i++) {
+        const c = rows[i].findIndex(x => /^unique viewers$/i.test(String(x).trim()))
+        if (c >= 0 && /\d/.test(String(rows[i + 1]?.[c] ?? ''))) uv = Number(String(rows[i + 1][c]).replace(/[^\d]/g, ''))
+      }
+      setZoomViewers(uv)
+      // Hosts / panelists who joined (Zoom counts them as viewers; we don't count them as attendees).
+      const hosts = new Set<string>()
+      let inHost = false
+      for (let i = 0; i < start; i++) {
+        const c0 = String(rows[i][0] ?? '').trim()
+        if (/^(host|panelist) details$/i.test(c0)) { inHost = true; continue }
+        if (/details$/i.test(c0)) { inHost = false; continue }
+        if (inHost && /^yes$/i.test(c0)) hosts.add(String(rows[i][2] || rows[i][1] || '').trim().toLowerCase())
+      }
+      setHostCount(hosts.size)
       setTable([head, ...body])
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not read this file') }
   }
@@ -467,6 +488,24 @@ function ZoomUpload({ batch, dir, file, onClose, onDone }: { batch: Batch; dir: 
     return [...map.values()].map(({ emails: _e, phones: _p, ...a }) => a)
   }, [table, cols, org.timezone, dir])
   const hasTimes = attendees.some(a => a.sessions?.length)
+  // Bots and our own team who joined: Zoom counts them, we skip them.
+  const skippedJoined = useMemo(() => {
+    if (!table) return 0
+    const teamEmails = new Set(dir.members.map(m => (m.profile?.email ?? '').toLowerCase()).filter(Boolean))
+    const keys = new Set<string>()
+    for (const r of table.slice(1)) {
+      const g = (k: ZoomCol) => cols[k] >= 0 ? String(r[cols[k]] ?? '').trim() : ''
+      if (!(Number(g('minutes').replace(/[^\d.]/g, '')) > 0)) continue
+      const email = g('email').toLowerCase()
+      if (ZOOM_BOT.test(g('name')) || (email && teamEmails.has(email))) keys.add(email || g('name').toLowerCase())
+    }
+    return keys.size
+  }, [table, cols, dir])
+  const joinedCount = attendees.filter(a => a.minutes > 0).length
+  const expectedViewers = joinedCount + skippedJoined + hostCount
+  // Small differences are normal (one person on two devices / two emails); a big one means the file was read wrong.
+  const countGap = zoomViewers != null ? zoomViewers - expectedViewers : 0
+  const countWrong = zoomViewers != null && Math.abs(countGap) > Math.max(3, Math.round(zoomViewers * 0.05)) && !countOk
 
   // Date check: a report from another day usually means the wrong webinar was opened.
   const dayOf = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: org.timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d)
@@ -513,7 +552,7 @@ function ZoomUpload({ batch, dir, file, onClose, onDone }: { batch: Batch; dir: 
   return (
     <Modal open onClose={onClose} title="Upload Zoom attendance report" wide footer={result ? <Button onClick={onClose}>Done</Button> : <>
       <Button variant="secondary" onClick={onClose}>Cancel</Button>
-      <Button onClick={apply} loading={busy} disabled={wrongDay || !attendees.length || cols.minutes < 0 || (cols.email < 0 && cols.phone < 0)}>Save watch time for {attendees.length || ''} people</Button>
+      <Button onClick={apply} loading={busy} disabled={wrongDay || countWrong || !attendees.length || cols.minutes < 0 || (cols.email < 0 && cols.phone < 0)}>Save watch time for {attendees.length || ''} people</Button>
     </>}>
       {result ? (
         <div className="space-y-4 text-sm">
@@ -572,6 +611,14 @@ function ZoomUpload({ batch, dir, file, onClose, onDone }: { batch: Batch; dir: 
       ) : (
         <div className="space-y-4 text-sm">
           <p>Found <b>{table.length - 1}</b> rows → <b>{attendees.length}</b> different people. Check the columns:</p>
+          {zoomViewers != null && !countWrong && (
+            <p className="rounded-lg bg-emerald-50 p-2 text-emerald-900">✓ Count check: Zoom says <b>{zoomViewers}</b> people watched. We read <b>{joinedCount}</b> attendees{hostCount + skippedJoined > 0 && <> + {[hostCount && `${hostCount} host${hostCount > 1 ? 's' : ''}`, skippedJoined && `${skippedJoined} note-taker bot / own team`].filter(Boolean).join(' + ')} (not counted)</>}.</p>)}
+          {countWrong && (
+            <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-red-900">
+              <p className="font-semibold">⚠ Count doesn't match: Zoom says {zoomViewers} people watched, but we read {joinedCount} attendees{hostCount + skippedJoined > 0 && ` (+ ${hostCount + skippedJoined} host / bot / own team)`}.</p>
+              <p className="mt-1">Something in this file was read wrong, so nothing is saved yet. Please send this file to Closer OS support.</p>
+              <Button variant="ghost" className="mt-2 !py-1" onClick={() => setCountOk(true)}>I've checked the file — save anyway</Button>
+            </div>)}
           {wrongDay && (
             <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-900">
               <p className="font-semibold">⚠ This report is from {fmtDate(reportDay + 'T12:00:00Z', org)}, but this webinar is on {fmtDate(batch.webinar_at, org)}.</p>

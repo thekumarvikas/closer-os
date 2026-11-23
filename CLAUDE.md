@@ -2387,3 +2387,6 @@ intelligence → Play Store launch.
   splice with an indexOf result without checking >= 0.
   Same day: 2 attendees were matched to DELETED leads via lead_phones (find_lead, apply_zoom_report, import_leads had no
   deleted_at check on that probe) → hidden from counts (83). Migration 0146 fixes all three; re-applied → 85.
+- Zoom count check (Nov 24 2026): ZoomUpload reads the summary "Unique Viewers" + Host/Panelist rows; compares with attendees
+  read + hosts + bots/own team. Gap > max(3, 5%) → red warning, Save blocked until "I've checked the file — save anyway"; else a
+  green "Count check" line. tests/zoom-count-test.cjs (real 23 Nov file: Zoom 87 = 85 + 1 host + 1 bot).

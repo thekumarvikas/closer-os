@@ -2337,7 +2337,7 @@ intelligence → Play Store launch.
   NOW: only through a recorded visit. support_sessions (org, user, mode view|edit, reason, started, expires +8 h, ended);
   support_allowed(org) = settings.support_access (missing = true, "on by default with a clear note"); support_mode(org);
   my_support_orgs(); is_org_member / is_org_admin / my_member_orgs / my_admin_orgs include open visits (no is_super_admin);
-  leads_select rewritten without is_super_admin. sa_support_open(org, mode, reason) (refused when the company turned it off),
+  leads_select rewritten without is_super_admin; 0143: org_role(org) returns 'admin' during a visit (RPCs that read org_role, e.g. search_leads, agree). sa_support_open(org, mode, reason) (refused when the company turned it off),
   sa_support_close, sa_support_current, set_support_access(org, on) (owner/admin; off ends open visits), support_visits(org)
   (visits + audit_logs actions by that person during the visit). sa_* RPCs, org_access, profile_select, billing reads still use
   is_super_admin directly (Super Admin pages).

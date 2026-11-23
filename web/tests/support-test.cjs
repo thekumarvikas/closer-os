@@ -34,14 +34,14 @@ const client = async u => { const c = createClient(URL, process.env.SB_PUB, { au
     p.on('pageerror', e => errors.push(e.message));
     const shot = async n => { await p.waitForTimeout(1200); await p.screenshot({ path: `${SHOTS}/${n}.png`, fullPage: false }); log('screenshot', n) };
     await p.goto('http://localhost:4173/'); await p.fill('input[type=email]', SA.email); await p.fill('input[type=password]', SA.password); await p.click('button[type=submit]');
-    await p.waitForTimeout(3000);
-    if (await p.locator('text=Just me').count()) { await p.click('text=Just me'); await p.click('button:has-text("Create my account")'); await p.waitForTimeout(3000) }
-    await p.goto('http://localhost:4173/admin'); await p.waitForSelector('text=Support Check Co (TEST)');
+    await p.waitForSelector('text=Just me', { timeout: 15000 }); await p.click('text=Just me');
+    await p.waitForSelector('button:has-text("Create my account")'); await p.click('button:has-text("Create my account")'); await p.waitForTimeout(4000);
+    await p.goto('http://localhost:4173/admin'); await p.waitForTimeout(5000); await shot('0-admin'); await p.waitForSelector('text=Support Check Co (TEST)');
     await p.locator('tr', { hasText: 'Support Check Co (TEST)' }).locator('button:has-text("Open")').click();
     await p.fill('input[placeholder^="e.g. Checking"]', 'Test visit'); await shot('1-open-dialog');
     await p.locator('.fixed button:has-text("Open")').last().click();
     await p.waitForSelector('text=as Closer OS support'); await shot('2-banner-dashboard');
-    await p.goto('http://localhost:4173/leads'); await p.waitForSelector('text=Priya Test Lead'); await shot('3-leads');
+    await p.goto('http://localhost:4173/leads'); await p.waitForTimeout(5000); await p.waitForSelector('td >> text=Priya Test Lead'); await shot('3-leads');
     check(true, 'company leads visible during the visit');
     await p.goto('http://localhost:4173/settings'); await p.waitForSelector('text=Company name');
     await p.locator('input.input').first().fill('Renamed by support'); await p.locator('form button[type=submit]').first().click();

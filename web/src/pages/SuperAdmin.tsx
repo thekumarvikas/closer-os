@@ -4,6 +4,39 @@ import { CompanyHealth, AddCompany, CompanyDetails, type CompanyExtra } from '..
 import { supabase, errorText } from '../lib/supabase'
 import { Badge, Button, Card, ErrorBox, Field, Modal, PageHeader, Spinner } from '../components/ui'
 import { featureNames } from './Billing'
+import { useNavigate } from 'react-router-dom'
+import { useSession } from '../lib/session'
+
+/** Open a client company as Closer OS support: recorded, visible to the client, view-only unless changes are needed. */
+function OpenCompany({ co, onClose }: { co: { id: string; name: string }; onClose: () => void }) {
+  const { openSupport } = useSession()
+  const nav = useNavigate()
+  const [mode, setMode] = useState<'view' | 'edit'>('view')
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  async function go() {
+    if (mode === 'edit' && !reason.trim()) return setErr('Write why you need to make changes — the company sees this.')
+    setBusy(true); const e = await openSupport(co.id, mode, reason); setBusy(false)
+    if (e) setErr(e); else { onClose(); nav('/') }
+  }
+  return (
+    <Modal open onClose={onClose} title={`Open ${co.name}`} footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button onClick={go} disabled={busy}>{busy ? 'Opening…' : 'Open'}</Button></>}>
+      <div className="space-y-3 text-sm">
+        <div className="grid grid-cols-2 gap-2">
+          {([['view', 'View only', 'See everything, change nothing'], ['edit', 'Can make changes', 'Fix settings, import, upload reports']] as const).map(([k, l, d]) =>
+            <button key={k} onClick={() => setMode(k)} className={`rounded-lg border p-3 text-left ${mode === k ? 'border-brand-600 bg-brand-50' : 'border-slate-200'}`}>
+              <p className="font-medium">{l}</p><p className="text-xs text-slate-500">{d}</p></button>)}
+        </div>
+        <Field label={mode === 'edit' ? 'Why? (the company sees this)' : 'Why? (optional — the company sees this)'}>
+          <input className="input" value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g. Checking the Zoom report they asked about" />
+        </Field>
+        <p className="text-xs text-slate-500">The visit is recorded and shown to the company in Settings → Company. It ends when you press Exit, or after 8 hours.</p>
+        <ErrorBox error={err} />
+      </div>
+    </Modal>
+  )
+}
 
 interface Company extends CompanyExtra { id: string; name: string; created_at: string; owner: string | null; users: number; calls_7d: number; last_call: string | null
   status: string | null; plan: string | null; plan_id: string | null; seats: number | null; cycle: string | null; trial_ends_at: string | null; current_period_end: string | null; note: string | null; paid_total: number }
@@ -24,6 +57,7 @@ export default function SuperAdmin() {
   const [revenue, setRevenue] = useState<{ month: string; amount: number; payments: number }[]>([])
   const [editCo, setEditCo] = useState<Company | null>(null)
   const [adding, setAdding] = useState(false)
+  const [visit, setVisit] = useState<Company | null>(null)
   const [editPlan, setEditPlan] = useState<Partial<Plan> | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [q, setQ] = useState('')
@@ -70,7 +104,7 @@ export default function SuperAdmin() {
           <div className="flex flex-wrap items-center justify-between gap-2 p-3"><input className="input max-w-xs" placeholder="Search company, owner or contact" value={q} onChange={e => setQ(e.target.value)} />
             <Button onClick={() => setAdding(true)}><Plus className="h-4 w-4" /> Add a company</Button></div>
           <table className="w-full table-fixed text-sm">
-            <thead className="bg-slate-50"><tr><th className="th w-[24%]">Company</th><th className="th">Plan</th><th className="th w-[22%]">Status</th><th className="th w-[9%]">Users</th><th className="th w-[11%]">Calls (7 days)</th><th className="th w-[10%]">Paid total</th><th className="th w-[6%]"></th></tr></thead>
+            <thead className="bg-slate-50"><tr><th className="th w-[24%]">Company</th><th className="th">Plan</th><th className="th w-[22%]">Status</th><th className="th w-[9%]">Users</th><th className="th w-[11%]">Calls (7 days)</th><th className="th w-[10%]">Paid total</th><th className="th w-[14%]"></th></tr></thead>
             <tbody className="divide-y divide-slate-100">
               {shown.map(c => (
                 <tr key={c.id} className="align-top">
@@ -82,7 +116,7 @@ export default function SuperAdmin() {
                   <td className="px-3 py-2">{c.users}</td>
                   <td className="px-3 py-2">{c.calls_7d}<span className="block text-xs text-slate-500">last {d(c.last_call)}</span></td>
                   <td className="px-3 py-2">{rupees(c.paid_total)}</td>
-                  <td className="px-3 py-2"><button className="p-1 text-slate-400 hover:text-slate-700" onClick={() => setEditCo(c)} aria-label="Edit"><Pencil className="h-4 w-4" /></button></td>
+                  <td className="px-3 py-2 whitespace-nowrap"><Button variant="secondary" className="!px-2 !py-1 text-xs" onClick={() => setVisit(c)}>Open</Button><button className="p-1 text-slate-400 hover:text-slate-700" onClick={() => setEditCo(c)} aria-label="Edit"><Pencil className="h-4 w-4" /></button></td>
                 </tr>
               ))}
             </tbody>
@@ -121,6 +155,7 @@ export default function SuperAdmin() {
 
       {tab === 'errors' && <AppErrors />}
 
+      {visit && <OpenCompany co={visit} onClose={() => setVisit(null)} />}
       {editCo && <EditCompany c={editCo} plans={plans} onClose={() => { setEditCo(null); reload() }} />}
       {adding && <AddCompany onClose={() => { setAdding(false); reload() }} />}
       {editPlan && <EditPlan p={editPlan} onClose={() => { setEditPlan(null); reload() }} />}

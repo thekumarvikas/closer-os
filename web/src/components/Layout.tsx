@@ -27,7 +27,7 @@ const nav = [
 ]
 
 export default function Layout() {
-  const { org, role, profile, memberships, selectOrg, isAdmin, isManager, access } = useSession()
+  const { org, role, profile, memberships, selectOrg, isAdmin, isManager, access, support, closeSupport } = useSession()
   const solo = !!org?.is_individual
   const location = useLocation()
   const [open, setOpen] = useState(false)
@@ -85,6 +85,12 @@ export default function Layout() {
           {access.state === 'grace' && <>Your plan has ended — please renew to keep using Closer OS. </>}
           {access.state === 'expired' && <>Your plan has ended. Your data is safe. </>}
           {solo ? null : isAdmin ? <Link to="/billing" className="font-semibold underline">{access.state === 'trial' ? 'Choose a plan' : 'Renew now'}</Link> : 'Please ask your company owner to renew.'}
+        </div>
+      )}
+      {support && (
+        <div className={`flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 py-2 text-center text-sm font-medium text-white ${support.mode === 'edit' ? 'bg-orange-600' : 'bg-indigo-700'}`}>
+          <span>🛟 Viewing <b>{support.name}</b> as Closer OS support · {support.mode === 'edit' ? 'can make changes' : 'view only'} · this visit is recorded and the company can see it</span>
+          <button className="rounded-md bg-white/20 px-3 py-0.5 hover:bg-white/30" onClick={async () => { await closeSupport(); window.location.assign('/admin') }}>Exit</button>
         </div>
       )}
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">

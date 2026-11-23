@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode, useRef } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import { supabase } from './supabase'
+import { supabase, setSupportReadOnly } from './supabase'
+import { toast } from './dialogs'
 import type { Access, Member, Organization, Profile, Role } from './types'
 
 interface Ctx {
@@ -16,7 +17,12 @@ interface Ctx {
   refresh: () => Promise<void>
   access: Access | null
   reloadAccess: () => void
+  /** Closer OS staff visiting a client company (recorded; the client can see it). */
+  support: Support | null
+  openSupport: (orgId: string, mode: 'view' | 'edit', reason: string) => Promise<string | null>
+  closeSupport: () => Promise<void>
 }
+export interface Support { id: string; org_id: string; name: string; mode: 'view' | 'edit'; expires_at?: string }
 
 const SessionContext = createContext<Ctx | null>(null)
 const ORG_KEY = 'closeros.org'
@@ -30,7 +36,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     try { return localStorage.getItem(ORG_KEY) } catch { return null }
   })
 
+  const [support, setSupport] = useState<Support | null>(null)
+  const [supportOrg, setSupportOrg] = useState<Organization | null>(null)
   const loadedUser = useRef<string | null | undefined>(undefined)
+  const applyVisit = useCallback(async (v: Support | null) => {
+    setSupportReadOnly(v?.mode === 'view', () => toast('View only — this visit can’t change anything'))
+    if (!v) { setSupport(null); setSupportOrg(null); return }
+    const { data: o } = await supabase.from('organizations').select('*').eq('id', v.org_id).maybeSingle()
+    setSupportOrg((o as Organization) ?? null); setSupport(o ? v : null)
+  }, [])
   const load = useCallback(async (s: Session | null) => {
     loadedUser.current = s?.user.id ?? null
     if (!s) { setProfile(null); setMemberships([]); setLoading(false); return }
@@ -42,6 +56,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     ])
     setProfile(p as Profile | null)
     setMemberships((m ?? []) as Ctx['memberships'])
+    if ((p as Profile | null)?.is_super_admin) {
+      const { data: v } = await supabase.rpc('sa_support_current')
+      await applyVisit((v as Support) ?? null)
+    } else await applyVisit(null)
     setLoading(false)
   }, [])
 
@@ -58,7 +76,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe()
   }, [load])
 
-  const current = memberships.find(m => m.org_id === orgId) ?? memberships[0] ?? null
+  const visit = support && supportOrg ? { org_id: support.org_id, user_id: session?.user.id ?? '', role: 'admin', status: 'active', organization: supportOrg } as unknown as Ctx['memberships'][number] : null
+  const current = visit ?? memberships.find(m => m.org_id === orgId) ?? memberships[0] ?? null
   const [access, setAccess] = useState<Access | null>(null)
   const [accessVersion, setAccessVersion] = useState(0)
   useEffect(() => {
@@ -74,7 +93,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     selectOrg: (id: string) => { setOrgId(id); try { localStorage.setItem(ORG_KEY, id) } catch { /* private mode */ } },
     refresh: () => load(session),
     access, reloadAccess: () => setAccessVersion(v => v + 1),
-  }), [session, loading, profile, memberships, current, load, access])
+    support,
+    openSupport: async (id, mode, reason) => {
+      const { data, error } = await supabase.rpc('sa_support_open', { p_org: id, p_mode: mode, p_reason: reason || null })
+      if (error) return error.message
+      await applyVisit(data as Support); return null
+    },
+    closeSupport: async () => { await supabase.rpc('sa_support_close'); await applyVisit(null) },
+  }), [session, loading, profile, memberships, current, load, access, support, applyVisit])
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>
 }

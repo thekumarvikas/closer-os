@@ -26,3 +26,29 @@ export function errorText(e: unknown): string {
   if (/^[A-Z0-9]{5}:|relation .* does not exist|syntax error|plpgsql|PGRST/i.test(msg)) return 'Something went wrong on our side. Please try again in a minute.'
   return msg
 }
+
+// ---- Closer OS support visits: "View only" blocks every change from this browser ----
+let readOnly = false
+let onBlocked: (() => void) | null = null
+export function setSupportReadOnly(on: boolean, blocked?: () => void) { readOnly = on; onBlocked = blocked ?? null }
+// RPCs that change data (blocked in view-only visits). Reads, and logging a recording play, still work.
+const WRITE_RPC = /^(set_|save_|add_|delete_|update_|import_|apply_|assign_|bulk_|merge_|claim_|review_|remove_|send_|lock_|link_|reassign_|request_|share_|cancel_|mark_|start_|archive_|create_|zoom_upload|ingest|rematch|sales_fill|event_set|schedule_|sequence_mark|pin_|accept_|unlock|relink|move_|seed_|invite|resend|revoke|deactivate|reactivate|rename|close_|remind_|dismiss|confirm|undo|restore|toggle|upsert|push|sync_|verify|refund|transfer|lead_names_ok|buyer_sheet|reorder|log_call|log_wa|drop_|sa_(?!support))/
+const blocked = () => { onBlocked?.(); return Promise.resolve({ data: null, error: { message: 'View only — this support visit cannot change anything. Open the company again with “Can make changes”.' }, count: null, status: 403, statusText: 'View only' }) }
+const origRpc = supabase.rpc.bind(supabase)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+;(supabase as any).rpc = (fn: string, ...rest: any[]) => {
+  if (readOnly && WRITE_RPC.test(fn)) return blocked()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (origRpc as any)(fn, ...rest)
+}
+const origFrom = supabase.from.bind(supabase)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+;(supabase as any).from = (table: string) => {
+  const q = origFrom(table)
+  if (!readOnly) return q
+  for (const m of ['insert', 'update', 'upsert', 'delete'] as const) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(q as any)[m] = () => { const b = blocked(); return Object.assign(b, { select: () => b, single: () => b, eq: () => b, in: () => b, match: () => b }) }
+  }
+  return q
+}

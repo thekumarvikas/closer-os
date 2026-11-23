@@ -81,6 +81,8 @@ export default function Settings() {
           </form>
         </Card>
 
+        <SupportAccess />
+
         <Card className="p-5">
           <h2 className="font-semibold">Lead distribution</h2>
           <p className="mb-4 mt-1 text-sm text-slate-500">New unassigned leads (imports, webhooks, manual) go through these rules from top to bottom. The first matching rule picks the next person in turn.</p>
@@ -228,5 +230,40 @@ function NewRule({ people, nextPriority, onSave }: { people: { id: string; name:
       </div>
       <div className="flex gap-2"><Button type="submit" disabled={!users.length}>Save rule</Button><Button variant="ghost" type="button" onClick={() => setOpen(false)}>Cancel</Button></div>
     </form>
+  )
+}
+
+/** The company decides whether Closer OS support may open its account, and sees every visit. */
+function SupportAccess() {
+  const { org, refresh, isAdmin, support } = useOrg()
+  const [on, setOn] = useState(org.settings?.support_access !== false)
+  const [visits, setVisits] = useState<Record<string, unknown>[] | null>(null)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { supabase.rpc('support_visits', { p_org: org.id }).then(({ data }) => setVisits((data ?? []) as Record<string, unknown>[])) }, [org.id, on])
+  if (!isAdmin) return null
+  const when = (x: unknown) => new Date(String(x)).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: 'numeric', minute: '2-digit' })
+  async function flip(v: boolean) { setBusy(true); const { error } = await supabase.rpc('set_support_access', { p_org: org.id, p_on: v }); setBusy(false); if (!error) { setOn(v); refresh() } }
+  return (
+    <Card className="p-5">
+      <h2 className="font-semibold">Closer OS support access</h2>
+      <p className="mt-1 text-sm text-slate-500">When this is on, the Closer OS team can open your account to help you or fix a problem. Every visit is listed below with what was changed. Turn it off any time.</p>
+      <label className="mt-3 flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={on} disabled={busy || !!support} onChange={e => flip(e.target.checked)} />
+        <span>Allow Closer OS support to open our account</span>
+      </label>
+      <h3 className="mt-4 text-sm font-medium">Support visits</h3>
+      {!visits ? <Spinner /> : visits.length === 0 ? <p className="text-sm text-slate-500">No visits yet.</p> : (
+        <table className="mt-1 w-full table-fixed text-sm">
+          <thead className="text-left text-xs text-slate-500"><tr><th className="w-[26%] py-1">When</th><th className="w-[18%]">Who</th><th className="w-[14%]">Access</th><th>Why · what changed</th></tr></thead>
+          <tbody>{visits.map(v => { const ch = (v.changes ?? []) as { action: string }[]
+            return <tr key={String(v.id)} className="border-t border-slate-100 align-top">
+              <td className="py-1.5">{when(v.started_at)} – {v.open ? 'now' : new Date(String(v.ended_at)).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}</td>
+              <td className="truncate">{String(v.by)}</td>
+              <td>{v.mode === 'edit' ? 'Could make changes' : 'View only'}</td>
+              <td className="text-slate-600">{v.reason ? String(v.reason) : '—'}{ch.length > 0 ? <span className="block text-xs">{ch.length} change{ch.length === 1 ? '' : 's'}: {[...new Set(ch.map(c => c.action.replace(/[._]/g, ' ')))].slice(0, 5).join(', ')}</span> : <span className="block text-xs text-slate-400">Nothing changed</span>}</td>
+            </tr> })}</tbody>
+        </table>
+      )}
+    </Card>
   )
 }

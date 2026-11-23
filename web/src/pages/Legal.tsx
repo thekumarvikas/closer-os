@@ -45,6 +45,7 @@ function Privacy() {
         <><b>WhatsApp calls (only if you turn on notification access):</b> the app reads only WhatsApp call notifications to note the contact, time and duration of calls with your leads. It does not read messages or any other notifications.</>,
         <><b>Contacts:</b> read on your phone to show saved names next to numbers. Your contact list is not uploaded.</>,
         <><b>Call recordings:</b> in the individual app, recordings made by your phone stay on your phone. Closer OS only finds the matching file in the folder you choose so you can play it inside the app. Recordings are never uploaded. (Company accounts may choose to upload recordings to their private company storage.)</>,
+        <><b>Support visits (company accounts):</b> when a company allows it (Settings → Company → Closer OS support access, on by default), the Closer OS team may open the company's account to help or fix a problem — view only unless changes are needed. Every visit is recorded and shown to the company's owner and admins, and the company can turn access off at any time. We never use a company's data for any other purpose.</>,
         <><b>Device and app information:</b> phone model, Android version, app version, setup status and error reports, used to keep the app working.</>,
         <><b>Purchases:</b> if you buy Closer OS Pro, Google Play handles the payment. We only learn whether your subscription is active. We never see your card or bank details.</>,
       ]} />
@@ -100,7 +101,7 @@ function Terms() {
         'Only add people you have a lawful reason to contact, and follow the calling, messaging, recording and privacy laws of your country (for example do-not-call rules and consent for call recording).',
         'Do not use Closer OS for spam, harassment, fraud or anything illegal, and do not try to break, overload or copy the service.']} />
       <H>Your data</H>
-      <p>Your leads, notes and call information belong to you. You give us permission to store and process them only to provide the service, as described in the <a className="text-brand-700" href="/privacy">privacy policy</a>. You can delete your account and data at any time.</p>
+      <p>Your leads, notes and call information belong to you. You give us permission to store and process them only to provide the service, as described in the <a className="text-brand-700" href="/privacy">privacy policy</a>. Company accounts can let the Closer OS team open the account for support; every visit is recorded and shown to the company, and it can be turned off in Settings. You can delete your account and data at any time.</p>
       <H>Availability and changes</H>
       <p>We work to keep Closer OS running and your data safe, but the service is provided “as is”, without guarantees that it will always be available or error-free. We may change or improve features. If we ever stop the service, we will give reasonable notice so you can export your data.</p>
       <H>Liability</H>

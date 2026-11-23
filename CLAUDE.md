@@ -2331,3 +2331,19 @@ intelligence → Play Store launch.
 - Sales page "How long buyers take to pay" (Nov 23, web only, SalesHome.tsx TimeToBuy): fully paid sales, From sign-up | From the
   webinar; Shortest · Average · Longest + "How many paid when" (same day / 1–3 / 4–7 / 8–30 / 30+ days, share bars) + By team
   member / By webinar / Month by month (shortest · average · longest); every number opens the buyers → journey. Middle value dropped (owner).
+
+## Closer OS support access (Nov 23 2026, migration 0142) — owner asked "is it ethical?" → built with safeguards
+- BEFORE: is_super_admin() made the Super Admin a silent admin of EVERY company (is_org_member/is_org_admin + leads_select).
+  NOW: only through a recorded visit. support_sessions (org, user, mode view|edit, reason, started, expires +8 h, ended);
+  support_allowed(org) = settings.support_access (missing = true, "on by default with a clear note"); support_mode(org);
+  my_support_orgs(); is_org_member / is_org_admin / my_member_orgs / my_admin_orgs include open visits (no is_super_admin);
+  leads_select rewritten without is_super_admin. sa_support_open(org, mode, reason) (refused when the company turned it off),
+  sa_support_close, sa_support_current, set_support_access(org, on) (owner/admin; off ends open visits), support_visits(org)
+  (visits + audit_logs actions by that person during the visit). sa_* RPCs, org_access, profile_select, billing reads still use
+  is_super_admin directly (Super Admin pages).
+- Web: lib/session.tsx support / openSupport / closeSupport (visit = synthetic admin membership of that company);
+  lib/supabase.ts setSupportReadOnly → in VIEW visits every write RPC (WRITE_RPC regex) and table insert/update/upsert/delete
+  is blocked in the browser with a toast (view-only is enforced in the dashboard, not by the database). Layout banner
+  "🛟 Viewing X as Closer OS support · view only / can make changes · Exit". Super Admin → Companies "Open" (OpenCompany modal:
+  View only / Can make changes + reason, required for changes). Settings → "Closer OS support access" card (switch + visit
+  list) for owners/admins. Terms + Privacy mention it. Test: web/tests/support-test.cjs.

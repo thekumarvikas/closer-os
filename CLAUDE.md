@@ -2312,3 +2312,6 @@ intelligence → Play Store launch.
 - Nov 23 (migration 0134): file imports set leads.signup_at from a "Sign-up date & time" column (LeadImport target signup_at;
   guesses date/timestamp/…), signup_guess(raw, tz, created, ref) picks DD/MM vs MM/DD (not after upload, closest before the
   webinar). Old imports backfilled from custom date fields (Cancer: 4,990 of 4,996 fixed; 6 have no date).
+- Migration 0135: sales / buyer numbers count from coalesce(signup_at, created_at) — buyer_effort, buyer_gaps, buyer_patterns,
+  conversion_insights, lead_start_at (response time), t_lead_work_secs (also fires on signup_at change), sale_facts.signup_at.
+  sales_dashboard / buyers_common / buyer_timeline already did. Work seconds recounted for leads with an older sign-up time.

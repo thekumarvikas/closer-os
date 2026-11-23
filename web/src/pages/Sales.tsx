@@ -106,7 +106,7 @@ export function SaleModal({ id, dir, onClose, onChanged, onOpenLead }: { id: str
           <h3 className="mb-1 font-semibold">Lead</h3>
           {l ? <>
             <button className="font-medium text-brand-700 hover:underline" onClick={() => onOpenLead(l.id)}>{l.name || 'No name'}</button> · <Ph v={l.phone} />
-            <p className="text-slate-600">{[l.source, `added ${fmtDate(l.created_at, org)}`, l.assigned_to ? `assigned to ${dir.nameOf(l.assigned_to)}` : 'unassigned', l.arrivals > 1 && `came in ${l.arrivals}×`].filter(Boolean).join(' · ')}</p>
+            <p className="text-slate-600">{[l.source, `signed up ${fmtDate(l.signup_at ?? l.created_at, org)}`, l.assigned_to ? `assigned to ${dir.nameOf(l.assigned_to)}` : 'unassigned', l.arrivals > 1 && `came in ${l.arrivals}×`].filter(Boolean).join(' · ')}</p>
             <p className="mt-1">{l.calls} calls · {l.conversations} conversations · {fmtDuration(l.talk_sec ?? 0)} talk · {f.wa} WhatsApp · {f.recordings} recordings</p>
           </> : <p className="text-slate-500">{s.buyer ? `${s.buyer.name ?? ''} ${s.buyer.phone ?? ''} — not matched to a lead` : 'No lead linked'}</p>}
           {(f.webinars as any[]).length > 0 && <p className="mt-1">🎥 {(f.webinars as any[]).map(w => `${w.name}: ${w.watch == null ? 'no data' : w.watch > 0 ? `${w.watch} min` : 'didn’t join'}${w.saw_pitch ? ' (saw pitch)' : ''}`).join(' → ')}</p>}

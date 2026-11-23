@@ -158,29 +158,53 @@ export function AddSale({ dir, onClose, onDone }: { dir: Directory; onClose: () 
   const [products, setProducts] = useState<Product[]>([])
   const [p, setP] = useState({ product_id: '', product: '', amount: '', paid: '', method: 'upi', reference: '', credited_to: session?.user.id ?? '', sold_at: new Date().toISOString().slice(0, 10), note: '' })
   const [error, setError] = useState<string | null>(null)
+  const [searched, setSearched] = useState(false)
+  const [nl, setNl] = useState({ name: '', phone: '', email: '' })   // buyer who isn't a lead yet
+  const [busy, setBusy] = useState(false)
   useEffect(() => { supabase.from('products').select('*').eq('org_id', org.id).eq('is_active', true).order('position').then(({ data }) => setProducts((data ?? []) as Product[])) }, [org.id])
   useEffect(() => {
+    setSearched(false)
     if (q.trim().length < 2) return setHits([])
     const t = setTimeout(async () => {
+      const term = q.trim(); setNl(x => ({ ...x, phone: /@/.test(term) ? x.phone : term.replace(/[^\d+]/g, '').length >= 8 ? term : x.phone, email: /@/.test(term) ? term : x.email }))
       const { data: ids } = await supabase.rpc('search_leads', { p_org: org.id, p_q: q.trim(), p_limit: 8 })
       const list = ((ids ?? []) as any[]).map(x => typeof x === 'string' ? x : x.id ?? x.search_leads).filter(Boolean)
-      if (!list.length) return setHits([])
+      if (!list.length) { setSearched(true); return setHits([]) }
       const { data } = await supabase.from('leads').select('id, name, phone, assigned_to').in('id', list)
-      setHits((data ?? []) as any[])
+      setHits((data ?? []) as any[]); setSearched(true)
     }, 250)
     return () => clearTimeout(t)
   }, [q, org.id])
   async function save() {
-    if (!lead) return setError('Choose the lead first')
-    const { error } = await supabase.rpc('claim_sale', { p_lead: lead.id, p: { ...p, sold_at: new Date(p.sold_at + 'T12:00:00').toISOString() } })
+    let id = lead?.id
+    if (!id) {
+      if (!nl.phone.trim()) return setError(q.trim() ? 'This buyer is not in your leads yet — fill in the phone number below to add them.' : 'Search the buyer by name, number or email first')
+      setBusy(true)
+      const r = await supabase.rpc('add_lead', { p_org: org.id, p: { name: nl.name.trim(), phone: nl.phone.trim(), email: nl.email.trim(), source: 'Sale added on dashboard' } })
+      if (r.error) { setBusy(false); return setError(errorText(r.error)) }
+      id = (r.data as { id: string }).id
+      if (p.credited_to) await supabase.rpc('bulk_update_leads', { p_org: org.id, p_ids: [id], p: { assigned_to: p.credited_to } })
+    }
+    setBusy(true)
+    const { error } = await supabase.rpc('claim_sale', { p_lead: id, p: { ...p, sold_at: new Date(p.sold_at + 'T12:00:00').toISOString() } })
+    setBusy(false)
     if (error) return setError(errorText(error)); onDone()
   }
   return (
-    <Modal open onClose={onClose} title="Add a sale" wide footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button onClick={save}>Save (verified)</Button></>}>
+    <Modal open onClose={onClose} title="Add a sale" wide footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button onClick={save} loading={busy}>Save (verified)</Button></>}>
       <ErrorBox error={error} />
       {!lead ? <Field label="Lead"><input className="input" autoFocus placeholder="Search name or number" value={q} onChange={e => setQ(e.target.value)} />
         <ul className="mt-1 divide-y divide-slate-100 rounded border border-slate-200">{hits.map(h => <li key={h.id}><button className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
-          onClick={() => { setLead(h); if (h.assigned_to) setP(x => ({ ...x, credited_to: h.assigned_to! })) }}>{h.name || 'No name'} · {fmtPhone(h.phone)}</button></li>)}</ul></Field>
+          onClick={() => { setLead(h); if (h.assigned_to) setP(x => ({ ...x, credited_to: h.assigned_to! })) }}>{h.name || 'No name'} · {fmtPhone(h.phone)}</button></li>)}</ul>
+        {searched && hits.length === 0 && (
+          <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
+            <p className="mb-2 text-amber-900">No lead found for “{q.trim()}”. Add the buyer as a new lead — the sale is saved on them:</p>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <input className="input" placeholder="Name" value={nl.name} onChange={e => setNl({ ...nl, name: e.target.value })} />
+              <input className="input" placeholder="Phone number (required)" value={nl.phone} onChange={e => setNl({ ...nl, phone: e.target.value })} />
+              <input className="input" placeholder="Email (optional)" value={nl.email} onChange={e => setNl({ ...nl, email: e.target.value })} />
+            </div>
+          </div>)}</Field>
         : <p className="mb-3 text-sm">Lead: <b>{lead.name || 'No name'}</b> · {fmtPhone(lead.phone)} <button className="ml-2 text-brand-700 underline" onClick={() => setLead(null)}>change</button></p>}
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Product"><select className="input" value={p.product_id} onChange={e => { const pr = products.find(x => x.id === e.target.value)

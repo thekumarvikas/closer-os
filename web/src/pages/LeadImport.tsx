@@ -14,6 +14,7 @@ const targets: { key: string; label: string; guesses: string[] }[] = [
   { key: 'name', label: 'Name', guesses: ['name', 'full name', 'lead name', 'customer', 'contact name', 'first name'] },
   { key: 'phone', label: 'Phone (required)', guesses: ['phone', 'mobile', 'phone number', 'mobile number', 'contact', 'number', 'whatsapp', 'contact number'] },
   { key: 'email', label: 'Email', guesses: ['email', 'email address', 'e-mail', 'mail'] },
+  { key: 'signup_at', label: 'Sign-up date & time', guesses: ['date', 'timestamp', 'date & time', 'date time', 'date_time', 'submitted at', 'registration date', 'sign up date', 'signup date', 'created time'] },
   { key: 'city', label: 'City', guesses: ['city', 'town', 'location'] },
   { key: 'state', label: 'State', guesses: ['state', 'region', 'province'] },
   { key: 'country', label: 'Country', guesses: ['country'] },

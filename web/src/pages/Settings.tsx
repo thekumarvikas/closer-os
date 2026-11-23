@@ -83,6 +83,8 @@ export default function Settings() {
 
         <SupportAccess />
 
+        <WorkTypes />
+
         <Card className="p-5">
           <h2 className="font-semibold">Lead distribution</h2>
           <p className="mb-4 mt-1 text-sm text-slate-500">New unassigned leads (imports, webhooks, manual) go through these rules from top to bottom. The first matching rule picks the next person in turn.</p>
@@ -264,6 +266,34 @@ function SupportAccess() {
             </tr> })}</tbody>
         </table>
       )}
+    </Card>
+  )
+}
+
+/** The company's own work types (Support, Outreach…), given to team members on the Team page. */
+function WorkTypes() {
+  const { org, refresh, isAdmin } = useOrg()
+  const [types, setTypes] = useState<string[]>((org.settings?.work_types ?? []) as string[])
+  const [add, setAdd] = useState('')
+  if (org.is_individual || !isAdmin) return null
+  async function save(next: string[]) {
+    setTypes(next)
+    await supabase.from('organizations').update({ settings: { ...(org.settings ?? {}), work_types: next } }).eq('id', org.id)
+    refresh()
+  }
+  return (
+    <Card className="p-5">
+      <h2 className="font-semibold">Team work types</h2>
+      <p className="mt-1 text-sm text-slate-500">Your own labels for what people do, e.g. Support, Outreach, Follow-up team. Give them to people on the Team page; filter the Team page and Team performance by them. Calls made by these people count as sales calls.</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {types.map(t => <span key={t} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-sm">{t}
+          <button className="text-slate-400 hover:text-red-600" aria-label={`Remove ${t}`} onClick={() => save(types.filter(x => x !== t))}>×</button></span>)}
+        {types.length === 0 && <p className="text-sm text-slate-400">None yet.</p>}
+      </div>
+      <form className="mt-3 flex gap-2" onSubmit={e => { e.preventDefault(); const v = add.trim(); if (v && !types.includes(v)) save([...types, v]); setAdd('') }}>
+        <input className="input" value={add} onChange={e => setAdd(e.target.value)} placeholder="e.g. Support" maxLength={30} />
+        <Button type="submit" variant="secondary">Add</Button>
+      </form>
     </Card>
   )
 }

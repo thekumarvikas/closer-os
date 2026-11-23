@@ -4,7 +4,7 @@ import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
 import type { Directory } from '../lib/directory'
 import { fmtPhone, roleLabel } from '../lib/format'
-import type { Role } from '../lib/types'
+import type { Member, Role } from '../lib/types'
 import { Badge, Button, Card, ErrorBox } from './ui'
 import { ask, toast } from '../lib/dialogs'
 import { missingReason, type RecDevice } from './CallColors'
@@ -39,6 +39,7 @@ export default function TeamTable({ dir, version, onChanged, onRemove }: {
   dir: Directory; version: number; onChanged: () => void; onRemove: (userId: string) => void
 }) {
   const { org, isAdmin, role: myRole, session } = useOrg()
+  const workTypes = ((org.settings?.work_types ?? []) as string[])
   const [devices, setDevices] = useState<Map<string, Device>>(new Map())
   const [sims, setSims] = useState<Sim[]>([])
   const [tick, setTick] = useState(0)
@@ -133,12 +134,7 @@ export default function TeamTable({ dir, version, onChanged, onRemove }: {
                         {roles.map(r => <option key={r} value={r}>{roleLabel[r]}</option>)}
                       </select>
                     ) : <p className="py-1">{roleLabel[m.role]}</p>}
-                    {isAdmin ? (
-                      <select className="mt-1 w-full bg-transparent text-xs text-slate-500" title="Only matters if you have a separate reminder team and sales team" value={m.call_team ?? ''}
-                        onChange={e => run(supabase.from('org_members').update({ call_team: e.target.value || null }).eq('org_id', org.id).eq('user_id', m.user_id))}>
-                        <option value="">Reminder + sales calls</option><option value="reminder">Reminder team</option><option value="sales">Sales team</option>
-                      </select>
-                    ) : m.call_team && <p className="text-xs text-slate-500">{m.call_team === 'reminder' ? 'Reminder team' : 'Sales team'}</p>}
+                    <MemberWork m={m} canEdit={isAdmin} types={workTypes} onSave={p => run(supabase.rpc('set_member_work', { p_org: org.id, p_user: m.user_id, p }))} />
                   </td>
                   <td className="px-3 py-2.5">
                     {ws.length ? ws.map(s => <div key={s.id} className="mb-1">
@@ -194,6 +190,25 @@ function RowMenu({ open, onToggle, onClose, children }: { open: boolean; onToggl
     <div ref={ref} className="inline-block">
       <button className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="More actions" onClick={onToggle}><MoreHorizontal className="h-4 w-4" /></button>
       {open && <div className="absolute right-2 z-20 mt-1 w-36 overflow-hidden rounded-lg border border-slate-200 bg-white text-sm shadow-lg">{children}</div>}
+    </div>
+  )
+}
+
+export const CALL_WORK: Record<string, string> = { both: 'Sales + reminder calls', sales: 'Sales calls only', reminder: 'Reminder calls only', none: "Doesn't call" }
+/** What a person does: which calls (or none) + the company's own work types. */
+function MemberWork({ m, canEdit, types, onSave }: { m: Member; canEdit: boolean; types: string[]; onSave: (p: Record<string, unknown>) => void }) {
+  const mine = m.work_types ?? []
+  const all = [...new Set([...types, ...mine])]
+  if (!canEdit) return <p className="text-xs text-slate-500">{CALL_WORK[m.call_team ?? 'both']}{mine.length > 0 && ` · ${mine.join(', ')}`}</p>
+  return (
+    <div className="mt-1 space-y-1">
+      <select className="w-full bg-transparent text-xs text-slate-500" value={m.call_team ?? 'both'} onChange={e => onSave({ call_team: e.target.value })}
+        title="Doesn't call = left out of call lists, lead sharing, reports, check-ins and automatic lead assignment">
+        {Object.entries(CALL_WORK).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+      </select>
+      {all.length > 0 && <div className="flex flex-wrap gap-1">{all.map(t => { const on = mine.includes(t)
+        return <button key={t} type="button" onClick={() => onSave({ work_types: on ? mine.filter(x => x !== t) : [...mine, t] })}
+          className={`rounded-full border px-2 py-0.5 text-[11px] ${on ? 'border-brand-600 bg-brand-50 text-brand-800' : 'border-slate-200 text-slate-400'}`}>{on ? '✓ ' : '+ '}{t}</button> })}</div>}
     </div>
   )
 }

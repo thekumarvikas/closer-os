@@ -145,7 +145,7 @@ function SourceForm({ kind, source, dir, batches, onClose, onSaved }:
     const hit = colChoices.find(([c]) => /webinar|batch|event|session/i.test(c) && !/attend/i.test(c))
     if (hit) setWCol(hit[0])
   }, [wMode, colChoices.length]) // eslint-disable-line react-hooks/exhaustive-deps
-  const active = dir.members.filter(m => m.status === 'active')
+  const active = dir.members.filter(m => m.status === 'active' && m.call_team !== 'none')
 
   async function save(e: FormEvent) {
     e.preventDefault(); setBusy(true); setError(null)
@@ -221,7 +221,7 @@ function SourceForm({ kind, source, dir, batches, onClose, onSaved }:
             {active.map(m => (
               <label key={m.user_id} className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-slate-50">
                 <input type="checkbox" checked={users.includes(m.user_id)} onChange={() => setUsers(users.includes(m.user_id) ? users.filter(u => u !== m.user_id) : [...users, m.user_id])} />
-                {dir.nameOf(m.user_id)}{m.call_team && <span className="text-xs text-slate-400">{m.call_team === "reminder" ? "reminder team" : "sales team"}</span>}
+                {dir.nameOf(m.user_id)}{(m.call_team === 'reminder' || m.call_team === 'sales') && <span className="text-xs text-slate-400">{m.call_team === "reminder" ? "reminder calls" : "sales calls"}</span>}
               </label>))}
           </div>}
           <p className="mt-1.5 text-xs text-slate-500">If the sheet has a "Team Member" column with a team member's name, the lead goes to that person instead.</p>

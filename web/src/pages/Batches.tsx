@@ -237,9 +237,9 @@ function OutsideRule({ batch, dir, onClose, onDone }: { batch: CardRow; dir: Dir
 
 /** "Unassigned N → Assign": tick people, the webinar's unassigned leads are shared out in turns (hottest first). */
 function AssignUnassigned({ batch, dir, onClose, onDone }: { batch: CardRow; dir: Directory; onClose: () => void; onDone: () => void }) {
-  const active = dir.members.filter(m => m.status === 'active')
+  const active = dir.members.filter(m => m.status === 'active' && m.call_team !== 'none')
   const past = new Date(batch.webinar_at) < new Date()
-  const team = active.filter(m => m.call_team === (past ? 'sales' : 'reminder')).map(m => m.user_id)
+  const team = active.filter(m => m.call_team === (past ? 'sales' : 'reminder') || m.call_team === 'both').map(m => m.user_id)
   const [users, setUsers] = useState<string[]>(team)
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState<number | null>(null)

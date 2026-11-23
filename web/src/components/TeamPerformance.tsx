@@ -10,7 +10,7 @@ import { Button, Card, Empty, ErrorBox, Spinner } from './ui'
 import { LeadDrill, type DrillRow } from './LeadDrill'
 
 interface Row {
-  user_id: string; name: string; call_team: 'sales' | 'reminder' | null
+  user_id: string; name: string; call_team: 'sales' | 'reminder' | 'both' | null
   dialled: number; answered: number; pickup_pct: number | null; conversations: number; talk_sec: number; leads_talked: number
   sales: number; revenue: number; close_pct: number | null; close_days: number | null
   assigned: number; assigned_called: number; called_pct: number | null
@@ -33,7 +33,9 @@ export default function TeamPerformance({ dir, from, to, users }: { dir: Directo
   const [data, setData] = useState<{ target_min: number; rows: Row[] } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [view, setView] = useState<View>('results')
-  const [team, setTeam] = useState<'all' | 'sales' | 'reminder'>('all')
+  const [team, setTeam] = useState<string>('all')
+  const workOf = (u: string) => dir.members.find(m => m.user_id === u)?.work_types ?? []
+  const wtypes = [...new Set(dir.members.flatMap(m => m.work_types ?? []))]
   const [drill, setDrill] = useState<{ title: string; user: string; metric: string } | null>(null)
   useEffect(() => {
     setData(null)
@@ -41,7 +43,7 @@ export default function TeamPerformance({ dir, from, to, users }: { dir: Directo
       .then(({ data, error }) => error ? setError(errorText(error)) : setData(data))
   }, [org.id, from, to])
 
-  const rows = useMemo(() => (data?.rows ?? []).filter(r => (users.length === 0 || users.includes(r.user_id)) && (team === 'all' || r.call_team === team)), [data, users, team])
+  const rows = useMemo(() => (data?.rows ?? []).filter(r => (users.length === 0 || users.includes(r.user_id)) && (team === 'all' || (team.startsWith('wt:') ? workOf(r.user_id).includes(team.slice(3)) : r.call_team === team || r.call_team === 'both'))), [data, users, team, dir])
   const cols = useMemo(() => ({
     name: (r: Row) => r.name, dialled: (r: Row) => r.dialled, pickup: (r: Row) => r.pickup_pct, conv: (r: Row) => r.conversations, talk: (r: Row) => r.talk_sec,
     sales: (r: Row) => r.sales, revenue: (r: Row) => r.revenue, close: (r: Row) => r.close_pct, closedays: (r: Row) => r.close_days,
@@ -52,7 +54,7 @@ export default function TeamPerformance({ dir, from, to, users }: { dir: Directo
   const { sorted, th } = useSort(rows, cols, ['talk', 'desc'])
   if (error) return <ErrorBox error={error} />
   if (!data) return <Spinner />
-  const hasTeams = (data.rows ?? []).some(r => r.call_team)
+  const hasTeams = (data.rows ?? []).some(r => r.call_team === 'sales' || r.call_team === 'reminder') || wtypes.length > 0
   const t = data.target_min
 
   /** A number that opens the leads behind it; the small line says what it is out of. */
@@ -83,7 +85,7 @@ export default function TeamPerformance({ dir, from, to, users }: { dir: Directo
               <button key={k} onClick={() => setView(k)} className={`rounded-md px-3 py-1.5 font-medium ${view === k ? 'bg-white shadow-sm' : 'text-slate-600'}`}>{l}</button>))}
           </div>
           {hasTeams && <div className="flex rounded-lg bg-slate-100 p-1 text-sm">
-            {([['all', 'Everyone'], ['sales', 'Sales team'], ['reminder', 'Reminder team']] as const).map(([k, l]) => (
+            {([['all', 'Everyone'], ['sales', 'Sales calls'], ['reminder', 'Reminder calls'], ...wtypes.map(t => ['wt:' + t, t])] as [string, string][]).map(([k, l]) => (
               <button key={k} onClick={() => setTeam(k)} className={`rounded-md px-3 py-1.5 ${team === k ? 'bg-white font-medium shadow-sm' : 'text-slate-600'}`}>{l}</button>))}
           </div>}
         </div>
@@ -100,7 +102,7 @@ export default function TeamPerformance({ dir, from, to, users }: { dir: Directo
               </tr></thead>
               <tbody className="divide-y divide-slate-100">{sorted.map(r => (
                 <tr key={r.user_id}>
-                  <td className="td font-medium">{r.name}{r.call_team && <span className="block text-[11px] font-normal text-slate-500">{r.call_team === 'sales' ? 'Sales team' : 'Reminder team'}</span>}</td>
+                  <td className="td font-medium">{r.name}{(r.call_team === 'sales' || r.call_team === 'reminder' || workOf(r.user_id).length > 0) && <span className="block text-[11px] font-normal text-slate-500">{[r.call_team === 'sales' ? 'Sales calls' : r.call_team === 'reminder' ? 'Reminder calls' : '', ...workOf(r.user_id)].filter(Boolean).join(' · ')}</span>}</td>
                   <N r={r} v={r.dialled.toLocaleString('en-IN')} metric="dialled" title="Leads dialled" />
                   <N r={r} v={p(r.pickup_pct)} of={`${r.answered} of ${r.dialled} dialled`} />
                   <N r={r} v={r.conversations.toLocaleString('en-IN')} of={`${r.leads_talked} leads`} metric="talked" title="Leads talked to (30+ s)" />

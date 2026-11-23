@@ -11,7 +11,7 @@ export interface Profile { id: string; email: string | null; full_name: string |
 /** What the company may do now (org_access()). state: trial | active | grace | expired. */
 export interface Access { state: 'trial' | 'active' | 'grace' | 'expired'; status: string; plan: string | null; plan_id: string | null; features: Record<string, boolean>
   seats: number; seats_used: number; cycle: 'month' | 'year' | null; ends_at: string | null; grace_ends_at: string | null; days_left: number | null }
-export interface Member { org_id: string; user_id: string; role: Role; status: 'active' | 'deactivated'; joined_at: string; profile?: Profile | null; call_team?: 'reminder' | 'sales' | null }
+export interface Member { org_id: string; user_id: string; role: Role; status: 'active' | 'deactivated'; joined_at: string; profile?: Profile | null; call_team?: 'none' | 'reminder' | 'sales' | 'both' | null; work_types?: string[] }
 export interface Team { id: string; org_id: string; name: string }
 export interface TeamMember { team_id: string; user_id: string; org_id: string; is_manager: boolean }
 export interface Stage { id: string; name: string; position: number; is_won: boolean; is_lost: boolean; is_active: boolean }

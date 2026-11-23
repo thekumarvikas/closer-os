@@ -890,10 +890,10 @@ function AfterWebinar({ batch, onClose, onGo, onAssign }: { batch: Batch; onClos
 
 function AssignSalesCalls({ batch, dir, onClose, onDone }: { batch: Batch; dir: Directory; onClose: () => void; onDone: () => void }) {
   const { org } = useOrg()
-  const active = dir.members.filter(m => m.status === 'active')
-  const twoTeams = active.some(m => m.call_team)
-  const salesTeam = active.filter(m => m.call_team === 'sales').map(m => m.user_id)
-  const remTeam = active.filter(m => m.call_team === 'reminder').map(m => m.user_id)
+  const active = dir.members.filter(m => m.status === 'active' && m.call_team !== 'none')
+  const twoTeams = active.some(m => m.call_team === 'sales' || m.call_team === 'reminder')
+  const salesTeam = active.filter(m => m.call_team === 'sales' || m.call_team === 'both').map(m => m.user_id)
+  const remTeam = active.filter(m => m.call_team === 'reminder' || m.call_team === 'both').map(m => m.user_id)
   const [att, setAtt] = useState(twoTeams)
   const [attUsers, setAttUsers] = useState<string[]>(salesTeam.length ? salesTeam : active.map(m => m.user_id))
   const [non, setNon] = useState<'none' | 'sales' | 'reminder'>(twoTeams && remTeam.length ? 'reminder' : 'none')
@@ -928,7 +928,7 @@ function AssignSalesCalls({ batch, dir, onClose, onDone }: { batch: Batch; dir: 
     <div className="ml-6 mt-1 grid gap-0.5 sm:grid-cols-2">{active.map(m => (
       <label key={m.user_id} className="flex items-center gap-2 rounded px-2 py-0.5 hover:bg-slate-50">
         <input type="checkbox" checked={list.includes(m.user_id)} onChange={() => set(list.includes(m.user_id) ? list.filter(u => u !== m.user_id) : [...list, m.user_id])} />
-        {dir.nameOf(m.user_id)}{m.call_team && <span className="text-xs text-slate-400">{m.call_team === 'sales' ? 'sales' : 'reminder'}</span>}
+        {dir.nameOf(m.user_id)}{(m.call_team === 'sales' || m.call_team === 'reminder') && <span className="text-xs text-slate-400">{m.call_team === 'sales' ? 'sales' : 'reminder'}</span>}
         {preview?.per_person[m.user_id] ? <b className="ml-auto text-xs text-brand-700">{preview.per_person[m.user_id]}</b> : null}
       </label>))}</div>)
   return (

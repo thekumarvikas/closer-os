@@ -2347,3 +2347,14 @@ intelligence → Play Store launch.
   "🛟 Viewing X as Closer OS support · view only / can make changes · Exit". Super Admin → Companies "Open" (OpenCompany modal:
   View only / Can make changes + reason, required for changes). Settings → "Closer OS support access" card (switch + visit
   list) for owners/admins. Terms + Privacy mention it. Test: web/tests/support-test.cjs.
+
+## Team work (Nov 23 2026, migration 0144, website)
+- org_members.call_team = none ("Doesn't call") | sales | reminder | both (null = both); org_members.work_types text[] = the
+  company's own labels from settings.work_types (Settings → "Team work types", admins). set_member_work(org, user, {call_team,
+  work_types}) (admins, audit member.work_changed). "none" is left out of leaderboard, team_performance, daily_summary team lines,
+  dashboard_data people, team_checkins, org_people (lead sharing), team_brief, target_progress, pick_assignee + source_rule_pick
+  (auto assignment); web pickers (lead sources, webinar Assign / Share out) hide them; "both" counts in sales AND reminder pickers.
+- Team page (TeamTable MemberWork): call work select + work-type chips; Team performance filter: Everyone / Sales calls /
+  Reminder calls / each work type. Custom types are labels only (Option A): their calls use sales outcomes.
+- NOT yet in the app: hourly check-in + "Select your work SIM" card still show for people marked "Doesn't call" (they normally
+  don't use the app); a work type with its own outcomes (Option B) only if the owner asks.

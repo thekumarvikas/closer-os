@@ -174,7 +174,7 @@ function Overview({ d, t, dir, drill, fromTs, toTs, onRemoved }: { d: J; t: J; d
         <Tile label="Sales" value={t.sales} sub={`${t.full} fully paid · ${t.part} part paid`} onClick={() => drill({})} />
         <Tile label="Collected" value={fmtMoney(t.collected, org)} tone="green" sub="money received" onClick={() => drill({})} />
         <Tile label="Pending" value={fmtMoney(t.pending, org)} tone={t.pending > 0 ? 'red' : undefined} sub={`${t.pending_orders} order${t.pending_orders === 1 ? '' : 's'} with balance due`} onClick={() => drill({}, 'pending')} />
-        <Tile label="Days to convert" value={days(t.days_signup)} sub={`sign-up → fully paid (middle value)${t.days_webinar != null ? ` · ${days(t.days_webinar)} from the webinar` : ''}`} onClick={() => drill({})} />
+        <Tile label="Days to convert · sign-up → paid" value={days(t.days_signup)} sub={`half the buyers pay within this · average ${days(t.days_signup_avg)}${t.days_webinar != null ? ` · from the webinar: ${days(t.days_webinar)} (average ${days(t.days_webinar_avg)})` : ''}`} onClick={() => drill({})} />
       </div>
 
       {removed.length > 0 && <Card className="border-amber-300 bg-amber-50 p-4 text-sm">

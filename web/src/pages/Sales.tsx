@@ -1,4 +1,4 @@
-import { Ph } from '../components/Copy'
+import { Ph, Em } from '../components/Copy'
 import { useEffect, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
@@ -105,10 +105,10 @@ export function SaleModal({ id, dir, onClose, onChanged, onOpenLead }: { id: str
         <section className="rounded-lg bg-slate-50 p-3 text-sm">
           <h3 className="mb-1 font-semibold">Lead</h3>
           {l ? <>
-            <button className="font-medium text-brand-700 hover:underline" onClick={() => onOpenLead(l.id)}>{l.name || 'No name'}</button> · <Ph v={l.phone} />
+            <button className="font-medium text-brand-700 hover:underline" onClick={() => onOpenLead(l.id)}>{l.name || 'No name'}</button> · <Ph v={l.phone} />{l.email && <> · <Em v={l.email} /></>}
             <p className="text-slate-600">{[l.source, `signed up ${fmtDate(l.signup_at ?? l.created_at, org)}`, l.assigned_to ? `assigned to ${dir.nameOf(l.assigned_to)}` : 'unassigned', l.arrivals > 1 && `came in ${l.arrivals}×`].filter(Boolean).join(' · ')}</p>
             <p className="mt-1">{l.calls} calls · {l.conversations} conversations · {fmtDuration(l.talk_sec ?? 0)} talk · {f.wa} WhatsApp · {f.recordings} recordings</p>
-          </> : <p className="text-slate-500">{s.buyer ? `${s.buyer.name ?? ''} ${s.buyer.phone ?? ''} — not matched to a lead` : 'No lead linked'}</p>}
+          </> : <p className="text-slate-500">{s.buyer ? `${s.buyer.name ?? ''} ${s.buyer.phone ?? ''} ${s.buyer.email ?? ''} — not matched to a lead` : 'No lead linked'}</p>}
           {(f.webinars as any[]).length > 0 && <p className="mt-1">🎥 {(f.webinars as any[]).map(w => `${w.name}: ${w.watch == null ? 'no data' : w.watch > 0 ? `${w.watch} min` : 'didn’t join'}${w.saw_pitch ? ' (saw pitch)' : ''}`).join(' → ')}</p>}
         </section>
         <section className="rounded-lg bg-slate-50 p-3 text-sm">

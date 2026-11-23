@@ -2324,3 +2324,7 @@ intelligence → Play Store launch.
   EARLIER sign-up time and joins the row's webinar — a repeat arrival no longer loses the file's webinar date (Rahul Jadhav case:
   lead first created by "Add sale"). sales_fill_gaps(org) = rematch_buyers + re-pick sale webinars; runs at the end of
   import_leads and hourly (pg_cron 'sales-gap-fill'). Unmatched buyers with the same NAME only are left for Match (never auto).
+- RULE (Nov 23, migrations 0139–0141): every sale has a lead page — sales_fill_gaps also creates a lead (source "Buyers list",
+  every email kept, extra columns → custom) for a buyer matching no lead ('check' cases stay for Match). Days to convert tile
+  shows middle value + average (days_signup_avg / days_webinar_avg); same-day = 0; leads made from a sale (Buyers list / Sale
+  added on dashboard, no real sign-up time) are left out of the days numbers. Sale modal shows the lead's email.

@@ -41,7 +41,7 @@ export default function DailySummary() {
     const stamp = `hot-leads-${data.plan_day}`
     if (kindOf === 'csv') {
       downloadCsv(`${stamp}.csv`, ['#', 'Category', 'Lead', 'Phone', 'Owner', 'Tag', 'Outcome', 'Registered', 'Attended', 'Watched (min)', 'Best (min)', 'Best webinar',
-        'Saw the pitch', 'Chats', 'Polls', 'Talk (min)', 'Talk by team member', 'Calls', 'WhatsApp', 'Last talked', 'Next call'],
+        'Saw the payment link', 'Chats', 'Polls', 'Talk (min)', 'Talk by team member', 'Calls', 'WhatsApp', 'Last talked', 'Next call'],
         full.list.map((h, i) => [i + 1, HOT_CATS[h.cat], h.name, h.phone, nameOf(h.owner), h.tag ?? '', h.outcome ?? '', h.reg, h.att, h.watch, h.best ?? '',
           h.best_at ? new Date(h.best_at).toLocaleDateString('en-IN', { timeZone: data.tz }) : '', h.pitch ? 'yes' : '', h.chats, h.polls, Math.round(h.talk / 60),
           (h.talk_by ?? []).map(t => `${nameOf(t.user)} ${Math.round(t.sec / 60)}m`).join('; '), h.calls, h.wa,

@@ -42,27 +42,27 @@ export default function WatchBands({ batch, dir, onSetPitch, scope = 'all' }: { 
   return (
     <Card className="mt-4 p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h3 className="font-semibold">Watch time & the pitch</h3>
+        <h3 className="font-semibold">Watch time & the payment link</h3>
         <Button variant="secondary" className="!py-1" onClick={() => downloadCsv(`${batch.name}_watch-time.csv`, ['Watched', 'Leads', 'Called', 'Talked', 'Bought'],
           data.bands.map(b => [b.k === -2 ? 'Not in Zoom report' : b.k === -1 ? "Didn't join" : `${b.from}–${b.to} min`, b.leads, b.called, b.talked, b.won]))}>
           <Download className="h-4 w-4" /> CSV</Button>
       </div>
 
       {pm == null ? (
-        <p className="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Set the minute when the pitch / payment link was shown to split leads into “saw the pitch” and “left before”.{' '}
-          {onSetPitch && <button className="font-medium underline" onClick={onSetPitch}>Set pitch time</button>}</p>
+        <p className="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Set the minute at which the payment link was dropped to split leads into “present at the link” and “missed it”.{' '}
+          {onSetPitch && <button className="font-medium underline" onClick={onSetPitch}>Set the payment link minute</button>}</p>
       ) : (
         <div className="mb-4 grid gap-2 sm:grid-cols-3">
-          <Tile label="🎯 Saw the pitch" c={P('saw')} tone="border-emerald-200 bg-emerald-50 text-emerald-900" p={{ title: 'Saw the pitch', from: null, to: null, pitch: 'saw' }} />
-          <Tile label="Missed the pitch (left early / joined late)" c={P('before')} tone="border-amber-200 bg-amber-50 text-amber-900" p={{ title: 'Missed the pitch', from: null, to: null, pitch: 'missed' }} />
+          <Tile label="💳 Present at the payment link" c={P('saw')} tone="border-emerald-200 bg-emerald-50 text-emerald-900" p={{ title: 'Present at the payment link', from: null, to: null, pitch: 'saw' }} />
+          <Tile label="Missed the payment link (left early / joined late)" c={P('before')} tone="border-amber-200 bg-amber-50 text-amber-900" p={{ title: 'Missed the payment link', from: null, to: null, pitch: 'missed' }} />
           <Tile label="Didn't join" c={P('absent')} tone="border-slate-200 bg-slate-50 text-slate-700" p={{ title: "Didn't join", from: null, to: null, absent: true }} />
         </div>
       )}
 
-      {pm != null && <p className="-mt-2 mb-3 text-xs text-slate-500">{data.exact ? `Exact: in the webinar at minute ${pm} (from Zoom join / leave times).` : `From total minutes watched (${pm}+ min). Upload a Zoom report with join / leave times for an exact answer.`}</p>}
+      {pm != null && <p className="-mt-2 mb-3 text-xs text-slate-500">{data.exact ? `Exact: in the webinar 5 minutes before to 5 minutes after minute ${pm} (from Zoom join / leave times).` : `Estimated from total minutes watched (${pm + 5}+ min). Upload a Zoom report with join / leave times for an exact answer.`}</p>}
       {data.warmth && (data.warmth.hot + data.warmth.warm + data.warmth.cold) > 0 && (
         <div className="mb-4">
-          <p className="mb-1 text-xs text-slate-500">Warmth = watch time + present at the pitch + chat + polls (0–100). Hot and warm leads go up the focus calling list.</p>
+          <p className="mb-1 text-xs text-slate-500">Warmth = watch time + present at the payment link + chat + polls (0–100). Hot and warm leads go up the focus calling list.</p>
           <div className="flex flex-wrap gap-2 text-sm">
             {([['🔥 Hot (70+)', data.warmth.hot, [70, 100], 'border-orange-300 bg-orange-50 text-orange-900'], ['Warm (40–69)', data.warmth.warm, [40, 69], 'border-amber-200 bg-amber-50 text-amber-900'],
               ['Cold (1–39)', data.warmth.cold, [1, 39], 'border-slate-200 bg-slate-50 text-slate-700']] as const).map(([l, n, r, tone]) => (
@@ -71,7 +71,7 @@ export default function WatchBands({ batch, dir, onSetPitch, scope = 'all' }: { 
           </div>
         </div>
       )}
-      <p className="mb-1 text-xs text-slate-500">Watched (10-minute groups) — click a row to see the leads{pm != null ? ` · ▲ = pitch at ${pm} min` : ''}</p>
+      <p className="mb-1 text-xs text-slate-500">Watched (10-minute groups) — click a row to see the leads{pm != null ? ` · ▲ = payment link at ${pm} min` : ''}</p>
       <div className="space-y-1">
         {data.bands.filter(b => b.k >= 0).map(b => {
           const hasPitch = pm != null && b.from! <= pm && pm <= b.to!
@@ -109,7 +109,7 @@ function BandLeads({ batch, dir, pick, onClose, scope }: { batch: Batch; dir: Di
   }, [batch.id, pick, scope])
   return (
     <Modal open wide onClose={onClose} title={`${pick.title}${rows ? ` · ${rows.length} leads` : ''}`} footer={rows && rows.length > 0 ? (
-      <Button variant="secondary" onClick={() => downloadCsv(`${batch.name}_${pick.title}.csv`, ['Name', 'Phone', 'City', 'Rep', 'Watched (min)', 'Saw the pitch', 'Chat messages', 'Polls answered', 'Warmth', 'Calls', 'Talked', 'Talk time'],
+      <Button variant="secondary" onClick={() => downloadCsv(`${batch.name}_${pick.title}.csv`, ['Name', 'Phone', 'City', 'Rep', 'Watched (min)', 'Present at the payment link', 'Chat messages', 'Polls answered', 'Warmth', 'Calls', 'Talked', 'Talk time'],
         rows.map(r => [r.lead.name ?? '', r.lead.phone, r.lead.city ?? '', r.lead.assigned_to ? dir.nameOf(r.lead.assigned_to) : '', r.watch_minutes ?? '', r.saw_pitch == null ? '' : r.saw_pitch ? 'Yes' : 'No', r.chat_count, r.poll_answered, r.warmth, r.lead.dial_count, r.lead.has_talked ? 'Yes' : 'No', hms(r.lead.total_talk_sec)]))}>
         <Download className="h-4 w-4" /> CSV</Button>) : undefined}>
       <ErrorBox error={error} />

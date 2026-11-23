@@ -236,7 +236,7 @@ function Body({ d, period, mgr, nameOf, first, money, onLead, onShowAll, onDrill
                     {l.tag && <span className="ml-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-800">{l.tag}</span>}</span>
                   <span className="block text-xs text-slate-500"><span className="inline-block"><Ph v={l.phone} /></span> · {l.watch ? `${l.watch} min · ` : ''}{l.pitch ? '✓ pitch · ' : ''}{l.talk ? `${dur(l.talk)} talk` : 'not talked yet'}</span>
                 </div>)}</div>}
-            {d.hot.total > 0 && <p className="mt-2 text-xs text-slate-500">{Object.entries(d.hot.by_cat).sort(([a], [b]) => +a - +b).map(([c, n]) => `${HOT_CATS[+c]} ${n}`).join(' · ')}</p>}
+            {d.hot.total > 0 && <p className="mt-2 text-xs text-slate-500">{Object.entries(d.hot.by_cat).sort(([a], [b]) => (+a === 9 ? 1.5 : +a) - (+b === 9 ? 1.5 : +b)).map(([c, n]) => `${HOT_CATS[+c]} ${n}`).join(' · ')}</p>}
           </Card>
         </div>
       </div>

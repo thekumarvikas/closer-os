@@ -12,11 +12,11 @@ import { ask } from '../lib/dialogs'
  * in the app's WhatsApp queue — never automatic.
  */
 interface Msg { anchor: 'start' | 'event'; day_offset: number; send_time: string; minutes_before: number | null; body: string; media_path?: string | null; media_type?: string | null; media_name?: string | null }
-interface Seq { id: string; name: string; company: boolean; mine: boolean; owner_name: string | null; start_outcomes: string[]; messages: Msg[]; active_all: number; done_all: number; auto_webinar?: boolean }
+interface Seq { id: string; name: string; company: boolean; mine: boolean; owner_name: string | null; start_outcomes: string[]; messages: Msg[]; active_all: number; done_all: number; auto_webinar?: boolean; auto_link?: boolean }
 interface Outcome { id: string; label: string; purpose: string }
 interface Template { id: string; name: string; body: string; media_path: string | null; media_type: string | null; media_name: string | null }
 
-const variables = ['{{leadName}}', '{{leadFullName}}', '{{repName}}', '{{companyName}}', '{{batchName}}', '{{batchDate}}', '{{city}}', '{{profession}}']
+const variables = ['{{leadName}}', '{{leadFullName}}', '{{repName}}', '{{companyName}}', '{{batchName}}', '{{batchDate}}', '{{payLink}}', '{{city}}', '{{profession}}']
 
 function whenText(m: Msg) {
   if (m.anchor === 'event') {
@@ -29,6 +29,13 @@ function whenText(m: Msg) {
 }
 
 /** Pre-webinar countdown: welcome on joining, then 5 d / 3 d / 1 d / 5 h / 2 h / 15 min before. Every time can be changed. */
+/** Ready-made follow-up for people who were in the webinar when the payment link was dropped (editable). */
+const AFTER_LINK: Msg[] = [
+  { anchor: 'start', day_offset: 0, send_time: '21:30', minutes_before: null, body: 'Hi {{leadName}}, thank you for staying till the end of {{batchName}}! Here is the link to join: {{payLink}}\nAny question — just reply here.' },
+  { anchor: 'start', day_offset: 1, send_time: '11:00', minutes_before: null, body: 'Hi {{leadName}}, did you get a chance to look at the program? Many people in yesterday\'s session have already joined. Link: {{payLink}}' },
+  { anchor: 'start', day_offset: 3, send_time: '11:00', minutes_before: null, body: 'Hi {{leadName}}, this is {{repName}}. Is there anything stopping you from joining? Happy to help on a quick call.' },
+]
+
 const COUNTDOWN: Msg[] = [
   { anchor: 'start', day_offset: 0, send_time: '10:00', minutes_before: null, body: 'Hi {{leadName}}, thank you for registering for {{batchName}} on {{batchDate}}. Save this number so you get the joining link. See you there! — {{repName}}' },
   { anchor: 'event', day_offset: 0, send_time: '10:00', minutes_before: 5 * 1440, body: 'Hi {{leadName}}, 5 days to go for {{batchName}} ({{batchDate}}). Block your calendar — it will be worth it.' },
@@ -82,6 +89,7 @@ export function CompanySequences() {
               <button className="font-medium text-brand-700 hover:underline" onClick={() => setViewing(s)}>{s.name}</button>
               <div className="text-xs text-slate-500">{s.messages.length} message{s.messages.length === 1 ? '' : 's'} · {s.messages.map(m => whenText(m).split(' · ')[0]).join(', ')}</div>
               {s.auto_webinar && <div className="text-xs text-brand-700">🎥 Starts by itself when a lead registers for a webinar</div>}
+              {s.auto_link && <div className="text-xs text-emerald-700">💳 Starts by itself for people present when the payment link was dropped</div>}
               {s.start_outcomes.length > 0 && <div className="text-xs text-brand-700">🔁 Starts by itself after: {s.start_outcomes.map(label).filter(Boolean).join(', ')}</div>}
               <div className="text-xs text-slate-500">{s.active_all} leads on it now{s.done_all ? ` · ${s.done_all} finished` : ''}</div>
             </div>
@@ -97,6 +105,8 @@ export function CompanySequences() {
         <Plus className="h-4 w-4" /> New sequence</Button>
       <Button variant="secondary" className="ml-2 mt-3" onClick={() => setEditing({ id: '', name: 'Pre-webinar countdown', company: true, mine: false, owner_name: null, start_outcomes: [], active_all: 0, done_all: 0,
         auto_webinar: true, messages: COUNTDOWN.map(m => ({ ...m })) })}>⏳ Ready-made: Pre-webinar countdown</Button>
+      <Button variant="secondary" className="ml-2 mt-3" onClick={() => setEditing({ id: '', name: 'After the payment link', company: true, mine: false, owner_name: null, start_outcomes: [], active_all: 0, done_all: 0,
+        auto_link: true, messages: AFTER_LINK.map(m => ({ ...m })) })}>💳 Ready-made: After the payment link</Button>
       {viewing && <SequenceDetail seq={viewing} onClose={() => { setViewing(null); setVersion(v => v + 1) }} />}
       {editing && <SequenceEditor seq={editing} outcomes={outcomes} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); setVersion(v => v + 1) }} />}
     </Card>
@@ -109,6 +119,7 @@ function SequenceEditor({ seq, outcomes, onClose, onSaved }: { seq: Seq; outcome
   const [msgs, setMsgs] = useState<Msg[]>(seq.messages.map(m => ({ ...m })))
   const [starts, setStarts] = useState<string[]>(seq.start_outcomes)
   const [autoWeb, setAutoWeb] = useState(!!seq.auto_webinar)
+  const [autoLink, setAutoLink] = useState(!!seq.auto_link)
   const [templates, setTemplates] = useState<Template[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -127,7 +138,7 @@ function SequenceEditor({ seq, outcomes, onClose, onSaved }: { seq: Seq; outcome
     const bad = msgs.findIndex(m => !m.body.trim() && !m.media_path)
     if (bad >= 0) return setError(`Message ${bad + 1} is empty`)
     setBusy(true); setError(null)
-    const { error } = await supabase.rpc('save_sequence', { p_org: org.id, p: { id: seq.id || undefined, name, company: true, start_outcomes: starts, auto_webinar: autoWeb, messages: msgs } })
+    const { error } = await supabase.rpc('save_sequence', { p_org: org.id, p: { id: seq.id || undefined, name, company: true, start_outcomes: starts, auto_webinar: autoWeb, auto_link: autoLink, messages: msgs } })
     setBusy(false)
     if (error) setError(errorText(error)); else onSaved()
   }
@@ -181,6 +192,10 @@ function SequenceEditor({ seq, outcomes, onClose, onSaved }: { seq: Seq; outcome
         <label className="flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-sm">
           <input type="checkbox" className="mt-1" checked={autoWeb} onChange={e => setAutoWeb(e.target.checked)} />
           <span><b>Start by itself when a lead registers for a webinar</b><br /><span className="text-slate-500">The lead's reminder caller (or owner) sends the messages. Someone who registers late only gets the messages still ahead — e.g. joining 2 days before skips the "5 days before" one.</span></span>
+        </label>
+        <label className="flex items-start gap-2 rounded-lg bg-emerald-50 p-3 text-sm">
+          <input type="checkbox" className="mt-1" checked={autoLink} onChange={e => setAutoLink(e.target.checked)} />
+          <span><b>Start by itself for people who were in the webinar when the payment link was dropped</b><br /><span className="text-slate-500">Starts once the Zoom report is uploaded and the payment link minute is set. Stops by itself when they buy. The lead's owner sends each message with one tap.</span></span>
         </label>
         <div>
           <span className="label">Start automatically when a rep saves this outcome</span>

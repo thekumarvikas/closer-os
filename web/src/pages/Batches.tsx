@@ -287,6 +287,7 @@ export function BatchForm({ batch, onClose, onSaved }: { batch?: Batch; onClose:
   const [pitch, setPitch] = useState<string>(batch?.pitch_minute != null ? String(batch.pitch_minute) : '')
   const [target, setTarget] = useState(batch?.guided_target_pct ?? 70)
   const [link, setLink] = useState(batch?.join_link ?? '')
+  const [payLink, setPayLink] = useState(batch?.pay_link ?? '')
   const holdout = batch?.holdout_pct ?? 0   // test group option removed from the form (owner); old batches keep theirs
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -299,7 +300,7 @@ export function BatchForm({ batch, onClose, onSaved }: { batch?: Batch; onClose:
     const utc = new Date(asUtc.toLocaleString('en-US', { timeZone: 'UTC' }))
     const webinar_at = new Date(asUtc.getTime() - (zoned.getTime() - utc.getTime())).toISOString()
     const row = { name: name.trim(), kind, webinar_at, hot_minutes: hot, guided_target_pct: target, holdout_pct: holdout,
-      pitch_minute: pitch.trim() === '' ? null : Math.max(0, Math.round(Number(pitch))), join_link: link.trim() || null }
+      pitch_minute: pitch.trim() === '' ? null : Math.max(0, Math.round(Number(pitch))), join_link: link.trim() || null, pay_link: payLink.trim() || null }
     const { error } = batch
       ? await supabase.from('batches').update(row).eq('id', batch.id)
       : await supabase.from('batches').insert({ ...row, org_id: org.id, created_by: session?.user.id })
@@ -322,9 +323,10 @@ export function BatchForm({ batch, onClose, onSaved }: { batch?: Batch; onClose:
         <Field label="Name"><input className="input" required value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Webinar 4 Oct 2026" autoFocus /></Field>
         <div className="sm:col-span-2"><Field label={`${kind === 'batch' ? 'Start date' : 'Date'} & time (${org.timezone})`}><input className="input" type="datetime-local" required value={when} onChange={e => setWhen(e.target.value)} /></Field></div>
         <Field label="Hot lead = watched at least (minutes)"><input className="input" type="number" min={0} value={hot} onChange={e => setHot(Number(e.target.value))} /></Field>
-        <Field label="Pitch / payment link shown at (minute)" hint="e.g. 80. People who watched this long saw the pitch. Leave empty if not known yet.">
+        <Field label="Payment link dropped at (minute)" hint="Enter the minute at which the payment link was dropped in the webinar, e.g. 65. People in the webinar 5 minutes before and after count as present. Leave empty if not known yet.">
           <input className="input" type="number" min={0} value={pitch} onChange={e => setPitch(e.target.value)} placeholder="e.g. 80" /></Field>
         <div className="sm:col-span-2"><Field label="Joining link (Zoom / Meet)" hint="Sent in WhatsApp messages with the {{joinLink}} fill-in."><input className="input" value={link} onChange={e => setLink(e.target.value)} placeholder="https://zoom.us/j/…" /></Field></div>
+        <div className="sm:col-span-2"><Field label="Payment link" hint="Sent in WhatsApp messages with the {{payLink}} fill-in."><input className="input" value={payLink} onChange={e => setPayLink(e.target.value)} placeholder="https://rzp.io/…" /></Field></div>
         <Field label="Guided target (%)"><input className="input" type="number" min={0} max={100} value={target} onChange={e => setTarget(Number(e.target.value))} /></Field>
         <div className="sm:col-span-2"><ErrorBox error={error} /></div>
       </form>

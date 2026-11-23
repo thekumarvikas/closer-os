@@ -410,7 +410,7 @@ fun BriefCard(vm: AppViewModel, lead: Lead, showProfile: Boolean = true) {
         }
         Text("💬 Open with: “${openingLine(vm, lead, p, obj)}”", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Brand.primaryDark)
         val signals = listOfNotNull(
-            lead.latestBatch?.let { b -> b.watch_minutes?.let { w -> if (w > 0) "🎥 watched $w min" + (if (b.saw_pitch == true) " · saw the pitch" else "") else "🎥 didn't join ${b.batch?.name ?: "the webinar"}" } },
+            lead.latestBatch?.let { b -> b.watch_minutes?.let { w -> if (w > 0) "🎥 watched $w min" + (if (b.saw_pitch == true) " · saw the payment link" else "") else "🎥 didn't join ${b.batch?.name ?: "the webinar"}" } },
             lead.wa_count.takeIf { it > 0 }?.let { "💬 $it WhatsApp sent" },
             lead.best_hour?.let { h -> "⏰ usually picks up around ${java.time.LocalTime.of(h, 0).format(java.time.format.DateTimeFormatter.ofPattern("h a"))}" },
         )

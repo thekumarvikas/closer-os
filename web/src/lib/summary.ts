@@ -14,10 +14,12 @@ export type Summary = { kind: 'morning' | 'evening'; day: string; plan_day: stri
 export type Line = { label: string; value: string; phone?: string }
 export type Section = { title: string; lines: Line[]; note?: string }
 export type HotRow = { lead_id: string; name: string; phone: string; owner: string; cat: number; why: string; activity: string; done: string; when: string; short: string; web: string; work: string; tag: string }
-export const HOT_CATS: Record<number, string> = { 1: 'Ready to pay', 2: 'Hot', 3: 'Interested', 4: 'Positive — follow up',
+export const HOT_CATS: Record<number, string> = { 1: 'Ready to pay', 9: 'Saw the payment link — not bought yet', 2: 'Hot', 3: 'Interested', 4: 'Positive — follow up',
   5: 'Came back + active in Zoom', 6: 'Came back (attended 2+ webinars)', 7: 'Active in Zoom once', 8: 'Talked, not tagged yet — ask the team member' }
-export const HOT_GROUP = (c: number) => c <= 4 ? '🔥 Hot — tagged or positive outcome' : c <= 7 ? '⭐ Potentially hot — attended, not talked to yet' : '📝 Talked, not tagged yet'
-export const HOT_NOTE = 'Hot = tagged Ready to pay / Hot / Interested or a positive outcome. Potentially hot = attended webinars (2+ times, or chatted / answered polls) but nobody has talked to them yet. Inside each category: most webinar minutes first, then most talk time with the team.'
+/** Category 9 (saw the payment link, not bought) ranks right after Ready to pay. */
+export const hotTop = (c: number) => c <= 4 || c === 9
+export const HOT_GROUP = (c: number) => hotTop(c) ? '🔥 Hot — tagged or positive outcome' : c <= 7 ? '⭐ Potentially hot — attended, not talked to yet' : '📝 Talked, not tagged yet'
+export const HOT_NOTE = 'Hot = tagged Ready to pay / Hot / Interested, a positive outcome, or was in the webinar when the payment link was dropped (not bought yet). Potentially hot = attended webinars (2+ times, or chatted / answered polls) but nobody has talked to them yet. Inside each category: most webinar minutes first, then most talk time with the team.'
 export const fmtPh = (p: string) => { const m = /^\+91(\d{5})(\d{5})$/.exec(p ?? ''); return m ? `+91 ${m[1]} ${m[2]}` : p ?? '' }
 const mins = (sec: number) => `${Math.round(sec / 60)} min`
 /** One readable row per hot lead (dashboard, app, text, image, PDF, CSV). */
@@ -29,15 +31,15 @@ export function hotRows(list: HotLead[], nameOf: (id: string | null) => string, 
     const why = h.cat === 8 ? `Not tagged yet — ask ${owner || 'the team member'}` : h.cat >= 5 ? HOT_CATS[h.cat] : [h.tag, h.outcome].filter(Boolean).join(' · ') || HOT_CATS[h.cat]
     const activity = [`Registered ${h.reg}× · attended ${h.att}×`,
       h.watch ? `watched ${h.watch} min${h.att > 1 && h.best ? ` (best ${h.best} min, ${day(h.best_at)})` : ''}` : '',
-      h.pitch ? 'saw the pitch' : '', h.chats ? `${h.chats} chat${h.chats > 1 ? 's' : ''}` : '', h.polls ? 'answered polls' : ''].filter(Boolean).join(' · ')
+      h.pitch ? 'saw the payment link' : '', h.chats ? `${h.chats} chat${h.chats > 1 ? 's' : ''}` : '', h.polls ? 'answered polls' : ''].filter(Boolean).join(' · ')
     const by = (h.talk_by ?? []).filter(t => t.sec > 0)
     const talk = h.talk ? `Talked ${mins(h.talk)}${by.length > 1 ? ` (${by.map(t => `${nameOf(t.user).split(' ')[0]} ${mins(t.sec)}`).join(', ')})` : ''}` : 'Not talked yet'
     const done = [talk, `${h.calls} call${h.calls === 1 ? '' : 's'}`, h.wa ? `${h.wa} WhatsApp` : ''].filter(Boolean).join(' · ')
-    const last = h.last_at ? `Last ${day(h.last_at)} · ${h.last_min ?? 0} min${h.last_pitch ? ' ✓ pitch' : ''}` : ''
-    const short = [last || (h.watch ? `${h.watch} min` : ''), h.att > 1 ? `total ${h.watch} min` : '', !last && h.pitch ? '✓ pitch' : '', h.chats ? `${h.chats} chat${h.chats > 1 ? 's' : ''}` : '', h.polls ? 'polls' : '',
+    const last = h.last_at ? `Last ${day(h.last_at)} · ${h.last_min ?? 0} min${h.last_pitch ? ' ✓ payment link' : ''}` : ''
+    const short = [last || (h.watch ? `${h.watch} min` : ''), h.att > 1 ? `total ${h.watch} min` : '', !last && h.pitch ? '✓ payment link' : '', h.chats ? `${h.chats} chat${h.chats > 1 ? 's' : ''}` : '', h.polls ? 'polls' : '',
       h.att > 1 ? `attended ${h.att}×` : '', h.reg > 1 ? `registered ${h.reg}×` : '',
       h.talk ? `talked ${h.talk < 60 ? `${h.talk}s` : `${Math.round(h.talk / 60)}m`}` : 'not talked', `${h.calls} call${h.calls === 1 ? '' : 's'}`, h.wa ? `${h.wa} WA` : ''].filter(Boolean).join(' · ')
-    const web = [last || (h.watch ? `${h.watch} min` : 'joined'), h.att > 1 ? `total ${h.watch} min` : (!last && h.pitch ? '✓ pitch' : ''), h.chats ? `${h.chats} chat${h.chats > 1 ? 's' : ''}` : '', h.polls ? 'polls' : '',
+    const web = [last || (h.watch ? `${h.watch} min` : 'joined'), h.att > 1 ? `total ${h.watch} min` : (!last && h.pitch ? '✓ payment link' : ''), h.chats ? `${h.chats} chat${h.chats > 1 ? 's' : ''}` : '', h.polls ? 'polls' : '',
       h.att > 1 ? `${h.att} webinars` : '', h.reg > 1 ? `registered ${h.reg}×` : ''].filter(Boolean).join(' · ')
     const work = [h.talk ? (h.talk < 60 ? `${h.talk}s talk` : `${Math.round(h.talk / 60)}m talk`) : 'no talk', `${h.calls} call${h.calls === 1 ? '' : 's'}`, h.wa ? `${h.wa} WA` : ''].filter(Boolean).join(' · ')
     const tag = h.cat <= 4 ? [h.tag, h.outcome].filter(Boolean).join(' · ') : ''
@@ -147,8 +149,8 @@ export function buildModel(s: Summary, money: (v: number) => string, nameOf: (id
   // One-page image: numbers only (names + details live in the PDF).
   const byOwner = pl.hot.by_owner ?? []
   const owners = s.team ? [...new Set(byOwner.map(b => b.owner))].sort((a, b) => nameOf(a).localeCompare(nameOf(b))) : []
-  const cats = [1, 2, 3, 4, 5, 6, 7, 8].filter(c => (pl.hot.by_cat?.[String(c)] ?? 0) > 0)
-  const grid = cats.map(c => ({ label: (c <= 4 ? '🔥 ' : c <= 7 ? '⭐ ' : '📝 ') + (c === 8 ? 'Not tagged yet' : HOT_CATS[c]),
+  const cats = [1, 9, 2, 3, 4, 5, 6, 7, 8].filter(c => (pl.hot.by_cat?.[String(c)] ?? 0) > 0)
+  const grid = cats.map(c => ({ label: (hotTop(c) ? '🔥 ' : c <= 7 ? '⭐ ' : '📝 ') + (c === 8 ? 'Not tagged yet' : HOT_CATS[c]),
     vals: s.team ? owners.map(o => byOwner.find(b => b.owner === o && b.cat === c)?.n ?? 0) : [], total: pl.hot.by_cat?.[String(c)] ?? 0 }))
   const planBits = [`Follow-ups due ${pl.follow_ups}`, pl.overdue ? `Overdue ${pl.overdue}` : '', st.missed_open ? `Missed callers ${st.missed_open}` : '',
     pl.no_next ? `Interested, no next call ${pl.no_next}` : ''].filter(Boolean)
@@ -364,7 +366,7 @@ export async function renderList(m: Model): Promise<{ canvas: HTMLCanvasElement;
       for (const cat of cats) {
         const inCat = m.hot.rows.filter(r => r.cat === cat)
         rect(pad, y - 4, W - pad * 2, 50, cat <= 4 ? '#fff4e5' : cat <= 7 ? '#fff9db' : '#eef2ff', 10)
-        t(`${cat <= 4 ? '🔥' : cat <= 7 ? '⭐' : '📝'}  ${HOT_CATS[cat]} · ${inCat.length}`, pad + 16, y + 30, 24, C.ink, 700); y += 64
+        t(`${hotTop(cat) ? '🔥' : cat <= 7 ? '⭐' : '📝'}  ${HOT_CATS[cat]} · ${inCat.length}`, pad + 16, y + 30, 24, C.ink, 700); y += 64
         const owners = [...new Set(inCat.map(r => r.owner))]
         for (const o of owners) {
           const mine = inCat.filter(r => r.owner === o)

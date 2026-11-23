@@ -188,7 +188,7 @@ data class LeadFact(val key: String, val label: String, val options: List<String
     val chat: List<WebChat> = emptyList(), val polls: List<WebPoll> = emptyList(),
 )
 @Serializable data class Person(val user_id: String, val name: String = "", val role: String = "rep")
-@Serializable data class BatchMini(val name: String = "", val webinar_at: String? = null, val join_link: String? = null)
+@Serializable data class BatchMini(val name: String = "", val webinar_at: String? = null, val join_link: String? = null, val pay_link: String? = null)
 @Serializable data class BatchLink(val watch_minutes: Int? = null, val attended: Boolean = false, val batch: BatchMini? = null,
     val batch_id: String? = null, val is_holdout: Boolean = false,
     /** Webinar engagement: 0–100 (watch + present at pitch + chat + polls) and its one-line reason. */
@@ -347,7 +347,7 @@ object TalkBands {
 
 @Serializable data class TodayStats(val calls: Int = 0, val connected: Int = 0, val talkSec: Int = 0, val notPicked: Int = 0, val missed: Int = 0)
 
-private const val LEAD_COLUMNS = "*, batch_leads(batch_id, is_holdout, watch_minutes, attended, warmth, warm_reason, saw_pitch, batch:batches(name, webinar_at, join_link))"
+private const val LEAD_COLUMNS = "*, batch_leads(batch_id, is_holdout, watch_minutes, attended, warmth, warm_reason, saw_pitch, batch:batches(name, webinar_at, join_link, pay_link))"
 
 object Repo {
     private val db get() = Backend.client.postgrest

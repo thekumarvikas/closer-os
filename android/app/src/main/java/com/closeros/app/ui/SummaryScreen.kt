@@ -78,10 +78,12 @@ private fun bestHour(hours: List<JsonObject>): JsonObject? {
     return live.sortedWith(compareByDescending<JsonObject> { sc(it) }.thenByDescending { it.i("conn") }).first()
 }
 
-val HOT_CATS = mapOf(1 to "Ready to pay", 2 to "Hot", 3 to "Interested", 4 to "Positive — follow up",
+val HOT_CATS = mapOf(1 to "Ready to pay", 9 to "Saw the payment link — not bought yet", 2 to "Hot", 3 to "Interested", 4 to "Positive — follow up",
     5 to "Came back + active in Zoom", 6 to "Came back (attended 2+ webinars)", 7 to "Active in Zoom once", 8 to "Talked, not tagged yet — ask the team member")
-fun hotGroup(c: Int) = if (c <= 4) "🔥 Hot — tagged or positive outcome" else if (c <= 7) "⭐ Potentially hot — attended, not talked to yet" else "📝 Talked, not tagged yet"
-const val HOT_NOTE = "Hot = tagged Ready to pay / Hot / Interested or a positive outcome. Potentially hot = attended webinars (2+ times, or chatted / answered polls) but nobody has talked to them yet. Inside each category: most webinar minutes first, then most talk time with the team."
+/** Category 9 (saw the payment link, not bought) ranks right after Ready to pay. */
+fun hotTop(c: Int) = c <= 4 || c == 9
+fun hotGroup(c: Int) = if (hotTop(c)) "🔥 Hot — tagged or positive outcome" else if (c <= 7) "⭐ Potentially hot — attended, not talked to yet" else "📝 Talked, not tagged yet"
+const val HOT_NOTE = "Hot = tagged Ready to pay / Hot / Interested, a positive outcome, or was in the webinar when the payment link was dropped (not bought yet). Potentially hot = attended webinars (2+ times, or chatted / answered polls) but nobody has talked to them yet. Inside each category: most webinar minutes first, then most talk time with the team."
 
 /** Hot leads grouped by category (same rules as the dashboard). */
 fun hotSections(list: List<JsonObject>, total: Int, tz: ZoneId, team: Boolean, nameOf: (String?) -> String): List<SumSection> {
@@ -94,7 +96,7 @@ fun hotSections(list: List<JsonObject>, total: Int, tz: ZoneId, team: Boolean, n
         val att = h.i("att"); val watch = h.i("watch"); val best = h.i("best")
         val activity = listOfNotNull("Registered ${h.i("reg")}× · attended $att×",
             if (watch > 0) "watched $watch min" + (if (att > 1 && best > 0) " (best $best min, ${whenTxt(h.t("best_at"), "d MMM")})" else "") else null,
-            if (h["pitch"]?.jsonPrimitive?.booleanOrNull == true) "saw the pitch" else null,
+            if (h["pitch"]?.jsonPrimitive?.booleanOrNull == true) "saw the payment link" else null,
             h.i("chats").takeIf { it > 0 }?.let { "$it chat${if (it > 1) "s" else ""}" }, if (h.i("polls") > 0) "answered polls" else null).joinToString(" · ")
         val by = (h["talk_by"] as? JsonArray)?.map { it.jsonObject }?.filter { it.i("sec") > 0 } ?: emptyList()
         val talkSec = h.i("talk")
@@ -104,14 +106,14 @@ fun hotSections(list: List<JsonObject>, total: Int, tz: ZoneId, team: Boolean, n
         val whenLine = listOfNotNull(whenTxt(h.t("last_talk"), "d MMM, h:mm a")?.let { "Last talked $it" }, whenTxt(h.t("next"), "d MMM, h:mm a")?.let { "Next call $it" }).joinToString(" · ")
         val t = "${hotGroup(cat)} · ${HOT_CATS[cat]}"
         if (t != title) { if (lines.isNotEmpty()) out += SumSection(title, lines); title = t; lines = mutableListOf() }
-        val last = whenTxt(h.t("last_at"), "d MMM")?.let { "Last $it · ${h.i("last_min")} min" + (if (h["last_pitch"]?.jsonPrimitive?.booleanOrNull == true) " ✓ pitch" else "") }
+        val last = whenTxt(h.t("last_at"), "d MMM")?.let { "Last $it · ${h.i("last_min")} min" + (if (h["last_pitch"]?.jsonPrimitive?.booleanOrNull == true) " ✓ payment link" else "") }
         val pitchAny = h["pitch"]?.jsonPrimitive?.booleanOrNull == true
-        val short = listOfNotNull(last ?: (if (watch > 0) "$watch min" else null), if (att > 1) "total $watch min" else null, if (last == null && pitchAny) "✓ pitch" else null,
+        val short = listOfNotNull(last ?: (if (watch > 0) "$watch min" else null), if (att > 1) "total $watch min" else null, if (last == null && pitchAny) "✓ payment link" else null,
             h.i("chats").takeIf { it > 0 }?.let { "$it chat${if (it > 1) "s" else ""}" }, if (h.i("polls") > 0) "polls" else null,
             if (att > 1) "attended $att×" else null, if (h.i("reg") > 1) "registered ${h.i("reg")}×" else null,
             if (talkSec > 0) "talked " + (if (talkSec < 60) "${talkSec}s" else "${talkSec / 60}m") else "not talked",
             "$calls call${if (calls == 1) "" else "s"}", if (wa > 0) "$wa WA" else null).joinToString(" · ")
-        val web = listOfNotNull(last ?: (if (watch > 0) "$watch min" else "joined"), if (att > 1) "total $watch min" else if (last == null && pitchAny) "✓ pitch" else null,
+        val web = listOfNotNull(last ?: (if (watch > 0) "$watch min" else "joined"), if (att > 1) "total $watch min" else if (last == null && pitchAny) "✓ payment link" else null,
             h.i("chats").takeIf { it > 0 }?.let { "$it chat${if (it > 1) "s" else ""}" }, if (h.i("polls") > 0) "polls" else null,
             if (att > 1) "$att webinars" else null, if (h.i("reg") > 1) "registered ${h.i("reg")}×" else null).joinToString(" · ")
         val work = listOfNotNull(if (talkSec > 0) (if (talkSec < 60) "${talkSec}s talk" else "${talkSec / 60}m talk") else "no talk",
@@ -201,8 +203,8 @@ fun buildSummary(s: JsonObject, currency: String, hotOverride: JsonObject? = nul
     val byCat = hotObj?.get("by_cat") as? JsonObject
     val byOwner = (hotObj?.get("by_owner") as? JsonArray)?.map { it.jsonObject } ?: emptyList()
     val owners = if (team) byOwner.map { it.t("owner") }.distinct().sortedBy { ownerName[it] ?: "" } else emptyList()
-    val grid = (1..8).filter { (byCat?.i(it.toString()) ?: 0) > 0 }.map { c ->
-        Triple((if (c <= 4) "🔥 " else if (c <= 7) "⭐ " else "📝 ") + (if (c == 8) "Not tagged yet" else HOT_CATS[c] ?: ""),
+    val grid = listOf(1, 9, 2, 3, 4, 5, 6, 7, 8).filter { (byCat?.i(it.toString()) ?: 0) > 0 }.map { c ->
+        Triple((if (hotTop(c)) "🔥 " else if (c <= 7) "⭐ " else "📝 ") + (if (c == 8) "Not tagged yet" else HOT_CATS[c] ?: ""),
             owners.map { o -> byOwner.firstOrNull { it.t("owner") == o && it.i("cat") == c }?.i("n") ?: 0 }, byCat?.i(c.toString()) ?: 0) }
     val people = (s["people"] as? JsonArray)?.map { it.jsonObject } ?: emptyList()
     val withCalls = people.filter { val ps = it["stats"]!!.jsonObject; ps.i("dialled") + ps.i("received") > 0 }
@@ -401,8 +403,8 @@ fun listBitmap(m: SumModel): Pair<Bitmap, List<TelLink>> {
             y += 12
             for (cat in m.hot.map { it.cat }.distinct()) {
                 val inCat = m.hot.filter { it.cat == cat }
-                g.rect(pad, y - 4, w - pad * 2, 50f, if (cat <= 4) 0xFFFFF4E5 else if (cat <= 7) 0xFFFFF9DB else 0xFFEEF2FF, 10f)
-                g.t("${if (cat <= 4) "🔥" else if (cat <= 7) "⭐" else "📝"}  ${HOT_CATS[cat]} · ${inCat.size}", pad + 16, y + 30, 24f, Col.ink, true); y += 64
+                g.rect(pad, y - 4, w - pad * 2, 50f, if (hotTop(cat)) 0xFFFFF4E5 else if (cat <= 7) 0xFFFFF9DB else 0xFFEEF2FF, 10f)
+                g.t("${if (hotTop(cat)) "🔥" else if (cat <= 7) "⭐" else "📝"}  ${HOT_CATS[cat]} · ${inCat.size}", pad + 16, y + 30, 24f, Col.ink, true); y += 64
                 for (o in inCat.map { it.owner ?: "" }.distinct()) {
                     val mine = inCat.filter { (it.owner ?: "") == o }
                     if (m.teamView && o.isNotBlank()) { g.t("$o · ${mine.size}", pad, y + 6, 22f, Col.brand, true); y += 30 }
@@ -471,7 +473,7 @@ private fun shareFile(ctx: Context, f: File, mime: String) {
 fun saveHotCsv(ctx: Context, full: JsonObject, people: Map<String?, String>, tz: ZoneId) {
     fun q(v: Any?) = "\"" + (v?.toString() ?: "").replace("\"", "\"\"") + "\""
     fun t(v: String?) = v?.let { runCatching { com.closeros.app.data.parseInstant(it).atZone(tz).format(DateTimeFormatter.ofPattern("d MMM yyyy, h:mm a")) }.getOrNull() } ?: ""
-    val sb = StringBuilder("#,Category,Lead,Phone,Owner,Tag,Outcome,Registered,Attended,Watched (min),Best (min),Best webinar,Saw the pitch,Chats,Polls,Talk (min),Talk by team member,Calls,WhatsApp,Last talked,Next call\n")
+    val sb = StringBuilder("#,Category,Lead,Phone,Owner,Tag,Outcome,Registered,Attended,Watched (min),Best (min),Best webinar,Saw the payment link,Chats,Polls,Talk (min),Talk by team member,Calls,WhatsApp,Last talked,Next call\n")
     ((full["list"] as? JsonArray)?.map { it.jsonObject } ?: emptyList()).forEachIndexed { i, h ->
         val by = (h["talk_by"] as? JsonArray)?.map { it.jsonObject }?.joinToString("; ") { "${people[it.t("user")] ?: ""} ${it.i("sec") / 60}m" } ?: ""
         sb.append(listOf(i + 1, HOT_CATS[h.i("cat")], h.t("name"), h.t("phone"), people[h.t("owner")] ?: "", h.t("tag"), h.t("outcome"), h.i("reg"), h.i("att"),

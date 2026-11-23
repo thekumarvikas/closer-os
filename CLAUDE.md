@@ -2288,3 +2288,18 @@ intelligence → Play Store launch.
   (with missing fill-in warning), "How each message is doing · last 30 days". App: data/WaContext (outcome just saved for a number,
   15 min) → pop-up step 2 + WhatsApp picker list matching messages first with ⭐; picker search (> 5 messages) + #tag chips;
   LeadIndex cursor v13 (join_link).
+
+## Payment link dropped (Nov 23 2026, migrations 0129–0131, app 0.29.9)
+- Owner: "pitch" renamed "payment link dropped" everywhere (web + app). Pitch moment = minute the payment link was dropped in the
+  chat (batches.pitch_minute, entered by hand: "Enter the minute at which the payment link was dropped in the webinar").
+  PRESENT = in the room for the 10 minutes around it (5 before, 5 after), short drops allowed (≥ 540 of 600 s, from Zoom sessions).
+  No join/leave times → estimated: watched ≥ minute + 5 (batch_leads.pitch_est, labelled "estimated").
+- batch_link_report(batch): counts present / left_before / joined_after / partly + follow-up of present (not called, called, talked
+  30 s+, bought, not bought), people-in-room curve per minute, chat_link (first payment/landing link in batch_chat → "Use minute N"
+  suggestion; manager confirms). batch_link_leads(batch, group) for every list. Web components/PaymentLink.tsx card at the top of the
+  webinar page (always visible, minute entry if missing, RoomCurve chart). batches.pay_link (typed in the webinar form) → fill-in
+  {{payLink}} (web lib/fill.ts, app fillTemplateText, sequences via my_sequence_due batch json).
+- Hot leads category 9 "Saw the payment link — not bought yet" (latest attended webinar, 30 days) ranks right after Ready to pay
+  (order uses 1.5 for 9; hotTop() in web lib/summary.ts + app SummaryScreen.kt).
+- WhatsApp: no auto-send (WhatsApp bans it); wa_sequences.auto_link = sequence starts by itself when saw_pitch turns true
+  (t_bl_link_seq → seq_enroll, owner sends 1 tap each); dashboard ready-made "After the payment link" sequence.

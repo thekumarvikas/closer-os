@@ -17,6 +17,7 @@ import { BatchForm } from './Batches'
 import LeadImport from './LeadImport'
 import ShowUpImpact from './ShowUp'
 import WatchBands from '../components/WatchBands'
+import PaymentLinkCard from '../components/PaymentLink'
 import { LeadDrill, type DrillRow } from '../components/LeadDrill'
 
 type Purpose = 'sales' | 'reminder'
@@ -127,6 +128,7 @@ export default function BatchDetail() {
 
       <WebinarHints />
       {isManager && <UndoZoom key={'u' + version} batch={batch} onDone={refresh} />}
+      <PaymentLinkCard key={'pl' + version} batch={batch} dir={dir} canEdit={isManager} onSaved={refresh} />
       {isManager && <SourceShowUp key={'src' + version} batch={batch} dir={dir} />}
 
       <div className="mb-4 flex rounded-lg bg-slate-100 p-1 text-sm sm:inline-flex">
@@ -597,11 +599,11 @@ function ZoomUpload({ batch, dir, file, onClose, onDone }: { batch: Batch; dir: 
             </table>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label={`Webinar actually started at (${org.timezone})`} hint="Read from the report when possible. The pitch time is counted from here.">
+            <Field label={`Webinar actually started at (${org.timezone})`} hint="Read from the report when possible. The payment link minute is counted from here.">
               <input className="input" type="datetime-local" value={started} onChange={e => setStarted(e.target.value)} /></Field>
             <p className={`self-end rounded-lg p-2 text-xs ${hasTimes ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'}`}>
-              {hasTimes ? '✓ Join and leave times found — "saw the pitch" will be exact (present at the pitch moment).'
-                : 'No join / leave times found — "saw the pitch" will use total minutes watched instead.'}</p>
+              {hasTimes ? '✓ Join and leave times found — "present when the payment link was dropped" will be exact.'
+                : 'No join / leave times found — "present when the payment link was dropped" will be estimated from total minutes watched.'}</p>
           </div>
           {cols.minutes < 0 && <ErrorBox error="Choose the column with minutes watched." />}
           <ErrorBox error={error} />

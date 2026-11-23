@@ -204,7 +204,7 @@ export function WhatsAppTemplates() {
   }, [org.id, lq])  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!lead) return
-    supabase.from('batch_leads').select('batch:batches(name,webinar_at,join_link)').eq('lead_id', lead.id).then(({ data }) => {
+    supabase.from('batch_leads').select('batch:batches(name,webinar_at,join_link,pay_link)').eq('lead_id', lead.id).then(({ data }) => {
       const bs = ((data ?? []) as unknown as { batch: FillBatch | null }[]).map(x => x.batch).filter(Boolean) as FillBatch[]
       bs.sort((a, b) => b.webinar_at.localeCompare(a.webinar_at)); setBatch(bs[0] ?? null)
     })

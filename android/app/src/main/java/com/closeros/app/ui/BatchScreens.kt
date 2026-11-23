@@ -234,16 +234,16 @@ private fun FilterPanel(vm: AppViewModel, rows: List<BatchRow>, p: ListPrefs, pu
             Label("Webinar attendance")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 (listOf("all" to "All") +
-                    (if (pm != null) listOf("pitch" to "🎯 Saw the pitch", "before_pitch" to "Missed the pitch") else emptyList()) +
+                    (if (pm != null) listOf("pitch" to "💳 Present at the payment link", "before_pitch" to "Missed the payment link") else emptyList()) +
                     (if (rows.any { it.warmth > 0 }) listOf("hotw" to "🔥 Hot (warmth 70+)", "warm" to "Warm 40+") else emptyList()) +
                     listOf("hot" to "🔥 ${batch.hot_minutes}+ min", "attended" to "Attended", "low" to "Joined < ${batch.hot_minutes} min", "absent" to "Didn't attend"))
                     .forEach { (k, l) -> Pill("$l (${count(rows, p.copy(attendance = k), batch.hot_minutes, pm)})", p.attendance == k) { update(p.copy(attendance = k)) } }
             }
-            if (pm == null && purpose == "sales") Text("Tip: set the pitch time for this webinar on the dashboard to see who saw the pitch.", fontSize = 12.sp, color = Brand.muted)
+            if (pm == null && purpose == "sales") Text("Tip: set the minute the payment link was dropped (dashboard → this webinar) to see who was present.", fontSize = 12.sp, color = Brand.muted)
             // 10-minute watch groups (only the ones that have leads), several can be picked.
             val bandCounts = rows.mapNotNull { watchBand(it.watch_minutes) }.groupingBy { it }.eachCount()
             if (bandCounts.isNotEmpty()) {
-                Label("Watched — 10-minute groups" + (pm?.let { " · 🎯 = pitch at $it min" } ?: ""))
+                Label("Watched — 10-minute groups" + (pm?.let { " · 💳 = payment link at minute $it" } ?: ""))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     bandCounts.keys.sorted().forEach { b ->
                         val mark = if (pm != null && b >= 0 && pm in (b * 10 + 1)..(b * 10 + 10)) " 🎯" else ""

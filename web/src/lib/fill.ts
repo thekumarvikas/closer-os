@@ -1,7 +1,7 @@
 /* Fills a WhatsApp message's {{fill-ins}} for one lead (same rules as the app's fillTemplateText):
    an empty fill-in is dropped together with its joining word ("on", "in", ",", …). */
 export interface FillLead { name: string; city?: string | null; profession?: string | null; next_follow_up_at?: string | null }
-export interface FillBatch { name: string; webinar_at: string; join_link?: string | null }
+export interface FillBatch { name: string; webinar_at: string; join_link?: string | null; pay_link?: string | null }
 
 export function timeLeft(iso: string, now = Date.now()): string {
   const m = Math.round((new Date(iso).getTime() - now) / 60000)
@@ -18,7 +18,7 @@ export function fillMessage(body: string, lead: FillLead, o: { companyName: stri
   const v: Record<string, string> = {
     leadName: lead.name.split(' ')[0] || 'there', leadFullName: lead.name || 'there', repName: o.repName.split(' ')[0] ?? '',
     companyName: o.companyName.trim(), batchName: o.batch?.name ?? '', batchDate: fmt(o.batch?.webinar_at), batchTime: time(o.batch?.webinar_at),
-    joinLink: o.batch?.join_link ?? '', timeLeft: o.batch ? timeLeft(o.batch.webinar_at) : '',
+    joinLink: o.batch?.join_link ?? '', payLink: o.batch?.pay_link ?? '', timeLeft: o.batch ? timeLeft(o.batch.webinar_at) : '',
     followUpTime: fmt(lead.next_follow_up_at), city: (lead.city ?? '').trim(), profession: (lead.profession ?? '').trim(),
   }
   let out = body
@@ -31,7 +31,7 @@ export function fillMessage(body: string, lead: FillLead, o: { companyName: stri
 export function missingFillIns(body: string, lead: FillLead, o: { companyName: string; batch?: FillBatch | null }): string[] {
   return [
     ['{{batchName}}', !o.batch, 'webinar'], ['{{batchDate}}', !o.batch, 'webinar date'], ['{{batchTime}}', !o.batch, 'webinar time'],
-    ['{{joinLink}}', !o.batch?.join_link, 'joining link (add it to the webinar)'], ['{{timeLeft}}', !o.batch || !timeLeft(o.batch.webinar_at), 'time left (webinar not upcoming)'],
+    ['{{joinLink}}', !o.batch?.join_link, 'joining link (add it to the webinar)'], ['{{payLink}}', !o.batch?.pay_link, 'payment link (add it to the webinar)'], ['{{timeLeft}}', !o.batch || !timeLeft(o.batch.webinar_at), 'time left (webinar not upcoming)'],
     ['{{companyName}}', !o.companyName.trim(), 'business name'], ['{{city}}', !lead.city?.trim(), 'city'], ['{{profession}}', !lead.profession?.trim(), 'profession'],
   ].filter(([k, miss]) => miss && body.includes(k as string)).map(x => x[2] as string)
 }

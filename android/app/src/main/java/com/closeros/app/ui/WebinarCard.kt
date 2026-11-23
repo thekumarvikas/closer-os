@@ -61,7 +61,7 @@ fun LeadWebinarsCard(lead: Lead) {
                         val sess = w.sessions.orEmpty().mapNotNull { s -> clock(s.join)?.let { j -> "$j–${clock(s.leave) ?: "?"}" } }
                         Text("Watched ${w.watch_minutes} min" + if (sess.isNotEmpty()) " · " + sess.joinToString(", ") else "", fontSize = 14.sp)
                         if (w.pitch_minute != null) Text(
-                            (if (w.saw_pitch == true) "🎯 Present at the pitch" else "✗ Missed the pitch") + (clock(w.pitch_at)?.let { " ($it)" } ?: "") +
+                            (if (w.saw_pitch == true) "💳 Present at the payment link" else "✗ Missed the payment link") + (clock(w.pitch_at)?.let { " ($it)" } ?: "") +
                                 if (w.at_pitch == null) " · by minutes watched" else "",
                             fontSize = 14.sp, color = if (w.saw_pitch == true) Color(0xFF047857) else Color(0xFFB45309), fontWeight = FontWeight.SemiBold)
                     }

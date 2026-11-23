@@ -8,10 +8,11 @@ export type DayStats = { dialled: number; connected: number; received: number; m
 export type HotLead = { lead_id: string; name: string; phone: string; owner: string | null; cat: number; tag: string | null; outcome: string | null
   reg: number; att: number; watch: number; best: number | null; best_at: string | null; pitch: boolean; last_at?: string | null; last_min?: number | null; last_pitch?: boolean | null; chats: number; polls: number
   talk: number; talk_by: { user: string; sec: number }[]; calls: number; wa: number; last_talk: string | null; next: string | null }
-export type Summary = { kind: 'morning' | 'evening'; day: string; plan_day: string; tz: string; team: boolean; org_name: string; who: string | null
+export type Summary = { kind: 'morning' | 'live' | 'evening'; day: string; covers_from?: string; covers_to?: string; made_at?: string; complete?: boolean
+  usual?: { days: number; dialled: number | null; connected: number | null; talk: number | null; received: number | null; leads_connected: number | null; sales: number | null } | null; plan_day: string; tz: string; team: boolean; org_name: string; who: string | null
   working_day: boolean; stats: DayStats; people: { user_id: string; name: string; email: string | null; stats: DayStats }[] | null
   plan: { follow_ups: number; overdue: number; hot: { total: number; talked_24h?: number; by_cat: Record<string, number>; by_owner?: { owner: string | null; cat: number; n: number }[]; list: HotLead[] }; no_next: number; webinars: { name: string; at: string; leads: number }[] } }
-export type Line = { label: string; value: string; phone?: string }
+export type Line = { label: string; value: string; phone?: string; hint?: string }
 export type Section = { title: string; lines: Line[]; note?: string }
 export type HotRow = { lead_id: string; name: string; phone: string; owner: string; cat: number; why: string; activity: string; done: string; when: string; short: string; web: string; work: string; tag: string }
 export const HOT_CATS: Record<number, string> = { 1: 'Ready to pay', 9: 'Saw the payment link — not bought yet', 2: 'Hot', 3: 'Interested', 4: 'Positive — follow up',
@@ -77,16 +78,26 @@ const sd = (x: number) => { x = Math.round(x); const h = Math.floor(x / 3600), m
 const pc = (a: number, b: number) => b ? Math.round(a * 100 / b) : 0
 const dayName = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
 
+/** Report names (owner, Nov 24): start of day (frozen, yesterday's whole day) · so far today (live) · end of day (made any time, counts every call). */
+export const KIND_TITLE: Record<Summary['kind'], string> = { morning: 'Start of day summary', live: 'Today so far', evening: 'End of day summary' }
+const clock = (iso: string, tz: string, withDay = true) => new Date(iso).toLocaleString('en-IN', { timeZone: tz, ...(withDay ? { weekday: 'short', day: 'numeric', month: 'short' } : {}), hour: 'numeric', minute: '2-digit' })
+  .replace(/ am/i, ' AM').replace(/ pm/i, ' PM')
+/** "Covers Mon, 23 Nov, 12:00 AM – 9:47 PM (so far)" — the exact span every report is about. */
+export function coversLine(s: Summary): string {
+  if (!s.covers_from || !s.covers_to) return ''
+  return `Covers ${clock(s.covers_from, s.tz)} – ${clock(s.covers_to, s.tz, false)}${s.complete === false ? ' (so far — calls after this are not in it)' : ''}`
+}
 export function buildModel(s: Summary, money: (v: number) => string, nameOf: (id: string | null) => string = () => ''): Model {
   const st = s.stats, tz = s.tz
-  const res = s.kind === 'morning' ? 'Yesterday' : 'Today'
+  const res = s.kind === 'morning' ? 'Yesterday' : s.kind === 'live' ? 'Today so far' : 'Today'
+  const u = s.kind === 'live' && s.usual && s.usual.days > 0 ? s.usual : null
   const total = st.dialled + st.received + st.missed
   const tiles: Line[] = [
     { label: 'Total calls', value: `${total}` },
-    { label: 'Dialled', value: `${st.dialled}` },
-    { label: 'Connected', value: `${pc(st.connected, st.dialled)}%` },
-    { label: 'Leads connected', value: `${st.leads_connected} of ${st.leads}` },
-    { label: 'Talk time', value: dur(st.talk) },
+    { label: 'Dialled', value: `${st.dialled}`, hint: u ? `usual by now ${u.dialled ?? 0}` : undefined },
+    { label: 'Connected', value: `${pc(st.connected, st.dialled)}%`, hint: u ? `usual by now ${pc(u.connected ?? 0, u.dialled ?? 0)}%` : undefined },
+    { label: 'Leads connected', value: `${st.leads_connected} of ${st.leads}`, hint: u ? `usual by now ${u.leads_connected ?? 0}` : undefined },
+    { label: 'Talk time', value: dur(st.talk), hint: u ? `usual by now ${dur(u.talk ?? 0)}` : undefined },
     { label: 'Sales', value: st.sales ? `${st.sales} · ${money(st.revenue)}` : '0' },
   ]
   const results: Section[] = []
@@ -139,13 +150,18 @@ export function buildModel(s: Summary, money: (v: number) => string, nameOf: (id
   if (pl.no_next) plan.push({ label: 'Interested, no next call planned', value: `${pl.no_next}` })
   pl.webinars.forEach(w => plan.push({ label: w.name, value: `${new Date(w.at).toLocaleTimeString('en-IN', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).toUpperCase()} · ${w.leads} leads to remind` }))
   plan.push({ label: 'Hot leads', value: `${pl.hot.total}` })
-  const planDay = s.kind === 'morning' ? 'Today' : 'Tomorrow'
+  const planDay = s.kind === 'morning' ? 'Today' : s.kind === 'live' ? 'Rest of today' : 'Tomorrow'
   const planSec: Section = { title: `${planDay} · plan`, lines: plan }
   const rows = hotRows(pl.hot.list, nameOf, tz)
   const hotSec = hotSections(rows, pl.hot.total, s.team)
   const teamSec: Section[] = team.length ? [{ title: 'Team', lines: team.map(t => ({ label: t.name, value: t.calls ? `${t.total} calls · ${t.dialled} dialled · ${t.connected} leads connected · ${t.talk} · ${t.sales} sale${t.sales === 1 ? '' : 's'}` : 'no calls' })) }] : []
-  const sections = s.kind === 'morning' ? [planSec, ...hotSec, ...results, ...teamSec] : [...results, ...teamSec, planSec, ...hotSec]
-  const now = 'Made ' + new Date().toLocaleString('en-IN', { timeZone: tz, day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }).replace(' am', ' AM').replace(' pm', ' PM')
+  const usualSec: Section[] = u ? [{ title: `Compared with your usual by this time (last ${u.days} working days)`, lines: [
+    { label: 'Dialled', value: `${st.dialled} · usual ${u.dialled ?? 0}` }, { label: 'Received', value: `${st.received} · usual ${u.received ?? 0}` },
+    { label: 'Leads connected', value: `${st.leads_connected} · usual ${u.leads_connected ?? 0}` }, { label: 'Talk time', value: `${dur(st.talk)} · usual ${dur(u.talk ?? 0)}` }] }] : []
+  const sections = s.kind === 'morning' ? [planSec, ...hotSec, ...results, ...teamSec] : [...results, ...usualSec, ...teamSec, planSec, ...hotSec]
+  const made = 'Made ' + new Date(s.made_at ?? Date.now()).toLocaleString('en-IN', { timeZone: tz, day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }).replace(' am', ' AM').replace(' pm', ' PM')
+  const now = made
+  const cov = coversLine(s)
   // One-page image: numbers only (names + details live in the PDF).
   const byOwner = pl.hot.by_owner ?? []
   const owners = s.team ? [...new Set(byOwner.map(b => b.owner))].sort((a, b) => nameOf(a).localeCompare(nameOf(b))) : []
@@ -154,8 +170,8 @@ export function buildModel(s: Summary, money: (v: number) => string, nameOf: (id
     vals: s.team ? owners.map(o => byOwner.find(b => b.owner === o && b.cat === c)?.n ?? 0) : [], total: pl.hot.by_cat?.[String(c)] ?? 0 }))
   const planBits = [`Follow-ups due ${pl.follow_ups}`, pl.overdue ? `Overdue ${pl.overdue}` : '', st.missed_open ? `Missed callers ${st.missed_open}` : '',
     pl.no_next ? `Interested, no next call ${pl.no_next}` : ''].filter(Boolean)
-  const card: Card = { header: `${s.kind === 'morning' ? 'Morning' : 'Evening'} summary`,
-    sub: `${s.team ? s.org_name : s.who ?? ''} · ${dayName(s.plan_day)}`, team_view: s.team,
+  const card: Card = { header: KIND_TITLE[s.kind],
+    sub: `${s.team ? s.org_name : s.who ?? ''} · ${cov || dayName(s.plan_day)}`, team_view: s.team,
     plan: [planBits.join(' · '), ...pl.webinars.map(w => `${w.name} ${new Date(w.at).toLocaleTimeString('en-IN', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).toUpperCase()} · ${w.leads} to remind`)],
     hotTotal: pl.hot.total, cols: s.team ? owners.map(o => nameOf(o).split(' ')[0] || 'Unassigned') : [], grid, top: rows.slice(0, 5),
     at: now, stats: [{ label: 'Total calls', value: `${total}` }, { label: 'Dialled', value: `${st.dialled}` }, { label: 'Connected', value: `${pc(st.connected, st.dialled)}%` },
@@ -178,8 +194,8 @@ export function buildModel(s: Summary, money: (v: number) => string, nameOf: (id
     ['Total', `${total}`, `${st.connected + st.received}`, dur(st.talk), avg(st.talk, st.connected + st.received), `${st.missed_open}`]]
   const leadsRow = [`${st.leads}`, `${st.leads_connected} (${pc(st.leads_connected, st.leads)}%)`, `${st.leads_1min} (${pc(st.leads_1min, st.leads)}%)`,
     `${st.interested}`, `${st.conn_outcome} of ${st.conversations}`, st.sales ? `${st.sales} · ${money(st.revenue)}` : '0']
-  return { activity, leadsRow, card, team_view: s.team, title: `${s.kind === 'morning' ? 'Morning' : 'Evening'} summary`,
-    sub: `${s.team ? `${s.org_name} · Team` : s.who ?? ''} · Plan for ${dayName(s.plan_day)} · Results of ${dayName(s.day)} · ${now}`,
+  return { activity, leadsRow, card, team_view: s.team, title: KIND_TITLE[s.kind],
+    sub: `${s.team ? `${s.org_name} · Team` : s.who ?? ''}${cov ? ` · ${cov}` : ''} · ${s.kind === 'live' ? 'Plan: rest of today' : `Plan for ${dayName(s.plan_day)}`} · ${made}`,
     tiles, plan: planSec, hot: { total: pl.hot.total, note: HOT_NOTE, rows }, results, team, sections }
 }
 

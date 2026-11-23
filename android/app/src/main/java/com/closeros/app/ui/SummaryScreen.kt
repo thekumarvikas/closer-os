@@ -1,6 +1,6 @@
 package com.closeros.app.ui
 
-// Morning (8 AM) / evening (9:30 PM) summary: same model as the dashboard (web/src/lib/summary.ts) → screen,
+// Start of day / today so far / end of day summary: same model as the dashboard (web/src/lib/summary.ts) → screen,
 // WhatsApp text (*bold* headings), picture (PNG) and PDF, shared through the phone's share sheet.
 
 import android.content.ClipData
@@ -129,14 +129,25 @@ fun hotSections(list: List<JsonObject>, total: Int, tz: ZoneId, team: Boolean, n
     return out
 }
 
+/** Owner, Nov 24: start of day (frozen) · today so far (live) · end of day (made any time — every late call counts). */
+fun summaryTitle(s: JsonObject) = when (s.t("kind")) { "morning" -> "Start of day summary"; "live" -> "Today so far"; else -> "End of day summary" }
+/** "Covers Tue 24 Nov, 12:00 AM – 9:47 PM (so far)": the exact time span the report is about. */
+fun coversLine(s: JsonObject): String {
+    val tz = runCatching { ZoneId.of(s.t("tz")) }.getOrDefault(ZoneId.of("Asia/Kolkata"))
+    val a = s.t("covers_from") ?: return ""; val b = s.t("covers_to") ?: return ""
+    val f = DateTimeFormatter.ofPattern("EEE d MMM, h:mm a", java.util.Locale.ENGLISH); val t = DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.ENGLISH)
+    return runCatching { "Covers ${com.closeros.app.data.parseInstant(a).atZone(tz).format(f)} – ${com.closeros.app.data.parseInstant(b).atZone(tz).format(t)}" +
+        (if ((s["complete"] as? kotlinx.serialization.json.JsonPrimitive)?.content == "false") " (so far)" else "") }.getOrDefault("")
+}
+
 fun buildSummary(s: JsonObject, currency: String, hotOverride: JsonObject? = null): SumModel {
     val st = s["stats"]!!.jsonObject
     val tz = runCatching { ZoneId.of(s.t("tz")) }.getOrDefault(ZoneId.of("Asia/Kolkata"))
     val money = { v: Double -> java.text.NumberFormat.getCurrencyInstance(java.util.Locale("en", "IN")).apply {
         runCatching { this.currency = java.util.Currency.getInstance(currency) }; maximumFractionDigits = 0 }.format(v) }
-    val morning = s.t("kind") == "morning"
+    val morning = s.t("kind") == "morning"; val live = s.t("kind") == "live"
     val done = mutableListOf<SumSection>()
-    val res = if (morning) "Yesterday" else "Today"
+    val res = if (morning) "Yesterday" else if (live) "Today so far" else "Today"
     val dialled = st.i("dialled"); val missed = st.i("missed"); val open = st.i("missed_open"); val leads = st.i("leads")
     val totalCalls = dialled + st.i("received") + missed
     done += SumSection("$res · calls", listOf(
@@ -191,7 +202,7 @@ fun buildSummary(s: JsonObject, currency: String, hotOverride: JsonObject? = nul
     val ownerName = (s["people"] as? JsonArray)?.associate { it.jsonObject.t("user_id") to (it.jsonObject.t("name") ?: "") } ?: emptyMap()
     val team = s["team"]?.jsonPrimitive?.booleanOrNull == true
     plan += SumLine("Hot leads", "${hotObj?.i("total") ?: 0}")
-    val out = mutableListOf(SumSection("${if (morning) "Today" else "Tomorrow"} · plan", plan))
+    val out = mutableListOf(SumSection("${if (morning) "Today" else if (live) "Rest of today" else "Tomorrow"} · plan", plan))
     val hotList = (hotObj?.get("list") as? JsonArray)?.map { it.jsonObject } ?: emptyList()
     out += hotSections(hotList, hotObj?.i("total") ?: 0, tz, team) { ownerName[it] ?: "" }
     // Morning: today's tasks first, yesterday below. Evening: today's results first, then tomorrow.
@@ -209,8 +220,8 @@ fun buildSummary(s: JsonObject, currency: String, hotOverride: JsonObject? = nul
     val people = (s["people"] as? JsonArray)?.map { it.jsonObject } ?: emptyList()
     val withCalls = people.filter { val ps = it["stats"]!!.jsonObject; ps.i("dialled") + ps.i("received") > 0 }
         .sortedByDescending { it["stats"]!!.jsonObject.i("talk") }
-    val card = SumCard("${if (morning) "Morning" else "Evening"} summary", "${if (team) s.t("org_name") else s.t("who") ?: ""} · ${dn("plan_day")}",
-        "${if (morning) "Today" else "Tomorrow"} · plan",
+    val card = SumCard(summaryTitle(s), "${if (team) s.t("org_name") else s.t("who") ?: ""} · ${coversLine(s).ifBlank { dn("plan_day") }}",
+        "${if (morning) "Today" else if (live) "Rest of today" else "Tomorrow"} · plan",
         listOf(listOfNotNull("Follow-ups due ${pl.i("follow_ups")}", if (pl.i("overdue") > 0) "Overdue ${pl.i("overdue")}" else null,
             if (open > 0) "Missed callers $open" else null, if (pl.i("no_next") > 0) "Interested, no next call ${pl.i("no_next")}" else null).joinToString(" · ")) +
             ((pl["webinars"] as? JsonArray)?.map { it.jsonObject }?.map { w -> "${w.t("name")} ${runCatching { com.closeros.app.data.parseInstant(w.t("at")!!).atZone(tz).format(DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.ENGLISH)) }.getOrDefault("")} · ${w.i("leads")} to remind" } ?: emptyList()),
@@ -241,7 +252,13 @@ fun buildSummary(s: JsonObject, currency: String, hotOverride: JsonObject? = nul
         else listOf(p.t("name") ?: "", "${ps.i("dialled")}", "$c", sd(ps.i("talk_out")), if (c > 0) sd(ps.i("talk_out") / c) else "—",
             "$r", sd(ps.i("talk_in")), if (r > 0) sd(ps.i("talk_in") / r) else "—", "${ps.i("missed")}", sd(ps.i("talk")), "${ps.i("leads_connected")}", "${ps.i("sales")}")
     } ?: emptyList()
-    return SumModel("${if (morning) "Morning" else "Evening"} summary", "$who · $day · Made ${ZonedDateTime.now(tz).format(DateTimeFormatter.ofPattern("d MMM yyyy, h:mm a"))}", out,
+    // "So far today": compared with the usual by this same clock time (last working days with calls).
+    (s["usual"] as? JsonObject)?.takeIf { live && it.i("days") > 0 }?.let { u ->
+        out.add(1, SumSection("Compared with your usual by this time (last ${u.i("days")} working days)", listOf(
+            SumLine("Dialled", "$dialled · usual ${u.i("dialled")}"), SumLine("Received", "${st.i("received")} · usual ${u.i("received")}"),
+            SumLine("Leads connected", "${st.i("leads_connected")} · usual ${u.i("leads_connected")}"), SumLine("Talk time", "${d(st.i("talk"))} · usual ${d(u.i("talk"))}"))))
+    }
+    return SumModel(summaryTitle(s), "$who · ${coversLine(s).let { if (it.isBlank()) day else it }} · Made ${ZonedDateTime.now(tz).format(DateTimeFormatter.ofPattern("d MMM yyyy, h:mm a"))}", out,
         hotTotal = hotObj?.i("total") ?: 0, hotShown = hotList.size, card = card, hot = hotLines, teamView = team,
         activity = activity, leadsRow = leadsRow, teamWide = teamWide)
 }
@@ -544,9 +561,10 @@ fun SummaryScreen(vm: AppViewModel, initialKind: String, onBack: () -> Unit) {
     var who by remember { mutableStateOf(if (team) "team" else "me") }
     var raw by remember { mutableStateOf<JsonObject?>(null) }
     var allHot by remember { mutableStateOf<JsonObject?>(null) }
+    var refresh by remember { mutableStateOf(0) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(kind, who) {
+    LaunchedEffect(kind, who, refresh) {
         raw = null; allHot = null; error = null
         runCatching { Repo.dailySummary(m.org_id, kind, if (who == "me") null else who) }
             .onSuccess { raw = it }.onFailure { error = com.closeros.app.data.SafeError.forUser(it, "Couldn't load the summary") }
@@ -557,11 +575,13 @@ fun SummaryScreen(vm: AppViewModel, initialKind: String, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().background(Brand.bg)) {
         Row(Modifier.fillMaxWidth().padding(8.dp, 8.dp, 8.dp, 0.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") }
-            Text(if (kind == "morning") "Morning summary" else "Evening summary", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text(when (kind) { "morning" -> "Start of day"; "live" -> "Today so far"; else -> "End of day" }, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            FilterChip(kind == "morning", { kind = "morning" }, { Text("☀️ Morning · 8 AM") })
-            FilterChip(kind == "evening", { kind = "evening" }, { Text("🌙 Evening · 9:30 PM") })
+            FilterChip(kind == "morning", { kind = "morning" }, { Text("☀️ Start of day") })
+            FilterChip(kind == "live", { kind = "live" }, { Text("⏱ So far today") })
+            FilterChip(kind == "evening", { kind = "evening" }, { Text("🌙 End of day") })
+            FilterChip(false, { refresh++ }, { Text("⟳") })
             if (team) { FilterChip(who == "team", { who = "team" }, { Text("Team") }); FilterChip(who == "me", { who = "me" }, { Text("Me") }) }
         }
         val dm = data
@@ -590,6 +610,9 @@ fun SummaryScreen(vm: AppViewModel, initialKind: String, onBack: () -> Unit) {
                 saveHotCsv(ctx, full, people, ZoneId.of(raw?.t("tz") ?: "Asia/Kolkata"))
             } }, Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 6.dp)) { Text("⬇ Full hot list (CSV)", maxLines = 1) }
         }
+        // Pinned above the scrolling report: exactly which time span it covers.
+        raw?.let { r -> coversLine(r).takeIf { it.isNotBlank() }?.let { Text("🕒 $it", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Brand.primary,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)) } }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
             Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.White)) {
                 Column(Modifier.padding(16.dp)) {

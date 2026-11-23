@@ -2411,3 +2411,10 @@ intelligence → Play Store launch.
   Round9Reports LeadListModal. Add it to any new lead table.
 - Nov 24 2026: Call log rows open the LeadDrawer (side panel, full history) — whole row clickable except buttons/inputs; lead name
   shown as a link. 📞 CallBtn is green and also shows during an EDIT support visit (hidden only in view-only visits).
+- Daily summary v8 (Nov 24 2026, migration 0151, app 0.29.12): three reports — "Start of day" (kind morning: yesterday's whole
+  day + today's plan, frozen), "So far today" (kind live: today 12 AM → now + rest of today's plan + `usual` = average of the
+  last 14 days that had calls, cut at the same clock time → "usual by now"), "End of day" (kind evening: today up to the
+  moment it is made — EVERY late call counts, owner: Nikhil called at 9:44 PM — + tomorrow's plan; ⟳ remakes it).
+  daily_summary returns covers_from / covers_to / made_at / complete; web coversLine() + KIND_TITLE (lib/summary.ts), sticky
+  "🕒 Covers …" line in DailySummary.tsx, tiles show "usual by now"; image/PDF/text carry the covers line. App: summaryTitle /
+  coversLine (SummaryScreen.kt), same three chips + ⟳, pinned covers line; end-of-day notification moved 9:30 PM → 10:00 PM.

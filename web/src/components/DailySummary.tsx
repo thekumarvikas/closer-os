@@ -1,4 +1,4 @@
-// Morning (8 AM) / evening (9:30 PM) summary card: crisp numbers + Copy as text (WhatsApp) · Image · PDF.
+// Start of day / so far today / end of day summary card: crisp numbers + Copy as text (WhatsApp) · Image · PDF.
 import { useEffect, useMemo, useState } from 'react'
 import { Copy, Image as ImageIcon, FileText } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
@@ -6,7 +6,7 @@ import { useOrg } from '../lib/session'
 import { useDirectory } from '../lib/directory'
 import { fmtMoney } from '../lib/format'
 import { toast } from '../lib/dialogs'
-import { buildModel, toImage, toPdf, toText, type Summary } from '../lib/summary'
+import { buildModel, coversLine, toImage, toPdf, toText, type Summary } from '../lib/summary'
 import { Card, Spinner } from './ui'
 import { Ph } from './Copy'
 import LeadDrawer from '../pages/LeadDrawer'
@@ -21,11 +21,12 @@ export default function DailySummary() {
   const { org, isManager } = useOrg()
   const dir = useDirectory(org.id)
   const hourNow = Number(new Intl.DateTimeFormat('en-GB', { timeZone: org.timezone, hour: 'numeric', hour12: false }).format(new Date()))
-  const [kind, setKind] = useState<'morning' | 'evening'>(hourNow < 15 ? 'morning' : 'evening')
+  const [kind, setKind] = useState<Summary['kind']>(hourNow < 11 ? 'morning' : hourNow < 20 ? 'live' : 'evening')
   const [who, setWho] = useState<string>(isManager ? 'team' : 'me')
   const [data, setData] = useState<Summary | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [open, setOpen] = useState<string | null>(null)
+  const [v, setV] = useState(0)
   const [allHot, setAllHot] = useState<{ total: number; list: HotLead[] } | null>(null)
   useEffect(() => setAllHot(null), [org.id, kind, who])
   const fetchAllHot = async () => {
@@ -56,7 +57,7 @@ export default function DailySummary() {
     setData(null); setError(null)
     supabase.rpc('daily_summary', { p_org: org.id, p_kind: kind, p_user: who === 'team' || who === 'me' ? null : who })
       .then(({ data, error }) => error ? setError(errorText(error)) : setData(data as Summary))
-  }, [org.id, kind, who])
+  }, [org.id, kind, who, v])
   const model = useMemo(() => data ? buildModel(data, v => fmtMoney(v, org), id => dir?.nameOf(id) ?? '') : null, [data, org, dir])
   const file = model ? `${model.title.replace(' ', '-').toLowerCase()}-${data!.day}` : ''
   const btn = 'inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50'
@@ -64,8 +65,9 @@ export default function DailySummary() {
     <Card className="p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex rounded-lg bg-slate-100 p-1 text-sm">
-          {(['morning', 'evening'] as const).map(k => <button key={k} onClick={() => setKind(k)}
-            className={`rounded-md px-3 py-1 font-medium ${kind === k ? 'bg-white shadow-sm' : 'text-slate-600'}`}>{k === 'morning' ? '☀️ Morning · 8 AM' : '🌙 Evening · 9:30 PM'}</button>)}
+          {(['morning', 'live', 'evening'] as const).map(k => <button key={k} onClick={() => setKind(k)} title={k === 'morning' ? "Yesterday's full day + today's plan" : k === 'live' ? 'Today up to this minute, compared with your usual by this time' : "Today's results up to the moment you make it (every late call counts) + tomorrow's plan"}
+            className={`rounded-md px-3 py-1 font-medium ${kind === k ? 'bg-white shadow-sm' : 'text-slate-600'}`}>{k === 'morning' ? '☀️ Start of day' : k === 'live' ? '⏱ So far today' : '🌙 End of day'}</button>)}
+          <button onClick={() => { setData(null); setV(x => x + 1) }} className="ml-1 rounded-md px-2 py-1 text-slate-500 hover:bg-white" title="Make it again now">⟳</button>
         </div>
         {isManager && dir && <select className="input !w-auto !py-1.5" aria-label="Summary for" value={who} onChange={e => setWho(e.target.value)}>
           <option value="team">Whole team</option>
@@ -80,12 +82,15 @@ export default function DailySummary() {
       {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
       {!model ? !error && <div className="py-6"><Spinner /></div> : (
         <div className="mt-4 space-y-5">
-          <div><p className="font-semibold">{model.title}</p><p className="text-xs text-slate-500">{model.sub}</p></div>
+          <div className="sticky top-0 z-10 -mx-1 border-b border-slate-100 bg-white/95 px-1 py-2 backdrop-blur">
+            <p className="font-semibold">{model.title}</p>
+            <p className="text-sm font-medium text-brand-800">🕒 {coversLine(data!)}</p>
+            <p className="text-xs text-slate-500">{model.sub.split(' · ').filter(x => !x.startsWith('Covers ')).join(' · ')}</p></div>
           {/* Big numbers */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {model.tiles.map(t => <div key={t.label} className="rounded-xl bg-slate-50 px-4 py-3">
-              <p className="text-xs font-medium text-slate-500">{data!.kind === 'morning' ? 'Yesterday · ' : 'Today · '}{t.label}</p>
-              <p className="mt-0.5 text-xl font-semibold text-slate-900">{t.value}</p></div>)}
+              <p className="text-xs font-medium text-slate-500">{data!.kind === 'morning' ? 'Yesterday · ' : data!.kind === 'live' ? 'So far · ' : 'Today · '}{t.label}</p>
+              <p className="mt-0.5 text-xl font-semibold text-slate-900">{t.value}</p>{t.hint && <p className="text-xs text-slate-500">{t.hint}</p>}</div>)}
           </div>
           <div className="grid gap-6 lg:grid-cols-3">
             {/* Left two-thirds: plan + hot leads */}
@@ -96,7 +101,7 @@ export default function DailySummary() {
                 showAll={allHot ? null : model.hot.total > model.hot.rows.length ? loadAllHot : null}
                 onDownload={downloadHot} />}
               {model.team.length > 0 && <div>
-                <p className={head}>Team · {data!.kind === 'morning' ? 'yesterday' : 'today'}</p>
+                <p className={head}>Team · {data!.kind === 'morning' ? 'yesterday' : data!.kind === 'live' ? 'today so far' : 'today'}</p>
                 <table className="w-full text-sm">
                   <thead className="text-left text-xs text-slate-500"><tr><th className="py-1 font-medium">Team member</th>
                     <th className="py-1 text-right font-medium">Dialled</th><th className="py-1 text-right font-medium">Leads connected</th>

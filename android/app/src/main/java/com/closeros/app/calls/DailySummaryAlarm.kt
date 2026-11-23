@@ -1,6 +1,6 @@
 package com.closeros.app.calls
 
-// Morning summary at 8:00 AM and evening summary at 9:30 PM (company time zone). The notification carries one
+// Start of day summary at 8:00 AM and end of day summary at 10:00 PM (tap = made fresh, every late call counts) (company time zone). The notification carries one
 // line of numbers; tapping it opens the summary screen (copy as text · image · PDF). Holidays: sent only when
 // follow-ups are lined up (morning) or there was any calling / something lined up (evening).
 
@@ -42,7 +42,7 @@ object DailySummaryAlarm {
         val m = membership(ctx) ?: return
         val am = ctx.getSystemService(AlarmManager::class.java) ?: return
         val zone = runCatching { ZoneId.of(m.organization.timezone) }.getOrDefault(ZoneId.systemDefault())
-        for ((kind, h, min) in listOf(Triple("morning", 8, 0), Triple("evening", 21, 30))) {
+        for ((kind, h, min) in listOf(Triple("morning", 8, 0), Triple("evening", 22, 0))) {
             var t = ZonedDateTime.now(zone).withHour(h).withMinute(min).withSecond(0).withNano(0)
             if (!t.isAfter(ZonedDateTime.now(zone))) t = t.plusDays(1)
             val at = t.toInstant().toEpochMilli()
@@ -71,10 +71,10 @@ object DailySummaryAlarm {
             }.getOrNull()
             val nm = ctx.getSystemService(NotificationManager::class.java)
             if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(NotificationChannel(CHANNEL, "Daily summary", NotificationManager.IMPORTANCE_DEFAULT)
-                .apply { description = "Morning (8 AM) and evening (9:30 PM) summary" })
+                .apply { description = "Start of day (8 AM) and end of day (10 PM) summary" })
             val open = PendingIntent.getActivity(ctx, if (kind == "morning") 7403 else 7404, Intent(ctx, MainActivity::class.java).putExtra("summary", kind)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            val title = if (kind == "morning") "☀️ Your morning summary" else "🌙 Your evening summary"
+            val title = if (kind == "morning") "☀️ Your start of day summary" else "🌙 Your end of day summary"
             val note = NotificationCompat.Builder(ctx, CHANNEL).setSmallIcon(com.closeros.app.R.drawable.ic_notif).setColor(0xFF0E5E57.toInt())
                 .setContentTitle(title).setContentText(line.substringBefore('\n')).setStyle(pic?.let { NotificationCompat.BigPictureStyle().bigPicture(it).setSummaryText(line.substringBefore('\n')) }
                     ?: NotificationCompat.BigTextStyle().bigText(line))

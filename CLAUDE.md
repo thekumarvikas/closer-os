@@ -2315,3 +2315,8 @@ intelligence → Play Store launch.
 - Migration 0135: sales / buyer numbers count from coalesce(signup_at, created_at) — buyer_effort, buyer_gaps, buyer_patterns,
   conversion_insights, lead_start_at (response time), t_lead_work_secs (also fires on signup_at change), sale_facts.signup_at.
   sales_dashboard / buyers_common / buyer_timeline already did. Work seconds recounted for leads with an older sign-up time.
+- RULE (owner, Nov 23; migrations 0136–0137): every sale knows its webinar. lead_join_webinar(lead, raw) — file import with a
+  "Webinar Date" column joins (registered) that webinar via batch_for_text (created if missing); old leads backfilled (32 webinars
+  created for Cancer). sales.webinar_batch_id auto = latest webinar the buyer registered for up to the day after the sale
+  (t_sale_webinar, webinar_auto; re-picked when a batch_leads row is added). Days from webinar = calendar days (same day = 0).
+  rematch_buyers run for Cancer (5 → 44 of 49 sales linked to leads).

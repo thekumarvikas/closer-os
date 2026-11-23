@@ -2328,3 +2328,6 @@ intelligence → Play Store launch.
   every email kept, extra columns → custom) for a buyer matching no lead ('check' cases stay for Match). Days to convert tile
   shows middle value + average (days_signup_avg / days_webinar_avg); same-day = 0; leads made from a sale (Buyers list / Sale
   added on dashboard, no real sign-up time) are left out of the days numbers. Sale modal shows the lead's email.
+- Sales page "How long buyers take to pay" (Nov 23, web only, SalesHome.tsx TimeToBuy): fully paid sales, From sign-up | From the
+  webinar; Shortest · Average · Longest + "How many paid when" (same day / 1–3 / 4–7 / 8–30 / 30+ days, share bars) + By team
+  member / By webinar / Month by month (shortest · average · longest); every number opens the buyers → journey. Middle value dropped (owner).

@@ -116,7 +116,7 @@ export default function SalesHome() {
       </div>
 
       {!d || !t ? <Spinner /> : tab === 'overview'
-        ? <Overview d={d} t={t} dir={dir} drill={drill} fromTs={fromTs} toTs={toTs} onRemoved={changed} />
+        ? <Overview d={d} t={t} dir={dir} drill={drill} fromTs={fromTs} toTs={toTs} onRemoved={changed} onOpenBuyer={setJourney} />
         : <BuyersTable buyers={buyers} dir={dir} pay={payFilter} setPay={setPayFilter} onOpen={setJourney} onEdit={setEditSale} onChanged={changed} tag={`${a.from}_to_${a.to}`} />}
 
       {journey && <Journey b={journey} dir={dir} onClose={() => setJourney(null)} onEdit={() => setEditSale(journey.id)} onOpenLead={setOpenLead} />}
@@ -126,6 +126,86 @@ export default function SalesHome() {
       {locks && <LockMonths onClose={() => setLocks(false)} />}
       {openLead && <LeadDrawer leadId={openLead} dir={dir} onClose={() => setOpenLead(null)} onChanged={changed} />}
     </>
+  )
+}
+
+// ---- How long buyers take (fully paid sales only; leads with no real sign-up time are left out) ----
+const SPANS: [string, number, number][] = [['Same day', 0, 0.999], ['1–3 days', 1, 3.999], ['4–7 days', 4, 7.999], ['8–30 days', 8, 30.999], ['Over 30 days', 31, 1e9]]
+function spanStats(v: number[]) {
+  if (!v.length) return null
+  const s = [...v].sort((a, b) => a - b)
+  return { n: s.length, min: s[0], max: s[s.length - 1], avg: Math.round(s.reduce((a, b) => a + b, 0) / s.length * 10) / 10 }
+}
+function TimeToBuy({ buyers, dir, onOpen }: { buyers: Buyer[]; dir: Directory; onOpen: (b: Buyer) => void }) {
+  const { org } = useOrg()
+  const [from, setFrom] = usePersisted<'signup' | 'webinar'>('sales.ttb', 'signup')
+  const [view, setView] = useState<'spread' | 'member' | 'webinar' | 'month'>('spread')
+  const [list, setList] = useState<{ title: string; rows: Buyer[] } | null>(null)
+  const dv = (b: Buyer) => from === 'signup' ? b.days_signup : b.days_webinar
+  const paid = buyers.filter(b => b.pay_status === 'full' && dv(b) != null && Number(dv(b)) >= 0)
+  const st = spanStats(paid.map(b => Number(dv(b))))
+  const groups = (key: (b: Buyer) => string, label: (k: string, b: Buyer) => string) => {
+    const m = new Map<string, { label: string; rows: Buyer[] }>()
+    for (const b of paid) { const k = key(b); if (!m.has(k)) m.set(k, { label: label(k, b), rows: [] }); m.get(k)!.rows.push(b) }
+    return [...m.values()].map(g => ({ ...g, st: spanStats(g.rows.map(b => Number(dv(b))))! }))
+  }
+  const rowsFor = view === 'member' ? groups(b => b.credited_to ?? '-', (k) => k === '-' ? 'Bought in the webinar / not credited' : dir.nameOf(k)).sort((a, b) => a.st.avg - b.st.avg)
+    : view === 'webinar' ? groups(b => b.wid ?? '-', (_k, b) => b.wname ?? 'No webinar').sort((a, b) => a.st.avg - b.st.avg)
+    : view === 'month' ? groups(b => b.sold_at.slice(0, 7), (k) => new Date(k + '-15').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })).sort((a, b) => a.label < b.label ? 1 : -1)
+    : []
+  if (view === 'month') rowsFor.sort((a, b) => (b.rows[0].sold_at > a.rows[0].sold_at ? 1 : -1))
+  const show = (title: string, rows: Buyer[]) => setList({ title, rows: [...rows].sort((a, b) => Number(dv(a)) - Number(dv(b))) })
+  const fromWord = from === 'signup' ? 'sign-up' : 'the webinar'
+  return (
+    <div id="time-to-buy"><Card className="p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div><h2 className="font-semibold">How long buyers take to pay</h2>
+          <p className="text-xs text-slate-500">From {fromWord} to fully paid · {paid.length} fully paid sale{paid.length === 1 ? '' : 's'}. Buyers added without a real sign-up time are left out.</p></div>
+        <div className="flex rounded-lg bg-slate-100 p-1 text-xs">
+          {([['signup', 'From sign-up'], ['webinar', 'From the webinar']] as const).map(([k, l]) =>
+            <button key={k} onClick={() => setFrom(k)} className={`rounded-md px-3 py-1 font-medium ${from === k ? 'bg-white shadow-sm' : 'text-slate-600'}`}>{l}</button>)}
+        </div>
+      </div>
+      {!st ? <p className="text-sm text-slate-500">No fully paid sales with a known {from === 'signup' ? 'sign-up time' : 'webinar'} in this period.</p> : <>
+        <div className="grid grid-cols-3 gap-3">
+          {([['Shortest', st.min, paid.filter(b => Number(dv(b)) === st.min)], ['Average', st.avg, paid], ['Longest', st.max, paid.filter(b => Number(dv(b)) === st.max)]] as [string, number, Buyer[]][]).map(([l, v, rows]) =>
+            <button key={l} onClick={() => show(`${l}: ${days(v)}`, rows)} className="rounded-lg border border-slate-200 p-3 text-left hover:border-brand-400">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{l}</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums">{l === 'Average' ? `${v} days` : days(v)}</p></button>)}
+        </div>
+        <div className="mt-4 mb-2 flex flex-wrap gap-1 text-xs">
+          {([['spread', 'How many paid when'], ['member', 'By team member'], ['webinar', 'By webinar'], ['month', 'Month by month']] as const).map(([k, l]) =>
+            <button key={k} onClick={() => setView(k)} className={`rounded-full border px-3 py-1 ${view === k ? 'border-brand-600 bg-brand-50 font-medium text-brand-800' : 'border-slate-200 text-slate-600'}`}>{l}</button>)}
+        </div>
+        {view === 'spread' ? (
+          <table className="w-full table-fixed text-sm">
+            <thead className="text-left text-xs text-slate-500"><tr><th className="w-[28%] py-1">Paid within</th><th className="w-[14%]">Buyers</th><th>Share</th></tr></thead>
+            <tbody>{SPANS.map(([l, lo, hi]) => { const rows = paid.filter(b => Number(dv(b)) >= lo && Number(dv(b)) <= hi); const p = pctOf(rows.length, paid.length)
+              return <tr key={l} className="cursor-pointer border-t border-slate-100 hover:bg-slate-50" onClick={() => rows.length && show(`Paid ${l.toLowerCase()} after ${fromWord}`, rows)}>
+                <td className="py-1.5">{l}</td><td className="tabular-nums">{rows.length}</td>
+                <td><div className="flex items-center gap-2"><div className="h-2 flex-1 rounded bg-slate-100"><div className="h-2 rounded bg-brand-500" style={{ width: `${p}%` }} /></div><span className="w-10 text-right tabular-nums text-slate-600">{p}%</span></div></td></tr> })}</tbody>
+          </table>
+        ) : (
+          <table className="w-full table-fixed text-sm">
+            <thead className="text-left text-xs text-slate-500"><tr><th className="w-[40%] py-1">{view === 'member' ? 'Team member' : view === 'webinar' ? 'Webinar' : 'Month paid'}</th><th>Buyers</th><th>Shortest</th><th>Average</th><th>Longest</th></tr></thead>
+            <tbody>{rowsFor.map(g => (
+              <tr key={g.label} className="cursor-pointer border-t border-slate-100 hover:bg-slate-50" onClick={() => show(g.label, g.rows)}>
+                <td className="truncate py-1.5 font-medium">{g.label}</td><td className="tabular-nums">{g.st.n}</td>
+                <td>{days(g.st.min)}</td><td className="font-medium">{g.st.avg} days</td><td>{days(g.st.max)}</td></tr>))}</tbody>
+          </table>
+        )}
+      </>}
+      {list && <Modal open title={list.title} onClose={() => setList(null)} wide>
+        <table className="w-full table-fixed text-sm">
+          <thead className="text-left text-xs text-slate-500"><tr><th className="w-[32%] py-1">Buyer</th><th>Days</th><th>Paid</th><th>Sold by</th><th>Webinar</th></tr></thead>
+          <tbody>{list.rows.map(b => (
+            <tr key={b.id} className="cursor-pointer border-t border-slate-100 hover:bg-slate-50" onClick={() => { setList(null); onOpen(b) }}>
+              <td className="py-1.5"><div className="truncate font-medium">{b.name}</div><div className="truncate text-xs text-slate-500">{b.product ?? ''}</div></td>
+              <td className="font-medium">{days(dv(b))}</td><td>{fmtDate(b.full_at ?? b.sold_at, org)}</td>
+              <td className="truncate">{b.credited_to ? dir.nameOf(b.credited_to) : 'Webinar'}</td><td className="truncate">{b.wname ?? '—'}</td></tr>))}</tbody>
+        </table>
+      </Modal>}
+    </Card></div>
   )
 }
 
@@ -140,7 +220,7 @@ function Tile({ label, value, sub, tone, onClick }: { label: string; value: Reac
   )
 }
 
-function Overview({ d, t, dir, drill, fromTs, toTs, onRemoved }: { d: J; t: J; dir: Directory; drill: (p: Partial<F>, pay?: '' | 'pending') => void; fromTs: string; toTs: string; onRemoved: () => void }) {
+function Overview({ d, t, dir, drill, fromTs, toTs, onRemoved, onOpenBuyer }: { d: J; t: J; dir: Directory; drill: (p: Partial<F>, pay?: '' | 'pending') => void; fromTs: string; toTs: string; onRemoved: () => void; onOpenBuyer: (b: Buyer) => void }) {
   const { org, isManager } = useOrg()
   const [common, setCommon] = useState<J | null>(null)
   const [missed, setMissed] = useState<J | null>(null)
@@ -174,8 +254,10 @@ function Overview({ d, t, dir, drill, fromTs, toTs, onRemoved }: { d: J; t: J; d
         <Tile label="Sales" value={t.sales} sub={`${t.full} fully paid · ${t.part} part paid`} onClick={() => drill({})} />
         <Tile label="Collected" value={fmtMoney(t.collected, org)} tone="green" sub="money received" onClick={() => drill({})} />
         <Tile label="Pending" value={fmtMoney(t.pending, org)} tone={t.pending > 0 ? 'red' : undefined} sub={`${t.pending_orders} order${t.pending_orders === 1 ? '' : 's'} with balance due`} onClick={() => drill({}, 'pending')} />
-        <Tile label="Days to convert · sign-up → paid" value={days(t.days_signup)} sub={`half the buyers pay within this · average ${days(t.days_signup_avg)}${t.days_webinar != null ? ` · from the webinar: ${days(t.days_webinar)} (average ${days(t.days_webinar_avg)})` : ''}`} onClick={() => drill({})} />
+        <Tile label="Days to buy · sign-up → paid" value={t.days_signup_avg == null ? '—' : `${t.days_signup_avg} days`} sub="average · see “How long buyers take” below" onClick={() => document.getElementById('time-to-buy')?.scrollIntoView({ behavior: 'smooth' })} />
       </div>
+
+      <TimeToBuy buyers={(d.buyers ?? []) as Buyer[]} dir={dir} onOpen={onOpenBuyer} />
 
       {removed.length > 0 && <Card className="border-amber-300 bg-amber-50 p-4 text-sm">
         <p className="font-semibold text-amber-900">Removed from your Google Sheet — keep or delete? ({removed.length})</p>

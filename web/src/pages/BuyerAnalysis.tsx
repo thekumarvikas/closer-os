@@ -15,6 +15,7 @@ import { useSort } from '../lib/sort'
 import { Badge, Button, Card, Empty, ErrorBox, Field, Modal, PageHeader, Spinner, Stat } from '../components/ui'
 import { PlayButton, RecordingPlayer } from '../components/CallLog'
 import LeadDrawer from './LeadDrawer'
+import { ask } from '../lib/dialogs'
 
 type Tab = 'import' | 'match' | 'effort' | 'pattern' | 'gaps'
 const FIELDS: [string, string][] = [['name', 'Name'], ['phone', 'Phone'], ['email', 'Email'], ['amount', 'Amount paid (this payment)'], ['price', 'Price point (full order value)'],
@@ -84,6 +85,9 @@ function ImportTab({ onDone }: { onDone: () => void }) {
   const { org } = useOrg()
   const dir = useDirectory(org.id)
   const [runAt, setRunAt] = useState('')
+  const [products, setProducts] = useState<{ id: string; name: string }[]>([])
+  const [defProduct, setDefProduct] = useState('')
+  useEffect(() => { supabase.from('products').select('id,name').eq('org_id', org.id).eq('is_active', true).order('position').then(({ data }) => setProducts(data ?? [])) }, [org.id])
   const [see, setSee] = useState<{ ids: string[]; title: string; problems: ImportResult['problems'] } | null>(null)
   const [rows, setRows] = useState<Record<string, string>[]>([])
   const [headers, setHeaders] = useState<string[]>([])
@@ -117,6 +121,7 @@ function ImportTab({ onDone }: { onDone: () => void }) {
     // Columns you don't map (e.g. "Engineering field") still travel along and become lead fields.
     const mapped = rows.map((r, i) => { const o: Record<string, unknown> = { row: i + 2 }; const extra: Record<string, string> = {}
       for (const col of headers) { const f = map[col]; if (f) o[f] = r[col] ?? ''; else if (!SKIP.test(col) && !/pending|balance/i.test(col) && String(r[col] ?? '').trim()) extra[col] = String(r[col]) }
+      if (defProduct && !String(o.product ?? '').trim()) o.product = defProduct
       o.extra = extra; return o })
     setRunAt(new Date(Date.now() - 5000).toISOString())
     const total: ImportResult = { rows: 0, added: 0, payments: 0, updated: 0, matched: 0, unmatched: 0, check: 0, already: 0, confirm: 0, failed: 0, problems: [] }
@@ -150,7 +155,14 @@ function ImportTab({ onDone }: { onDone: () => void }) {
                 <option value="">Don't import</option>{FIELDS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
               </select>
             </div>))}</div>
-          <Button className="mt-3" loading={!!busy} onClick={run}>{busy || `Import ${rows.length.toLocaleString('en-IN')} buyers`}</Button>
+          <div className="mt-3 rounded-lg bg-slate-50 p-3 text-sm">
+            <span className="label">Which product did these buyers buy?</span>
+            <select className="input" value={defProduct} onChange={e => setDefProduct(e.target.value)}>
+              <option value="">{Object.values(map).includes('product') ? 'Read it from the file’s product column' : '— choose a product —'}</option>
+              {products.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}</select>
+            <p className="mt-1 text-xs text-slate-500">{Object.values(map).includes('product') ? 'Rows with an empty product cell get the product you choose here.' : 'Every buyer in this file gets this product.'} Add products in Settings → Products & prices.</p>
+          </div>
+          <Button className="mt-3" loading={!!busy} onClick={async () => { if (!defProduct && !Object.values(map).includes('product') && products.length && !await ask('Import without a product? You can set it later with bulk edit on the Sales page.')) return; void run() }}>{busy || `Import ${rows.length.toLocaleString('en-IN')} buyers`}</Button>
         </div>}
         {res && <ImportReport res={res} onSee={() => { const ids = history.filter(h => h.name === file && h.created_at >= runAt).map(h => h.id)
           if (ids.length) setSee({ ids, title: file, problems: res.problems }) }} />}

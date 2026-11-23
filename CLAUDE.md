@@ -2303,3 +2303,9 @@ intelligence → Play Store launch.
   (order uses 1.5 for 9; hotTop() in web lib/summary.ts + app SummaryScreen.kt).
 - WhatsApp: no auto-send (WhatsApp bans it); wa_sequences.auto_link = sequence starts by itself when saw_pitch turns true
   (t_bl_link_seq → seq_enroll, owner sends 1 tap each); dashboard ready-made "After the payment link" sequence.
+- Nov 23 sales fixes (migrations 0132–0133): Add a sale → buyer not in leads = "add as a new lead" box (add_lead, assigned to the
+  credited person, source "Sale added on dashboard"). Buyer import → "See the buyers" list (buyer_import_rows(imports[]): name,
+  phone, email, product, paid, matched lead, credit, row note; CSV with all details + extra columns) on the result + every recent
+  import. Products: trigger t_sale_product keeps sales.product ↔ product_id in step (name match to the price list); edit sale =
+  price-list picker (+ typed fallback); bulk_update_sales(ids, p) (product_id, credited_to, enrol_batch, delete) → Sales Buyers
+  table checkboxes + bulk bar; import asks "Which product did these buyers buy?" (fills empty product cells).

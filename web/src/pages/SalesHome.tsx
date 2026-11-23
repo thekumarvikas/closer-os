@@ -15,7 +15,7 @@ import { PlayButton, RecordingPlayer } from '../components/CallLog'
 import { LeadListModal } from '../components/Round9Reports'
 import LeadDrawer from './LeadDrawer'
 import { SaleModal, AddSale, type Sale } from './Sales'
-import { ask } from '../lib/dialogs'
+import { ask, toast } from '../lib/dialogs'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type J = Record<string, any>
@@ -117,7 +117,7 @@ export default function SalesHome() {
 
       {!d || !t ? <Spinner /> : tab === 'overview'
         ? <Overview d={d} t={t} dir={dir} drill={drill} fromTs={fromTs} toTs={toTs} onRemoved={changed} />
-        : <BuyersTable buyers={buyers} dir={dir} pay={payFilter} setPay={setPayFilter} onOpen={setJourney} onEdit={setEditSale} tag={`${a.from}_to_${a.to}`} />}
+        : <BuyersTable buyers={buyers} dir={dir} pay={payFilter} setPay={setPayFilter} onOpen={setJourney} onEdit={setEditSale} onChanged={changed} tag={`${a.from}_to_${a.to}`} />}
 
       {journey && <Journey b={journey} dir={dir} onClose={() => setJourney(null)} onEdit={() => setEditSale(journey.id)} onOpenLead={setOpenLead} />}
       {editSale && <SaleModal id={editSale} dir={dir} onClose={() => setEditSale(null)} onChanged={changed} onOpenLead={setOpenLead} />}
@@ -265,9 +265,25 @@ function Overview({ d, t, dir, drill, fromTs, toTs, onRemoved }: { d: J; t: J; d
   )
 }
 
-function BuyersTable({ buyers, dir, pay, setPay, onOpen, onEdit, tag }: { buyers: Buyer[]; dir: Directory; pay: '' | 'pending'; setPay: (v: '' | 'pending') => void
-  onOpen: (b: Buyer) => void; onEdit: (id: string) => void; tag: string }) {
+function BuyersTable({ buyers, dir, pay, setPay, onOpen, onEdit, onChanged, tag }: { buyers: Buyer[]; dir: Directory; pay: '' | 'pending'; setPay: (v: '' | 'pending') => void
+  onOpen: (b: Buyer) => void; onEdit: (id: string) => void; onChanged: () => void; tag: string }) {
   const { org, isManager } = useOrg()
+  const [sel, setSel] = useState<Set<string>>(new Set())
+  const [products, setProducts] = useState<{ id: string; name: string }[]>([])
+  const [bulk, setBulk] = useState({ product_id: '', credited_to: '', enrol_batch: '' })
+  const [bulkBusy, setBulkBusy] = useState(false)
+  useEffect(() => { supabase.from('products').select('id,name').eq('org_id', org.id).eq('is_active', true).order('position').then(({ data }) => setProducts(data ?? [])) }, [org.id])
+  async function applyBulk(del = false) {
+    const p: Record<string, string | boolean> = {}
+    if (del) { if (!await ask(`Delete ${sel.size} sales and their payments? This can't be undone.`)) return; p.delete = true }
+    else { if (bulk.product_id) p.product_id = bulk.product_id; if (bulk.credited_to) p.credited_to = bulk.credited_to === 'none' ? '' : bulk.credited_to; if (bulk.enrol_batch.trim()) p.enrol_batch = bulk.enrol_batch.trim()
+      if (!Object.keys(p).length) return toast('Choose what to change first') }
+    setBulkBusy(true)
+    const { error } = await supabase.rpc('bulk_update_sales', { p_ids: [...sel], p })
+    setBulkBusy(false)
+    if (error) return toast(errorText(error))
+    toast(del ? `${sel.size} sales deleted` : `${sel.size} sales updated`); setSel(new Set()); setBulk({ product_id: '', credited_to: '', enrol_batch: '' }); onChanged()
+  }
   const [start, setStart] = usePersisted<'signup' | 'webinar'>('sales.start', 'signup')
   const [q, setQ] = useState('')
   const dval = (b: Buyer) => start === 'signup' ? b.days_signup : b.days_webinar
@@ -295,14 +311,31 @@ function BuyersTable({ buyers, dir, pay, setPay, onOpen, onEdit, tag }: { buyers
             b.credited_to ? dir.nameOf(b.credited_to) : b.channel === 'webinar' ? 'Bought in the webinar' : '', b.days_signup ?? '', b.days_webinar ?? '', b.calls, b.convs, Math.round(b.talk / 60), b.wa]))}>
           <Download className="h-4 w-4" /> CSV</Button>
       </div>
+      {isManager && sel.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-brand-200 bg-brand-50 p-3 text-sm">
+          <b>{sel.size} selected</b>
+          <select className="input !w-auto !py-1" value={bulk.product_id} onChange={e => setBulk({ ...bulk, product_id: e.target.value })}>
+            <option value="">Product: keep</option>{products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+          <select className="input !w-auto !py-1" value={bulk.credited_to} onChange={e => setBulk({ ...bulk, credited_to: e.target.value })}>
+            <option value="">Credit to: keep</option><option value="none">Nobody (bought in the webinar)</option>
+            {dir.members.map(m => <option key={m.user_id} value={m.user_id}>{dir.nameOf(m.user_id)}</option>)}</select>
+          <input className="input !w-40 !py-1" placeholder="Batch joined: keep" value={bulk.enrol_batch} onChange={e => setBulk({ ...bulk, enrol_batch: e.target.value })} />
+          <Button className="!py-1" loading={bulkBusy} onClick={() => applyBulk()}>Apply to {sel.size}</Button>
+          <button className="text-red-600 hover:underline" onClick={() => applyBulk(true)}>Delete</button>
+          <button className="ml-auto text-slate-500 hover:underline" onClick={() => setSel(new Set())}>Clear selection</button>
+        </div>)}
       {sorted.length === 0 ? <Empty title="No buyers here" text="Change the period or the filters — or import your buyers sheet." /> : (
         <div className="overflow-x-auto">
           <table className="w-full table-fixed text-sm">
             <thead className="bg-slate-50"><tr>
+              {isManager && <th className="th w-[4%]"><input type="checkbox" checked={sorted.length > 0 && sorted.every(b => sel.has(b.id))}
+                onChange={e => setSel(e.target.checked ? new Set(sorted.map(b => b.id)) : new Set())} title="Select all" /></th>}
               {th('sold', 'Paid on', 'w-[10%]')}{th('name', 'Buyer', 'w-[20%]')}<th className="th w-[16%]">Product</th>{th('amount', 'Revenue', 'w-[11%]')}
               {th('pending', 'Payment', 'w-[13%]')}{th('member', 'Sold by', 'w-[14%]')}{th('days', 'Days to convert', 'w-[10%]')}<th className="th w-[6%]"></th></tr></thead>
             <tbody className="divide-y divide-slate-100">{sorted.map(b => (
-              <tr key={b.id} className="cursor-pointer align-top hover:bg-slate-50" onClick={() => onOpen(b)}>
+              <tr key={b.id} className={`cursor-pointer align-top hover:bg-slate-50 ${sel.has(b.id) ? 'bg-brand-50/60' : ''}`} onClick={() => onOpen(b)}>
+                {isManager && <td className="td" onClick={e => e.stopPropagation()}><input type="checkbox" checked={sel.has(b.id)}
+                  onChange={() => setSel(x => { const n = new Set(x); if (n.has(b.id)) n.delete(b.id); else n.add(b.id); return n })} /></td>}
                 <td className="td whitespace-nowrap text-slate-600">{fmtDate(b.sold_at, org)}</td>
                 <td className="td"><div className="truncate font-medium">{b.name || 'No name'}{!b.lead_id && <span className="ml-1 text-xs font-normal text-amber-700" title="Not matched to a lead yet">not matched</span>}</div>
                   <div className="truncate text-xs text-slate-500"><Ph v={b.phone} />{b.wname ? ` · ${b.wname}` : ''}</div></td>

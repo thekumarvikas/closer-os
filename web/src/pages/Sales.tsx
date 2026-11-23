@@ -30,7 +30,9 @@ export function SaleModal({ id, dir, onClose, onChanged, onOpenLead }: { id: str
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
   const [pay, setPay] = useState({ kind: 'payment', amount: '', method: 'upi', paid_at: new Date().toISOString().slice(0, 10), reference: '' })
-  const [edit, setEdit] = useState<{ product: string; amount: string; sold_at: string; credited_to: string; enrol_batch: string } | null>(null)
+  const [products, setProducts] = useState<Product[]>([])
+  useEffect(() => { supabase.from('products').select('*').eq('org_id', org.id).eq('is_active', true).order('position').then(({ data }) => setProducts((data ?? []) as Product[])) }, [org.id])
+  const [edit, setEdit] = useState<{ product_id: string; product: string; amount: string; sold_at: string; credited_to: string; enrol_batch: string } | null>(null)
   const [playing, setPlaying] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -76,12 +78,14 @@ export function SaleModal({ id, dir, onClose, onChanged, onOpenLead }: { id: str
         <span className="text-slate-500">{fmtDateTime(s.sold_at, org)} · {SOURCE[s.source] ?? s.source}{s.claimed_by ? ` · ${dir.nameOf(s.claimed_by)}` : ''}</span>
       </div>
       {isManager && !edit && <div className="mb-3 flex gap-2">
-        <Button variant="secondary" className="!py-1" onClick={() => setEdit({ product: s.product ?? '', amount: String(s.amount ?? ''), sold_at: String(s.sold_at).slice(0, 10), credited_to: s.credited_to ?? '', enrol_batch: (s as Sale & { enrol_batch?: string | null }).enrol_batch ?? '' })}>✏ Edit sale</Button>
+        <Button variant="secondary" className="!py-1" onClick={() => setEdit({ product_id: (s as Sale & { product_id?: string | null }).product_id ?? '', product: s.product ?? '', amount: String(s.amount ?? ''), sold_at: String(s.sold_at).slice(0, 10), credited_to: s.credited_to ?? '', enrol_batch: (s as Sale & { enrol_batch?: string | null }).enrol_batch ?? '' })}>✏ Edit sale</Button>
         <Button variant="ghost" className="!py-1 text-red-600" onClick={delSale}><Trash2 className="h-4 w-4" /> Delete sale</Button>
       </div>}
       {edit && <section className="mb-3 rounded-lg border border-brand-200 bg-brand-50/40 p-3">
         <div className="grid gap-2 sm:grid-cols-3">
-          <Field label="Product / program"><input className="input" value={edit.product} onChange={e => setEdit({ ...edit, product: e.target.value })} /></Field>
+          <Field label="Product / program"><select className="input" value={edit.product_id} onChange={e => { const pr = products.find(x => x.id === e.target.value); setEdit({ ...edit, product_id: e.target.value, product: pr?.name ?? edit.product }) }}>
+            <option value="">{edit.product && !edit.product_id ? `Typed: ${edit.product}` : '— choose —'}</option>{products.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
+            {!edit.product_id && <input className="input mt-1" placeholder="…or type a product name" value={edit.product} onChange={e => setEdit({ ...edit, product: e.target.value })} />}</Field>
           <Field label={`Order value (${org.currency})`}><input className="input" inputMode="decimal" value={edit.amount} onChange={e => setEdit({ ...edit, amount: e.target.value })} /></Field>
           <Field label="Sale date"><input className="input" type="date" value={edit.sold_at} onChange={e => setEdit({ ...edit, sold_at: e.target.value })} /></Field>
           <Field label="Credit goes to"><select className="input" value={edit.credited_to} onChange={e => setEdit({ ...edit, credited_to: e.target.value })}>

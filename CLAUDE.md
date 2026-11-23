@@ -2320,3 +2320,7 @@ intelligence → Play Store launch.
   created for Cancer). sales.webinar_batch_id auto = latest webinar the buyer registered for up to the day after the sale
   (t_sale_webinar, webinar_auto; re-picked when a batch_leads row is added). Days from webinar = calendar days (same day = 0).
   rematch_buyers run for Cancer (5 → 44 of 49 sales linked to leads).
+- RULE (Nov 23, migration 0138): lead_arrived keeps the whole incoming row (origin data), fills missing custom fields, takes an
+  EARLIER sign-up time and joins the row's webinar — a repeat arrival no longer loses the file's webinar date (Rahul Jadhav case:
+  lead first created by "Add sale"). sales_fill_gaps(org) = rematch_buyers + re-pick sale webinars; runs at the end of
+  import_leads and hourly (pg_cron 'sales-gap-fill'). Unmatched buyers with the same NAME only are left for Match (never auto).

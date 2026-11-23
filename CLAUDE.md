@@ -2309,3 +2309,6 @@ intelligence → Play Store launch.
   import. Products: trigger t_sale_product keeps sales.product ↔ product_id in step (name match to the price list); edit sale =
   price-list picker (+ typed fallback); bulk_update_sales(ids, p) (product_id, credited_to, enrol_batch, delete) → Sales Buyers
   table checkboxes + bulk bar; import asks "Which product did these buyers buy?" (fills empty product cells).
+- Nov 23 (migration 0134): file imports set leads.signup_at from a "Sign-up date & time" column (LeadImport target signup_at;
+  guesses date/timestamp/…), signup_guess(raw, tz, created, ref) picks DD/MM vs MM/DD (not after upload, closest before the
+  webinar). Old imports backfilled from custom date fields (Cancer: 4,990 of 4,996 fixed; 6 have no date).

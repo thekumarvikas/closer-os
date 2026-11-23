@@ -82,6 +82,9 @@ interface ImportResult { rows: number; added: number; payments?: number; updated
 
 function ImportTab({ onDone }: { onDone: () => void }) {
   const { org } = useOrg()
+  const dir = useDirectory(org.id)
+  const [runAt, setRunAt] = useState('')
+  const [see, setSee] = useState<{ ids: string[]; title: string; problems: ImportResult['problems'] } | null>(null)
   const [rows, setRows] = useState<Record<string, string>[]>([])
   const [headers, setHeaders] = useState<string[]>([])
   const [map, setMap] = useState<Record<string, string>>({})
@@ -115,6 +118,7 @@ function ImportTab({ onDone }: { onDone: () => void }) {
     const mapped = rows.map((r, i) => { const o: Record<string, unknown> = { row: i + 2 }; const extra: Record<string, string> = {}
       for (const col of headers) { const f = map[col]; if (f) o[f] = r[col] ?? ''; else if (!SKIP.test(col) && !/pending|balance/i.test(col) && String(r[col] ?? '').trim()) extra[col] = String(r[col]) }
       o.extra = extra; return o })
+    setRunAt(new Date(Date.now() - 5000).toISOString())
     const total: ImportResult = { rows: 0, added: 0, payments: 0, updated: 0, matched: 0, unmatched: 0, check: 0, already: 0, confirm: 0, failed: 0, problems: [] }
     for (let i = 0; i < mapped.length; i += 1000) {
       setBusy(`Importing ${Math.min(i + 1000, mapped.length)} of ${mapped.length}…`)
@@ -148,7 +152,8 @@ function ImportTab({ onDone }: { onDone: () => void }) {
             </div>))}</div>
           <Button className="mt-3" loading={!!busy} onClick={run}>{busy || `Import ${rows.length.toLocaleString('en-IN')} buyers`}</Button>
         </div>}
-        {res && <ImportReport res={res} />}
+        {res && <ImportReport res={res} onSee={() => { const ids = history.filter(h => h.name === file && h.created_at >= runAt).map(h => h.id)
+          if (ids.length) setSee({ ids, title: file, problems: res.problems }) }} />}
       </Card>
       <SheetCard />
       <Card className="p-5 lg:col-span-2">
@@ -157,14 +162,14 @@ function ImportTab({ onDone }: { onDone: () => void }) {
           <ul className="divide-y divide-slate-100 text-sm">{history.map(h => <li key={h.id} className="py-2">
             <b>{h.name || (h.kind === 'sheet' ? 'Google Sheet' : 'File')}</b> · {fmtDateTime(h.created_at, org)} · {h.totals?.added ?? 0} added, {h.totals?.matched ?? 0} matched,
             {' '}{h.totals?.unmatched ?? 0} unmatched, {h.totals?.already ?? 0} already there, {h.totals?.confirm ?? 0} to confirm, {h.totals?.failed ?? 0} failed
-            {(h.problems ?? []).length > 0 && <button className="ml-2 text-brand-700 underline" onClick={() => downloadCsv(`import-problems-${h.id.slice(0, 6)}.csv`, ['Row', 'Type', 'Reason'],
-              (h.problems as any[]).map(p => [p.row, p.level, p.reason]))}>problem rows (CSV)</button>}</li>)}</ul>)}
+            <button className="ml-2 font-medium text-brand-700 underline" onClick={() => setSee({ ids: [h.id], title: h.name || 'Import', problems: h.problems ?? [] })}>See the buyers</button></li>)}</ul>)}
       </Card>
+      {see && dir && <ImportBuyers ids={see.ids} title={see.title} problems={see.problems} dir={dir} onClose={() => setSee(null)} />}
     </div>
   )
 }
 
-function ImportReport({ res }: { res: ImportResult }) {
+function ImportReport({ res, onSee }: { res: ImportResult; onSee: () => void }) {
   const fail = res.problems.filter(p => p.level === 'failed'); const warn = res.problems.filter(p => p.level !== 'failed')
   return (
     <div className="mt-4 rounded-lg border border-slate-200 p-3 text-sm">
@@ -172,8 +177,60 @@ function ImportReport({ res }: { res: ImportResult }) {
       <p className="text-slate-600">{res.matched} matched to a lead · {res.unmatched} not matched yet · {res.check} need a check (phone and email point to different leads) · {res.confirm} possible repeat payments to check on the Sales page</p>
       {fail.length > 0 && <><p className="mt-2 font-medium text-red-700">Failed rows</p><ul className="max-h-40 overflow-y-auto text-red-700">{fail.map((p, i) => <li key={i}>Row {p.row}: {p.reason}</li>)}</ul></>}
       {warn.length > 0 && <><p className="mt-2 font-medium text-amber-700">Check these</p><ul className="max-h-40 overflow-y-auto text-amber-800">{warn.map((p, i) => <li key={i}>Row {p.row}: {p.reason}</li>)}</ul></>}
-      {res.problems.length > 0 && <button className="mt-2 text-brand-700 underline" onClick={() => downloadCsv('import-problems.csv', ['Row', 'Type', 'Reason'], res.problems.map(p => [p.row, p.level, p.reason]))}>Download these rows (CSV)</button>}
+      <Button className="mt-3" onClick={onSee}>See the buyers — names, numbers, matched lead</Button>
     </div>
+  )
+}
+
+interface BuyerRow { row_no: number | null; name: string; phone: string; email: string; product: string; amount: number; paid: number; sold_at: string
+  match_how: string; lead_id: string | null; lead_name: string | null; lead_phone: string | null; credited_to: string | null; status: string; extra: Record<string, string> }
+const MATCH: Record<string, string> = { phone: 'Matched by phone', email: 'Matched by email', manual: 'Linked by hand', check: 'Needs a check', none: 'Not matched yet' }
+
+/** Every buyer of an import with their details, the lead they matched, and any note on their row. */
+function ImportBuyers({ ids, title, problems, dir, onClose }: { ids: string[]; title: string; problems: ImportResult['problems']; dir: Directory; onClose: () => void }) {
+  const { org } = useOrg()
+  const [rows, setRows] = useState<BuyerRow[] | null>(null)
+  const [show, setShow] = useState<'all' | 'matched' | 'none' | 'notes'>('all')
+  const [openLead, setOpenLead] = useState<string | null>(null)
+  useEffect(() => { supabase.rpc('buyer_import_rows', { p_imports: ids }).then(({ data }) => setRows((data ?? []) as BuyerRow[])) }, [ids.join()])
+  const note = useMemo(() => { const m = new Map<number, string>(); problems.forEach(p => m.set(p.row, [m.get(p.row), p.reason].filter(Boolean).join(' · '))); return m }, [problems])
+  const failed = problems.filter(p => p.level === 'failed')
+  const list = (rows ?? []).filter(r => show === 'all' || (show === 'matched' ? !!r.lead_id : show === 'none' ? !r.lead_id : note.has(r.row_no ?? -1)))
+  const n = (f: (r: BuyerRow) => boolean) => (rows ?? []).filter(f).length
+  function csv() {
+    const extraKeys = [...new Set((rows ?? []).flatMap(r => Object.keys(r.extra ?? {})))]
+    downloadCsv(`${title}-buyers.csv`, ['Row', 'Name', 'Phone', 'Email', 'Product', 'Order value', 'Paid', 'Date', 'Match', 'Lead', 'Lead phone', 'Credit to', 'Status', 'Note', ...extraKeys],
+      [...(rows ?? []).map(r => [r.row_no ?? '', r.name, r.phone, r.email, r.product, r.amount, r.paid, fmtDate(r.sold_at, org), MATCH[r.match_how] ?? r.match_how,
+        r.lead_name ?? '', r.lead_phone ?? '', r.credited_to ? dir.nameOf(r.credited_to) : '', r.status, note.get(r.row_no ?? -1) ?? '', ...extraKeys.map(k => r.extra?.[k] ?? '')]),
+       ...failed.map(p => [p.row, '', '', '', '', '', '', '', 'Not imported', '', '', '', 'failed', p.reason])])
+  }
+  return (
+    <Modal open onClose={onClose} wide title={`Buyers · ${title}`} footer={<><Button variant="secondary" onClick={csv} disabled={!rows}><Download className="h-4 w-4" /> CSV with all details</Button><Button onClick={onClose}>Close</Button></>}>
+      {!rows ? <Spinner /> : <>
+        <div className="mb-3 flex flex-wrap gap-1.5 text-sm">
+          {([['all', `All (${rows.length})`], ['matched', `Matched to a lead (${n(r => !!r.lead_id)})`], ['none', `Not matched yet (${n(r => !r.lead_id)})`], ['notes', `With a note (${n(r => note.has(r.row_no ?? -1))})`]] as const).map(([k, l]) =>
+            <button key={k} onClick={() => setShow(k)} className={`rounded-full border px-3 py-1 ${show === k ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-slate-200 text-slate-600'}`}>{l}</button>)}
+        </div>
+        {failed.length > 0 && <p className="mb-2 rounded bg-red-50 p-2 text-sm text-red-700">{failed.length} rows were not imported: {failed.slice(0, 5).map(p => `row ${p.row} — ${p.reason}`).join('; ')}{failed.length > 5 ? '…' : ''}</p>}
+        <div className="max-h-[60vh] overflow-y-auto">
+          <table className="w-full table-fixed text-sm">
+            <thead className="sticky top-0 bg-slate-50"><tr><th className="th w-[7%]">Row</th><th className="th w-[24%]">Buyer</th><th className="th w-[18%]">Product · paid</th><th className="th w-[24%]">Lead in Closer OS</th><th className="th w-[27%]">Note</th></tr></thead>
+            <tbody className="divide-y divide-slate-100">{list.map((r, i) => (
+              <tr key={i} className="align-top">
+                <td className="px-3 py-2 text-slate-500">{r.row_no ?? ''}</td>
+                <td className="px-3 py-2"><span className="block font-medium">{r.name || 'No name'}</span>{r.phone && <span className="block text-xs text-slate-500"><Ph v={r.phone} /></span>}
+                  {r.email && <span className="block truncate text-xs text-slate-500">{r.email}</span>}</td>
+                <td className="px-3 py-2"><span className="block truncate">{r.product || '—'}</span><span className="text-xs text-slate-500">{fmtMoney(r.paid, org)} of {fmtMoney(r.amount, org)} · {fmtDate(r.sold_at, org)}</span></td>
+                <td className="px-3 py-2">{r.lead_id ? <button className="text-left text-brand-700 hover:underline" onClick={() => setOpenLead(r.lead_id)}><span className="block font-medium">{r.lead_name || 'No name'}</span>
+                    <span className="text-xs">{MATCH[r.match_how]}{r.credited_to ? ` · credit: ${dir.nameOf(r.credited_to)}` : ''}</span></button>
+                  : <span className={r.match_how === 'check' ? 'text-amber-700' : 'text-slate-500'}>{MATCH[r.match_how] ?? 'Not matched yet'}<span className="block text-xs">Link it on “2 · Match to leads”</span></span>}</td>
+                <td className="px-3 py-2 text-xs text-amber-800">{note.get(r.row_no ?? -1) ?? ''}</td>
+              </tr>))}</tbody>
+          </table>
+        </div>
+      </>}
+      {openLead && <LeadDrawer leadId={openLead} dir={dir} onClose={() => setOpenLead(null)} onChanged={() => {}} />}
+    </Modal>
   )
 }
 

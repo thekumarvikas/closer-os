@@ -65,6 +65,8 @@ export function parseChat(text: string): ChatLine[] {
     if (a) { cur = { time: a[1], sender: a[2].trim(), to: a[3].trim(), message: a[4].trim() }; out.push(cur); continue }
     const b = l.match(old)
     if (b) { cur = { time: b[1], sender: b[2].replace(/\s+to\s+.*$/i, '').trim(), to: 'Everyone', message: b[3].trim() }; out.push(cur); continue }
+    const t = l.match(/^(\d{1,2}:\d{2}(?::\d{2})?)\t+([^\t]+?):\t+(.*)$/)   // newer Zoom: "01:09:34<TAB>Name:<TAB>message"
+    if (t) { cur = { time: t[1], sender: t[2].trim(), to: 'Everyone', message: t[3].trim() }; out.push(cur); continue }
     if (cur && l.trim()) cur.message = (cur.message ? cur.message + '\n' : '') + l.trim()
   }
   return out.filter(c => c.message)

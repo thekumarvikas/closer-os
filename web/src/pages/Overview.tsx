@@ -92,7 +92,6 @@ function Body({ d, period, mgr, nameOf, first, money, onLead, onShowAll, onDrill
   nameOf: (id: string) => string; first: (id: string) => string; money: (v: number) => string; onLead: (id: string) => void
   onDrill: (x: { user: string; kind: 'dialled' | 'connected' | 'all' }) => void; meId: string }) {
   const k = d.kpi, p = d.prev
-  const vs = period === 'today' ? 'vs this time yesterday' : period === 'yesterday' ? 'vs the day before' : 'vs the 7 days before'
   const mine = d.people.filter(x => x.mine)
   const now = Date.now()
 
@@ -112,13 +111,20 @@ function Body({ d, period, mgr, nameOf, first, money, onLead, onShowAll, onDrill
   if (d.attention.unassigned) chips.push({ tone: 'gray', to: '/leads', text: `👤 ${d.attention.unassigned} new leads unassigned` })
 
   const conv = k.conversations
-  const tiles = [
-    { label: 'Dialled', value: k.dialled.toLocaleString('en-IN'), diff: k.dialled - p.dialled, fmt: (n: number) => `${n}` },
-    { label: 'Connected', value: `${pctOf(k.connected, k.dialled)}%`, sub: `${k.connected} of ${k.dialled}`, diff: pctOf(k.connected, k.dialled) - pctOf(p.connected, p.dialled), fmt: (n: number) => `${n} pts` },
-    { label: 'Leads connected', value: k.leads_connected, diff: k.leads_connected - p.leads_connected, fmt: (n: number) => `${n}` },
-    { label: 'Talk time', value: dur(k.talk), diff: k.talk - p.talk, fmt: (n: number) => dur(n) },
-    { label: 'Outcomes saved', value: conv ? `${pctOf(k.conn_outcome, conv)}%` : '—', sub: `${k.conn_outcome} of ${conv} connected calls`, bad: conv > 0 && k.conn_outcome / conv < 0.5 },
-    { label: 'Sales', value: k.revenue ? `${k.sales} · ${money(k.revenue)}` : k.sales, diff: k.sales - p.sales, fmt: (n: number) => `${n}` },
+  const when = period === 'today' ? 'yesterday by this time' : period === 'yesterday' ? 'the day before' : 'the 7 days before'
+  // Each tile: what it counts (plain words) + a full sentence comparing with the earlier period.
+  const tiles: { label: string; value: string | number; hint: string; prev?: string; diff?: number; more?: string; less?: string; fmt?: (n: number) => string; bad?: boolean }[] = [
+    { label: 'Calls dialled', value: k.dialled.toLocaleString('en-IN'), hint: 'Outgoing calls made',
+      diff: k.dialled - p.dialled, prev: `${p.dialled}`, fmt: n => `${n}`, more: 'more', less: 'fewer' },
+    { label: 'Picked up', value: `${pctOf(k.connected, k.dialled)}%`, hint: `${k.connected} of ${k.dialled} dialled calls were answered`,
+      diff: pctOf(k.connected, k.dialled) - pctOf(p.connected, p.dialled), prev: `${pctOf(p.connected, p.dialled)}%`, fmt: n => `${n}%`, more: 'higher', less: 'lower' },
+    { label: 'Leads spoken to', value: k.leads_connected, hint: 'Different people who answered',
+      diff: k.leads_connected - p.leads_connected, prev: `${p.leads_connected}`, fmt: n => `${n}`, more: 'more', less: 'fewer' },
+    { label: 'Talk time', value: dur(k.talk), hint: 'Total time on calls',
+      diff: k.talk - p.talk, prev: dur(p.talk), fmt: n => dur(n), more: 'more', less: 'less' },
+    { label: 'Outcomes saved', value: conv ? `${pctOf(k.conn_outcome, conv)}%` : '—', hint: `${k.conn_outcome} of ${conv} answered calls have an outcome`, bad: conv > 0 && k.conn_outcome / conv < 0.5 },
+    { label: 'Sales', value: k.revenue ? `${k.sales} · ${money(k.revenue)}` : k.sales, hint: 'Sales made',
+      diff: k.sales - p.sales, prev: `${p.sales}`, fmt: n => `${n}`, more: 'more', less: 'fewer' },
   ]
 
   const hours = [...k.hours].sort((a, b) => a.hr - b.hr)
@@ -135,15 +141,14 @@ function Body({ d, period, mgr, nameOf, first, money, onLead, onShowAll, onDrill
         return c.to ? <Link key={i} to={c.to} className={cls + ' hover:shadow-sm'}>{c.text}</Link> : <span key={i} className={cls}>{c.text}</span>
       })}</div>}
 
-      <p className="mb-1 text-right text-xs text-slate-400">▲▼ {vs}</p>
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         {tiles.map(t => (
           <Card key={t.label} className="p-4">
             <p className="text-sm text-slate-500">{t.label}</p>
             <p className={`mt-1 text-2xl font-semibold tabular-nums ${t.bad ? 'text-red-600' : 'text-slate-900'}`}>{t.value}</p>
-            {t.diff !== undefined ? <p className={`text-xs ${t.diff > 0 ? 'text-emerald-700' : t.diff < 0 ? 'text-red-600' : 'text-slate-400'}`}>
-              {t.diff > 0 ? '▲' : t.diff < 0 ? '▼' : '='} {t.diff ? t.fmt!(Math.abs(t.diff)) : 'same'} </p>
-              : <p className="text-xs text-slate-500">{t.sub}</p>}
+            <p className="text-xs text-slate-500">{t.hint}</p>
+            {t.diff !== undefined && <p className={`mt-1 text-xs ${t.diff > 0 ? 'text-emerald-700' : t.diff < 0 ? 'text-red-600' : 'text-slate-500'}`}>
+              {t.diff === 0 ? `Same as ${when} (${t.prev})` : `${t.diff > 0 ? '▲' : '▼'} ${t.fmt!(Math.abs(t.diff))} ${t.diff > 0 ? t.more : t.less} than ${when} (${t.prev})`}</p>}
           </Card>))}
       </div>
 

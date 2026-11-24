@@ -2443,3 +2443,6 @@ intelligence → Play Store launch.
   also gets the lead until the webinar is over. Date saved = date assigned to that rep. "Everything can be edited and auto-updated
   everywhere" (clarifying whether phone-side edits flow back into Closer OS). Spec: name "Rahul Sharma 23Nov" (+ " ✅ Buyer"),
   company line "Profession · City · Saved <date>", notes = last conversation note; 3-line caller-ID strip.
+- Nov 24 final: contact NAME = the lead's name only (no date — it would show in WhatsApp). Dates written with a space ("23 Nov").
+  Company line "Doctor · Pune · Webinar 23 Nov · Saved 24 Nov". Closer OS → phone auto-updates; phone → Closer OS only name +
+  email (a changed number is added as an extra number). Buyer tag placement: asked owner (name vs company line).

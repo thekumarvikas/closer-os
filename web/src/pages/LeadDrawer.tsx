@@ -37,6 +37,7 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
   const [followUps, setFollowUps] = useState<FollowUp[]>([])
   const [acts, setActs] = useState<Activity[]>([])
   const [note, setNote] = useState('')
+  const [nameEdit, setNameEdit] = useState<string | null>(null)
   const [enrolled, setEnrolled] = useState<{ product: string; purchased_at: string | null }[]>([])
   const [batches, setBatches] = useState<LeadBatch[]>([])
   const [cats, setCats] = useState<ProfessionCategory[]>([])
@@ -93,8 +94,18 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
           <>
             <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-200 bg-white px-5 py-4">
               <div>
-                <h2 className="flex flex-wrap items-center gap-2 text-lg font-semibold">{lead.name || 'No name'}
-                  {!lead.dial_count && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">⚠ Not called yet</span>}</h2>
+                {nameEdit !== null ? (
+                  <form className="flex items-center gap-2" onSubmit={async e => { e.preventDefault()
+                    const { error } = await supabase.rpc('update_lead_details', { p_lead: leadId, p: { name: nameEdit.trim() } })
+                    if (error) return setError(errorText(error))
+                    setNameEdit(null); load(); onChanged() }}>
+                    <input className="input !w-64 !py-1 text-base" autoFocus placeholder="Lead's name" value={nameEdit} onChange={e => setNameEdit(e.target.value)} />
+                    <Button disabled={!nameEdit.trim()}>Save</Button>
+                    <button type="button" className="text-sm text-slate-500" onClick={() => setNameEdit(null)}>Cancel</button>
+                  </form>) :
+                <h2 className="flex flex-wrap items-center gap-2 text-lg font-semibold">{lead.name || <span className="text-slate-400">No name</span>}
+                  <button onClick={() => setNameEdit(lead.name ?? '')} title="Edit name" className="text-sm font-normal text-brand-700 hover:underline">{lead.name ? '✏️' : '+ Add name'}</button>
+                  {!lead.dial_count && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">⚠ Not called yet</span>}</h2>}
                 <NameTags c={contacts.c} />
                 <p className="flex items-center gap-1.5 text-sm text-slate-600"><Phone className="h-3.5 w-3.5" /> <Ph v={lead.phone} /></p>
               </div>

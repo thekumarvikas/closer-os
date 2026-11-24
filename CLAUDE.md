@@ -2439,3 +2439,7 @@ intelligence → Play Store launch.
   + profession / city / webinar date / last conversation, 2–3 lines. Shared leads → saved on both phones. Managers → NOT saved on
   their phones. Reps may edit the contact (Closer OS keeps their edit). Caller ID for non-leads = "Not in your leads · + Add" strip.
   Open: reminder-caller question (re-explained), course short form source, update rules.
+- Final answers (Nov 24): course short form dropped for now; BUYER tag in the name when the lead is a buyer. Reminder caller's phone
+  also gets the lead until the webinar is over. Date saved = date assigned to that rep. "Everything can be edited and auto-updated
+  everywhere" (clarifying whether phone-side edits flow back into Closer OS). Spec: name "Rahul Sharma 23Nov" (+ " ✅ Buyer"),
+  company line "Profession · City · Saved <date>", notes = last conversation note; 3-line caller-ID strip.

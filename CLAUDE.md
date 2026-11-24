@@ -2446,3 +2446,5 @@ intelligence → Play Store launch.
 - Nov 24 final: contact NAME = the lead's name only (no date — it would show in WhatsApp). Dates written with a space ("23 Nov").
   Company line "Doctor · Pune · Webinar 23 Nov · Saved 24 Nov". Closer OS → phone auto-updates; phone → Closer OS only name +
   email (a changed number is added as an extra number). Buyer tag placement: asked owner (name vs company line).
+- Buyer (Nov 24): NOT in the name. Extra line "Buyer – <product> on <date of payment>" e.g. "Buyer – Cancer Consultation Circle
+  6 months on 25 Nov" in the contact (job title field) + as its own line on the caller-ID strip. Several purchases → latest one.

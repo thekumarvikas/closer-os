@@ -5,6 +5,7 @@ import { Phone, Mail, Star, Plus, Trash2, Pencil } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { ask, toast } from '../lib/dialogs'
 import { Ph, Em } from './Copy'
+import { phoneFix, fmtFix } from '../lib/phoneCheck'
 
 type Item = { id: string | null; value: string; label: string; main: boolean; source?: string; at?: string }
 export type Contacts = { phones: Item[]; emails: Item[]; names: { name: string; at: string; source?: string }[]; can_remove: boolean }
@@ -74,7 +75,14 @@ export default function LeadContacts({ leadId, c, onChanged }: { leadId: string;
   return (
     <div>
       <p className="label">Contact</p>
-      {c.phones.map(p => row('phone', p))}
+      {c.phones.map(p => {
+        const fix = phoneFix(p.value)
+        return <div key={'w' + p.value}>{row('phone', p)}
+          {fix && (p.main || c.can_remove) && <div className="mb-1 ml-6 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900">
+            ⚠ This looks like the Indian number <b>{fmtFix(fix)}</b> with a wrong country code in front.{' '}
+            <button type="button" className="font-medium text-brand-700 hover:underline" onClick={() => setEdit({ kind: 'phone', it: p, val: fix })}>Change to {fmtFix(fix)}</button>
+          </div>}</div>
+      })}
       {c.emails.map(e => row('email', e))}
       {adding ? (
         <form className="mt-1 flex flex-wrap items-center gap-2" onSubmit={e => { e.preventDefault(); if (val.trim()) void run({ kind: adding, op: 'add', value: val.trim(), label }, 'Added').then(() => { setAdding(null); setVal('') }) }}>

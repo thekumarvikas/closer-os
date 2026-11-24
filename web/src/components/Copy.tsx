@@ -1,3 +1,4 @@
+import { phoneFix } from '../lib/phoneCheck'
 // One-tap copy next to every phone number and email (owner, Nov 21 2026). Click the icon (or press long on the text on a
 // phone) to copy; a small "Copied" toast confirms. The number itself never starts a call.
 import { Copy as CopyIcon, Phone as PhoneIcon } from 'lucide-react'
@@ -78,5 +79,6 @@ export function useOtherPhones(ids: string[]) {
 /** The main number plus every other number, each with its own copy button. */
 export function AllPh({ main, others, lead }: { main?: string | null; others?: string[]; lead?: string | null }) {
   const rest = (others ?? []).filter(p => p && p !== main)
-  return <span className="inline-flex flex-wrap items-center gap-x-2"><Ph v={main} lead={lead} />{rest.map(p => <span key={p} className="text-slate-400"><Ph v={p} lead={lead} /></span>)}</span>
+  const bad = phoneFix(main)
+  return <span className="inline-flex flex-wrap items-center gap-x-2"><Ph v={main} lead={lead} />{bad && <span className="rounded bg-amber-100 px-1 text-[11px] font-medium text-amber-800" title={`Looks like ${bad} with a wrong country code — open the lead to fix`}>⚠ check number</span>}{rest.map(p => <span key={p} className="text-slate-400"><Ph v={p} lead={lead} /></span>)}</span>
 }

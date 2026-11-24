@@ -1,7 +1,7 @@
 // Lead details: every number and email the person has used, with labels (Primary / Secondary / anything you type),
 // one Main, copy buttons, add / rename / make main for everyone who sees the lead, remove for managers (owner, Nov 21 2026).
 import { useEffect, useState } from 'react'
-import { Phone, Mail, Star, Plus, Trash2 } from 'lucide-react'
+import { Phone, Mail, Star, Plus, Trash2, Pencil } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { ask, toast } from '../lib/dialogs'
 import { Ph, Em } from './Copy'
@@ -32,12 +32,33 @@ export default function LeadContacts({ leadId, c, onChanged }: { leadId: string;
     if (error) return toast(errorText(error))
     toast(msg); onChanged()
   }
+  const [edit, setEdit] = useState<{ kind: 'phone' | 'email'; it: Item; val: string } | null>(null)
+  async function saveEdit() {
+    if (!edit) return
+    const v = edit.val.trim(); if (!v || v === edit.it.value) return setEdit(null)
+    if (edit.it.main) {
+      // Main number / email = the lead's own field (checks the number and duplicates, keeps history).
+      const { error } = await supabase.rpc('update_lead_details', { p_lead: leadId, p: { [edit.kind]: v } })
+      if (error) return toast(errorText(error))
+      toast(edit.kind === 'phone' ? 'Number changed' : 'Email changed'); setEdit(null); onChanged(); return
+    }
+    const { error: e1 } = await supabase.rpc('set_lead_contact', { p_lead: leadId, p: { kind: edit.kind, op: 'add', value: v, label: edit.it.label } })
+    if (e1) return toast(errorText(e1))
+    await supabase.rpc('set_lead_contact', { p_lead: leadId, p: { kind: edit.kind, op: 'remove', id: edit.it.id } })
+    toast(edit.kind === 'phone' ? 'Number changed' : 'Email changed'); setEdit(null); onChanged()
+  }
   if (!c) return null
   const rename = async (kind: 'phone' | 'email', it: Item) => {
     const v = window.prompt('Label for this ' + (kind === 'phone' ? 'number' : 'email') + ' (e.g. Primary, Secondary, Personal, Office)', it.label)
     if (v != null && v.trim() && v.trim() !== it.label) void run({ kind, op: 'label', id: it.id, label: v.trim() }, 'Label saved')
   }
-  const row = (kind: 'phone' | 'email', it: Item) => (
+  const row = (kind: 'phone' | 'email', it: Item) => edit && edit.it === it ? (
+    <form key={(it.id ?? 'main') + it.value} className="flex flex-wrap items-center gap-2 py-1" onSubmit={e => { e.preventDefault(); void saveEdit() }}>
+      <input className="input !w-52 !py-1" autoFocus value={edit.val} onChange={e => setEdit({ ...edit, val: e.target.value })} />
+      <button className="rounded-lg bg-brand-700 px-3 py-1 text-sm font-medium text-white hover:bg-brand-800">Save</button>
+      <button type="button" className="text-sm text-slate-500" onClick={() => setEdit(null)}>Cancel</button>
+      {kind === 'phone' && <span className="w-full text-[11px] text-slate-500">Type it with the country code (e.g. +91 98765 43210). Without one, your company's code is added.</span>}
+    </form>) : (
     <div key={(it.id ?? 'main') + it.value} className="flex items-center gap-2 py-1 text-sm">
       {kind === 'phone' ? <Phone className="h-4 w-4 shrink-0 text-slate-400" /> : <Mail className="h-4 w-4 shrink-0 text-slate-400" />}
       <button type="button" onClick={() => rename(kind, it)} title="Rename this label"
@@ -45,6 +66,7 @@ export default function LeadContacts({ leadId, c, onChanged }: { leadId: string;
       <span className="min-w-0 truncate tabular-nums">{kind === 'phone' ? <Ph v={it.value} /> : <Em v={it.value} />}</span>
       {it.main ? <span className="flex items-center gap-0.5 text-[11px] text-amber-700" title="Used for calls and WhatsApp"><Star className="h-3 w-3 fill-amber-400 text-amber-500" /> Main</span>
         : <button type="button" className="text-[11px] text-brand-700 hover:underline" onClick={() => run({ kind, op: 'main', id: it.id }, 'Main ' + (kind === 'phone' ? 'number' : 'email') + ' changed')}>Make main</button>}
+      {(it.main || c.can_remove) && <button type="button" title="Edit" aria-label="Edit" className="text-slate-400 hover:text-brand-700" onClick={() => setEdit({ kind, it, val: it.value })}><Pencil className="h-3.5 w-3.5" /></button>}
       {it.source && !it.main && <span className="hidden truncate text-[11px] text-slate-400 sm:inline">· {it.source}</span>}
       {!it.main && c.can_remove && <button type="button" aria-label="Remove" className="ml-auto text-slate-300 hover:text-red-600"
         onClick={async () => { if (await ask(`Remove ${it.value} from this lead?`, { ok: 'Remove', danger: true })) void run({ kind, op: 'remove', id: it.id }, 'Removed') }}><Trash2 className="h-3.5 w-3.5" /></button>}

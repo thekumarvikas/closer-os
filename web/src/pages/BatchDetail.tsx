@@ -707,8 +707,9 @@ function ChatUpload({ batch, file, onClose, onDone }: { batch: Batch; file?: Fil
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<{ messages: number; matched: number; unmatched: { sender: string; messages: number }[] } | null>(null)
+  const [fname, setFname] = useState(file?.name ?? '')
   async function read(f: File) {
-    setError(null)
+    setError(null); setFname(f.name)
     let l: ReturnType<typeof parseChat> = []
     if (/\.(csv|xlsx)$/i.test(f.name)) {
       // A table with name / message (and time) columns.
@@ -735,7 +736,13 @@ function ChatUpload({ batch, file, onClose, onDone }: { batch: Batch; file?: Fil
       let sent_at: string | null = null, minute: number | null = null
       if (t) {
         const h = +t[1], m = +t[2], sec = +(t[3] ?? 0)
-        if (h < 3 && startH >= 6) { minute = h * 60 + m; sent_at = new Date(start.getTime() + (h * 3600 + m * 60 + sec) * 1000).toISOString() }
+        if (h < 3 && startH >= 6) {
+          // Recording chat: time since the RECORDING started — Zoom puts that start in the file name (GMT20261123-131431…).
+          const g = fname.match(/GMT(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})/)
+          const base = g ? Date.UTC(+g[1], +g[2] - 1, +g[3], +g[4], +g[5], +g[6]) : start.getTime()
+          sent_at = new Date(base + (h * 3600 + m * 60 + sec) * 1000).toISOString()
+          minute = Math.round((new Date(sent_at).getTime() - start.getTime()) / 60000)
+        }
         else {
           const [y, M, d] = day.split('-').map(Number)
           sent_at = wallToUtc({ y, M, d, h, m, s: sec }, org.timezone)

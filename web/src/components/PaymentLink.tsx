@@ -96,6 +96,12 @@ export default function PaymentLinkCard({ batch, dir, canEdit, onSaved }: { batc
         <p className="font-semibold">💳 Payment link dropped</p>
         {r.minute != null && canEdit && !editing && <button className="text-sm text-brand-700 hover:underline" onClick={() => { setMin(String(r.minute)); setEditing(true) }}>Change time</button>}
       </div>
+      {r.minute != null && !editing && canEdit && r.chat_link?.minute != null && Math.abs(r.chat_link.minute - r.minute) >= 2 && (
+        <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-sm text-emerald-900">
+          💡 The chat shows a link posted at <b>minute {r.chat_link.minute}</b> ({clock(r.chat_link.minute)}){r.chat_link.sender ? ` by ${r.chat_link.sender}` : ''} — you have minute {r.minute}.
+          <span className="mt-0.5 block truncate text-xs text-emerald-800">“{r.chat_link.message}”</span>
+          <Button className="mt-1 !py-1" loading={busy} onClick={() => save(r.chat_link!.minute)}>Use minute {r.chat_link.minute}</Button>
+        </div>)}
       {r.minute == null || editing ? (
         canEdit ? <div className="rounded-lg bg-amber-50 p-3">{!editing && <p className="mb-2 text-sm text-amber-900">Set the time the link was dropped to see who was in the webinar when your payment link was dropped — your most likely buyers.</p>}{entry}</div>
           : <p className="text-sm text-slate-500">The payment link minute hasn't been set for this webinar yet.</p>

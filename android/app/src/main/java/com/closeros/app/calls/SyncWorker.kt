@@ -47,6 +47,8 @@ object CallSync {
         // Keep the phone's copy of the leads fresh (instant after-call pop-up, works offline).
         val newLeadPhones = runCatching { com.closeros.app.data.LeadIndex.sync(ctx, orgId) }
             .onFailure { com.closeros.app.data.AppLog.error(ctx, "lead index", it) }.getOrDefault(emptySet())
+        // My leads as contacts on this phone (names on the ringing screen + WhatsApp); also feeds the caller-ID strip.
+        runCatching { PhoneContacts.sync(ctx, orgId, runCatching { Repo.membership()?.organization?.timezone }.getOrNull() ?: "Asia/Kolkata") }
 
         // 2) New call-log entries (first run: the last 2 days).
         val since = store.callLogCursorMs.takeIf { it > 0 } ?: (System.currentTimeMillis() - 2 * 86_400_000L)

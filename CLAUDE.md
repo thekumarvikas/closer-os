@@ -2448,3 +2448,13 @@ intelligence → Play Store launch.
   email (a changed number is added as an extra number). Buyer tag placement: asked owner (name vs company line).
 - Buyer (Nov 24): NOT in the name. Extra line "Buyer – <product> on <date of payment>" e.g. "Buyer – Cancer Consultation Circle
   6 months on 25 Nov" in the contact (job title field) + as its own line on the caller-ID strip. Several purchases → latest one.
+- BUILT (Nov 24 2026, migration 20261224000155, app 0.30.1): my_contact_leads(org) (assigned + shared + reminder_by until 3 h after
+  the webinar start; company owners/admins/managers get none; personal accounts all) with webinar, saved_at (assigned_at),
+  last_note, buyer (latest verified sale product + date, "+N more"). Statement trigger t_contacts_wake → push_wake(...,'contacts')
+  once per affected rep on reassign/delete. App calls/PhoneContacts.kt: own account "Closer OS" (ContactsAuthService +
+  ContactsSyncService stubs, res/xml/contacts_*.xml, resValue contacts_account_type per app), synced in CallSync after LeadIndex
+  and on push "contacts"; diff by hash (prefs phone_contacts leadId → raw id); name only, Organization company = "Profession ·
+  City · Webinar 23 Nov · Saved 24 Nov", title = "Buyer – <product> on 25 Nov 2026", note = last note (date); phone edits → name /
+  email back via update_lead_details, new number → set_lead_contact add; removeAll on sign-out / DeviceGuard kick. Setup "Contacts"
+  item now asks READ + WRITE. calls/CallerId.kt: slim top strip on RINGING (and 15 s on outgoing OFFHOOK), hidden on answer / IDLE;
+  non-leads "Not in your leads · + Add as lead" (skips saved personal contacts / never-ask numbers) → MainActivity add_lead_phone.

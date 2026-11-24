@@ -56,6 +56,7 @@ object DeviceGuard {
         runCatching { Backend.auth.signOut(SignOutScope.LOCAL) }   // only this phone — the new phone stays signed in
         LocalStore(ctx).clear()
         runCatching { LocalDb.get(ctx).clearCache() }
+        runCatching { PhoneContacts.removeAll(ctx) }
         LocalStore(ctx).kickedReason = reason
     }
 }

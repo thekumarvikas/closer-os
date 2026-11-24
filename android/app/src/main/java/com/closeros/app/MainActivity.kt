@@ -89,6 +89,7 @@ class MainActivity : ComponentActivity() {
         // Hourly check-in notification: open the card, or "start calling" straight away.
         i?.getStringExtra("summary")?.let { vm.summaryKind = it; i.removeExtra("summary") }
         i?.getStringExtra("checkin")?.let { if (it == "go") vm.checkInGo() else vm.openCheckIn(); i.removeExtra("checkin") }
+        i?.getStringExtra("add_lead_phone")?.let { vm.addLeadPhone = it; vm.showAddLead = true; i.removeExtra("add_lead_phone") }
         i?.getStringExtra("open_tab")?.let { if (it == "leads") { vm.tab = Tab.Leads; vm.reloadLeads() }; if (it == "sequences") { vm.showSequences = true; vm.loadSequences(); vm.loadSeqDue() }
             if (it == "wa_due") vm.startSeqQueue(); if (it == "setup") vm.showSetup = true; i.removeExtra("open_tab") }
     }

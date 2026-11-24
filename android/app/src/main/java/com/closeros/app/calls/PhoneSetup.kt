@@ -130,8 +130,9 @@ object PhoneSetup {
             callPerms.all { has(ctx, it) }, Kind.Runtime, perms = callPerms)
         if (Build.VERSION.SDK_INT >= 33) list += Item("notify", "Notifications", "Follow-up reminders with a Call button.",
             has(ctx, Manifest.permission.POST_NOTIFICATIONS), Kind.Runtime, perms = listOf(Manifest.permission.POST_NOTIFICATIONS))
-        list += Item("contacts", "Contacts", "Show the names saved in your contacts in call history and the after-call pop-up.",
-            has(ctx, Manifest.permission.READ_CONTACTS), Kind.Runtime, perms = listOf(Manifest.permission.READ_CONTACTS))
+        list += Item("contacts", "Contacts", "Your leads are saved in your phone's contacts (a separate \"Closer OS\" list), so a lead who calls you shows by name — also in WhatsApp.",
+            has(ctx, Manifest.permission.READ_CONTACTS) && has(ctx, Manifest.permission.WRITE_CONTACTS), Kind.Runtime,
+            perms = listOf(Manifest.permission.READ_CONTACTS, Manifest.permission.WRITE_CONTACTS))
         if (Build.VERSION.SDK_INT >= 31) list += Item("alarms", "On-time reminders", "Reminders ring exactly 5 minutes before and at the follow-up time.",
             FollowUpAlarms.canExact(ctx), Kind.Special,
             intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${ctx.packageName}")),

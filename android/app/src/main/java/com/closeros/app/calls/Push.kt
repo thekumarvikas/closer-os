@@ -65,6 +65,8 @@ class PushService : FirebaseMessagingService() {
                 AppLog.error(applicationContext, "push", null, kind = "info", message = "sync requested from the dashboard")
                 CallSync.syncNow(applicationContext)
             }
+            // A lead was assigned to / taken from me: the phone's Closer OS contacts update now.
+            "contacts" -> CallSync.syncNow(applicationContext)
             // The website's 📞 (or My desk) asked this phone to call: Closer OS dials as soon as it is open.
             "call" -> callAlert(message.data["label"])
             // A lead was just assigned to me / one of my leads registered again → notify at once.

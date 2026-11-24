@@ -17,6 +17,20 @@ class CallEndReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         if (intent.action != TelephonyManager.ACTION_PHONE_STATE_CHANGED) return
         val state = intent.getStringExtra(TelephonyManager.EXTRA_STATE)
+        @Suppress("DEPRECATION") val num = intent.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER)
+        // Caller ID strip: while it rings; while dialling (15 s); gone once answered or ended.
+        runCatching {
+            val sp = ctx.applicationContext.getSharedPreferences("call_kind", Context.MODE_PRIVATE)
+            when (state) {
+                TelephonyManager.EXTRA_STATE_RINGING -> CallerId.show(ctx, num)
+                TelephonyManager.EXTRA_STATE_OFFHOOK -> {
+                    val rangRecently = System.currentTimeMillis() - sp.getLong("ring", 0) < 120_000 && sp.getLong("ring", 0) > sp.getLong("idle", 0)
+                    if (rangRecently) CallerId.hide(ctx)
+                    else CallerId.show(ctx, num ?: com.closeros.app.data.LocalStore(ctx).pendingCall?.phone, autoHideMs = 15_000)
+                }
+                TelephonyManager.EXTRA_STATE_IDLE -> CallerId.hide(ctx)
+            }
+        }
         CallKind.note(ctx, state)   // remembers ringing / answered so the pop-up knows "received" vs "dialled" at once
         if (state != TelephonyManager.EXTRA_STATE_IDLE) return
         val endedAt = System.currentTimeMillis()

@@ -77,7 +77,7 @@ private fun EventChoice(vm: AppViewModel, value: String?, onChange: (String?) ->
 fun AddLeadDialog(vm: AppViewModel) {
     if (!vm.showAddLead) return
     var name by remember { mutableStateOf("") }
-    var phone by remember { mutableStateOf("") }
+    var phone by remember { mutableStateOf(vm.addLeadPhone.orEmpty().also { vm.addLeadPhone = null }) }
     var profession by remember { mutableStateOf("") }
     var city by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }

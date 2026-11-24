@@ -1066,6 +1066,8 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ───── Add leads in the app: one lead, a file, or phone contacts ─────
     var showAddLead by mutableStateOf(false)
+    /** Number to start the "Add a lead" form with (from the caller-ID strip's "+ Add as lead"). */
+    var addLeadPhone by mutableStateOf<String?>(null)
     var showAddMenu by mutableStateOf(false)
     var showImport by mutableStateOf(false)
     var showContactsPick by mutableStateOf(false)
@@ -1526,7 +1528,7 @@ open class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (left > 0) { signOutWaiting = left; return@launch }
         }
         signOutWaiting = null
-        runCatching { Repo.signOut() }; FollowUpAlarms.scheduleAll(ctx, emptyList()); store.clear(); com.closeros.app.data.WorkSims.clear(ctx); cache.clearCache(); leads.clear(); pending = null; needsSetup = true }
+        runCatching { Repo.signOut() }; com.closeros.app.calls.PhoneContacts.removeAll(ctx); FollowUpAlarms.scheduleAll(ctx, emptyList()); store.clear(); com.closeros.app.data.WorkSims.clear(ctx); cache.clearCache(); leads.clear(); pending = null; needsSetup = true }
 
     // ───────────── Calling ─────────────
 

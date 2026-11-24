@@ -279,7 +279,7 @@ object AfterCall {
     }
 
     /** Compose needs a lifecycle even outside a screen of the app. */
-    private class Owner : LifecycleOwner, SavedStateRegistryOwner, ViewModelStoreOwner {
+    internal class Owner : LifecycleOwner, SavedStateRegistryOwner, ViewModelStoreOwner {
         private val registry = LifecycleRegistry(this)
         private val saved = SavedStateRegistryController.create(this)
         override val lifecycle: Lifecycle get() = registry

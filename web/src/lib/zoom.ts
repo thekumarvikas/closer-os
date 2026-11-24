@@ -55,7 +55,7 @@ export interface ChatLine { time: string; sender: string; to: string; message: s
 /** Zoom "Save chat" file. Handles "19:05:12 From Rahul to Everyone:" + indented lines, and "19:05:12\t From Rahul : text". */
 export function parseChat(text: string): ChatLine[] {
   const out: ChatLine[] = []
-  const lines = text.replace(/\r/g, '').split('\n')
+  const lines = text.replace(/\r/g, '').replace(/[\u2028\u2029]/g, '\n').split('\n')
   const head = /^(\d{1,2}:\d{2}(?::\d{2})?)\s+From\s+(.+?)\s+to\s+(.+?):\s*(.*)$/i
   const old = /^(\d{1,2}:\d{2}(?::\d{2})?)\s+From\s+(.+?)\s*:\s*(.*)$/i
   let cur: ChatLine | null = null

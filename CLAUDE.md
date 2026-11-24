@@ -2435,3 +2435,7 @@ intelligence → Play Store launch.
   member / sign-out → removed. Personal contacts never touched. Also in the individual app.
 - Caller ID while ringing: YES, minimalistic small card (not full-screen like Truecaller). Contact name format: options sent
   to owner, waiting for his pick + answers to open questions.
+- Owner answers (Nov 24): ONE fixed format (companies don't choose), owner's own habit = course short form + full name + date saved
+  + profession / city / webinar date / last conversation, 2–3 lines. Shared leads → saved on both phones. Managers → NOT saved on
+  their phones. Reps may edit the contact (Closer OS keeps their edit). Caller ID for non-leads = "Not in your leads · + Add" strip.
+  Open: reminder-caller question (re-explained), course short form source, update rules.

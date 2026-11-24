@@ -2428,3 +2428,10 @@ intelligence → Play Store launch.
   ("Reserve-seat link", fill-in {{tokenLink}}) + settings.payment_details {upi_id, payee, bank, note} (dashboard Settings →
   Payment details) with Copy and Send on WhatsApp. Web drawer: "Save the outcome of your call" for MY calls of the last 7 days
   without an outcome (Desk OutcomePanel exported). Test: web/tests/leadquick-test.cjs. LeadIndex cursor v15.
+
+## Leads → phone contacts + ringing caller ID — owner decisions (Nov 24 2026; NOT built, "don't build yet")
+- Closer OS keeps its own contact account "Closer OS" on each rep's phone (not Google Contacts / People API). ALL leads assigned
+  to the person are saved (no 90-day limit); reassigned → removed from the old phone, added to the new; deleted lead / removed
+  member / sign-out → removed. Personal contacts never touched. Also in the individual app.
+- Caller ID while ringing: YES, minimalistic small card (not full-screen like Truecaller). Contact name format: options sent
+  to owner, waiting for his pick + answers to open questions.

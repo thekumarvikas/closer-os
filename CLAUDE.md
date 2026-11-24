@@ -2418,3 +2418,13 @@ intelligence → Play Store launch.
   daily_summary returns covers_from / covers_to / made_at / complete; web coversLine() + KIND_TITLE (lib/summary.ts), sticky
   "🕒 Covers …" line in DailySummary.tsx, tiles show "usual by now"; image/PDF/text carry the covers line. App: summaryTitle /
   coversLine (SummaryScreen.kt), same three chips + ⟳, pinned covers line; end-of-day notification moved 9:30 PM → 10:00 PM.
+
+## Lead at a glance (Nov 24 2026, migration 20261224000154, app 0.30.0)
+- Inspired by a client's own CRM screen. Lead drawer (web components/LeadQuick.tsx) + app lead page (ui/LeadGlance.kt):
+  "⚠ Not called yet" badge (dial_count 0); fact tiles (profession, city/state, latest webinar + attended, watched, level ·
+  score, last reminder-call outcome, assigned, next call); WhatsApp messages as one-tap buttons — templates whose show_for
+  has the last call's category first (unanswered/missed = not_connected) with ⭐, top 6 + "More" (web opens wa.me + logs
+  wa_messages; app opens the message box pre-filled); Payment row = webinar pay_link + NEW batches.token_link
+  ("Reserve-seat link", fill-in {{tokenLink}}) + settings.payment_details {upi_id, payee, bank, note} (dashboard Settings →
+  Payment details) with Copy and Send on WhatsApp. Web drawer: "Save the outcome of your call" for MY calls of the last 7 days
+  without an outcome (Desk OutcomePanel exported). Test: web/tests/leadquick-test.cjs. LeadIndex cursor v15.

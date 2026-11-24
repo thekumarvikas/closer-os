@@ -15,7 +15,7 @@ import { dur } from '../components/terms'
 import { CallType } from '../components/CallColors'
 import LeadDrawer from './LeadDrawer'
 
-interface NeedCall { id: string; lead_id: string; lead_name: string | null; phone: string; direction: string; started_at: string; duration_sec: number; purpose: string; batch_id: string | null }
+export interface NeedCall { id: string; lead_id: string; lead_name: string | null; phone: string; direction: string; started_at: string; duration_sec: number; purpose: string; batch_id: string | null }
 interface Fu { id: string; lead_id: string; due_at: string; reason: string | null; purpose: string; lead: { name: string; phone: string } | null }
 interface Req { id: string; status: 'pending' | 'dialing' | 'ended' | 'logged' | 'cancelled'; lead_id: string; call_id: string | null; started_at: string | null; duration_sec: number | null; phone: string | null; purpose: string; batch_id: string | null; created_at: string }
 interface Note { kind: string; at: string; text: string | null; tags: string[]; outcome?: string | null; by?: string | null }
@@ -227,7 +227,7 @@ function WhatsAppWeb({ lead, repName, onClose }: { lead: Lead; repName: string; 
 }
 
 /** The same outcome form as the app: outcome, notes + tags, next call (day + time) or no follow-up. */
-function OutcomePanel({ call, dir, onClose, onSaved }: { call: NeedCall; dir: Directory; onClose: () => void; onSaved: () => void }) {
+export function OutcomePanel({ call, dir, onClose, onSaved }: { call: NeedCall; dir: Directory; onClose: () => void; onSaved: () => void }) {
   const { org } = useOrg()
   const usage = useOutcomeUsage(org.id)
   const choices = outcomesFor(dir.outcomes.filter((o: Outcome) => o.is_active && (o.purpose === call.purpose || o.purpose === 'both')), call.direction, call.duration_sec, usage)

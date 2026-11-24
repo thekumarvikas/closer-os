@@ -204,7 +204,7 @@ export function WhatsAppTemplates() {
   }, [org.id, lq])  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!lead) return
-    supabase.from('batch_leads').select('batch:batches(name,webinar_at,join_link,pay_link)').eq('lead_id', lead.id).then(({ data }) => {
+    supabase.from('batch_leads').select('batch:batches(name,webinar_at,join_link,pay_link,token_link)').eq('lead_id', lead.id).then(({ data }) => {
       const bs = ((data ?? []) as unknown as { batch: FillBatch | null }[]).map(x => x.batch).filter(Boolean) as FillBatch[]
       bs.sort((a, b) => b.webinar_at.localeCompare(a.webinar_at)); setBatch(bs[0] ?? null)
     })
@@ -513,6 +513,33 @@ export function RecordingAndTeamSettings() {
         <label className="flex items-center gap-2 pt-6 text-sm"><input type="checkbox" checked={board} onChange={e => { setBoard(e.target.checked); save({ show_leaderboard: e.target.checked }) }} />
           Show the team leaderboard to reps in the app (talk time, conversations, sales)</label>
       </div>
+    </Card>
+  )
+}
+
+/** Payment details reps copy or send to a lead in one tap (lead page on the dashboard + app). */
+export function PaymentDetails() {
+  const { org, refresh } = useOrg()
+  const pd = (org.settings?.payment_details ?? {}) as { upi_id?: string; payee?: string; bank?: string; note?: string }
+  const [v, setV] = useState({ upi_id: pd.upi_id ?? '', payee: pd.payee ?? '', bank: pd.bank ?? '', note: pd.note ?? '' })
+  const [saved, setSaved] = useState(false)
+  async function save() {
+    const clean = Object.fromEntries(Object.entries(v).map(([k, x]) => [k, x.trim()]).filter(([, x]) => x))
+    await supabase.from('organizations').update({ settings: { ...(org.settings ?? {}), payment_details: clean } }).eq('id', org.id)
+    setSaved(true); setTimeout(() => setSaved(false), 1500); refresh()
+  }
+  const set = (k: keyof typeof v) => (e: { target: { value: string } }) => setV(x => ({ ...x, [k]: e.target.value }))
+  return (
+    <Card className="p-5 lg:col-span-2">
+      <h2 className="font-semibold">Payment details {saved && <span className="ml-2 text-xs font-normal text-emerald-600">Saved ✓</span>}</h2>
+      <p className="mb-3 mt-1 text-sm text-slate-500">Shown on every lead with <b>Copy</b> and <b>Send on WhatsApp</b> buttons, so reps never type them. Payment links go on each webinar (full payment link + reserve-a-seat link).</p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="UPI ID"><input className="input" value={v.upi_id} onChange={set('upi_id')} placeholder="yourname@okhdfcbank" /></Field>
+        <Field label="Name on UPI / account"><input className="input" value={v.payee} onChange={set('payee')} placeholder="Your business name" /></Field>
+        <Field label="Bank details"><textarea className="input min-h-[90px]" value={v.bank} onChange={set('bank')} placeholder={'Account name\nAccount number\nIFSC\nBank, branch'} /></Field>
+        <Field label="Note sent with the details (optional)"><textarea className="input min-h-[90px]" value={v.note} onChange={set('note')} placeholder="Please share the payment screenshot after paying." /></Field>
+      </div>
+      <Button className="mt-3" onClick={save}>Save payment details</Button>
     </Card>
   )
 }

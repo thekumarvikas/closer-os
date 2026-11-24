@@ -5,6 +5,7 @@ import LeadWebinars from '../components/LeadWebinars'
 import LeadShares from '../components/LeadShares'
 import { LeadSales } from './Sales'
 import { LeadProfileCard, PinnedNotes, LeadObjections, LeadOrigins, emailTypo, type Pin } from '../components/LeadProfile'
+import { FactTiles, QuickWhatsApp, PaymentBox, NeedsOutcome, type LeadBatch } from '../components/LeadQuick'
 import { IntentPicker } from '../components/Intent'
 import { PlayButton, RecordingPlayer } from '../components/CallLog'
 import { CallColorKey, CallType } from '../components/CallColors'
@@ -37,7 +38,7 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
   const [acts, setActs] = useState<Activity[]>([])
   const [note, setNote] = useState('')
   const [enrolled, setEnrolled] = useState<{ product: string; purchased_at: string | null }[]>([])
-  const [batches, setBatches] = useState<{ watch_minutes: number | null; attended: boolean; is_repeat: boolean; batch: { name: string; webinar_at: string } | null }[]>([])
+  const [batches, setBatches] = useState<LeadBatch[]>([])
   const [cats, setCats] = useState<ProfessionCategory[]>([])
   const [error, setError] = useState<string | null>(null)
 
@@ -48,7 +49,7 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
       supabase.from('follow_ups').select('*').eq('lead_id', leadId).order('due_at', { ascending: false }).limit(20),
       supabase.from('lead_activities').select('*').eq('lead_id', leadId).order('created_at', { ascending: false }).limit(50),
       supabase.rpc('lead_enrollments', { p_lead: leadId }),
-      supabase.from('batch_leads').select('watch_minutes, attended, is_repeat, batch:batches(name, webinar_at)').eq('lead_id', leadId),
+      supabase.from('batch_leads').select('watch_minutes, attended, is_repeat, batch:batches(id, name, webinar_at, join_link, pay_link, token_link)').eq('lead_id', leadId),
       supabase.from('profession_categories').select('*').eq('org_id', org.id).order('position'),
     ])
     supabase.rpc('lead_notes', { p_lead: leadId }).then(({ data }) => setNotes((data ?? []) as NoteEntry[]))
@@ -92,7 +93,8 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
           <>
             <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-200 bg-white px-5 py-4">
               <div>
-                <h2 className="text-lg font-semibold">{lead.name || 'No name'}</h2>
+                <h2 className="flex flex-wrap items-center gap-2 text-lg font-semibold">{lead.name || 'No name'}
+                  {!lead.dial_count && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">⚠ Not called yet</span>}</h2>
                 <NameTags c={contacts.c} />
                 <p className="flex items-center gap-1.5 text-sm text-slate-600"><Phone className="h-3.5 w-3.5" /> <Ph v={lead.phone} /></p>
               </div>
@@ -100,6 +102,10 @@ export default function LeadDrawer({ leadId, dir, onClose, onChanged }:
             </div>
             <div className="space-y-6 p-5">
               <ErrorBox error={error} />
+              <NeedsOutcome lead={lead} dir={dir} calls={calls} onSaved={() => { load(); onChanged() }} />
+              <FactTiles lead={lead} dir={dir} calls={calls} batches={batches} />
+              <QuickWhatsApp lead={lead} dir={dir} batch={batches[0]?.batch ?? null} lastCall={calls[0] ?? null} />
+              <PaymentBox lead={lead} batch={batches[0]?.batch ?? null} />
               {enrolled.length > 0 && (
                 <div className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
                   <GraduationCap className="mt-0.5 h-4 w-4 shrink-0" />

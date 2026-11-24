@@ -8,7 +8,7 @@ import { Badge, Button, Card, ErrorBox, Field, PageHeader, Spinner } from '../co
 import { CompanySequences } from '../components/Sequences'
 import { PriceList } from './Sales'
 import { OutcomeNextSteps, WorkingCalendar, TagGroups, LeadFacts, CheckinSettings, ProfileChoices, NoteSentences, IntentLevelsSettings, LostReasonsSettings } from './SettingsRound9'
-import { AppLeadFilters, Buyers, RecordingAndTeamSettings, ExcludedNumbers, ProfessionCategories, ReviewChecklist, WhatsAppTemplates, CompanyFiles } from './SettingsExtra'
+import { PaymentDetails, AppLeadFilters, Buyers, RecordingAndTeamSettings, ExcludedNumbers, ProfessionCategories, ReviewChecklist, WhatsAppTemplates, CompanyFiles } from './SettingsExtra'
 
 export default function Settings() {
   const { org, refresh } = useOrg()
@@ -140,6 +140,7 @@ export default function Settings() {
 
         <WhatsAppTemplates />
         <CompanyFiles />
+        <PaymentDetails />
         <CompanySequences />
 
         <IntentLevelsSettings />

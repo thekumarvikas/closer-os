@@ -224,8 +224,10 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
             // Who, where from, what's next — then ONE line of numbers (no repeated stats further down).
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    if (l.dial_count == 0) Text("⚠ Not called yet", color = Color(0xFF92400E), fontSize = 13.sp, fontWeight = FontWeight.Medium,
+                        modifier = Modifier.background(Color(0xFFFEF3C7), RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 3.dp))
                     LeadContactsBlock(l) { }
-                    listOfNotNull(l.profession, l.company, l.city, l.state).filter { it.isNotBlank() }.joinToString(" · ").takeIf { it.isNotEmpty() }?.let { Text(it, color = Brand.muted) }
+                    l.company?.takeIf { it.isNotBlank() }?.let { Text(it, color = Brand.muted) }
                     listOfNotNull(l.source, l.campaign).filter { it.isNotBlank() }.joinToString(" · ").takeIf { it.isNotEmpty() }?.let { Text("Source: $it", color = Brand.muted, fontSize = 14.sp) }
                     Text(l.next_follow_up_at?.let { "📅 Next follow-up: ${fmtWhen(it)}" } ?: "📅 No follow-up planned", color = Brand.primary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                     LeadStatsLine(vm, l)
@@ -233,6 +235,7 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
                     l.response_sec?.let { r -> Text("⚡ First call " + (if (r < 60) "within a minute" else "${r / 60} working min") + " after it came in", fontSize = 13.sp, color = Brand.muted) }
                 }
             }
+            item { LeadFactTiles(vm, l, calls) }
             item { IntentRow(vm, l) { lead = it } }
             item { BriefCard(vm, l, showProfile = false) }
             if (vm.isSolo) item { LeadEventsRow(vm, l) }
@@ -251,6 +254,10 @@ fun LeadDetailScreen(vm: AppViewModel, leadId: String, onCall: (Lead) -> Unit) {
                         Text("SMS", maxLines = 1, softWrap = false)
                     }
                 }
+                Spacer(Modifier.height(8.dp))
+                QuickWaButtons(vm, l, calls.firstOrNull())
+                Spacer(Modifier.height(6.dp))
+                PaymentRow(vm, l)
                 if (l.do_not_call) Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("⛔ Marked Do not call", color = Brand.red, fontSize = 13.sp, modifier = Modifier.weight(1f))
                     TextButton(onClick = { vm.setDoNotCall(l, false) { u -> lead = u } }) { Text("Remove") }

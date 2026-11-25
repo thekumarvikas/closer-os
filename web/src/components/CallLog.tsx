@@ -1,3 +1,4 @@
+import { playableUrl } from '../lib/amr'
 import { Ph } from './Copy'
 import LeadDrawer from '../pages/LeadDrawer'
 import { Fragment, useCallback, useEffect, useState } from 'react'
@@ -289,7 +290,11 @@ export function RecordingPlayer({ call, onClose }: { call: { id: string; recordi
     if (!call.recording_path) return
     let alive = true
     supabase.rpc('log_recording_access', { p_call: call.id, p_action: 'play' })
-    signedRecording(call.recording_path, false).then(r => { if (!alive) return; if (r.url) setUrl(r.url); else setErr(r.err!) })
+    signedRecording(call.recording_path, false).then(async r => {
+      if (!alive) return; if (!r.url) return setErr(r.err!)
+      const u = await playableUrl(r.url, call.recording_path!).catch(() => r.url!)   // AMR → WAV so the browser can play it
+      if (alive) setUrl(u)
+    })
     return () => { alive = false }
   }, [call.id, call.recording_path])
   if (err) return <span className="text-xs text-red-600">{err}</span>

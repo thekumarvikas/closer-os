@@ -2458,3 +2458,10 @@ intelligence → Play Store launch.
   email back via update_lead_details, new number → set_lead_contact add; removeAll on sign-out / DeviceGuard kick. Setup "Contacts"
   item now asks READ + WRITE. calls/CallerId.kt: slim top strip on RINGING (and 15 s on outgoing OFFHOOK), hidden on answer / IDLE;
   non-leads "Not in your leads · + Add as lead" (skips saved personal contacts / never-ask numbers) → MainActivity add_lead_phone.
+
+## AMR recordings on the website (Nov 25 2026)
+- Nikhil's Lava phone (and other dialers) save calls as AMR-NB ("#!AMR\n", storage mime audio/amr, 322 files in 3 days) — browsers
+  can't play AMR → "Couldn't play this recording". web/src/lib/amr.ts playableUrl(url, path): for *.amr fetches the file, decodes with
+  the self-hosted web/public/vendor/BenzAMRRecorder.min.js (MIT, benz-amr-recorder 1.1.5; minified → call decodeAMRAsync, not
+  _samples) and plays a WAV blob (8 kHz mono). Used by CallLog RecordingPlayer (call log, lead drawer, reviews, training).
+  AMR-WB files fall back to the original link (Download). The Android app plays AMR natively.

@@ -2465,3 +2465,8 @@ intelligence → Play Store launch.
   the self-hosted web/public/vendor/BenzAMRRecorder.min.js (MIT, benz-amr-recorder 1.1.5; minified → call decodeAMRAsync, not
   _samples) and plays a WAV blob (8 kHz mono). Used by CallLog RecordingPlayer (call log, lead drawer, reviews, training).
   AMR-WB files fall back to the original link (Download). The Android app plays AMR natively.
+
+## Nikhil meeting feedback (Nov 25 2026 meeting, noted Nov 26) — NOT built, waiting for "go"
+1. My desk → "Needs outcome (1)" kept showing a call (Vikas, +91 81264 84760, dialled 25/11 5:54 pm, not picked up) after the
+   outcome was saved in the app AND on the web, even after two refreshes. Check my_calls_needing_outcome vs the call id the
+   outcome was saved on (app may have logged a different/duplicate call id, or desk list ignores outcome saved on the twin row).

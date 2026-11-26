@@ -2475,3 +2475,8 @@ intelligence → Play Store launch.
 3. Calling queue (auto / power dialer) on the WEBSITE too: pick leads (Leads list selection, webinar list, CSV file) → the
    phone dials them one by one; after each call the outcome pop-up on the web (or the app — whichever is used first; the
    other closes), then the countdown to the next. Same rules as the app queue.
+4. Webinars / Sales Events list as a REP (Nikhil, sales rep view = plain table: name · type · date · leads · joined · attendance
+   report): numbers are NOT clickable and nothing opens a list to call / follow up / check. Make Leads / Joined (and every
+   count) open the lead list with Call / WhatsApp / queue actions; make the page nicer and easier to read (card look like the
+   managers' webinar cards). RULE (owner): EVERY number in EVERY table across the whole Closer OS (dashboard + app) is clickable
+   and opens its list.

@@ -2503,3 +2503,10 @@ intelligence → Play Store launch.
   factors with a group ≥ 20 people that is ±25% vs the average; green = above, red = below, grey = same; "few" < 20 never
   coloured; no-difference + can't-tell-yet chips), 3 · What to do next (rule sentences), "Show all the numbers" (every factor,
   came + stayed). Every number opens LeadDrill. Old ShowUpImpact kept under "More for this webinar (old view)".
+
+## To do in the NEXT app update (owner said yes, Nov 26 2026)
+- Play Console "DEX code optimization below threshold — Obfuscation 0%" (fix by Feb 2027). Turn obfuscation ON for release builds:
+  remove -dontobfuscate from app/proguard-rules.pro, keep rules for com.closeros.app.data.** (@Serializable models + companions),
+  supabase / ktor / kotlinx.serialization, WorkManager workers, services/receivers in the manifest, Compose; keep
+  -keepattributes SourceFile,LineNumberTable + upload mapping.txt (Play does it with the bundle). Test the whole app on the phone
+  (login, sync, pop-up, outcomes, reports, sequences, billing/ads in solo) before uploading.

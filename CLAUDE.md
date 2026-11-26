@@ -2493,3 +2493,13 @@ intelligence → Play Store launch.
    team members: per webinar Leads / Not called yet / Talked / Joined / 🔥 Hot / Joined, not called — each opens LeadDrill (queue,
    CSV, lead details); old per-batch count queries skipped for reps. 5) Phone setup pop-up item: restricted-settings steps +
    "Open app info" (Android 13+). Tests: web/tests/repqueue-test.cjs, leadquick-test.cjs.
+
+## Webinar show-up simple view (Nov 26 2026, migration 20261224000156)
+- show_up_people(batch, range this|last4|all) → registrants (not walk-ins) of this webinar / last 4 / all webinars with Zoom
+  data up to this one: watch minutes, saw pitch, repeat, reg_count, sign-up hours before, source, profession, and calls before
+  the start (count, outgoing, talk, longest, hours before of last dial, hour of last 30 s+ talk in company tz, last outcome, last caller).
+- web components/ShowUpSimple.tsx on the webinar page "Show-up impact" tab: controls (This webinar / Last 4 / All; Everyone who came
+  | Stayed at least [N] minutes, any number), 1 · What happened (sentence, tiles, who called, good to know), 2 · What works (only
+  factors with a group ≥ 20 people that is ±25% vs the average; green = above, red = below, grey = same; "few" < 20 never
+  coloured; no-difference + can't-tell-yet chips), 3 · What to do next (rule sentences), "Show all the numbers" (every factor,
+  came + stayed). Every number opens LeadDrill. Old ShowUpImpact kept under "More for this webinar (old view)".

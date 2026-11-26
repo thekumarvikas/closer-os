@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Closer OS — Trial guide</title>
+<style>
+@page { size: A4; margin: 16mm 15mm 16mm 15mm; }
+* { box-sizing: border-box; }
+body { font-family: "Inter", "Segoe UI", Roboto, Arial, sans-serif; color: #1e293b; font-size: 10.5pt; line-height: 1.5; margin: 0; }
+h1 { font-size: 26pt; margin: 0 0 6px; color: #0E5E57; letter-spacing: -0.5px; }
+h2 { font-size: 16pt; color: #0E5E57; margin: 0 0 4px; padding-bottom: 6px; border-bottom: 2px solid #0E5E57; }
+h3 { font-size: 12pt; margin: 16px 0 4px; color: #0f172a; }
+p { margin: 4px 0 8px; }
+.sub { color: #64748b; margin-bottom: 14px; }
+section { page-break-before: always; }
+section.first { page-break-before: auto; }
+ul, ol { margin: 4px 0 8px; padding-left: 20px; }
+li { margin: 2px 0; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
+.card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; break-inside: avoid; }
+.card h4 { margin: 0 0 4px; font-size: 11pt; color: #0E5E57; }
+.card p { margin: 0; font-size: 9.8pt; color: #334155; }
+.tip { background: #ecfdf5; border-left: 4px solid #16a34a; padding: 8px 12px; border-radius: 6px; margin: 10px 0; break-inside: avoid; }
+.warn { background: #fffbeb; border-left: 4px solid #f59e0b; padding: 8px 12px; border-radius: 6px; margin: 10px 0; break-inside: avoid; }
+table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 9.8pt; break-inside: avoid; }
+th { background: #0E5E57; color: #fff; text-align: left; padding: 6px 8px; font-weight: 600; }
+td { padding: 6px 8px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+tr:nth-child(even) td { background: #f8fafc; }
+.steps { counter-reset: s; list-style: none; padding-left: 0; }
+.steps li { counter-increment: s; position: relative; padding-left: 32px; margin: 7px 0; }
+.steps li::before { content: counter(s); position: absolute; left: 0; top: 0; width: 22px; height: 22px; border-radius: 50%; background: #0E5E57; color: #fff; font-size: 9pt; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+b { color: #0f172a; }
+.cover { height: 255mm; display: flex; flex-direction: column; justify-content: space-between; }
+.cover .top { margin-top: 40mm; }
+.logo { width: 72px; height: 72px; margin-bottom: 22px; }
+.cover .tag { font-size: 14pt; color: #334155; max-width: 140mm; }
+.pill { display: inline-block; background: #0E5E57; color: #fff; border-radius: 99px; padding: 4px 14px; font-size: 10pt; margin-bottom: 18px; }
+.contact { background: #0E5E57; color: #fff; border-radius: 14px; padding: 16px 20px; }
+.contact b { color: #fff; }
+.toc { columns: 2; font-size: 10.5pt; margin-top: 18px; }
+.toc div { padding: 3px 0; }
+.big { font-size: 11.5pt; }
+.k { display: inline-block; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 5px; padding: 0 5px; font-size: 9.5pt; }
+</style></head><body>
+
+<!-- COVER -->
+<div class="cover">
+  <div class="top">
+    <svg class="logo" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0E5E57"/><path d="M41.5 22.5a13 13 0 1 0 0 19" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round"/><circle cx="45" cy="32" r="4.5" fill="#F5B942"/></svg>
+    <span class="pill">Free trial guide</span>
+    <h1>Closer OS</h1>
+    <p class="tag">The sales operating system for calling teams — an Android app that makes every rep faster, and a website that shows management exactly what is happening.</p>
+    <div class="toc">
+      <div>1 · What Closer OS is</div>
+      <div>2 · Why teams switch to Closer OS</div>
+      <div>3 · Start your trial (managers)</div>
+      <div>4 · Install the app (sales reps)</div>
+      <div>5 · A rep's day in the app</div>
+      <div>6 · Everything on the website</div>
+      <div>7 · Webinars &amp; sales events</div>
+      <div>8 · Sales, buyers &amp; revenue</div>
+      <div>9 · Your data &amp; privacy</div>
+      <div>10 · Quick fixes &amp; help</div>
+    </div>
+  </div>
+  <div class="contact">
+    <b>Need help during your trial?</b><br>
+    WhatsApp us on <b>+91 81264 84760</b> — we set up your company with you.<br>
+    Website: <b>closer-os-liard.vercel.app</b>
+  </div>
+</div>
+
+<!-- 1 -->
+<section>
+<h2>1 · What Closer OS is</h2>
+<p class="big">Closer OS has two parts that work on the same data, live:</p>
+<div class="grid">
+  <div class="card"><h4>📱 Android app — for sales reps</h4><p>Calls leads from the rep's own phone and SIM, asks for the outcome after every call, plans the next call, sends WhatsApp messages in one tap, reminds follow-ups on time, and uploads call history and recordings automatically.</p></div>
+  <div class="card"><h4>💻 Website (dashboard) — for management</h4><p>Leads, team, reports, call log with recordings, follow-up discipline, webinars, sales and revenue, training — and reps can also work from the laptop ("My desk").</p></div>
+</div>
+<p>Calls are made with the phone's normal dialer and normal SIM — <b>no new numbers, no call charges, no special hardware</b>. Closer OS works alongside the phone app your reps already use.</p>
+
+<h3>Who it is for</h3>
+<ul>
+  <li>Teams that sell on the phone and WhatsApp: courses, coaching, consulting, real estate, insurance, services.</li>
+  <li>Businesses that run <b>webinars / sales events</b> — reminder calls before, sales calls after.</li>
+  <li>Owners who want to know, every day, <b>who called whom, what happened, and what's next</b>.</li>
+</ul>
+
+<h3>Roles</h3>
+<table>
+<tr><th>Role</th><th>What they see and do</th></tr>
+<tr><td><b>Owner / Admin</b></td><td>Everything: all leads, all team members, settings, reports, sales, billing.</td></tr>
+<tr><td><b>Manager</b></td><td>Their team's leads, calls, recordings and reports; assigns leads; reviews calls; verifies sales.</td></tr>
+<tr><td><b>Sales rep</b></td><td>Only the leads assigned or shared with them; their own calls, follow-ups and numbers.</td></tr>
+</table>
+</section>
+
+<!-- 2 -->
+<section>
+<h2>2 · Why teams switch to Closer OS</h2>
+<p class="sub">What you get that a regular CRM doesn't give a calling team.</p>
+<div class="grid">
+  <div class="card"><h4>⚡ Built for speed, not data entry</h4><p>After every call a small card pops up over the phone screen: tap the outcome, tap the next-call time, Save. Two or three taps — the rep never opens a form or types a date.</p></div>
+  <div class="card"><h4>📞 Every call is captured, automatically</h4><p>Dialled, received, missed, declined and WhatsApp calls are read from the phone itself — even calls made outside the app. No "I forgot to log it".</p></div>
+  <div class="card"><h4>🎧 Call recordings without extra cost</h4><p>Uses the phone's own automatic call recorder. Closer OS finds the file, matches it to the call and uploads it. Managers press ▶ Play.</p></div>
+  <div class="card"><h4>🔔 Follow-ups that actually happen</h4><p>Reminders 5 minutes before, on time and after, with a Call button. Every follow-up is marked On time / Late / Not called — visible to management.</p></div>
+  <div class="card"><h4>🎯 Today's focus list</h4><p>The app decides who to call first: overdue follow-ups, new leads waiting, webinar reminders, hot leads, best time to call — then calls them one by one with a countdown.</p></div>
+  <div class="card"><h4>💬 WhatsApp in one tap</h4><p>Ready messages with the lead's name, webinar date, links and files filled in. WhatsApp queues and multi-day message sequences — without risky auto-sending.</p></div>
+  <div class="card"><h4>🎓 Made for webinar businesses</h4><p>Registrations, reminder calls, Zoom attendance, chat and polls, "saw the payment link", hot leads, show-up impact of reminder calls, and sales per webinar.</p></div>
+  <div class="card"><h4>💰 Real sales, real revenue</h4><p>Sales are verified by management with full proof (calls, talk time, recordings). Part payments, balance due, buyers list import, days to convert, what buyers have in common.</p></div>
+  <div class="card"><h4>📴 Works with no internet</h4><p>Reps keep calling, saving outcomes and notes offline. Everything uploads by itself when the network is back.</p></div>
+  <div class="card"><h4>🔒 Privacy built in</h4><p>Only the rep's work SIM is tracked. Personal calls stay on the phone. Recordings are private. Data is stored in India (Mumbai).</p></div>
+</div>
+<div class="tip"><b>In one line:</b> other tools store what reps type in. Closer OS records what reps actually <i>do</i> — and makes them faster while doing it.</div>
+</section>
+
+<!-- 3 -->
+<section>
+<h2>3 · Start your trial (owner / manager)</h2>
+<p>Everything in this section is done on the website, from a laptop or computer.</p>
+<ol class="steps">
+  <li><b>Sign in.</b> Open the website and click <b>Continue with Google</b> with the Gmail we registered for your company. You land on your company dashboard.</li>
+  <li><b>Check company details.</b> <span class="k">Settings → Company</span>: company name, time zone, working days, which calls to track.</li>
+  <li><b>Invite your team.</b> <span class="k">Team → Invite</span>: type each person's Gmail and role (Rep / Manager / Admin). They join by signing in with that Gmail — on the website or in the app.</li>
+  <li><b>Add your leads</b> — any of these:
+    <ul>
+      <li><b>File:</b> <span class="k">Leads → Import</span> a CSV or Excel file. Closer OS matches the columns for you (a sample file is provided). Duplicate numbers are not added twice — they're marked <i>Repeated</i>.</li>
+      <li><b>Google Sheet:</b> <span class="k">Lead sources → Google Sheet</span>. Paste our script once; new rows arrive about every minute.</li>
+      <li><b>Automatic from ads &amp; forms:</b> <span class="k">Lead sources</span> gives a private link for Facebook ads (via Pabbly / Zapier), Flexifunnels, Google Ads forms, website forms, IndiaMART.</li>
+    </ul></li>
+  <li><b>Decide who gets which lead.</b> In the lead source: tick the reps who get new leads <i>in turns</i>, or use the sheet's "Team member" column, or assign by hand from the Leads page (select → Assign).</li>
+  <li><b>Check your outcomes.</b> <span class="k">Settings → Outcomes</span>: ready-made call results (Interested, Call back later, Didn't pick, Not interested, Sale…) — rename or add your own, and set the default next step for each.</li>
+  <li><b>Add WhatsApp messages.</b> <span class="k">Settings → WhatsApp messages</span>: write messages with fill-ins like <span class="k">{{leadName}}</span>, attach brochures/PDFs. Reps send them in one tap.</li>
+  <li><b>Send the app link to your reps</b> (next page) and ask them to finish Phone setup on day one.</li>
+</ol>
+<div class="tip">Optional on day one: set daily targets (<span class="k">Reports → Targets</span>), add your products and prices (<span class="k">Settings → Products &amp; prices</span>), and your UPI / bank details for payment messages (<span class="k">Settings → Payment details</span>).</div>
+</section>
+
+<!-- 4 -->
+<section>
+<h2>4 · Install the app (sales reps)</h2>
+<p>During the trial the app is shared as a Google Drive link (the Play Store version is on its way). Use an <b>Android phone</b> (Android 8 or newer).</p>
+<h3>Install</h3>
+<ol class="steps">
+  <li>Open the <b>Google Drive link</b> your manager sent, on your phone. Tap the file <b>CloserOS-….apk</b> → <b>Download</b>.</li>
+  <li>Open the downloaded file. If the phone says <i>"For your security, your phone is not allowed to install unknown apps"</i>, tap <b>Settings</b> → turn on <b>Allow from this source</b> → go back.</li>
+  <li>Tap <b>Install</b>. If Play Protect shows a warning, tap <b>More details → Install anyway</b>. (This appears for every app installed outside the Play Store.)</li>
+  <li>Open <b>Closer OS</b> and tap <b>Continue with Google</b> using the <b>same Gmail your manager invited</b>.</li>
+</ol>
+<h3>One-time setup (about 5 minutes)</h3>
+<ol class="steps">
+  <li><b>Choose your work SIM.</b> Only calls on this SIM are tracked. Your other SIM stays completely private.</li>
+  <li><b>Phone setup checklist</b> (<span class="k">Settings → Open phone setup</span>). Do every step marked <b>NEXT STEP</b> — the app opens the exact Android screen for you:
+    <ul>
+      <li>Allow calls, call history, contacts and notifications.</li>
+      <li><b>Display over other apps</b> — needed for the after-call pop-up.</li>
+      <li><b>Battery: No restrictions</b> and <b>Autostart</b> — so calls upload even when the app is closed.</li>
+      <li><b>Automatic call recording</b> in your phone's own Phone app, then <b>choose the recordings folder</b> once.</li>
+    </ul></li>
+  <li>Make one test call. After it ends, the after-call card should appear. <span class="k">Settings → After-call pop-up → Test the pop-up</span> checks it any time.</li>
+</ol>
+<div class="warn"><b>Recordings need your phone maker's own Phone app</b> (Samsung, Xiaomi, Vivo, Oppo, Realme, OnePlus…) with auto-record on. If your default Phone app is a downloaded dialer, or Google's Phone app, recordings can't be picked up — the app tells you which case applies.</div>
+<div class="warn"><b>"Restricted setting" / "App was denied access"</b> when turning on <i>Display over other apps</i> (Android 13+): open <b>App info → ⋮ (top right) → Allow restricted settings</b>, then turn the switch on again. Phone setup has an "Open app info" button for this.</div>
+</section>
+
+<!-- 5 -->
+<section>
+<h2>5 · A rep's day in the app</h2>
+<p>Five tabs at the bottom — swipe left/right between them: <b>Home · Leads · Calls · Follow-ups · Settings</b>. The green ☎ button opens a dial pad from anywhere.</p>
+<table>
+<tr><th style="width:26%">I want to…</th><th>How</th></tr>
+<tr><td><b>Know what to do now</b></td><td><b>Home</b> shows one big button: continue calling, call overdue follow-ups, webinar reminder calls, or <i>Start today's focus</i>. Below: today's numbers vs target, leaderboard, response time for new leads.</td></tr>
+<tr><td><b>Call many leads quickly</b></td><td>Tap <b>Call all</b> on any list (focus list, webinar list, selected leads, a CSV file). The phone dials one by one; after you save the outcome, a 3/5/10-second countdown, then the next. Pause / Skip / Stop any time. A small "before you call" card shows who they are and what happened last time.</td></tr>
+<tr><td><b>Save what happened</b></td><td>After every call the <b>after-call card</b> appears (even if the app is closed): tap the outcome → tap the next-call time (In 1 hour · Today · Tomorrow · or a time slot) → <b>Save</b>. Optional: quick note (voice typing 🎤), tags, profile. Then it offers the right WhatsApp message.</td></tr>
+<tr><td><b>Never miss a follow-up</b></td><td>Reminders at −5 min, on time (with a <b>Call</b> button), +5 and +10 min. <b>Follow-ups</b> tab: Today · Not called · Upcoming · Called late · On time.</td></tr>
+<tr><td><b>Send WhatsApp</b></td><td>Tap WhatsApp on a lead → pick a message (name, links, files filled in) → it opens WhatsApp ready → tap Send. For many leads: <b>WhatsApp all</b> (queue, one tap each). <b>Sequences</b>: a series of messages over days, the app reminds you when each is due. You can also <b>schedule</b> a message or a call for later from the lead page.</td></tr>
+<tr><td><b>See everything about a lead</b></td><td>Lead page: facts at a glance (profession, city, webinar watched, level, next call), all calls with recordings, notes and pinned notes, WhatsApp history, payment links/UPI to copy or send, Edit, Share with a teammate, Claim a sale.</td></tr>
+<tr><td><b>Add leads</b></td><td><b>Leads → + Add</b>: one lead, from phone contacts, or a CSV/Excel file. An unknown number that called you? Tap <b>+ Add as lead</b> on the after-call card or the Calls tab.</td></tr>
+<tr><td><b>Know who's calling</b></td><td>Your leads are saved in the phone's contacts (separate "Closer OS" list), and a small strip shows the lead's details while the phone rings.</td></tr>
+<tr><td><b>Check my numbers</b></td><td><b>My reports</b>: today / yesterday / week / month — calls, conversations, talk time, outcomes, follow-ups, by hour. Every number opens its list. <b>Summary</b> at 8 AM and 10 PM.</td></tr>
+<tr><td><b>Work from the laptop</b></td><td>Open the website → <b>My desk</b>. Click 📞 on any lead — your phone dials it; the outcome form opens on the laptop when the call ends.</td></tr>
+<tr><td><b>Learn &amp; improve</b></td><td><b>Playbook</b>: scripts, objection answers (with how often each answer led to a sale). <b>Feedback</b>: your manager's call reviews and coaching tasks.</td></tr>
+</table>
+<div class="tip">No internet? Keep working. Outcomes, notes and follow-ups are saved on the phone and upload by themselves later. The top bar shows how many are waiting.</div>
+</section>
+
+<!-- 6 -->
+<section>
+<h2>6 · Everything on the website</h2>
+<p>Every number on the website can be clicked — it opens the exact calls or leads behind it.</p>
+<table>
+<tr><th style="width:22%">Page</th><th>What it does</th></tr>
+<tr><td><b>Dashboard</b></td><td>Today / yesterday / 7 days vs before; what needs attention (unassigned new leads, calls without outcome, overdue follow-ups); team table with last activity; calls by hour; next and last webinar; hot leads. <b>Daily summary</b> (start of day / so far / end of day) as WhatsApp text, image or PDF.</td></tr>
+<tr><td><b>My desk</b></td><td>For reps on the laptop: calls needing outcome, follow-ups, my leads; call on my phone; WhatsApp Web; notes with voice typing.</td></tr>
+<tr><td><b>Leads</b></td><td>Search, filters (assigned, stage, source, webinar, level, tags, form fields…), columns, sort. Select → assign / share out in turns / stage / tag / do not call / delete / call all in a queue. Lead details drawer with full history. Possible duplicates &amp; merge. Lead utilisation (assigned vs called) and reassign with full history.</td></tr>
+<tr><td><b>Calls</b></td><td>Complete call log: who, lead, type (colour-coded), length, ringing time, ▶ recording (or the reason it's missing), outcome, notes, SIM. Filters under every column. CSV export.</td></tr>
+<tr><td><b>Follow-ups</b></td><td>All planned calls with On time / Late / Not called, per team member.</td></tr>
+<tr><td><b>Reports</b></td><td>Overview · Outcomes (and why leads were lost) · Team · Daily · By hour (best hour) · Follow-ups · Targets · Lead work · Response time (speed to new leads) · Compare periods · Team performance &amp; CRM hygiene · Hourly check-ins · Sales insights.</td></tr>
+<tr><td><b>Webinars / Sales events</b></td><td>See section 7.</td></tr>
+<tr><td><b>Sales</b> &amp; <b>Training</b></td><td>See section 8.</td></tr>
+<tr><td><b>Call reviews</b></td><td>Listen and score calls on your checklist (1–5), write what went well / improve, give a coaching task. Reps see it in the app.</td></tr>
+<tr><td><b>Playbook</b></td><td>Scripts, objections with several answers, links, documents. Reps suggest; managers approve.</td></tr>
+<tr><td><b>Announcements</b></td><td>A message every rep must read and acknowledge in the app; see who hasn't, remind.</td></tr>
+<tr><td><b>Lead sources</b></td><td>Google Sheets (live, with health check), webhooks for Pabbly / Zapier / Flexifunnels / forms, Google Ads, IndiaMART. Column matching, received list, who gets the leads.</td></tr>
+<tr><td><b>Team</b></td><td>Invite, roles, teams, calling team (sales / reminder), work SIMs, each phone's setup and recording status, last synced, "Sync now".</td></tr>
+<tr><td><b>Settings</b></td><td>Company, outcomes &amp; next steps, stages, note tags &amp; quick sentences, lead profile choices, WhatsApp messages &amp; company files, sequences, products &amp; prices, payment details, working calendar &amp; holidays, recordings retention, call review checklist.</td></tr>
+</table>
+</section>
+
+<!-- 7 -->
+<section>
+<h2>7 · Webinars &amp; sales events</h2>
+<p>Built for businesses where leads register for a webinar, get <b>reminder calls before</b> it and <b>sales calls after</b> it.</p>
+<ol class="steps">
+  <li><b>Registrations come in</b> from your sheet / form / import. Closer OS can create the webinar automatically from the sheet's date column (with your default start time) — or you create it yourself.</li>
+  <li><b>Reminder calls.</b> Reps get "Reminder calls" lists in the app; calls before the start count as reminder calls for that webinar. The webinar card shows <i>x of y called, N left</i>, per caller.</li>
+  <li><b>After the webinar, upload the Zoom reports</b> (attendee report — plus chat and polls if you have them; drop all files at once). Closer OS calculates watch minutes, who was there when the <b>payment link was dropped</b>, chats, poll answers and a <b>warmth score</b>.</li>
+  <li><b>Share out sales calls</b> — hottest leads spread evenly among the reps you tick. Hot leads go to the top of everyone's calling list.</li>
+  <li><b>See the results</b>: show-up by source (landing page vs direct Zoom link), the effect of reminder calls on show-up, watch-time groups, saw the payment link → called → talked → bought, webinar-by-webinar comparison.</li>
+</ol>
+<div class="tip">Upload mistakes happen — the webinar page has <b>Undo last upload</b> for 24 hours, and it warns if a Zoom file's date doesn't match the webinar.</div>
+</section>
+
+<!-- 8 -->
+<section>
+<h2>8 · Sales, buyers &amp; revenue</h2>
+<ul>
+  <li><b>Sales are verified.</b> A rep saves a "Sale" outcome or claims a sale → the manager sees all the proof on one screen (calls, talk time, WhatsApp, recordings, webinar watched, red flags like very short talk or a duplicate) → Verify or Reject. Only verified sales count in reports.</li>
+  <li><b>Payments ledger.</b> Full, part payments and refunds (UPI, bank, cash, card…). Orders stay "Balance due" until fully paid. Lock a month when accounts are closed.</li>
+  <li><b>Buyers list.</b> Import your buyers file (CSV / Excel) or connect a Google Sheet. Closer OS cleans messy numbers and emails, matches each buyer to the lead, marks them Bought in everyone's app, and lists anything it couldn't match for you to check.</li>
+  <li><b>Sales page:</b> revenue, sales, collected, pending, how long buyers take to pay (from sign-up or from the webinar), by team member, by webinar, by product, what buyers have in common, missed money (hot leads not bought, attendees never called).</li>
+  <li><b>Each buyer's journey</b> — every registration, webinar, call, recording, WhatsApp and payment on one timeline.</li>
+  <li><b>Training:</b> a library of the calls that led to real sales — play or download, to train new reps.</li>
+  <li><b>In the app:</b> reps see "My Sales Revenue" for the month.</li>
+</ul>
+</section>
+
+<!-- 9 -->
+<section>
+<h2>9 · Your data &amp; privacy</h2>
+<table>
+<tr><th style="width:30%">Question</th><th>Answer</th></tr>
+<tr><td>Where is the data stored?</td><td>In India — a secure cloud database in Mumbai.</td></tr>
+<tr><td>Are my personal calls uploaded?</td><td>Only calls on the <b>work SIM</b> are tracked. The other SIM's calls never appear anywhere in Closer OS. The company can also choose to track only calls with leads.</td></tr>
+<tr><td>Who can hear recordings?</td><td>Recordings are private files. Only people who can see that lead (the rep, their managers, admins) can play them, and every play/download is logged.</td></tr>
+<tr><td>What can reps see?</td><td>Only their own assigned or shared leads and their own numbers.</td></tr>
+<tr><td>One phone per login</td><td>A login works on one phone at a time; signing in elsewhere signs out the old phone after uploading its data.</td></tr>
+<tr><td>Does Closer OS staff see our data?</td><td>Only if you allow support access (Settings), and every support visit is recorded and visible to you. You can turn it off.</td></tr>
+<tr><td>WhatsApp</td><td>Closer OS never sends WhatsApp messages by itself — the rep taps Send — so your numbers stay safe from WhatsApp bans.</td></tr>
+</table>
+</section>
+
+<!-- 10 -->
+<section>
+<h2>10 · Quick fixes &amp; help</h2>
+<table>
+<tr><th style="width:34%">Problem</th><th>Fix</th></tr>
+<tr><td>No pop-up after calls</td><td>Phone setup → turn on <b>Display over other apps</b> (and on Xiaomi/Vivo "pop-ups in the background"). If it says "restricted": App info → ⋮ → Allow restricted settings.</td></tr>
+<tr><td>Calls / outcomes not reaching the website</td><td>Phone setup → <b>Battery: No restrictions</b> and <b>Autostart</b>. Home shows the last sync; tap <b>Sync now</b>. Managers can press "Sync now" for a phone on the Team page.</td></tr>
+<tr><td>No recordings</td><td>Use the phone maker's own Phone app with automatic call recording on, and choose the recordings folder in Phone setup. The Team page shows the exact reason per phone.</td></tr>
+<tr><td>"Not in lead list" on a call</td><td>The number isn't a lead yet — tap <b>+ Add as lead</b>, or skip if it's personal.</td></tr>
+<tr><td>Can't sign in</td><td>Use the same Gmail your manager invited. Ask your manager to check Team → invites.</td></tr>
+<tr><td>Laptop call doesn't start</td><td>Keep Closer OS open on your phone — it picks up the call within a few seconds.</td></tr>
+</table>
+
+<div class="contact" style="margin-top:24px">
+  <b style="font-size:13pt">We're with you through the trial</b><br>
+  WhatsApp <b>+91 81264 84760</b> — setup help, questions, or a quick walkthrough for your team.<br>
+  Tell us what slows your team down — we build for the way you sell.
+</div>
+</section>
+
+</body></html>

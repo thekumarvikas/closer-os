@@ -442,15 +442,19 @@ const KIND: Record<string, [string, string]> = { arrived: ['📝', 'bg-slate-100
 /** Payments / orders imported from a sheet often have only a DATE (stored at 12:00 noon). Such rows are shown without a time
  *  and placed at the END of that day, so a payment made after an evening webinar never appears before it. ISO dates inside
  *  texts (sheet values) are shown as normal dates. */
-export function tidyJourney(ev: J[], tz: string): (J & { dateOnly?: boolean })[] {
+export function tidyJourney(ev: J[], tz: string): (J & { dateOnly?: boolean; viaArrival?: boolean })[] {
   const clock = (iso: string) => new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(new Date(iso))
   const day = (iso: string) => new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date(iso))
   const pretty = (t: string) => t.replace(/\b(\d{4}-\d{2}-\d{2})T[\d:.]+Z\b/g, (_m, d: string) =>
     new Date(d + 'T12:00:00Z').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }))
   return ev.map((e, i) => {
-    const dateOnly = ['sale', 'payment', 'refund'].includes(e.kind) && !!e.at && clock(e.at) === '12:00:00'
-    const key = dateOnly ? `${day(e.at)}~` : `${day(e.at)} ${clock(e.at)}`
-    return { e: { ...e, text: typeof e.text === 'string' ? pretty(e.text) : e.text, dateOnly }, key, i }
+    let at: string = e.at, dateOnly = false, viaArrival = false
+    if (['sale', 'payment', 'refund'].includes(e.kind) && at && clock(at) === '12:00:00') {
+      // Only a date in the sheet: use the moment it reached Closer OS when that was the same day; else show the date only.
+      if (e.arrived && day(e.arrived) === day(at)) { at = e.arrived; viaArrival = true } else dateOnly = true
+    }
+    const key = dateOnly ? `${day(at)}~` : `${day(at)} ${clock(at)}`
+    return { e: { ...e, at, text: typeof e.text === 'string' ? pretty(e.text) : e.text, dateOnly, viaArrival }, key, i }
   }).sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : a.i - b.i).map(x => x.e)
 }
 
@@ -488,7 +492,7 @@ export function Journey({ b, dir, onClose, onEdit, onOpenLead }: { b: Buyer; dir
                 <li key={i} className="relative">
                   <span className="absolute -left-[27px] top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-white text-xs">{icon}</span>
                   <div className={`rounded-lg px-3 py-2 text-sm ${bg}`}>
-                    <p className="text-xs text-slate-500">{e.dateOnly ? `${fmtDate(e.at, org)} · time not given` : fmtDateTime(e.at, org)}{e.user_id ? ` · ${dir.nameOf(e.user_id)}` : ''}</p>
+                    <p className="text-xs text-slate-500">{e.dateOnly ? `${fmtDate(e.at, org)} · time not given` : e.viaArrival ? `${fmtDateTime(e.at, org)} · reached Closer OS` : fmtDateTime(e.at, org)}{e.user_id ? ` · ${dir.nameOf(e.user_id)}` : ''}</p>
                     {e.kind === 'call'
                       ? <p><b>{e.direction === 'outgoing' ? 'Dialled' : e.direction === 'incoming' ? 'Received' : 'Missed'}</b> · {e.duration_sec > 0 ? fmtDuration(e.duration_sec) : 'no answer'}{e.text ? ` · ${e.text}` : ''}
                           {e.recording_path && <span className="ml-2"><PlayButton call={{ id: e.id, recording_path: e.recording_path }} status={e.recording_status} open={playing === e.id} onPlay={() => setPlaying(p => p === e.id ? null : e.id)} /></span>}</p>

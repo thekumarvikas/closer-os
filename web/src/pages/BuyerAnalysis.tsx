@@ -509,7 +509,7 @@ function Timeline({ row, dir, onClose, onOpenLead }: { row: any; dir: Directory;
         {' '}first call {mins(row.call_clock_min)} (work {mins(row.call_work_min)}) · {row.calls} calls · {fmtDuration(row.talk_sec)} talk · paid after {row.days_signup_to_pay} days</p>
       {(row.journey ?? []).length > 0 && <p className="mb-2 text-sm">🎥 {(row.journey as any[]).map(w => `${w.name}: ${w.watch == null ? 'no data' : w.watch > 0 ? `${w.watch} min` : 'didn’t join'}`).join(' → ')}</p>}
       {!ev ? <Spinner /> : <ol className="max-h-[60vh] space-y-1 overflow-y-auto border-l-2 border-slate-200 pl-4 text-sm">{tidyJourney(ev, org.timezone).map((e: any, i) => (
-        <li key={i}><span className="text-slate-500">{e.dateOnly ? `${fmtDate(e.at, org)} · time not given` : fmtDateTime(e.at, org)}</span> {icon[e.kind] ?? '•'} {e.kind === 'call'
+        <li key={i}><span className="text-slate-500">{e.dateOnly ? `${fmtDate(e.at, org)} · time not given` : e.viaArrival ? `${fmtDateTime(e.at, org)} · reached Closer OS` : fmtDateTime(e.at, org)}</span> {icon[e.kind] ?? '•'} {e.kind === 'call'
           ? <>{e.direction === 'incoming' ? 'Received' : e.direction === 'outgoing' ? 'Dialled' : 'Missed'} · {fmtDuration(e.duration_sec ?? 0)}{e.text ? ` · ${e.text}` : ''} · {dir.nameOf(e.user_id)}
             {e.recording_path && <span className="ml-2"><PlayButton call={e} status={e.recording_status} open={playing === e.id} onPlay={() => setPlaying(p => p === e.id ? null : e.id)} /></span>}
             {e.note && <div className="text-slate-600">“{e.note}”</div>}{playing === e.id && <div className="mt-1"><RecordingPlayer call={e} onClose={() => setPlaying(null)} /></div>}</>

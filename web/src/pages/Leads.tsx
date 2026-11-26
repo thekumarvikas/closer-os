@@ -1,10 +1,11 @@
+import { useCallFlow } from '../lib/callFlow'
 import { AllPh, useOtherPhones } from '../components/Copy'
 import { lenText } from '../components/LastCall'
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { intentLevels, intentOf } from '../lib/intents'
 import { IntentBadge } from '../components/Intent'
 import { usePersisted } from '../lib/persist'
-import { Plus, Upload, Search, Users, ChevronLeft, ChevronRight, UserPlus, Download, Columns3 } from 'lucide-react'
+import { Plus, Upload, Search, Users, ChevronLeft, ChevronRight, UserPlus, Download, Columns3, Phone } from 'lucide-react'
 import { supabase, errorText } from '../lib/supabase'
 import { useOrg } from '../lib/session'
 import { useDirectory, type Directory } from '../lib/directory'
@@ -50,6 +51,7 @@ const NO_FILTERS: LeadFilter = { intent: '', tag: '', q: '', assignee: '', stage
 const STD_COLS: [string, string][] = [['signup_at', 'Signed up'], ['email', 'Email'], ['profession', 'Profession'], ['company', 'Company'], ['campaign', 'Campaign'], ['state', 'State']]
 
 export default function Leads() {
+  const flow = useCallFlow()
   const { org, isManager } = useOrg()
   const [version, setVersion] = useState(0)
   const dir = useDirectory(org.id, version)
@@ -287,9 +289,16 @@ export default function Leads() {
         </div>
         {chips.length > 0 && <div className="border-b border-slate-200 px-3 py-2"><FilterChips chips={chips} onClearAll={f.clear} /></div>}
 
-        {nSel > 0 && isManager && (
+        {nSel > 0 && (
           <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-brand-50 px-4 py-2 text-sm">
             <b>{nSel.toLocaleString('en-IN')} selected</b>
+            {flow && <Button className="!py-1" onClick={async () => {
+              const ids = (await targetIds()).slice(0, 500)
+              const { data } = await supabase.from('leads').select('id, name, phone').in('id', ids)
+              const by = new Map(((data ?? []) as { id: string; name: string | null; phone: string }[]).map(x => [x.id, x]))
+              flow.startQueue(ids.map(i => by.get(i)).filter(Boolean).map(x => ({ lead_id: x!.id, phone: x!.phone, name: x!.name })))
+            }}><Phone className="h-4 w-4" /> Call {Math.min(nSel, 500)} in a queue</Button>}
+            {isManager && <>
             {!allMatching && allOnPage && count > leads!.length && <button className="font-medium text-brand-700 underline" onClick={() => setAllMatching(true)}>
               Select all {count.toLocaleString('en-IN')} matching</button>}
             <Button variant="secondary" className="!py-1" onClick={async () => setAssignIds(await targetIds())}><UserPlus className="h-4 w-4" /> Assign / share out</Button>
@@ -301,6 +310,7 @@ export default function Leads() {
             <Button variant="secondary" className="!py-1" onClick={() => { const t = prompt('Tag to add (e.g. VIP, Hindi, Batch 12)')?.trim(); if (t) bulk({ add_tag: t }) }}>+ Tag</Button>
             <Button variant="secondary" className="!py-1" onClick={() => bulk({ do_not_call: true })}>Do not call</Button>
             <Button variant="ghost" className="!py-1 text-red-600" onClick={() => ask(`Delete ${nSel} leads? Their calls stay in reports.`).then(ok => { if (ok) void bulk({ delete: true }) })}>Delete</Button>
+            </>}
             <button className="text-slate-500 hover:underline" onClick={() => { setSelected(new Set()); setAllMatching(false) }}>Clear</button>
           </div>
         )}
@@ -316,7 +326,7 @@ export default function Leads() {
           <div className="divide-y divide-slate-100 md:hidden">
             {leads.map(l => (
               <div key={l.id} className="flex items-start gap-3 px-3 py-2.5" onClick={() => setOpenLead(l.id)}>
-                {isManager && <input type="checkbox" className="mt-1" checked={allMatching || selected.has(l.id)} onClick={e => e.stopPropagation()} onChange={() => {
+                {<input type="checkbox" className="mt-1" checked={allMatching || selected.has(l.id)} onClick={e => e.stopPropagation()} onChange={() => {
                   setAllMatching(false); const s = new Set(selected); if (s.has(l.id)) s.delete(l.id); else s.add(l.id); setSelected(s) }} />}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5"><span className="truncate font-medium text-slate-900">{l.name || 'No name'}</span>{l.do_not_call && <Badge color="red">DNC</Badge>}{(l.arrivals ?? 1) > 1 && <Badge color="gray">🔁 ×{l.arrivals}</Badge>}<IntentBadge level={intentOf(org, (l as any).intent)} /></div>
@@ -330,7 +340,7 @@ export default function Leads() {
             <table className="min-w-full divide-y divide-slate-100">
               <thead className="bg-slate-50">
                 <tr>
-                  {isManager && <th className="th w-8"><input type="checkbox" checked={allOnPage || allMatching}
+                  {<th className="th w-8"><input type="checkbox" checked={allOnPage || allMatching}
                     onChange={() => { setAllMatching(false); setSelected(allOnPage ? new Set() : new Set(leads.map(l => l.id))) }} /></th>}
                   <SortTh k="name" label="Lead" sort={sort} onSort={setSort} firstDir="asc" />
                   <th className="th">Assigned to</th>
@@ -348,7 +358,7 @@ export default function Leads() {
                   const overdue = l.next_follow_up_at && new Date(l.next_follow_up_at) < new Date()
                   return (
                     <tr key={l.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setOpenLead(l.id)}>
-                      {isManager && <td className="td" onClick={e => e.stopPropagation()}>
+                      {<td className="td" onClick={e => e.stopPropagation()}>
                         <input type="checkbox" checked={allMatching || selected.has(l.id)} onChange={() => {
                           setAllMatching(false); const s = new Set(selected); if (s.has(l.id)) s.delete(l.id); else s.add(l.id); setSelected(s)
                         }} /></td>}

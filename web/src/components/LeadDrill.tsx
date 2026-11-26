@@ -1,7 +1,8 @@
 import { AllPh, useOtherPhones } from './Copy'
 import { LastCall, useLastCalls, lenText } from './LastCall'
 import { useEffect, useState } from 'react'
-import { Download, X } from 'lucide-react'
+import { Download, X, Phone } from 'lucide-react'
+import { useCallFlow } from '../lib/callFlow'
 import { errorText } from '../lib/supabase'
 import type { Directory } from '../lib/directory'
 import { useOrg } from '../lib/session'
@@ -26,6 +27,7 @@ export function LeadDrill({ title, sub, load, dir, onClose, ownerLabel = 'Team m
   { title: string; sub?: string; load: () => Promise<DrillRow[]>; dir: Directory; onClose: () => void; ownerLabel?: string; fileName?: string }) {
   const { org } = useOrg()
   const [rows, setRows] = useState<DrillRow[] | null>(null)
+  const flow = useCallFlow()
   const otherPhones = useOtherPhones((rows ?? []).map(r => r.lead_id))
   const lastCalls = useLastCalls((rows ?? []).map(r => r.lead_id))
   const [open, setOpen] = useState<string | null>(null)
@@ -55,6 +57,7 @@ export function LeadDrill({ title, sub, load, dir, onClose, ownerLabel = 'Team m
             <p className="text-sm text-slate-500">{rows ? `${rows.length.toLocaleString('en-IN')} lead${rows.length === 1 ? '' : 's'}` : 'Loading…'}{sub ? ` · ${sub}` : ''}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            {rows && rows.length > 0 && flow && <Button onClick={() => { flow.startQueue(rows.map(r => ({ lead_id: r.lead_id, phone: r.phone, name: r.name }))); onClose() }}><Phone className="h-4 w-4" /> Call all {rows.length} in a queue</Button>}
             {rows && rows.length > 0 && <Button variant="secondary" onClick={csv}><Download className="h-4 w-4" /> CSV</Button>}
             <button onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100" aria-label="Close"><X className="h-5 w-5" /></button>
           </div>

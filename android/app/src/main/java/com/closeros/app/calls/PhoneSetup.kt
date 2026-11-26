@@ -152,7 +152,8 @@ object PhoneSetup {
                 Settings.canDrawOverlays(ctx), Kind.Special,
                 intent = vivo ?: overlayStd,
                 steps = if (vivo != null) "On this vivo page: turn on \"Floating windows\" (or \"Display over other apps\") AND \"Display pop-up windows while running in background\" for Closer OS, then come back."
-                    else "Find Closer OS and turn on \"Display over other apps\" (on some phones: \"Appear on top\" or \"Display pop-up windows\"), then come back.",
+                    else "Find Closer OS and turn on \"Display over other apps\" (on some phones: \"Appear on top\" or \"Display pop-up windows\"), then come back." +
+                        (if (Build.VERSION.SDK_INT >= 33) "\nIf Android says \"App was denied access\" / \"Restricted setting\": tap \"Open app info\" below → ⋮ (top right) → \"Allow restricted settings\" → confirm with your PIN, then tap Turn on again." else ""),
                 fallback = if (vivo != null) overlayStd else null,
                 fallbackSteps = "Find Closer OS and turn on \"Display over other apps\", then come back.")
             if (vivo != null) list += Item("vivopopup", "Pop-ups in the background (vivo)", "vivo also blocks pop-ups from apps running in the background unless this is on.",

@@ -2484,3 +2484,12 @@ intelligence → Play Store launch.
    restricted settings for apps installed from a file / outside the Play Store, Android 13+ / 15). Fix today: App info → ⋮ →
    "Allow restricted settings" → then turn the switch on. TO BUILD: Phone setup's pop-up item explains this + "Open app info"
    button (as the WhatsApp item already does); dashboard Team page shows it as the reason when the pop-up is off.
+- BUILT (Nov 26 2026, app 0.30.2, website): 1) cause = the 5:54 PM call's outcome reached the server at 6:03 PM (phone outbox; the
+   web save had gone to the 4:33 PM call) — My desk now refreshes every 10 s. 2+3) web/src/lib/callFlow.tsx CallFlowProvider (in
+   Layout around Outlet): call(phone, lead, name) via request_call_phone, follows call_requests every 2 s, ended → OutcomePanel
+   pop-up on ANY page, logged on the phone → closes; startQueue(items) = website calling queue (bar: n of N, Pause / Skip / Stop,
+   5 s countdown). CallBtn (📞 everywhere) + My desk use it. Queue buttons: Leads selection bar "Call N in a queue" (checkboxes now
+   for reps too; manager-only actions wrapped), every LeadDrill list "Call all N in a queue". 4) Batches.tsx RepWebinarCards for
+   team members: per webinar Leads / Not called yet / Talked / Joined / 🔥 Hot / Joined, not called — each opens LeadDrill (queue,
+   CSV, lead details); old per-batch count queries skipped for reps. 5) Phone setup pop-up item: restricted-settings steps +
+   "Open app info" (Android 13+). Tests: web/tests/repqueue-test.cjs, leadquick-test.cjs.

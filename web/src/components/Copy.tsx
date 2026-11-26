@@ -7,6 +7,7 @@ import { supabase, errorText } from '../lib/supabase'
 import { useSession } from '../lib/session'
 import { fmtPhone } from '../lib/format'
 import { toast } from '../lib/dialogs'
+import { useCallFlow } from '../lib/callFlow'
 
 export function copy(text: string, what = 'Copied') {
   void navigator.clipboard?.writeText(text).then(() => toast(`${what} ✓`)).catch(() => toast('Could not copy'))
@@ -38,9 +39,11 @@ export function Ph({ v, lead, noCall }: { v?: string | null; lead?: string | nul
 /** 📞 next to a number: asks MY Closer OS phone app to dial this exact number (like "Call on my phone" in My desk). */
 export function CallBtn({ phone, lead }: { phone: string; lead?: string | null }) {
   const { org, support } = useSession()
+  const flow = useCallFlow()
   if (!org || support?.mode === 'view') return null
   async function call(e: React.MouseEvent) {
     e.stopPropagation(); e.preventDefault()
+    if (flow) { await flow.call(phone, lead ?? null, null); return }   // outcome pop-up follows on this page
     const { data, error } = await supabase.rpc('request_call_phone', { p_org: org!.id, p_phone: phone, p_lead: lead ?? null })
     if (error) return toast(errorText(error))
     toast(`📞 Calling ${fmtPhone(phone)} on your phone…`)

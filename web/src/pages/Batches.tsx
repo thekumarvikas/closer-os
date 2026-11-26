@@ -11,6 +11,7 @@ import type { Batch } from '../lib/types'
 import { Badge, Button, Card, Empty, ErrorBox, Field, Modal, PageHeader, Spinner } from '../components/ui'
 import { ask, toast } from '../lib/dialogs'
 import LeadDrawer from './LeadDrawer'
+import { LeadDrill } from '../components/LeadDrill'
 
 interface Row extends Batch { leads: number; attended: number }
 
@@ -42,6 +43,7 @@ export default function Batches() {
       .order('webinar_at', { ascending: false }).limit(200)
     if (error) return setError(errorText(error))
     const batches = (data ?? []) as Batch[]
+    if (!isManager && !archived) { setRows(batches.slice(0, 40).map(b => ({ ...b, leads: 0, attended: 0 }))); return }   // cards count by themselves
     const counts = await Promise.all(batches.map(b => Promise.all([
       supabase.from('batch_leads').select('lead_id', { count: 'exact', head: true }).eq('batch_id', b.id),
       supabase.from('batch_leads').select('lead_id', { count: 'exact', head: true }).eq('batch_id', b.id).eq('attended', true),
@@ -118,7 +120,8 @@ export default function Batches() {
             )
           })}
         </div>)
-      ) : <Card className="overflow-x-auto">
+      ) : !isManager && !archived && rows && rows.length > 0 ? <RepWebinarCards rows={rows} />
+      : <Card className="overflow-x-auto">
         {!rows ? <Spinner /> : rows.length === 0 ? (
           <Empty icon={<Video className="h-6 w-6" />} title={archived ? 'Nothing archived' : 'No webinars or sales events yet'}
             text="Create one, add its registrations or leads, then (for webinars) upload the Zoom report afterwards."
@@ -390,3 +393,57 @@ function Compare() {
 }
 
 function kindLabel(k?: string | null) { return k === 'event' ? 'Sales event' : k === 'batch' ? 'Batch' : 'Webinar' }
+
+/** Team member view (Nikhil, Nov 25): one card per webinar; every number opens the leads behind it (call / queue / CSV). */
+type MyBl = { batch_id: string; attended: boolean | null; watch_minutes: number | null; warmth: number | null
+  lead: { id: string; name: string | null; phone: string; assigned_to: string | null; dial_count: number | null; conversation_count: number | null; total_talk_sec: number | null; last_outcome_id: string | null; deleted_at: string | null } | null }
+export function RepWebinarCards({ rows }: { rows: (Batch & { leads: number; attended: number })[] }) {
+  const { org } = useOrg()
+  const dir = useDirectory(org.id)
+  const [bl, setBl] = useState<MyBl[] | null>(null)
+  const [drill, setDrill] = useState<{ title: string; list: MyBl[] } | null>(null)
+  useEffect(() => {
+    const ids = rows.slice(0, 40).map(b => b.id)
+    if (!ids.length) { setBl([]); return }
+    supabase.from('batch_leads').select('batch_id, attended, watch_minutes, warmth, lead:leads(id, name, phone, assigned_to, dial_count, conversation_count, total_talk_sec, last_outcome_id, deleted_at)')
+      .in('batch_id', ids).limit(20000).then(({ data }) => setBl(((data ?? []) as unknown as MyBl[]).filter(x => x.lead && !x.lead.deleted_at)))
+  }, [rows])
+  const groups = (list: MyBl[], past: boolean): [string, MyBl[], string][] => [
+    ['Leads', list, 'text-slate-900'],
+    ['Not called yet', list.filter(x => !x.lead!.dial_count), 'text-red-700'],
+    ['Talked', list.filter(x => (x.lead!.conversation_count ?? 0) > 0), 'text-emerald-700'],
+    ...(past ? [['Joined', list.filter(x => x.attended), 'text-sky-700'] as [string, MyBl[], string],
+      ['🔥 Hot', list.filter(x => (x.warmth ?? 0) >= 70), 'text-orange-600'] as [string, MyBl[], string],
+      ['Joined, not called', list.filter(x => x.attended && !x.lead!.dial_count), 'text-red-700'] as [string, MyBl[], string]] : []),
+  ]
+  return (
+    <>
+      <div className="grid gap-3 md:grid-cols-2">
+        {rows.map(b => {
+          const past = new Date(b.webinar_at) < new Date()
+          const list = (bl ?? []).filter(x => x.batch_id === b.id)
+          return (
+            <Card key={b.id} className="p-4">
+              <div className="mb-3 flex items-start justify-between gap-2">
+                <div><Link to={`/webinars/${b.id}`} className="font-semibold text-brand-700 hover:underline">{b.name}</Link>
+                  <p className="text-xs text-slate-500">{kindLabel(b.kind)} · {fmtDateTime(b.webinar_at, org)}</p></div>
+                {!past ? <Badge color="blue">Upcoming</Badge> : b.zoom_uploaded_at ? <Badge color="green">Zoom report in</Badge> : <Badge color="amber">Zoom report not uploaded</Badge>}
+              </div>
+              {!bl ? <Spinner /> : (
+                <div className="grid grid-cols-3 gap-2">
+                  {groups(list, past).map(([label, l, color]) => (
+                    <button key={label} disabled={!l.length} onClick={() => setDrill({ title: `${b.name} · ${label}`, list: l })}
+                      className="rounded-lg bg-slate-50 px-3 py-2 text-left transition enabled:hover:bg-brand-50 disabled:opacity-60">
+                      <p className={`text-xl font-semibold tabular-nums ${color}`}>{l.length.toLocaleString('en-IN')}</p>
+                      <p className="text-[11px] text-slate-500">{label}</p>
+                    </button>))}
+                </div>)}
+            </Card>)
+        })}
+      </div>
+      {drill && dir && <LeadDrill title={drill.title} dir={dir} ownerLabel="Assigned to" fileName={drill.title} onClose={() => setDrill(null)}
+        load={async () => drill.list.map(x => ({ lead_id: x.lead!.id, name: x.lead!.name ?? '', phone: x.lead!.phone, owner: x.lead!.assigned_to,
+          watch_minutes: x.watch_minutes, calls: x.lead!.dial_count ?? 0, talk: x.lead!.total_talk_sec ?? 0, outcome_id: x.lead!.last_outcome_id }))} />}
+    </>
+  )
+}

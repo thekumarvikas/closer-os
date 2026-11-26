@@ -14,6 +14,7 @@ import { Badge, Button, Card, ErrorBox, PageHeader, Spinner } from '../component
 import { dur } from '../components/terms'
 import { CallType } from '../components/CallColors'
 import LeadDrawer from './LeadDrawer'
+import { useCallFlow } from '../lib/callFlow'
 
 export interface NeedCall { id: string; lead_id: string; lead_name: string | null; phone: string; direction: string; started_at: string; duration_sec: number; purpose: string; batch_id: string | null }
 interface Fu { id: string; lead_id: string; due_at: string; reason: string | null; purpose: string; lead: { name: string; phone: string } | null }
@@ -23,6 +24,7 @@ interface Note { kind: string; at: string; text: string | null; tags: string[]; 
 /** Desk mode: reps work from the laptop — calls still ring on their phone, outcomes can be saved here. */
 export default function Desk() {
   const { org, profile } = useOrg()
+  const flow = useCallFlow()
   const dir = useDirectory(org.id)
   const [tab, setTab] = useState<'outcome' | 'followups' | 'leads'>('followups')
   const [need, setNeed] = useState<NeedCall[]>([])
@@ -44,7 +46,7 @@ export default function Desk() {
       supabase.from('follow_ups').select('id, lead_id, due_at, reason, purpose, lead:leads(name, phone)').eq('org_id', org.id).eq('assigned_to', profile?.id ?? '')
         .eq('status', 'pending').order('due_at').limit(200).then(({ data }) => setFus((data ?? []) as unknown as Fu[]))
     }
-    load(); const t = setInterval(load, 20_000); return () => clearInterval(t)
+    load(); const t = setInterval(load, 10_000); return () => clearInterval(t)
   }, [org.id, profile?.id, version])
 
   useEffect(() => {
@@ -79,6 +81,7 @@ export default function Desk() {
 
   async function callOnPhone(l: Lead) {
     setError(null)
+    if (flow) return flow.call(l.phone, l.id, l.name)
     const { data, error } = await supabase.rpc('request_call', { p_lead: l.id })
     if (error) return setError(errorText(error))
     setReq({ id: data as string, status: 'pending', lead_id: l.id, call_id: null, started_at: null, duration_sec: null, phone: l.phone, purpose: 'sales', batch_id: null, created_at: new Date().toISOString() })
@@ -134,7 +137,7 @@ export default function Desk() {
 
         <div className="space-y-4">
           {outcomeFor && <OutcomePanel call={outcomeFor} dir={dir} onClose={() => setOutcomeFor(null)} onSaved={() => { setOutcomeFor(null); reload(); if (selected) pickLead(selected.id) }} />}
-          {selected ? <LeadPanel lead={selected} dir={dir} onCall={() => callOnPhone(selected)} onFull={() => setFull(selected.id)} busy={!!req && ['pending', 'dialing'].includes(req.status)} />
+          {selected ? <LeadPanel lead={selected} dir={dir} onCall={() => callOnPhone(selected)} onFull={() => setFull(selected.id)} busy={flow?.busy || (!!req && ['pending', 'dialing'].includes(req.status))} />
             : !outcomeFor && <Card className="p-8 text-center text-slate-500">Pick a follow-up or a lead on the left.</Card>}
         </div>
       </div>

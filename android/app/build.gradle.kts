@@ -12,8 +12,8 @@ android {
         applicationId = "com.closeros.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 116
-        versionName = "0.30.1"
+        versionCode = 117
+        versionName = "0.30.2"
         // Public values: the publishable key is meant to be in apps; data is protected by database rules.
         buildConfigField("String", "SUPABASE_URL", "\"https://tdbqgoxxxfkfttdznzhb.supabase.co\"")
         buildConfigField("String", "SUPABASE_KEY", "\"sb_publishable_aXH8Wr7Lq1YeOWxhvxEdGQ_ePS1GYTY\"")

@@ -4,6 +4,7 @@ import { LayoutDashboard, Headphones, BarChart3, Video, Plug, BookOpen, Megaphon
 import { supabase, errorText } from '../lib/supabase'
 import { Button, ErrorBox, Field, Modal, Spinner } from './ui'
 import { useSession } from '../lib/session'
+import { CallFlowProvider } from '../lib/callFlow'
 import { roleLabel } from '../lib/format'
 
 const nav = [
@@ -100,7 +101,7 @@ export default function Layout() {
             <p className="mt-2 text-slate-600">Nothing is deleted — all your leads, calls and reports are kept. {isAdmin ? 'Renew to continue.' : 'Ask your company owner to renew the plan.'}</p>
             {isAdmin && <Link to="/billing" className="mt-4 inline-block rounded-lg bg-brand-600 px-4 py-2 font-medium text-white">Go to Plan & billing</Link>}
           </div>
-        ) : <Suspense fallback={<Spinner />}><Outlet /></Suspense>}
+        ) : <CallFlowProvider><Suspense fallback={<Spinner />}><Outlet /></Suspense></CallFlowProvider>}
       </main>
       {profileOpen && <MyProfile onClose={() => setProfileOpen(false)} />}
     </div>

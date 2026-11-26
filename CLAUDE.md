@@ -2480,3 +2480,7 @@ intelligence → Play Store launch.
    count) open the lead list with Call / WhatsApp / queue actions; make the page nicer and easier to read (card look like the
    managers' webinar cards). RULE (owner): EVERY number in EVERY table across the whole Closer OS (dashboard + app) is clickable
    and opens its list.
+5. Nikhil's phone: turning on "Display over other apps" showed "App was denied access — restricted permission" (Android's
+   restricted settings for apps installed from a file / outside the Play Store, Android 13+ / 15). Fix today: App info → ⋮ →
+   "Allow restricted settings" → then turn the switch on. TO BUILD: Phone setup's pop-up item explains this + "Open app info"
+   button (as the WhatsApp item already does); dashboard Team page shows it as the reason when the pop-up is off.

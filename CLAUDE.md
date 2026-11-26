@@ -2470,3 +2470,8 @@ intelligence → Play Store launch.
 1. My desk → "Needs outcome (1)" kept showing a call (Vikas, +91 81264 84760, dialled 25/11 5:54 pm, not picked up) after the
    outcome was saved in the app AND on the web, even after two refreshes. Check my_calls_needing_outcome vs the call id the
    outcome was saved on (app may have logged a different/duplicate call id, or desk list ignores outcome saved on the twin row).
+2. Web call (📞 from any page) → when the call ends, an OUTCOME POP-UP must open right there on the website (like the app's
+   after-call card), on whatever page the person is — no going to Call log / lead / My desk → Needs outcome.
+3. Calling queue (auto / power dialer) on the WEBSITE too: pick leads (Leads list selection, webinar list, CSV file) → the
+   phone dials them one by one; after each call the outcome pop-up on the web (or the app — whichever is used first; the
+   other closes), then the countdown to the next. Same rules as the app queue.

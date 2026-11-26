@@ -16,6 +16,7 @@ import { Button, Card, Empty, ErrorBox, Field, Modal, Spinner } from '../compone
 import { BatchForm } from './Batches'
 import LeadImport from './LeadImport'
 import ShowUpImpact from './ShowUp'
+import ShowUpSimple from '../components/ShowUpSimple'
 import WatchBands from '../components/WatchBands'
 import PaymentLinkCard from '../components/PaymentLink'
 import { LeadDrill, type DrillRow } from '../components/LeadDrill'
@@ -150,7 +151,9 @@ export default function BatchDetail() {
       )}
 
       {purpose === 'showup'
-        ? <ShowUpImpact key={'s' + version + scope} batch={batch} dir={dir} scope={scope} />
+        ? <><ShowUpSimple key={'su' + version} batch={batch} dir={dir} />
+            <details className="mt-4"><summary className="cursor-pointer text-sm font-medium text-slate-500 hover:text-slate-700">More for this webinar: by caller and by call result (old view)</summary>
+              <div className="mt-3"><ShowUpImpact key={'s' + version + scope} batch={batch} dir={dir} scope={scope} /></div></details></>
         : <BatchReport key={purpose + version + scope} batch={batch} purpose={purpose} dir={dir} scope={scope} />}
       {purpose === 'sales' && <WatchBands key={'w' + version + scope} batch={batch} dir={dir} scope={scope} onSetPitch={isManager ? () => setModal('edit') : undefined} />}
 

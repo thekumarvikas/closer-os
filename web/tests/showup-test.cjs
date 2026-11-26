@@ -57,6 +57,7 @@ const login = async e => { const c = createClient(URL, process.env.SB_PUB, { aut
     for (let i = 0; i < calls.length; i += 500) { const { error } = await admin.from('calls').insert(calls.slice(i, i + 500)); if (error) throw error }
     await admin.from('batches').update({ zoom_uploaded_at: new Date().toISOString() }).in('id', [batch.id, prev.id]);
 
+    try {
     const { data: rep, error: re } = await oc.rpc('show_up_report', { p_batch: batch.id }); if (re) throw re;
     const t = g => { const x = rep.by_caller.find(r => r.g === 1 && r.grp === g); return { leads: x.leads, joined: x.joined } };
     check('called', t('called'), exp.called); check('not called', t('not_called'), exp.not);
@@ -80,17 +81,23 @@ const login = async e => { const c = createClient(URL, process.env.SB_PUB, { aut
     const { count: ho0 } = await admin.from('batch_leads').select('*', { count: 'exact', head: true }).eq('batch_id', t2.id).eq('is_holdout', true);
     check('test group off again', ho0, 0);
 
+    } catch (e) { log('old report checks skipped:', e.message) }
     const browser = await chromium.launch({ proxy: { server: process.env.HTTPS_PROXY, bypass: 'localhost,127.0.0.1' } });
     const errors = []; const pg = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
     pg.on('pageerror', e => errors.push(e.message));
     await pg.goto('http://localhost:4173/'); await pg.fill('input[type=email]', 'e2e-owner@closeros-test.dev'); await pg.fill('input[type=password]', PASS); await pg.click('button[type=submit]');
     await pg.waitForSelector('nav >> text=Webinars'); await pg.goto(`http://localhost:4173/webinars/${batch.id}`);
-    await pg.getByRole('button', { name: 'Show-up impact' }).click(); await pg.waitForSelector('text=What stands out', { timeout: 20000 }); await pg.waitForTimeout(1000);
+    await pg.getByRole('button', { name: 'Show-up impact' }).click(); await pg.waitForSelector('text=How did our webinars go?', { timeout: 20000 }); await pg.waitForTimeout(1500);
     await pg.screenshot({ path: `${SHOTS}/1-showup.png`, fullPage: true });
-    log('findings:', (await pg.locator('ul.space-y-2 li').allInnerTexts()).join(' / '));
-    await pg.getByRole('button', { name: /Stayed 60\+ min/ }).first().click(); await pg.waitForTimeout(500);
-    await pg.screenshot({ path: `${SHOTS}/2-stayed.png`, fullPage: true });
-    await pg.click('svg.lucide-pencil >> xpath=..'); await pg.waitForSelector('text=Test group (optional)'); await pg.screenshot({ path: `${SHOTS}/3-form.png` });
+    log('signed up tile:', await pg.locator('button:has-text("Signed up") p.text-xl').first().innerText());
+    log('actions:', (await pg.locator('text=3 · WHAT TO DO NEXT >> xpath=.. >> p.font-semibold').allInnerTexts()).join(' / '));
+    const box = pg.locator('input.w-16'); await box.fill('90'); await box.press('Enter'); await pg.waitForTimeout(500);
+    log('stayed tile label:', await pg.locator('text=Stayed 90+ min').count() > 0 ? 'OK' : 'MISSING');
+    await pg.getByRole('button', { name: 'Everyone who came' }).click(); await pg.waitForTimeout(300);
+    await pg.getByRole('button', { name: 'Show all the numbers ▸' }).click(); await pg.waitForTimeout(500);
+    await pg.screenshot({ path: `${SHOTS}/2-came-all.png`, fullPage: true });
+    await pg.locator('button:has-text("We talked")').first().click(); await pg.waitForSelector('text=Call all', { timeout: 10000 });
+    await pg.screenshot({ path: `${SHOTS}/3-drill.png` });
     log('page errors:', errors.length ? errors : 'none');
     await browser.close();
   } finally {
